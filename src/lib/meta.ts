@@ -4,7 +4,7 @@
  * Env vars required:
  *   META_APP_ID        — from developers.facebook.com
  *   META_APP_SECRET    — from developers.facebook.com
- *   NEXT_PUBLIC_APP_URL — e.g. https://seosuite.com or http://localhost:3000
+ *   NEXT_PUBLIC_APP_URL — e.g. https://seosuite.com or http://localhost:3099
  */
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";
@@ -69,25 +69,21 @@ export async function exchangeCodeForToken(code: string): Promise<{
 }
 
 /**
- * Discover the Instagram Business Account ID connected to the user's
- * Facebook Pages. Returns all found IG accounts.
+ * Discover the Instagram Business Account connected to a Facebook Page.
+ *
+ * Two strategies:
+ * 1. Try me/accounts (works when Meta cooperates)
+ * 2. If empty, query known Page IDs directly (fallback for Dev mode quirks)
  */
-export async function discoverInstagramAccounts(accessToken: string): Promise<Array<{
+export async function discoverInstagramAccounts(
+  accessToken: string,
+  pageIds?: string[]
+): Promise<Array<{
   igUserId: string;
   igUsername: string;
   pageName: string;
   pageId: string;
 }>> {
-  // Get all pages the user manages
-  const pagesRes = await fetch(
-    `${GRAPH_BASE}/me/accounts?fields=id,name,instagram_business_account&access_token=${accessToken}`
-  );
-  const pagesData = await pagesRes.json();
-
-  if (!pagesRes.ok) {
-    throw new Error(`Pages fetch failed: ${JSON.stringify(pagesData.error || pagesData)}`);
-  }
-
   const accounts: Array<{
     igUserId: string;
     igUsername: string;
@@ -95,26 +91,55 @@ export async function discoverInstagramAccounts(accessToken: string): Promise<Ar
     pageId: string;
   }> = [];
 
-  for (const page of pagesData.data || []) {
-    if (!page.instagram_business_account) continue;
+  // Strategy 1: me/accounts
+  const pagesRes = await fetch(
+    `${GRAPH_BASE}/me/accounts?fields=id,name,instagram_business_account&access_token=${accessToken}`
+  );
+  const pagesData = await pagesRes.json();
 
-    const igId = page.instagram_business_account.id;
+  if (pagesRes.ok && pagesData.data?.length > 0) {
+    for (const page of pagesData.data) {
+      if (!page.instagram_business_account) continue;
+      const ig = await fetchIgAccount(page.instagram_business_account.id, page, accessToken);
+      if (ig) accounts.push(ig);
+    }
+  }
 
-    // Fetch IG username
-    const igRes = await fetch(
-      `${GRAPH_BASE}/${igId}?fields=username&access_token=${accessToken}`
-    );
-    const igData = await igRes.json();
-
-    accounts.push({
-      igUserId: igId,
-      igUsername: igData.username || igId,
-      pageName: page.name,
-      pageId: page.id,
-    });
+  // Strategy 2: Direct Page ID queries (fallback)
+  if (accounts.length === 0 && pageIds && pageIds.length > 0) {
+    console.log("me/accounts empty — trying direct Page queries for:", pageIds);
+    for (const pageId of pageIds) {
+      const pageRes = await fetch(
+        `${GRAPH_BASE}/${pageId}?fields=id,name,instagram_business_account&access_token=${accessToken}`
+      );
+      const pageData = await pageRes.json();
+      if (pageRes.ok && pageData.instagram_business_account) {
+        const ig = await fetchIgAccount(pageData.instagram_business_account.id, pageData, accessToken);
+        if (ig) accounts.push(ig);
+      }
+    }
   }
 
   return accounts;
+}
+
+async function fetchIgAccount(
+  igId: string,
+  page: { id: string; name: string },
+  accessToken: string
+): Promise<{ igUserId: string; igUsername: string; pageName: string; pageId: string } | null> {
+  const igRes = await fetch(
+    `${GRAPH_BASE}/${igId}?fields=username&access_token=${accessToken}`
+  );
+  const igData = await igRes.json();
+  if (!igRes.ok) return null;
+
+  return {
+    igUserId: igId,
+    igUsername: igData.username || igId,
+    pageName: page.name,
+    pageId: page.id,
+  };
 }
 
 /**

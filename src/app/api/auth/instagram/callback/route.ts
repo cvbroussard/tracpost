@@ -7,7 +7,7 @@ import { sql } from "@/lib/db";
  *
  * Meta redirects here after the user authorizes. We:
  * 1. Exchange code for long-lived token
- * 2. Discover Instagram Business accounts linked to their pages
+ * 2. Discover Instagram Business accounts (via me/accounts or direct Page query)
  * 3. Store credentials in social_accounts
  * 4. Redirect to dashboard with success message
  */
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Decode state
-  let state: { site_id: string; subscriber_id: string };
+  let state: { site_id: string; subscriber_id: string; page_ids?: string[] };
   try {
     state = JSON.parse(Buffer.from(stateParam, "base64url").toString());
   } catch {
@@ -44,8 +44,8 @@ export async function GET(req: NextRequest) {
     // Exchange code for long-lived token
     const { accessToken, expiresIn } = await exchangeCodeForToken(code);
 
-    // Discover Instagram accounts
-    const igAccounts = await discoverInstagramAccounts(accessToken);
+    // Discover Instagram accounts (with Page ID fallback)
+    const igAccounts = await discoverInstagramAccounts(accessToken, state.page_ids);
 
     if (igAccounts.length === 0) {
       return NextResponse.redirect(

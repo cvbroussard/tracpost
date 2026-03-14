@@ -2,12 +2,17 @@ import { sql } from "@/lib/db";
 import { triageAsset } from "./triage";
 import { generateSlots } from "./slot-generator";
 import { fillSlots } from "./slot-filler";
+import { generateMissingCaptions } from "./caption-generator";
+import { publishDuePosts } from "./publisher";
 
 export interface PipelineRunResult {
   siteId: string;
   assetsTriaged: number;
   slotsGenerated: number;
   slotsFilled: number;
+  captionsGenerated: number;
+  postsPublished: number;
+  postsFailed: number;
   errors: string[];
 }
 
@@ -16,8 +21,10 @@ export interface PipelineRunResult {
  * 1. Triage all "received" assets
  * 2. Generate publishing slots for the next 7 days
  * 3. Fill open slots with best available assets
+ * 4. Generate captions for scheduled posts missing them
+ * 5. Publish posts that are due (scheduled_at <= now)
  *
- * Designed to be called by a cron job (every 15-30 min)
+ * Designed to be called by a cron job (every 15 min)
  * or triggered on asset upload.
  */
 export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
@@ -26,6 +33,9 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     assetsTriaged: 0,
     slotsGenerated: 0,
     slotsFilled: 0,
+    captionsGenerated: 0,
+    postsPublished: 0,
+    postsFailed: 0,
     errors: [],
   };
 
@@ -61,6 +71,24 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     result.errors.push(`slot-fill: ${msg}`);
+  }
+
+  // Step 4: Generate captions for posts that need them
+  try {
+    result.captionsGenerated = await generateMissingCaptions(siteId);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    result.errors.push(`captions: ${msg}`);
+  }
+
+  // Step 5: Publish posts that are due
+  try {
+    const pubResult = await publishDuePosts(siteId);
+    result.postsPublished = pubResult.published;
+    result.postsFailed = pubResult.failed;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    result.errors.push(`publish: ${msg}`);
   }
 
   return result;

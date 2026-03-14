@@ -144,10 +144,8 @@ async function publishToInstagram(
 
   const containerId = containerData.id;
 
-  // Step 1.5: For video, poll until container is ready
-  if (isVideo) {
-    await waitForVideoContainer(baseUrl, containerId, accessToken);
-  }
+  // Step 1.5: Poll until container is ready (images and videos both need this)
+  await waitForContainer(baseUrl, containerId, accessToken, isVideo ? 30 : 10);
 
   // Step 2: Publish the container
   const publishRes = await fetch(`${baseUrl}/${igUserId}/media_publish`, {
@@ -172,15 +170,15 @@ async function publishToInstagram(
 }
 
 /**
- * Poll Meta API until a video container is finished processing.
- * Videos can take 30s–5min to process on Meta's side.
+ * Poll Meta API until a container is finished processing.
+ * Images usually take a few seconds, videos can take 30s–5min.
  */
-async function waitForVideoContainer(
+async function waitForContainer(
   baseUrl: string,
   containerId: string,
   accessToken: string,
-  maxAttempts: number = 30,
-  intervalMs: number = 10000
+  maxAttempts: number = 10,
+  intervalMs: number = 3000
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     const res = await fetch(

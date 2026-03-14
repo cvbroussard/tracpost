@@ -97,7 +97,7 @@ export async function generateCaption({ postId }: CaptionRequest): Promise<Capti
   const prompt = buildPrompt(post, platformFormat, rules, brandVoice);
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250514",
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
   });
@@ -213,8 +213,8 @@ export async function generateMissingCaptions(siteId: string): Promise<number> {
     try {
       await generateCaption({ postId: post.id });
       generated++;
-    } catch {
-      // Skip failures — will retry on next pipeline run
+    } catch (err) {
+      console.error(`Caption generation failed for post ${post.id}:`, err instanceof Error ? err.message : err);
     }
   }
 

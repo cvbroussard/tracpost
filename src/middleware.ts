@@ -17,9 +17,11 @@ export function middleware(req: NextRequest) {
   const subdomain = classifyHost(hostname);
   const { pathname } = req.nextUrl;
 
-  // In development, skip all subdomain logic
-  if (subdomain === "marketing" && hostname.includes("localhost")) {
-    return NextResponse.next();
+  const isLocal = hostname.includes("localhost");
+
+  // In development, only enforce admin auth — skip subdomain logic
+  if (isLocal) {
+    return gateAdmin(req, pathname);
   }
 
   // API routes — shared across all subdomains, pass through
@@ -28,7 +30,7 @@ export function middleware(req: NextRequest) {
   }
 
   // Static/shared public pages — accessible from all subdomains
-  const sharedPaths = ["/login", "/privacy", "/terms", "/data-deletion"];
+  const sharedPaths = ["/login", "/privacy", "/terms", "/data-deletion", "/admin-login"];
   if (sharedPaths.some((p) => pathname === p)) {
     return NextResponse.next();
   }
@@ -54,12 +56,33 @@ export function middleware(req: NextRequest) {
     if (pathname.startsWith("/dashboard")) {
       return new NextResponse("Not Found", { status: 404 });
     }
-    // Already rewritten paths
-    if (pathname.startsWith("/admin")) {
+
+    // Admin login page — pass through
+    if (pathname === "/admin-login" || pathname.startsWith("/admin-login")) {
       return NextResponse.next();
     }
+
+    // Gate admin routes (after rewrite or direct access)
+    if (pathname.startsWith("/admin")) {
+      const gate = gateAdmin(req, pathname);
+      if (gate) return gate;
+      return NextResponse.next();
+    }
+
+    // Login rewrite — /login on platform goes to admin login
+    if (pathname === "/login") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/admin-login";
+      return NextResponse.rewrite(url);
+    }
+
     // Rewrite: /subscribers → /admin/subscribers, / → /admin
     const rewritePath = pathname === "/" ? "/admin" : `/admin${pathname}`;
+
+    // Gate before rewriting
+    const gate = gateAdmin(req, rewritePath);
+    if (gate) return gate;
+
     const url = req.nextUrl.clone();
     url.pathname = rewritePath;
     return NextResponse.rewrite(url);
@@ -76,6 +99,39 @@ export function middleware(req: NextRequest) {
   }
 
   return NextResponse.next();
+}
+
+/**
+ * Gate admin routes — redirect to admin login if no tp_admin cookie.
+ * Returns a redirect response if blocked, or null if allowed.
+ */
+function gateAdmin(req: NextRequest, pathname: string): NextResponse | null {
+  // Skip API routes and login page
+  if (pathname.startsWith("/api/") || pathname === "/admin-login") {
+    return null;
+  }
+
+  // Only gate admin routes
+  if (!pathname.startsWith("/admin")) {
+    return null;
+  }
+
+  // Allow the admin login page within the admin path (dev mode)
+  if (pathname === "/admin/login") {
+    return null;
+  }
+
+  const adminCookie = req.cookies.get("tp_admin")?.value;
+  if (adminCookie === "authenticated") {
+    return null;
+  }
+
+  // Redirect to admin login
+  const isLocal = req.headers.get("host")?.includes("localhost");
+  const loginPath = isLocal ? "/admin-login" : "/login";
+  const url = req.nextUrl.clone();
+  url.pathname = loginPath;
+  return NextResponse.redirect(url);
 }
 
 export const config = {

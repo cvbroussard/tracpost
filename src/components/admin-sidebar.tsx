@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const baseNav = [
   { label: "Overview", path: "", icon: "◆" },
@@ -14,6 +14,7 @@ const baseNav = [
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
 
   const isSubdomain =
     typeof window !== "undefined" &&
@@ -57,7 +58,16 @@ export function AdminSidebar() {
         })}
       </nav>
       <div className="border-t border-border px-5 py-3">
-        <p className="text-xs text-muted">Platform Admin</p>
+        <p className="mb-1 text-xs text-muted">Platform Admin</p>
+        <button
+          onClick={async () => {
+            await fetch("/api/auth/admin", { method: "DELETE" });
+            router.push(isSubdomain ? "/login" : "/admin-login");
+          }}
+          className="text-[10px] text-muted hover:text-foreground"
+        >
+          Sign out
+        </button>
       </div>
     </aside>
   );

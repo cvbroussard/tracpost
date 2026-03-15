@@ -3,17 +3,28 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
-const nav = [
-  { label: "Overview", href: "/dashboard", icon: "◆" },
-  { label: "Calendar", href: "/dashboard/calendar", icon: "▦" },
-  { label: "Media", href: "/dashboard/media", icon: "▣" },
-  { label: "Accounts", href: "/dashboard/accounts", icon: "◉" },
-  { label: "Settings", href: "/dashboard/settings", icon: "⚙" },
+const baseNav = [
+  { label: "Overview", path: "", icon: "◆" },
+  { label: "Calendar", path: "/calendar", icon: "▦" },
+  { label: "Media", path: "/media", icon: "▣" },
+  { label: "Accounts", path: "/accounts", icon: "◉" },
+  { label: "Settings", path: "/settings", icon: "⚙" },
 ];
 
 export function Sidebar({ subscriberName }: { subscriberName: string }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // On studio subdomain, links are root-relative (no /dashboard prefix).
+  // In dev (localhost), keep the /dashboard prefix.
+  const isSubdomain =
+    typeof window !== "undefined" &&
+    window.location.hostname === "studio.tracpost.com";
+  const prefix = isSubdomain ? "" : "/dashboard";
+  const nav = baseNav.map((item) => ({
+    ...item,
+    href: prefix + item.path || prefix,
+  }));
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -30,9 +41,9 @@ export function Sidebar({ subscriberName }: { subscriberName: string }) {
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2">
         {nav.map((item) => {
           const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
+            item.path === ""
+              ? pathname === prefix || pathname === prefix + "/"
+              : pathname.startsWith(prefix + item.path);
           return (
             <Link
               key={item.href}

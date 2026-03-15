@@ -3,17 +3,26 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const nav = [
-  { label: "Overview", href: "/admin", icon: "◆" },
-  { label: "Subscribers", href: "/admin/subscribers", icon: "◇" },
-  { label: "Pipeline", href: "/admin/pipeline", icon: "▶" },
-  { label: "Social Accounts", href: "/admin/social", icon: "◉" },
-  { label: "Content Queue", href: "/admin/content", icon: "▤" },
-  { label: "Usage & Billing", href: "/admin/usage", icon: "◈" },
+const baseNav = [
+  { label: "Overview", path: "", icon: "◆" },
+  { label: "Subscribers", path: "/subscribers", icon: "◇" },
+  { label: "Pipeline", path: "/pipeline", icon: "▶" },
+  { label: "Social Accounts", path: "/social", icon: "◉" },
+  { label: "Content Queue", path: "/content", icon: "▤" },
+  { label: "Usage & Billing", path: "/usage", icon: "◈" },
 ];
 
 export function AdminSidebar() {
   const pathname = usePathname();
+
+  const isSubdomain =
+    typeof window !== "undefined" &&
+    window.location.hostname === "platform.tracpost.com";
+  const prefix = isSubdomain ? "" : "/admin";
+  const nav = baseNav.map((item) => ({
+    ...item,
+    href: prefix + item.path || prefix,
+  }));
 
   return (
     <aside className="flex h-screen w-56 flex-col border-r border-border bg-surface">
@@ -28,9 +37,9 @@ export function AdminSidebar() {
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2">
         {nav.map((item) => {
           const active =
-            item.href === "/admin"
-              ? pathname === "/admin"
-              : pathname.startsWith(item.href);
+            item.path === ""
+              ? pathname === prefix || pathname === prefix + "/"
+              : pathname.startsWith(prefix + item.path);
           return (
             <Link
               key={item.href}

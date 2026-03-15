@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { cookieDomain } from "@/lib/subdomains";
 
 /**
  * POST /api/auth/login
@@ -63,12 +64,14 @@ export async function POST(req: NextRequest) {
     sites,
   });
 
+  const domain = cookieDomain();
   response.cookies.set("tp_session", JSON.stringify(session), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 30, // 30 days
+    ...(domain && { domain }),
   });
 
   return response;

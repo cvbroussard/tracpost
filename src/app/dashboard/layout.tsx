@@ -8,7 +8,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login"); // Works on both studio subdomain and localhost
 
   return (
     <div className="flex h-screen overflow-hidden">

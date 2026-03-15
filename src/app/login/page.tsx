@@ -28,7 +28,16 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      // In production, redirect to studio subdomain
+      const isStudio =
+        window.location.hostname === "studio.tracpost.com";
+      const isProduction =
+        window.location.hostname.endsWith("tracpost.com");
+      if (isProduction && !isStudio) {
+        window.location.href = "https://studio.tracpost.com/";
+      } else {
+        router.push(isStudio ? "/" : "/dashboard");
+      }
     } catch {
       setError("Network error");
     } finally {

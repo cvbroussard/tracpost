@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForToken, discoverInstagramAccounts } from "@/lib/meta";
 import { sql } from "@/lib/db";
+import { studioUrl } from "@/lib/subdomains";
 
 /**
  * GET /api/auth/instagram/callback?code=xxx&state=xxx
@@ -19,13 +20,13 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/accounts?error=oauth_denied`
+      `${studioUrl("/accounts")}?error=oauth_denied`
     );
   }
 
   if (!code || !stateParam) {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/accounts?error=missing_params`
+      `${studioUrl("/accounts")}?error=missing_params`
     );
   }
 
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
     state = JSON.parse(Buffer.from(stateParam, "base64url").toString());
   } catch {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/accounts?error=invalid_state`
+      `${studioUrl("/accounts")}?error=invalid_state`
     );
   }
 
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
     if (igAccounts.length === 0) {
       console.log("OAuth callback — no IG accounts found, redirecting with error");
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/accounts?error=no_ig_account`
+        `${studioUrl("/accounts")}?error=no_ig_account`
       );
     }
 
@@ -91,13 +92,13 @@ export async function GET(req: NextRequest) {
 
     const accountNames = igAccounts.map((a) => a.igUsername).join(",");
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/accounts?connected=${encodeURIComponent(accountNames)}`
+      `${studioUrl("/accounts")}?connected=${encodeURIComponent(accountNames)}`
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Instagram OAuth callback error:", message);
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/accounts?error=oauth_failed`
+      `${studioUrl("/accounts")}?error=oauth_failed`
     );
   }
 }

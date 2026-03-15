@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [apiKey, setApiKey] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -18,11 +19,12 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: apiKey }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (!res.ok) {
-        setError("Invalid API key");
+        const data = await res.json();
+        setError(data.error || "Invalid credentials");
         return;
       }
 
@@ -38,19 +40,30 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-8">
       <div className="w-full max-w-sm">
         <h1 className="mb-1 text-center text-lg font-semibold">SEO Suite</h1>
-        <p className="mb-8 text-center text-sm text-muted">Sign in with your API key</p>
+        <p className="mb-8 text-center text-sm text-muted">Sign in to your dashboard</p>
 
         <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-surface p-5">
           <div className="mb-4">
-            <label className="mb-1 block text-xs text-muted">API Key</label>
+            <label className="mb-1 block text-xs text-muted">Email</label>
             <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
               className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-              placeholder="seo_..."
+              placeholder="you@example.com"
               autoFocus
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="mb-1 block text-xs text-muted">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
             />
           </div>
 
@@ -58,7 +71,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading || !apiKey}
+            disabled={loading || !email || !password}
             className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign In"}

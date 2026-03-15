@@ -7,6 +7,8 @@ import Link from "next/link";
 export default function NewSubscriberPage() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [plan, setPlan] = useState("pro");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ id: string; api_key: string } | null>(null);
@@ -21,14 +23,14 @@ export default function NewSubscriberPage() {
       const res = await fetch("/api/subscribers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, plan }),
+        body: JSON.stringify({ name, plan, email, password }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to create subscriber");
         return;
       }
-      setResult({ id: data.id, api_key: data.api_key });
+      setResult({ id: data.subscriber.id, api_key: data.api_key });
     } catch {
       setError("Network error");
     } finally {
@@ -48,15 +50,15 @@ export default function NewSubscriberPage() {
           <p className="mb-4 text-sm text-success">Subscriber &ldquo;{name}&rdquo; created successfully.</p>
 
           <div className="mb-4">
-            <label className="mb-1 block text-xs text-muted">Subscriber ID</label>
-            <div className="rounded border border-border bg-background px-3 py-2 font-mono text-xs">
-              {result.id}
+            <label className="mb-1 block text-xs text-muted">Dashboard Login</label>
+            <div className="rounded border border-border bg-background px-3 py-2 text-xs">
+              {email}
             </div>
           </div>
 
           <div className="mb-4">
-            <label className="mb-1 block text-xs text-danger">API Key (save this — shown only once)</label>
-            <div className="rounded border border-danger/30 bg-background px-3 py-2 font-mono text-xs break-all">
+            <label className="mb-1 block text-xs text-muted">API Key (for programmatic access — shown only once)</label>
+            <div className="rounded border border-border bg-background px-3 py-2 font-mono text-xs break-all">
               {result.api_key}
             </div>
           </div>
@@ -100,6 +102,29 @@ export default function NewSubscriberPage() {
           />
         </div>
 
+        <div className="mb-4">
+          <label className="mb-1 block text-xs text-muted">Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+            placeholder="subscriber@example.com"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="mb-1 block text-xs text-muted">Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+          />
+        </div>
+
         <div className="mb-6">
           <label className="mb-1 block text-xs text-muted">Plan</label>
           <select
@@ -117,7 +142,7 @@ export default function NewSubscriberPage() {
 
         <button
           type="submit"
-          disabled={loading || !name}
+          disabled={loading || !name || !email || !password}
           className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
         >
           {loading ? "Creating..." : "Create Subscriber"}

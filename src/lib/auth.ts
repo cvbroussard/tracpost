@@ -1,5 +1,6 @@
 import { sql } from "./db";
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export interface AuthContext {
   subscriberId: string;
@@ -8,31 +9,59 @@ export interface AuthContext {
 }
 
 /**
- * Validate Bearer token and return subscriber context.
- * API keys are stored as bcrypt hashes in the subscribers table.
- * For performance, we use a simple hash comparison (SHA-256)
- * since API keys are high-entropy random strings.
+ * Authenticate a request via Bearer token (API) or session cookie (dashboard).
+ *
+ * Priority:
+ * 1. Bearer token in Authorization header → API key auth
+ * 2. seo_session cookie → dashboard session auth
  */
 export async function authenticateRequest(
   req: NextRequest
 ): Promise<AuthContext | NextResponse> {
   const authHeader = req.headers.get("authorization");
 
-  if (!authHeader?.startsWith("Bearer ")) {
-    return NextResponse.json(
-      { error: "Missing or invalid Authorization header" },
-      { status: 401 }
-    );
+  // Path 1: Bearer token (external API calls)
+  if (authHeader?.startsWith("Bearer ")) {
+    return authenticateByApiKey(authHeader.slice(7));
   }
 
-  const token = authHeader.slice(7);
+  // Path 2: Session cookie (dashboard calls)
+  const cookieStore = await cookies();
+  const raw = cookieStore.get("seo_session")?.value;
+  if (raw) {
+    try {
+      const session = JSON.parse(raw);
+      if (session.subscriberId) {
+        return {
+          subscriberId: session.subscriberId,
+          subscriberName: session.subscriberName,
+          plan: session.plan,
+        };
+      }
+    } catch {
+      // Invalid cookie, fall through
+    }
+  }
 
-  // Hash the incoming token and compare against stored hashes
+  return NextResponse.json(
+    { error: "Missing or invalid authentication" },
+    { status: 401 }
+  );
+}
+
+/**
+ * Authenticate by API key (Bearer token).
+ */
+async function authenticateByApiKey(
+  token: string
+): Promise<AuthContext | NextResponse> {
   const encoder = new TextEncoder();
   const data = encoder.encode(token);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const apiKeyHash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  const apiKeyHash = hashArray
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
   const rows = await sql`
     SELECT id, name, plan

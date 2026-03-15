@@ -4,7 +4,7 @@ import { getSession } from "@/lib/session";
 /**
  * GET /api/auth/session
  *
- * Returns the current session info including apiKey for client-side API calls.
+ * Returns current session info (no API key — that's for external API auth only).
  */
 export async function GET() {
   const session = await getSession();
@@ -16,7 +16,6 @@ export async function GET() {
     subscriberId: session.subscriberId,
     subscriberName: session.subscriberName,
     plan: session.plan,
-    apiKey: session.apiKey,
     activeSiteId: session.activeSiteId,
     sites: session.sites,
   });

@@ -10,8 +10,8 @@ export default function NewSitePage({
 }) {
   const { id: subscriberId } = use(params);
   const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
+  const [domain, setDomain] = useState("");
+  const [blogUrl, setBlogUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ id: string } | null>(null);
   const [error, setError] = useState("");
@@ -22,20 +22,17 @@ export default function NewSitePage({
     setError("");
 
     try {
-      const res = await fetch("/api/sites", {
+      const res = await fetch("/api/admin/sites", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({ name, url }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriber_id: subscriberId, name, domain, blog_url: blogUrl }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to create site");
         return;
       }
-      setResult({ id: data.id });
+      setResult({ id: data.site.id });
     } catch {
       setError("Network error");
     } finally {
@@ -85,40 +82,38 @@ export default function NewSitePage({
             onChange={(e) => setName(e.target.value)}
             required
             className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-            placeholder="e.g. mysite.com"
+            placeholder="e.g. Hektor K9"
           />
         </div>
 
         <div className="mb-4">
-          <label className="mb-1 block text-xs text-muted">URL</label>
+          <label className="mb-1 block text-xs text-muted">Domain</label>
           <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            type="text"
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
             required
             className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-            placeholder="https://mysite.com"
+            placeholder="hektork9.com"
           />
         </div>
 
         <div className="mb-6">
-          <label className="mb-1 block text-xs text-muted">Subscriber API Key</label>
+          <label className="mb-1 block text-xs text-muted">Blog URL</label>
           <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            required
+            type="url"
+            value={blogUrl}
+            onChange={(e) => setBlogUrl(e.target.value)}
             className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-            placeholder="seo_..."
+            placeholder="https://hektork9.com/blog"
           />
-          <p className="mt-1 text-[10px] text-muted">Required to authenticate the site creation request</p>
         </div>
 
         {error && <p className="mb-4 text-xs text-danger">{error}</p>}
 
         <button
           type="submit"
-          disabled={loading || !name || !url || !apiKey}
+          disabled={loading || !name || !domain}
           className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
         >
           {loading ? "Creating..." : "Create Site"}

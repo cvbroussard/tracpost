@@ -14,32 +14,25 @@ interface Post {
   platform_post_url: string | null;
 }
 
-interface SessionInfo {
-  apiKey: string;
-  activeSiteId: string;
-}
-
 export default function CalendarPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [vetoingId, setVetoingId] = useState<string | null>(null);
-  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [activeSiteId, setActiveSiteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((data) => {
-        setSession({ apiKey: data.apiKey, activeSiteId: data.activeSiteId });
-        return fetchPosts(data.apiKey, data.activeSiteId);
+        setActiveSiteId(data.activeSiteId);
+        return fetchPosts(data.activeSiteId);
       })
       .catch(() => setLoading(false));
   }, []);
 
-  async function fetchPosts(apiKey: string, siteId: string) {
+  async function fetchPosts(siteId: string) {
     try {
-      const res = await fetch(`/api/calendar?site_id=${siteId}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      const res = await fetch(`/api/calendar?site_id=${siteId}`);
       if (res.ok) {
         const data = await res.json();
         setPosts(data.posts);
@@ -50,15 +43,12 @@ export default function CalendarPage() {
   }
 
   async function vetoPost(postId: string) {
-    if (!session) return;
+    if (!activeSiteId) return;
     setVetoingId(postId);
     try {
       const res = await fetch("/api/posts/veto", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.apiKey}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ post_id: postId, reason: "Vetoed from calendar" }),
       });
       if (res.ok) {

@@ -1,60 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 /**
  * POST /api/auth/login
- * Body: { api_key: "seo_..." }
+ * Body: { email, password }
  *
- * Validates the API key, sets a session cookie with subscriber + site info,
- * and returns subscriber details.
+ * Validates credentials, sets a session cookie with subscriber + site info.
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const apiKey = body.api_key;
+  const { email, password } = body;
 
-  if (!apiKey) {
-    return NextResponse.json({ error: "api_key is required" }, { status: 400 });
+  if (!email || !password) {
+    return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
   }
 
-  // Build a fake request with the Bearer header to reuse auth logic
-  const fakeReq = new NextRequest(req.url, {
-    headers: new Headers({ Authorization: `Bearer ${apiKey}` }),
-  });
+  const rows = await sql`
+    SELECT id, name, plan, password_hash
+    FROM subscribers
+    WHERE email = ${email}
+      AND is_active = true
+  `;
 
-  const authResult = await authenticateRequest(fakeReq);
-  if (authResult instanceof NextResponse) {
-    return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+  if (rows.length === 0) {
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
-  const auth = authResult as AuthContext;
+
+  const subscriber = rows[0];
+
+  if (!subscriber.password_hash) {
+    return NextResponse.json({ error: "Password not set — contact admin" }, { status: 401 });
+  }
+
+  const valid = await bcrypt.compare(password, subscriber.password_hash);
+  if (!valid) {
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  }
 
   // Fetch subscriber's sites
   const sites = await sql`
     SELECT id, name, url FROM sites
-    WHERE subscriber_id = ${auth.subscriberId}
+    WHERE subscriber_id = ${subscriber.id}
     ORDER BY created_at ASC
   `;
 
-  // Session payload
+  // Session payload — no API key stored
   const session = {
-    subscriberId: auth.subscriberId,
-    subscriberName: auth.subscriberName,
-    plan: auth.plan,
-    apiKey, // stored in httpOnly cookie for API calls from dashboard
+    subscriberId: subscriber.id,
+    subscriberName: subscriber.name,
+    plan: subscriber.plan,
     sites: sites.map((s) => ({ id: s.id, name: s.name, url: s.url })),
     activeSiteId: sites[0]?.id || null,
   };
 
   const response = NextResponse.json({
     subscriber: {
-      id: auth.subscriberId,
-      name: auth.subscriberName,
-      plan: auth.plan,
+      id: subscriber.id,
+      name: subscriber.name,
+      plan: subscriber.plan,
     },
     sites,
   });
 
-  // Set httpOnly cookie
   response.cookies.set("seo_session", JSON.stringify(session), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

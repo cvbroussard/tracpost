@@ -13,17 +13,8 @@ export function ConnectInstagramButton() {
     setError("");
 
     try {
-      const sessionRes = await fetch("/api/auth/session");
-      if (!sessionRes.ok) {
-        setError("Not authenticated");
-        return;
-      }
-      const { apiKey } = await sessionRes.json();
-
       const params = pageIds.trim() ? `?page_ids=${pageIds.trim()}` : "";
-      const res = await fetch(`/api/auth/instagram${params}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      const res = await fetch(`/api/auth/instagram${params}`);
 
       if (!res.ok) {
         const data = await res.json();

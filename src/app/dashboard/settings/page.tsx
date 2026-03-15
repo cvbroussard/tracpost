@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
+import { ApiKeySection } from "./api-key-section";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,8 @@ export default async function SettingsPage() {
             </div>
           )}
         </section>
+
+        <ApiKeySection />
 
         <section className="rounded-lg border border-border bg-surface p-5">
           <h2 className="mb-3 text-sm font-medium">Brand Voice</h2>

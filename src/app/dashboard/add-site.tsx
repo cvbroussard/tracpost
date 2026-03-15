@@ -17,15 +17,9 @@ export function AddSiteForm() {
     setError("");
 
     try {
-      const sessionRes = await fetch("/api/auth/session");
-      const { apiKey } = await sessionRes.json();
-
       const res = await fetch("/api/sites", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, domain, blog_url: blogUrl }),
       });
 
@@ -35,12 +29,8 @@ export function AddSiteForm() {
         return;
       }
 
-      // Re-login to refresh session with new site
-      await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: apiKey }),
-      });
+      // Refresh session to include new site
+      await fetch("/api/auth/refresh-session", { method: "POST" });
 
       router.refresh();
     } catch {

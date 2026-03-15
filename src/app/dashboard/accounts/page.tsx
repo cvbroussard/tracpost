@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { ConnectInstagramButton } from "./connect-instagram";
 import { LinkAccountForm } from "./link-account";
+import { DisconnectButton } from "./disconnect-button";
 
 export const dynamic = "force-dynamic";
 
@@ -72,9 +73,12 @@ export default async function AccountsPage() {
                     <h3 className="text-sm font-medium">{acc.account_name}</h3>
                     <p className="mt-0.5 text-xs text-muted">{acc.platform}</p>
                   </div>
-                  <span className={`text-xs ${acc.status === "active" ? "text-success" : "text-danger"}`}>
-                    {acc.status}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs ${acc.status === "active" ? "text-success" : "text-danger"}`}>
+                      {acc.status}
+                    </span>
+                    <DisconnectButton accountId={acc.id} accountName={acc.account_name} />
+                  </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-3 gap-4 border-t border-border pt-4 text-center">

@@ -18,15 +18,9 @@ export function LinkAccountForm({ accountId, sites, linkedSiteIds }: Props) {
   async function linkSite(siteId: string) {
     setLoading(true);
     try {
-      const sessionRes = await fetch("/api/auth/session");
-      const { apiKey } = await sessionRes.json();
-
       await fetch("/api/social-links", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ social_account_id: accountId, site_id: siteId }),
       });
 

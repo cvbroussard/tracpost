@@ -9,10 +9,16 @@ export default function Home() {
       </p>
       <div className="flex gap-3">
         <Link
-          href="/dashboard"
+          href="/login"
           className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
         >
-          Dashboard
+          Subscriber Login
+        </Link>
+        <Link
+          href="/admin"
+          className="rounded-md border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface"
+        >
+          Platform Admin
         </Link>
         <Link
           href="/api/health"

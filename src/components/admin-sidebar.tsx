@@ -1,37 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 const nav = [
-  { label: "Overview", href: "/dashboard", icon: "◆" },
-  { label: "Calendar", href: "/dashboard/calendar", icon: "▦" },
-  { label: "Media", href: "/dashboard/media", icon: "▣" },
-  { label: "Accounts", href: "/dashboard/accounts", icon: "◉" },
-  { label: "Settings", href: "/dashboard/settings", icon: "⚙" },
+  { label: "Overview", href: "/admin", icon: "◆" },
+  { label: "Subscribers", href: "/admin/subscribers", icon: "◇" },
+  { label: "Pipeline", href: "/admin/pipeline", icon: "▶" },
+  { label: "Social Accounts", href: "/admin/social", icon: "◉" },
+  { label: "Content Queue", href: "/admin/content", icon: "▤" },
+  { label: "Usage & Billing", href: "/admin/usage", icon: "◈" },
 ];
 
-export function Sidebar({ subscriberName }: { subscriberName: string }) {
+export function AdminSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-  }
 
   return (
     <aside className="flex h-screen w-56 flex-col border-r border-border bg-surface">
-      <div className="flex h-14 items-center px-5">
+      <div className="flex h-14 items-center gap-2 px-5">
         <span className="text-sm font-semibold tracking-wider text-foreground">
           SEO SUITE
+        </span>
+        <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+          ADMIN
         </span>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2">
         {nav.map((item) => {
           const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
+            item.href === "/admin"
+              ? pathname === "/admin"
               : pathname.startsWith(item.href);
           return (
             <Link
@@ -50,13 +48,7 @@ export function Sidebar({ subscriberName }: { subscriberName: string }) {
         })}
       </nav>
       <div className="border-t border-border px-5 py-3">
-        <p className="mb-1 truncate text-xs font-medium">{subscriberName}</p>
-        <button
-          onClick={handleLogout}
-          className="text-[10px] text-muted hover:text-foreground"
-        >
-          Sign out
-        </button>
+        <p className="text-xs text-muted">Platform Admin</p>
       </div>
     </aside>
   );

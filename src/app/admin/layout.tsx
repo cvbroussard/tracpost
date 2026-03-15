@@ -1,7 +1,7 @@
 import { AdminSidebar } from "@/components/admin-sidebar";
 
 export const metadata = {
-  title: "SEO Suite — Admin",
+  title: "TracPost — Admin",
 };
 
 export default function AdminLayout({

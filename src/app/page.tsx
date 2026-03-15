@@ -3,9 +3,9 @@ import Link from "next/link";
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-8">
-      <h1 className="text-2xl font-semibold tracking-tight">SEO Suite</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">TracPost</h1>
       <p className="max-w-md text-center text-sm text-muted">
-        SEO & Social Media Management as a Service. API-first, embeddable dashboard.
+        Social content automation for businesses. API-first, embeddable dashboard.
       </p>
       <div className="flex gap-3">
         <Link

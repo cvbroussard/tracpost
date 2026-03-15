@@ -14,7 +14,7 @@ export interface Session {
  */
 export async function getSession(): Promise<Session | null> {
   const cookieStore = await cookies();
-  const raw = cookieStore.get("seo_session")?.value;
+  const raw = cookieStore.get("tp_session")?.value;
   if (!raw) return null;
 
   try {

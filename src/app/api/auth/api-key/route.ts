@@ -16,7 +16,7 @@ export async function POST() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const apiKey = `seo_${randomBytes(24).toString("hex")}`;
+  const apiKey = `tp_${randomBytes(24).toString("hex")}`;
   const apiKeyHash = await hashApiKey(apiKey);
 
   await sql`

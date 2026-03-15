@@ -30,7 +30,7 @@ export async function POST() {
 
   const response = NextResponse.json({ ok: true });
 
-  response.cookies.set("seo_session", JSON.stringify(updated), {
+  response.cookies.set("tp_session", JSON.stringify(updated), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

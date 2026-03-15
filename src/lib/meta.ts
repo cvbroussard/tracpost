@@ -4,7 +4,7 @@
  * Env vars required:
  *   META_APP_ID        — from developers.facebook.com
  *   META_APP_SECRET    — from developers.facebook.com
- *   NEXT_PUBLIC_APP_URL — e.g. https://seosuite.com or http://localhost:3099
+ *   NEXT_PUBLIC_APP_URL — e.g. https://tracpost.com or http://localhost:3099
  */
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";

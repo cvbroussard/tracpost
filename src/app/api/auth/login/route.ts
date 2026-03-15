@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     sites,
   });
 
-  response.cookies.set("seo_session", JSON.stringify(session), {
+  response.cookies.set("tp_session", JSON.stringify(session), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

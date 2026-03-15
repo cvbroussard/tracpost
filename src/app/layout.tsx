@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SEO Suite",
-  description: "SEO & Social Media Management Service",
+  title: "TracPost",
+  description: "Social content automation for businesses",
 };
 
 export default function RootLayout({

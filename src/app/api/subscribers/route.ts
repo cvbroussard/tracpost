@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate a random API key
-    const apiKey = `seo_${randomBytes(24).toString("hex")}`;
+    const apiKey = `tp_${randomBytes(24).toString("hex")}`;
     const apiKeyHash = await hashApiKey(apiKey);
 
     // Hash password if provided

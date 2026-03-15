@@ -13,7 +13,7 @@ export interface AuthContext {
  *
  * Priority:
  * 1. Bearer token in Authorization header → API key auth
- * 2. seo_session cookie → dashboard session auth
+ * 2. tp_session cookie → dashboard session auth
  */
 export async function authenticateRequest(
   req: NextRequest
@@ -27,7 +27,7 @@ export async function authenticateRequest(
 
   // Path 2: Session cookie (dashboard calls)
   const cookieStore = await cookies();
-  const raw = cookieStore.get("seo_session")?.value;
+  const raw = cookieStore.get("tp_session")?.value;
   if (raw) {
     try {
       const session = JSON.parse(raw);

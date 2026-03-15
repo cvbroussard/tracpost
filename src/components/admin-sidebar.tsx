@@ -19,7 +19,7 @@ export function AdminSidebar() {
     <aside className="flex h-screen w-56 flex-col border-r border-border bg-surface">
       <div className="flex h-14 items-center gap-2 px-5">
         <span className="text-sm font-semibold tracking-wider text-foreground">
-          SEO SUITE
+          TRACPOST
         </span>
         <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">
           ADMIN

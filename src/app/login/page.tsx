@@ -39,7 +39,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-8">
       <div className="w-full max-w-sm">
-        <h1 className="mb-1 text-center text-lg font-semibold">SEO Suite</h1>
+        <h1 className="mb-1 text-center text-lg font-semibold">TracPost</h1>
         <p className="mb-8 text-center text-sm text-muted">Sign in to your dashboard</p>
 
         <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-surface p-5">

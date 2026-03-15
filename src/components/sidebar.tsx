@@ -24,7 +24,7 @@ export function Sidebar({ subscriberName }: { subscriberName: string }) {
     <aside className="flex h-screen w-56 flex-col border-r border-border bg-surface">
       <div className="flex h-14 items-center px-5">
         <span className="text-sm font-semibold tracking-wider text-foreground">
-          SEO SUITE
+          TRACPOST
         </span>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2">

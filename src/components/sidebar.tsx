@@ -8,6 +8,7 @@ const baseNav = [
   { label: "Capture", path: "/capture", icon: "◎" },
   { label: "Media", path: "/media", icon: "▣" },
   { label: "Calendar", path: "/calendar", icon: "▦" },
+  { label: "SEO", path: "/seo", icon: "◇" },
   { label: "Accounts", path: "/accounts", icon: "◉" },
   { label: "Settings", path: "/settings", icon: "⚙" },
 ];

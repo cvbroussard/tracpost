@@ -163,7 +163,7 @@ export default function CapturePage() {
       )}
 
       {/* Capture buttons */}
-      <div className="mb-6 flex gap-3">
+      <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3">
         <button
           onClick={() => {
             if (fileRef.current) {
@@ -172,10 +172,10 @@ export default function CapturePage() {
               fileRef.current.click();
             }
           }}
-          className="flex-1 rounded-md border border-border px-4 py-3 text-sm font-medium transition-colors hover:bg-surface"
+          className="rounded-lg border border-border px-2 py-4 text-sm font-medium transition-colors hover:bg-surface active:bg-surface-hover sm:px-4"
         >
-          <span className="mb-1 block text-lg">▣</span>
-          Choose File
+          <span className="mb-1 block text-2xl">▣</span>
+          Library
         </button>
         <button
           onClick={() => {
@@ -185,10 +185,10 @@ export default function CapturePage() {
               fileRef.current.click();
             }
           }}
-          className="flex-1 rounded-md border border-border px-4 py-3 text-sm font-medium transition-colors hover:bg-surface"
+          className="rounded-lg border border-border px-2 py-4 text-sm font-medium transition-colors hover:bg-surface active:bg-surface-hover sm:px-4"
         >
-          <span className="mb-1 block text-lg">◉</span>
-          Take Photo
+          <span className="mb-1 block text-2xl">◉</span>
+          Photo
         </button>
         <button
           onClick={() => {
@@ -198,10 +198,10 @@ export default function CapturePage() {
               fileRef.current.click();
             }
           }}
-          className="flex-1 rounded-md border border-border px-4 py-3 text-sm font-medium transition-colors hover:bg-surface"
+          className="rounded-lg border border-border px-2 py-4 text-sm font-medium transition-colors hover:bg-surface active:bg-surface-hover sm:px-4"
         >
-          <span className="mb-1 block text-lg">▶</span>
-          Record
+          <span className="mb-1 block text-2xl">▶</span>
+          Video
         </button>
       </div>
 
@@ -271,12 +271,14 @@ export default function CapturePage() {
           ))}
 
           {pending.length > 0 && siteId && (
-            <button
-              onClick={uploadAll}
-              className="w-full rounded-md bg-accent px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
-            >
-              Upload {pending.length} {pending.length === 1 ? "file" : "files"}
-            </button>
+            <div className="sticky bottom-4 pt-2">
+              <button
+                onClick={uploadAll}
+                className="w-full rounded-lg bg-accent px-4 py-4 text-base font-medium text-white shadow-lg transition-colors hover:bg-accent-hover active:bg-accent-hover"
+              >
+                Upload {pending.length} {pending.length === 1 ? "file" : "files"}
+              </button>
+            </div>
           )}
 
           {pending.length > 0 && !siteId && (

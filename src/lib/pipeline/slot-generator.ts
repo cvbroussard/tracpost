@@ -42,10 +42,20 @@ export async function generateSlots(
     const p = acct.platform as string;
     if (p === "instagram") {
       platformToCadence[acct.id] = ["ig_feed", "ig_reel", "ig_story"];
+    } else if (p === "facebook") {
+      platformToCadence[acct.id] = ["fb_feed", "fb_reel"];
     } else if (p === "youtube") {
       platformToCadence[acct.id] = ["youtube"];
     } else if (p === "gbp") {
       platformToCadence[acct.id] = ["gbp"];
+    } else if (p === "tiktok") {
+      platformToCadence[acct.id] = ["tiktok"];
+    } else if (p === "twitter") {
+      platformToCadence[acct.id] = ["twitter"];
+    } else if (p === "linkedin") {
+      platformToCadence[acct.id] = ["linkedin"];
+    } else if (p === "pinterest") {
+      platformToCadence[acct.id] = ["pinterest"];
     }
   }
 

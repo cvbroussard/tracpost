@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { ConnectInstagramButton } from "./connect-instagram";
+import { ConnectGoogleButton } from "./connect-google";
 import { LinkAccountForm } from "./link-account";
 import { DisconnectButton } from "./disconnect-button";
 
@@ -55,7 +56,12 @@ export default async function AccountsPage() {
           <h1 className="mb-1 text-lg font-semibold">Social Accounts</h1>
           <p className="text-sm text-muted">Connect and link accounts to your sites</p>
         </div>
-        <ConnectInstagramButton />
+        <div className="flex gap-2">
+          <ConnectInstagramButton />
+          {session.activeSiteId && (
+            <ConnectGoogleButton siteId={session.activeSiteId} />
+          )}
+        </div>
       </div>
 
       {accounts.length > 0 ? (

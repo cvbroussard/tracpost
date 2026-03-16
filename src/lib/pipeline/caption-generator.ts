@@ -58,6 +58,26 @@ const PLATFORM_RULES: Record<string, { maxLength: number; hashtagRange: [number,
     hashtagRange: [3, 5],
     style: "Short, punchy hook. Similar to ig_reel but can reference the Facebook Page or community.",
   },
+  tiktok: {
+    maxLength: 2200,
+    hashtagRange: [3, 5],
+    style: "Casual, trending tone. Hook in the first line — stop the scroll. Use popular format patterns. Include relevant trending hashtags.",
+  },
+  twitter: {
+    maxLength: 280,
+    hashtagRange: [1, 2],
+    style: "Concise and punchy. One clear thought. No filler words. Optional question to drive replies.",
+  },
+  linkedin: {
+    maxLength: 3000,
+    hashtagRange: [3, 5],
+    style: "Professional and insightful. Lead with a bold statement or industry observation. Share a lesson or result. End with a question to drive engagement.",
+  },
+  pinterest: {
+    maxLength: 500,
+    hashtagRange: [0, 0],
+    style: "Keyword-rich description for search discovery. Describe what the image shows and why it matters. Include the website link context.",
+  },
 };
 
 /**

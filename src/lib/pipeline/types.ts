@@ -24,7 +24,11 @@ export type PlatformFormat =
   | "fb_reel"
   | "youtube"
   | "youtube_short"
-  | "gbp";
+  | "gbp"
+  | "tiktok"
+  | "twitter"
+  | "linkedin"
+  | "pinterest";
 
 /** Publishing slot statuses */
 export type SlotStatus =
@@ -59,6 +63,10 @@ export interface CadenceConfig {
   youtube?: number;
   youtube_short?: number;
   gbp?: number;
+  tiktok?: number;
+  twitter?: number;
+  linkedin?: number;
+  pinterest?: number;
 }
 
 /** Autopilot config shape stored in sites.autopilot_config */

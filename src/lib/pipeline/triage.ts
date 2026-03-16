@@ -119,7 +119,7 @@ Respond with ONLY valid JSON (no markdown):
 {
   "quality_score": <0.0-1.0, based on: sharpness, lighting, composition, visual appeal>,
   "content_pillar": "<best matching pillar from: ${pillarList}>",
-  "platform_fit": [<array of: "ig_feed", "ig_story", "ig_reel", "gbp", "youtube", "youtube_short">],
+  "platform_fit": [<array of: "ig_feed", "ig_story", "ig_reel", "gbp", "youtube", "youtube_short", "fb_feed", "tiktok", "twitter", "linkedin", "pinterest">],
   "has_faces": <true/false>,
   "has_text_overlay": <true/false>,
   "description": "<1-sentence description of what's in the image>",
@@ -127,9 +127,11 @@ Respond with ONLY valid JSON (no markdown):
 }
 
 Rules:
-- Photos are typically ig_feed, ig_story, gbp
-- Vertical/portrait images also suit ig_story
-- Only include ig_reel or youtube if the content strongly suggests video would be better
+- Photos are typically ig_feed, ig_story, gbp, fb_feed, twitter, linkedin, pinterest
+- Vertical/portrait images also suit ig_story, tiktok, pinterest
+- Only include ig_reel, youtube, or tiktok if the content is video or strongly suggests video would be better
+- Professional/business content suits linkedin and gbp
+- Visual/aesthetic content suits pinterest
 - If subscriber provided a pillar, prefer it unless clearly wrong
 - Score quality honestly: blurry/dark/poorly composed = low, clear/well-lit/engaging = high`,
           },
@@ -150,7 +152,7 @@ Rules:
   }
 
   const quality = Math.min(1, Math.max(0, parsed.quality_score || 0.5));
-  const platformFit = (parsed.platform_fit || ["ig_feed", "ig_story", "gbp"]) as PlatformFormat[];
+  const platformFit = (parsed.platform_fit || ["ig_feed", "ig_story", "gbp", "fb_feed", "twitter", "linkedin", "pinterest"]) as PlatformFormat[];
 
   // Determine triage outcome
   let triageStatus: TriageResult["triage_status"] = "triaged";
@@ -213,11 +215,11 @@ function heuristicTriage(
   // Platform fit based on media type
   const platformFit: PlatformFormat[] = [];
   if (mediaType.startsWith("video")) {
-    platformFit.push("ig_reel", "ig_story", "youtube_short");
+    platformFit.push("ig_reel", "ig_story", "youtube_short", "tiktok", "fb_reel");
     const duration = (metadata.duration_seconds as number) || 0;
     if (duration > 60) platformFit.push("youtube");
   } else if (mediaType.startsWith("image")) {
-    platformFit.push("ig_feed", "ig_story", "gbp");
+    platformFit.push("ig_feed", "ig_story", "gbp", "fb_feed", "twitter", "linkedin", "pinterest");
   }
 
   // Pillar assignment — subscriber-provided pillar takes precedence

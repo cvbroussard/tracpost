@@ -5,6 +5,7 @@ import { fillSlots } from "./slot-filler";
 import { generateMissingCaptions } from "./caption-generator";
 import { publishDuePosts } from "./publisher";
 import { generateMissingBlogPosts } from "./blog-generator";
+import { sendPushNotification } from "@/lib/notifications";
 
 export interface PipelineRunResult {
   siteId: string;
@@ -102,7 +103,55 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     result.errors.push(`publish: ${msg}`);
   }
 
+  // Send push notification if there are meaningful results
+  await notifyPipelineResults(siteId, result);
+
   return result;
+}
+
+/**
+ * Send a push notification summarizing pipeline results.
+ * Only sends if there were meaningful actions (assets triaged or posts published).
+ */
+async function notifyPipelineResults(
+  siteId: string,
+  result: PipelineRunResult
+): Promise<void> {
+  const hasMeaningfulResults =
+    result.assetsTriaged > 0 || result.postsPublished > 0;
+  if (!hasMeaningfulResults) return;
+
+  try {
+    // Look up subscriber_id from the site
+    const siteRows = await sql`
+      SELECT s.subscriber_id, si.name as site_name
+      FROM sites si
+      JOIN subscribers s ON si.subscriber_id = s.id
+      WHERE si.id = ${siteId}
+    `;
+    if (siteRows.length === 0) return;
+
+    const { subscriber_id, site_name } = siteRows[0];
+    const parts: string[] = [];
+
+    if (result.assetsTriaged > 0) {
+      parts.push(`${result.assetsTriaged} asset${result.assetsTriaged === 1 ? "" : "s"} triaged`);
+    }
+    if (result.postsPublished > 0) {
+      parts.push(`${result.postsPublished} post${result.postsPublished === 1 ? "" : "s"} published`);
+    }
+
+    const title = `Pipeline Complete — ${site_name || "Your Site"}`;
+    const body = parts.join(", ");
+
+    await sendPushNotification(subscriber_id, title, body, {
+      siteId,
+      type: "pipeline_complete",
+    });
+  } catch (err) {
+    // Non-fatal — don't break the pipeline for notification failures
+    console.error("Failed to send pipeline notification:", err);
+  }
 }
 
 /**

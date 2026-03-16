@@ -4,6 +4,7 @@ import { generateSlots } from "./slot-generator";
 import { fillSlots } from "./slot-filler";
 import { generateMissingCaptions } from "./caption-generator";
 import { publishDuePosts } from "./publisher";
+import { generateMissingBlogPosts } from "./blog-generator";
 
 export interface PipelineRunResult {
   siteId: string;
@@ -11,6 +12,7 @@ export interface PipelineRunResult {
   slotsGenerated: number;
   slotsFilled: number;
   captionsGenerated: number;
+  blogPostsGenerated: number;
   postsPublished: number;
   postsFailed: number;
   errors: string[];
@@ -34,6 +36,7 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     slotsGenerated: 0,
     slotsFilled: 0,
     captionsGenerated: 0,
+    blogPostsGenerated: 0,
     postsPublished: 0,
     postsFailed: 0,
     errors: [],
@@ -81,7 +84,15 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     result.errors.push(`captions: ${msg}`);
   }
 
-  // Step 5: Publish posts that are due
+  // Step 5: Generate blog posts from triaged assets (if blog enabled)
+  try {
+    result.blogPostsGenerated = await generateMissingBlogPosts(siteId);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    result.errors.push(`blog-gen: ${msg}`);
+  }
+
+  // Step 6: Publish posts that are due
   try {
     const pubResult = await publishDuePosts(siteId);
     result.postsPublished = pubResult.published;

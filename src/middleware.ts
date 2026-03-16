@@ -36,6 +36,25 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  if (subdomain === "blog") {
+    // Blog subdomain — block admin/dashboard, rewrite to /blog/*
+    if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+    // Already on /blog path — pass through
+    if (pathname.startsWith("/blog")) {
+      return NextResponse.next();
+    }
+    // Rewrite: / → /blog, /my-post → /blog/my-post
+    const rewritePath = pathname === "/" ? "/blog" : `/blog${pathname}`;
+    const url = req.nextUrl.clone();
+    url.pathname = rewritePath;
+    // Pass the original hostname for domain→site resolution
+    const response = NextResponse.rewrite(url);
+    response.headers.set("x-blog-host", hostname);
+    return response;
+  }
+
   if (subdomain === "studio") {
     // Block admin routes on studio subdomain
     if (pathname.startsWith("/admin")) {

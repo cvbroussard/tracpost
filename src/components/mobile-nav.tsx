@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "./theme-toggle";
 
 const baseNav = [
-  { label: "Overview", path: "", icon: "◆" },
+  { label: "Dashboard", path: "", icon: "◆" },
   { label: "Brand", path: "/brand", icon: "◈" },
   { label: "Capture", path: "/capture", icon: "◎" },
   { label: "Media", path: "/media", icon: "▣" },
@@ -50,7 +50,7 @@ export function MobileNav({ subscriberName }: { subscriberName: string }) {
       {open && (
         <nav className="border-b border-border bg-surface px-2 py-2">
           {baseNav.map((item) => {
-            const href = prefix + item.path || prefix;
+            const href = prefix + item.path || "/";
             const active =
               item.path === ""
                 ? pathname === prefix || pathname === prefix + "/"

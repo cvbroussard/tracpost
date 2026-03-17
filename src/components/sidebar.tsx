@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "./theme-toggle";
 
 const baseNav = [
-  { label: "Overview", path: "", icon: "◆" },
+  { label: "Dashboard", path: "", icon: "◆" },
   { label: "Brand", path: "/brand", icon: "◈" },
   { label: "Capture", path: "/capture", icon: "◎" },
   { label: "Media", path: "/media", icon: "▣" },
@@ -27,7 +27,7 @@ export function Sidebar({ subscriberName }: { subscriberName: string }) {
   const prefix = isSubdomain ? "" : "/dashboard";
   const nav = baseNav.map((item) => ({
     ...item,
-    href: prefix + item.path || prefix,
+    href: prefix + item.path || "/",
   }));
 
   async function handleLogout() {

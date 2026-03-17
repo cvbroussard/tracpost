@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("TikTok OAuth callback error:", message);
     return NextResponse.redirect(
-      `${studioUrl("/accounts")}?error=tiktok_oauth_failed`
+      `${studioUrl("/accounts")}?error=tiktok_oauth_failed&detail=${encodeURIComponent(message.slice(0, 200))}`
     );
   }
 }

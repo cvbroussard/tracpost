@@ -130,7 +130,37 @@
 body {
   background: var(--color-background);
   color: var(--color-foreground);
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
   transition: background var(--tp-transition), color var(--tp-transition);
+}
+
+/* Type scale — Tux-inspired, Geist optimized */
+h1 {
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+h4 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 /* Buttons — tight 4px radius (Tux pattern) */

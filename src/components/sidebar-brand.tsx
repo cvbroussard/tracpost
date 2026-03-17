@@ -34,7 +34,7 @@ export function SidebarBrand({ subscriberName, sites, activeSiteId, onSiteChange
   return (
     <div className="border-b border-border px-4 py-3">
       {/* Business brand */}
-      <p className="text-sm font-semibold text-foreground">
+      <p className="font-semibold text-foreground">
         {subscriberName}
       </p>
 

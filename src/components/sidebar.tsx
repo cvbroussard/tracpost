@@ -56,7 +56,7 @@ export function Sidebar({ subscriberName, sites, activeSiteId }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
                 active
                   ? "bg-accent-muted text-accent"
                   : "text-muted hover:bg-surface-hover hover:text-foreground"

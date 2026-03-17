@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { InstagramIcon } from "@/components/platform-icons";
 
 export function ConnectInstagramButton() {
   const [loading, setLoading] = useState(false);
@@ -45,9 +46,10 @@ export function ConnectInstagramButton() {
       <button
         onClick={handleConnect}
         disabled={loading}
-        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+        className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
       >
-        {loading ? "Connecting..." : "Connect Instagram"}
+        <InstagramIcon size={16} />
+        {loading ? "Connecting..." : "Instagram"}
       </button>
       {!showPageIds && (
         <button

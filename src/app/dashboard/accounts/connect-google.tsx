@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { GoogleIcon } from "@/components/platform-icons";
 
 export function ConnectGoogleButton({ siteId }: { siteId: string }) {
   const [loading, setLoading] = useState(false);
@@ -33,9 +34,10 @@ export function ConnectGoogleButton({ siteId }: { siteId: string }) {
       <button
         onClick={handleConnect}
         disabled={loading}
-        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+        className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
       >
-        {loading ? "Connecting..." : "Connect Google Business"}
+        <GoogleIcon size={16} />
+        {loading ? "Connecting..." : "Google Business"}
       </button>
       {error && <span className="text-xs text-danger">{error}</span>}
     </div>

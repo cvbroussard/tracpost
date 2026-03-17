@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
+import { PlatformIcon } from "@/components/platform-icons";
 import { ConnectInstagramButton } from "./connect-instagram";
 import { ConnectGoogleButton } from "./connect-google";
 import { ConnectTikTokButton } from "./connect-tiktok";
@@ -77,9 +78,12 @@ export default async function AccountsPage() {
             return (
               <div key={acc.id} className="rounded-lg border border-border bg-surface p-5">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-medium">{acc.account_name}</h3>
-                    <p className="mt-0.5 text-xs text-muted">{acc.platform}</p>
+                  <div className="flex items-center gap-3">
+                    <PlatformIcon platform={acc.platform} size={24} />
+                    <div>
+                      <h3 className="text-sm font-medium">{acc.account_name}</h3>
+                      <p className="mt-0.5 text-xs text-muted">{acc.platform}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`text-xs ${acc.status === "active" ? "text-success" : "text-danger"}`}>

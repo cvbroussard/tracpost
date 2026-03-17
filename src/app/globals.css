@@ -41,6 +41,7 @@
   --tp-red: #ef4444;
 
   /* Spacing (base-8) */
+  --tp-radius-xs: 2px;
   --tp-radius-sm: 4px;
   --tp-radius: 8px;
   --tp-radius-lg: 12px;
@@ -137,7 +138,7 @@ button,
 a[role="button"],
 [type="submit"],
 [type="button"] {
-  border-radius: var(--tp-radius-sm);
+  border-radius: var(--tp-radius-xs);
 }
 
 /* Flat inputs — borderless, opacity background */

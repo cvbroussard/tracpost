@@ -79,7 +79,7 @@ export function SeoDashboardClient({
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               tab === t
                 ? "bg-accent/10 text-accent"
                 : "text-muted hover:text-foreground"

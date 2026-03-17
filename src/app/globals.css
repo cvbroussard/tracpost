@@ -1,22 +1,175 @@
 @import "tailwindcss";
 
-@theme inline {
-  --color-background: #0a0a0a;
+/*
+ * TracPost Design System
+ *
+ * Two-tier token architecture inspired by TikTok Tux:
+ *   Layer 1: --tp-*   → primitive values (raw colors, sizes)
+ *   Layer 2: --color-* → semantic tokens consumed by Tailwind
+ *
+ * Flat/opacity design language:
+ *   - No box-shadows for elevation
+ *   - Opacity-based hover states
+ *   - 8px primary border radius
+ *   - Geist variable font
+ */
+
+/* ── Primitives (not consumed directly by components) ─────────── */
+
+:root {
+  /* Neutral scale */
+  --tp-gray-50: #fafafa;
+  --tp-gray-100: #f4f4f5;
+  --tp-gray-200: #e4e4e7;
+  --tp-gray-300: #d4d4d8;
+  --tp-gray-400: #a1a1aa;
+  --tp-gray-500: #71717a;
+  --tp-gray-600: #52525b;
+  --tp-gray-700: #3f3f46;
+  --tp-gray-800: #27272a;
+  --tp-gray-900: #18181b;
+  --tp-gray-950: #0a0a0a;
+
+  /* Brand */
+  --tp-blue: #3b82f6;
+  --tp-blue-hover: #2563eb;
+  --tp-blue-muted: rgba(59, 130, 246, 0.10);
+
+  /* Status */
+  --tp-green: #22c55e;
+  --tp-yellow: #eab308;
+  --tp-red: #ef4444;
+
+  /* Spacing (base-8) */
+  --tp-radius-sm: 4px;
+  --tp-radius: 8px;
+  --tp-radius-lg: 12px;
+  --tp-radius-full: 9999px;
+
+  /* Transitions */
+  --tp-transition-fast: 0.1s ease;
+  --tp-transition: 0.2s ease;
+}
+
+/* ── Semantic tokens: Dark (default) ──────────────────────────── */
+
+:root {
+  --color-background: var(--tp-gray-950);
   --color-foreground: #ededed;
-  --color-muted: #a1a1aa;
-  --color-border: #27272a;
-  --color-surface: #18181b;
-  --color-surface-hover: #1e1e22;
-  --color-accent: #3b82f6;
-  --color-accent-hover: #2563eb;
-  --color-success: #22c55e;
-  --color-warning: #eab308;
-  --color-danger: #ef4444;
+  --color-muted: var(--tp-gray-400);
+  --color-dim: var(--tp-gray-500);
+  --color-border: var(--tp-gray-800);
+  --color-surface: var(--tp-gray-900);
+  --color-surface-hover: rgba(255, 255, 255, 0.05);
+  --color-accent: var(--tp-blue);
+  --color-accent-hover: var(--tp-blue-hover);
+  --color-accent-muted: var(--tp-blue-muted);
+  --color-success: var(--tp-green);
+  --color-warning: var(--tp-yellow);
+  --color-danger: var(--tp-red);
+
+  /* Input-specific */
+  --color-input-bg: rgba(255, 255, 255, 0.05);
+  --color-input-bg-hover: rgba(255, 255, 255, 0.08);
+  --color-input-placeholder: var(--tp-gray-500);
+}
+
+/* ── Semantic tokens: Light ───────────────────────────────────── */
+
+.light {
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+  --color-muted: var(--tp-gray-500);
+  --color-dim: var(--tp-gray-400);
+  --color-border: var(--tp-gray-200);
+  --color-surface: var(--tp-gray-50);
+  --color-surface-hover: rgba(0, 0, 0, 0.04);
+  --color-accent: var(--tp-blue);
+  --color-accent-hover: var(--tp-blue-hover);
+  --color-accent-muted: var(--tp-blue-muted);
+  --color-success: var(--tp-green);
+  --color-warning: var(--tp-yellow);
+  --color-danger: var(--tp-red);
+
+  /* Input-specific */
+  --color-input-bg: rgba(0, 0, 0, 0.04);
+  --color-input-bg-hover: rgba(0, 0, 0, 0.06);
+  --color-input-placeholder: var(--tp-gray-400);
+}
+
+/* ── Tailwind v4 theme binding ────────────────────────────────── */
+
+@theme inline {
+  --color-background: var(--color-background);
+  --color-foreground: var(--color-foreground);
+  --color-muted: var(--color-muted);
+  --color-dim: var(--color-dim);
+  --color-border: var(--color-border);
+  --color-surface: var(--color-surface);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-muted: var(--color-accent-muted);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+  --color-input-bg: var(--color-input-bg);
+  --color-input-bg-hover: var(--color-input-bg-hover);
+  --color-input-placeholder: var(--color-input-placeholder);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --radius-sm: var(--tp-radius-sm);
+  --radius: var(--tp-radius);
+  --radius-lg: var(--tp-radius-lg);
+  --radius-full: var(--tp-radius-full);
 }
+
+/* ── Base styles ──────────────────────────────────────────────── */
 
 body {
   background: var(--color-background);
   color: var(--color-foreground);
+  transition: background var(--tp-transition), color var(--tp-transition);
+}
+
+/* Flat inputs — borderless, opacity background */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  background: var(--color-input-bg);
+  border: none;
+  border-radius: var(--tp-radius);
+  color: var(--color-foreground);
+  transition: background var(--tp-transition-fast);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):hover,
+textarea:hover,
+select:hover {
+  background: var(--color-input-bg-hover);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+  background: var(--color-input-bg-hover);
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-input-placeholder);
+}
+
+/* Kill all box-shadows — flat design */
+* {
+  --tw-shadow: none !important;
+  --tw-ring-shadow: none !important;
+}
+
+/* Allow explicit focus rings */
+:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
 }

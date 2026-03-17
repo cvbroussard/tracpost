@@ -66,13 +66,13 @@ export default function NewSubscriberPage() {
           <div className="flex gap-3">
             <Link
               href={`/admin/subscribers/${result.id}`}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
             >
               View Subscriber
             </Link>
             <Link
               href={`/admin/subscribers/${result.id}/sites/new`}
-              className="rounded-md border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface"
+              className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface"
             >
               Add Site
             </Link>
@@ -143,7 +143,7 @@ export default function NewSubscriberPage() {
         <button
           type="submit"
           disabled={loading || !name || !email || !password}
-          className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+          className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
         >
           {loading ? "Creating..." : "Create Subscriber"}
         </button>

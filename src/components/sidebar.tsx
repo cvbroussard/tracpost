@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { ThemeToggle } from "./theme-toggle";
 
 const baseNav = [
   { label: "Overview", path: "", icon: "◆" },
@@ -51,9 +52,9 @@ export function Sidebar({ subscriberName }: { subscriberName: string }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                 active
-                  ? "bg-accent/10 text-accent"
+                  ? "bg-accent-muted text-accent"
                   : "text-muted hover:bg-surface-hover hover:text-foreground"
               }`}
             >
@@ -64,7 +65,10 @@ export function Sidebar({ subscriberName }: { subscriberName: string }) {
         })}
       </nav>
       <div className="border-t border-border px-5 py-3">
-        <p className="mb-1 truncate text-xs font-medium">{subscriberName}</p>
+        <div className="mb-1 flex items-center justify-between">
+          <p className="truncate text-xs font-medium">{subscriberName}</p>
+          <ThemeToggle />
+        </div>
         <button
           onClick={handleLogout}
           className="text-[10px] text-muted hover:text-foreground"

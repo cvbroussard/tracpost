@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { ThemeToggle } from "./theme-toggle";
 
 const baseNav = [
   { label: "Overview", path: "", icon: "◆" },
@@ -59,9 +60,9 @@ export function MobileNav({ subscriberName }: { subscriberName: string }) {
                 key={href}
                 href={href}
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
                   active
-                    ? "bg-accent/10 text-accent"
+                    ? "bg-accent-muted text-accent"
                     : "text-muted hover:bg-surface-hover hover:text-foreground"
                 }`}
               >
@@ -71,7 +72,10 @@ export function MobileNav({ subscriberName }: { subscriberName: string }) {
             );
           })}
           <div className="mt-1 border-t border-border px-3 pt-2">
-            <p className="mb-1 truncate text-xs font-medium">{subscriberName}</p>
+            <div className="mb-1 flex items-center justify-between">
+              <p className="truncate text-xs font-medium">{subscriberName}</p>
+              <ThemeToggle />
+            </div>
             <button
               onClick={handleLogout}
               className="text-[10px] text-muted hover:text-foreground"

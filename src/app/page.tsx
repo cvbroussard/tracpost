@@ -14,19 +14,19 @@ export default function Home() {
       <div className="flex gap-3">
         <Link
           href={loginHref}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
         >
           Subscriber Login
         </Link>
         <Link
           href={adminHref}
-          className="rounded-md border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface"
+          className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface"
         >
           Platform Admin
         </Link>
         <Link
           href="/api/health"
-          className="rounded-md border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface"
+          className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface"
         >
           API Status
         </Link>

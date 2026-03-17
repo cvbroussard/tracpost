@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { ThemeToggle } from "./theme-toggle";
 
 const baseNav = [
   { label: "Overview", path: "", icon: "◆" },
@@ -45,9 +46,9 @@ export function AdminSidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                 active
-                  ? "bg-accent/10 text-accent"
+                  ? "bg-accent-muted text-accent"
                   : "text-muted hover:bg-surface-hover hover:text-foreground"
               }`}
             >
@@ -58,7 +59,10 @@ export function AdminSidebar() {
         })}
       </nav>
       <div className="border-t border-border px-5 py-3">
-        <p className="mb-1 text-xs text-muted">Platform Admin</p>
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-xs text-muted">Platform Admin</p>
+          <ThemeToggle />
+        </div>
         <button
           onClick={async () => {
             await fetch("/api/auth/admin", { method: "DELETE" });

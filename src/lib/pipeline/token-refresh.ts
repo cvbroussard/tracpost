@@ -9,7 +9,7 @@ export async function refreshExpiringTokens(): Promise<{ refreshed: number; fail
   const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const expiring = await sql`
-    SELECT id, platform, access_token_encrypted, account_name
+    SELECT id, platform, access_token_encrypted, refresh_token_encrypted, account_name
     FROM social_accounts
     WHERE status = 'active'
       AND token_expires_at IS NOT NULL
@@ -28,9 +28,9 @@ export async function refreshExpiringTokens(): Promise<{ refreshed: number; fail
         continue;
       }
 
-      const { accessToken, expiresIn } = await adapter.refreshToken(
-        account.access_token_encrypted // TODO: decrypt
-      );
+      // Use refresh token if available (TikTok, Twitter, etc.), otherwise access token (Meta)
+      const tokenForRefresh = account.refresh_token_encrypted || account.access_token_encrypted;
+      const { accessToken, expiresIn } = await adapter.refreshToken(tokenForRefresh);
 
       const newExpiry = new Date(Date.now() + expiresIn * 1000).toISOString();
 

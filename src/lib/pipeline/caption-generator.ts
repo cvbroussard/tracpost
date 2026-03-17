@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 import type { PlatformFormat } from "./types";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { getPersonaCaptionContext } from "@/lib/personas";
 
 const anthropic = new Anthropic();
 
@@ -147,9 +148,15 @@ export async function generateCaption({ postId }: CaptionRequest): Promise<Capti
     }
   }
 
+  // Get persona context if asset is linked to characters
+  const sourceAssetId = post.source_asset_id as string | null;
+  const personaContext = sourceAssetId
+    ? await getPersonaCaptionContext(sourceAssetId).catch(() => null)
+    : null;
+
   const prompt = playbook
-    ? buildPlaybookPrompt(post, platformFormat, rules, playbook, hookText)
-    : buildPrompt(post, platformFormat, rules, brandVoice);
+    ? buildPlaybookPrompt(post, platformFormat, rules, playbook, hookText, personaContext)
+    : buildPrompt(post, platformFormat, rules, brandVoice, personaContext);
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
@@ -181,7 +188,8 @@ function buildPlaybookPrompt(
   platform: PlatformFormat,
   rules: (typeof PLATFORM_RULES)[string],
   playbook: BrandPlaybook,
-  hookText?: string
+  hookText?: string,
+  personaContext?: string | null
 ): string {
   const { audienceResearch, brandPositioning, offerCore } = playbook;
   const angle = brandPositioning.selectedAngles[0];
@@ -220,6 +228,13 @@ function buildPlaybookPrompt(
     parts.push(`Visual: ${analysis.description}`);
   }
 
+  if (personaContext) {
+    parts.push("");
+    parts.push("## Characters");
+    parts.push(personaContext);
+    parts.push("Use their names naturally. Reference their story arc if relevant to the content.");
+  }
+
   parts.push("");
   parts.push("## Platform Rules");
   parts.push(`Platform: ${platform}`);
@@ -247,7 +262,8 @@ function buildPrompt(
   post: Record<string, unknown>,
   platform: PlatformFormat,
   rules: (typeof PLATFORM_RULES)[string],
-  brandVoice: Record<string, unknown>
+  brandVoice: Record<string, unknown>,
+  personaContext?: string | null
 ): string {
   const parts: string[] = [];
 
@@ -269,6 +285,13 @@ function buildPrompt(
   const analysis = post.ai_analysis as Record<string, unknown> | null;
   if (analysis && Object.keys(analysis).length > 0) {
     parts.push(`AI analysis of the asset: ${JSON.stringify(analysis)}`);
+  }
+
+  if (personaContext) {
+    parts.push("");
+    parts.push("## Characters");
+    parts.push(personaContext);
+    parts.push("Use their names naturally in the caption.");
   }
 
   parts.push("");

@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 import type { AutopilotConfig, TriageResult, ContentPillar, PlatformFormat } from "./types";
+import { buildPersonaPrompt, processDetections } from "@/lib/personas";
+import type { PersonaDetection } from "@/lib/personas";
 
 const anthropic = new Anthropic();
 
@@ -35,15 +37,26 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
   let result: TriageResult;
   const mediaType = asset.media_type as string;
 
+  // Build persona prompt if site has characters defined
+  const personaPrompt = await buildPersonaPrompt(asset.site_id as string).catch(() => null);
+
   if (mediaType.startsWith("image") && asset.storage_url) {
     try {
-      result = await visionTriage(asset, config, availablePillars, site?.brand_voice);
+      result = await visionTriage(asset, config, availablePillars, site?.brand_voice, personaPrompt);
     } catch (err: unknown) {
       console.error("Vision triage failed, falling back to heuristic:", err);
       result = heuristicTriage(asset, config, availablePillars);
     }
   } else {
     result = heuristicTriage(asset, config, availablePillars);
+  }
+
+  // Process persona detections from vision
+  const detections = (result.ai_analysis?.detected_personas || []) as PersonaDetection[];
+  if (detections.length > 0) {
+    await processDetections(assetId, detections).catch((err) =>
+      console.error("Persona detection processing failed:", err)
+    );
   }
 
   // Persist triage result
@@ -83,7 +96,8 @@ async function visionTriage(
   asset: Record<string, unknown>,
   config: AutopilotConfig,
   pillars: ContentPillar[],
-  brandVoice?: unknown
+  brandVoice?: unknown,
+  personaPrompt?: string | null
 ): Promise<TriageResult> {
   const contextNote = (asset.context_note as string) || "";
   const metadata = (asset.metadata || {}) as Record<string, unknown>;
@@ -123,7 +137,8 @@ Respond with ONLY valid JSON (no markdown):
   "has_faces": <true/false>,
   "has_text_overlay": <true/false>,
   "description": "<1-sentence description of what's in the image>",
-  "quality_notes": "<brief note on quality issues if any>"
+  "quality_notes": "<brief note on quality issues if any>",
+  "detected_personas": [{"persona_id": "<id>", "persona_name": "<name>", "confidence": <0.0-1.0>, "role": "subject"|"background", "reasoning": "<why>"}]
 }
 
 Rules:
@@ -133,7 +148,8 @@ Rules:
 - Professional/business content suits linkedin and gbp
 - Visual/aesthetic content suits pinterest
 - If subscriber provided a pillar, prefer it unless clearly wrong
-- Score quality honestly: blurry/dark/poorly composed = low, clear/well-lit/engaging = high`,
+- Score quality honestly: blurry/dark/poorly composed = low, clear/well-lit/engaging = high
+${personaPrompt || 'If no known characters list is provided, return "detected_personas": []'}`,
           },
         ],
       },
@@ -182,6 +198,7 @@ Rules:
       quality_notes: parsed.quality_notes,
       has_faces: parsed.has_faces,
       has_text_overlay: parsed.has_text_overlay,
+      detected_personas: parsed.detected_personas || [],
     },
   };
 }

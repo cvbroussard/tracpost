@@ -46,19 +46,28 @@ export async function exchangeTikTokCode(code: string): Promise<{
     }),
   });
 
-  const data = await res.json();
+  const raw = await res.json();
+  console.log("TikTok token exchange response:", JSON.stringify(raw));
 
-  if (!res.ok || data.data?.error_code) {
+  // TikTok v2 may nest under `data` or return at top level
+  const data = raw.data || raw;
+
+  if (!res.ok || data.error_code || data.error) {
     throw new Error(
-      `TikTok token exchange failed: ${JSON.stringify(data.data?.description || data)}`
+      `TikTok token exchange failed: ${JSON.stringify(data.error_description || data.description || data.error || data)}`
     );
   }
 
+  const accessToken = data.access_token;
+  if (!accessToken) {
+    throw new Error(`TikTok token exchange: no access_token in response: ${JSON.stringify(raw)}`);
+  }
+
   return {
-    accessToken: data.data.access_token,
-    refreshToken: data.data.refresh_token,
-    expiresIn: data.data.expires_in || 86400,
-    openId: data.data.open_id,
+    accessToken,
+    refreshToken: data.refresh_token || "",
+    expiresIn: data.expires_in || 86400,
+    openId: data.open_id || "",
   };
 }
 
@@ -77,17 +86,20 @@ export async function getTikTokUserInfo(accessToken: string): Promise<{
     },
   });
 
-  const data = await res.json();
+  const raw = await res.json();
+  console.log("TikTok user info response:", JSON.stringify(raw));
 
-  if (!res.ok || data.data?.error_code) {
+  const data = raw.data || raw;
+
+  if (!res.ok || data.error_code || data.error) {
     throw new Error(
-      `TikTok user info failed: ${JSON.stringify(data.data?.description || data)}`
+      `TikTok user info failed: ${JSON.stringify(data.error_description || data.description || data.error || data)}`
     );
   }
 
-  const user = data.data.user;
+  const user = data.user || data;
   return {
-    openId: user.open_id,
+    openId: user.open_id || "",
     displayName: user.display_name || "",
     avatarUrl: user.avatar_url || "",
     username: user.username || "",

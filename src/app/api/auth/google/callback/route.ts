@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       VALUES (
         ${state.site_id}, ${googleAccountId}, ${email},
         ${accessToken}, ${refreshToken}, ${expiresAt},
-        ${"business.manage,userinfo.email"},
+        ${"{business.manage,userinfo.email}"},
         true
       )
       ON CONFLICT (site_id)
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
         VALUES (
           ${state.subscriber_id}, 'gbp', ${loc.locationName}, ${loc.locationId},
           ${accessToken}, ${expiresAt},
-          ${"business.manage"},
+          ${"{business.manage}"},
           'active',
           ${JSON.stringify({
             google_account_id: googleAccountId,

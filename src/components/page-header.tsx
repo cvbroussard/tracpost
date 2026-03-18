@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 interface PageHeaderProps {
   siteName: string;
+  siteIcon?: string;
   children?: React.ReactNode;
 }
 
@@ -19,7 +20,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/settings": "Settings",
 };
 
-export function PageHeader({ siteName, children }: PageHeaderProps) {
+export function PageHeader({ siteName, siteIcon, children }: PageHeaderProps) {
   const pathname = usePathname();
 
   const isSubdomain =
@@ -45,27 +46,37 @@ export function PageHeader({ siteName, children }: PageHeaderProps) {
   return (
     <div className="flex shrink-0 items-center justify-between border-b border-border bg-surface px-5 py-3">
       <div className="flex items-center gap-2 text-sm">
-        <Link href={prefix || "/"} className="font-medium text-foreground hover:text-accent">
-          {siteName}
-        </Link>
-        {crumbs.map((crumb) => (
-          <span key={crumb.href} className="flex items-center gap-2">
-            <span className="text-dim">/</span>
-            <Link href={crumb.href} className="text-muted hover:text-foreground">
-              {crumb.label}
-            </Link>
-          </span>
-        ))}
-        {currentPage && (
-          <>
-            <span className="text-dim">/</span>
-            <span className="text-muted">{currentPage.label}</span>
-          </>
+        {/* Business brand — plain logo, no link */}
+        {siteIcon ? (
+          <img src={siteIcon} alt={siteName} className="h-5 w-5 rounded" />
+        ) : (
+          <img src="/icon.svg" alt={siteName} className="h-5 w-5" />
         )}
-        {!currentPage && (
+        <span className="font-medium text-foreground">{siteName}</span>
+
+        {/* Breadcrumbs — root is always Dashboard */}
+        <span className="text-dim">/</span>
+        {crumbs.length === 0 && !currentPage ? (
+          <span className="text-muted">Dashboard</span>
+        ) : (
           <>
-            <span className="text-dim">/</span>
-            <span className="text-muted">Dashboard</span>
+            <Link href={prefix || "/"} className="text-muted hover:text-foreground">
+              Dashboard
+            </Link>
+            {crumbs.map((crumb) => (
+              <span key={crumb.href} className="flex items-center gap-2">
+                <span className="text-dim">/</span>
+                <Link href={crumb.href} className="text-muted hover:text-foreground">
+                  {crumb.label}
+                </Link>
+              </span>
+            ))}
+            {currentPage && (
+              <>
+                <span className="text-dim">/</span>
+                <span className="text-muted">{currentPage.label}</span>
+              </>
+            )}
           </>
         )}
       </div>

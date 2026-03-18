@@ -22,21 +22,21 @@ export default async function SocialAccountsPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="mb-1 text-lg font-semibold">Social Accounts</h1>
-      <p className="mb-8 text-sm text-muted">All connected social accounts across subscribers</p>
+      <h1>Social Accounts</h1>
+      <p className="mt-2 mb-8 text-muted">All connected social accounts across subscribers</p>
 
-      <div className="overflow-hidden rounded-lg border border-border">
-        <table className="w-full text-sm">
+      <div>
+        <table className="w-full">
           <thead>
-            <tr className="border-b border-border bg-surface text-left text-xs text-muted">
-              <th className="px-4 py-3 font-medium">Account</th>
-              <th className="px-4 py-3 font-medium">Platform</th>
-              <th className="px-4 py-3 font-medium">Subscriber</th>
-              <th className="px-4 py-3 font-medium">Linked Sites</th>
-              <th className="px-4 py-3 font-medium text-center">Published</th>
-              <th className="px-4 py-3 font-medium text-center">Scheduled</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Token Expires</th>
+            <tr className="border-b border-border text-left text-sm text-muted">
+              <th className="pb-3 font-medium">Account</th>
+              <th className="pb-3 font-medium">Platform</th>
+              <th className="pb-3 font-medium">Subscriber</th>
+              <th className="pb-3 font-medium">Linked Sites</th>
+              <th className="py-3 pr-4 font-medium text-center">Published</th>
+              <th className="py-3 pr-4 font-medium text-center">Scheduled</th>
+              <th className="pb-3 font-medium">Status</th>
+              <th className="pb-3 font-medium">Token Expires</th>
             </tr>
           </thead>
           <tbody>
@@ -47,10 +47,10 @@ export default async function SocialAccountsPage() {
               const linkedSites = (acc.linked_sites as string[] | null) || [];
               return (
                 <tr key={acc.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                  <td className="px-4 py-3 font-medium">{acc.account_name}</td>
-                  <td className="px-4 py-3 text-xs">{acc.platform}</td>
-                  <td className="px-4 py-3 text-xs text-muted">{acc.subscriber_name}</td>
-                  <td className="px-4 py-3">
+                  <td className="pb-3 font-medium">{acc.account_name}</td>
+                  <td className="py-3 pr-4 text-xs">{acc.platform}</td>
+                  <td className="py-3 pr-4 text-xs text-muted">{acc.subscriber_name}</td>
+                  <td className="py-3 pr-4">
                     {linkedSites.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {linkedSites.map((name, i) => (
@@ -63,14 +63,14 @@ export default async function SocialAccountsPage() {
                       <span className="text-xs text-warning">Unlinked</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-center">{acc.published_count}</td>
-                  <td className="px-4 py-3 text-center">{acc.scheduled_count}</td>
-                  <td className="px-4 py-3">
+                  <td className="py-3 pr-4 text-center">{acc.published_count}</td>
+                  <td className="py-3 pr-4 text-center">{acc.scheduled_count}</td>
+                  <td className="py-3 pr-4">
                     <span className={`text-xs ${acc.status === "active" ? "text-success" : "text-danger"}`}>
                       {acc.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="py-3 pr-4">
                     <span className={`text-xs ${urgent ? "text-danger font-medium" : "text-muted"}`}>
                       {daysLeft !== null ? `${daysLeft}d` : "—"}
                     </span>
@@ -80,7 +80,7 @@ export default async function SocialAccountsPage() {
             })}
             {accounts.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted">
+                <td colSpan={8} className="py-12 text-center text-sm text-muted">
                   No social accounts connected
                 </td>
               </tr>

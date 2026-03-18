@@ -34,31 +34,31 @@ export default async function UsagePage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="mb-1 text-lg font-semibold">Usage & Billing</h1>
-      <p className="mb-8 text-sm text-muted">API usage, action logs, and billing metrics</p>
+      <h1>Usage & Billing</h1>
+      <p className="mt-2 mb-8 text-muted">API usage, action logs, and billing metrics</p>
 
       {/* By Subscriber */}
       <section className="mb-8">
-        <h2 className="mb-3 text-sm font-medium">Usage by Subscriber</h2>
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
+        <h2 className="mb-4">Usage by Subscriber</h2>
+        <div>
+          <table className="w-full">
             <thead>
-              <tr className="border-b border-border bg-surface text-left text-xs text-muted">
-                <th className="px-4 py-3 font-medium">Subscriber</th>
-                <th className="px-4 py-3 font-medium">Plan</th>
-                <th className="px-4 py-3 font-medium text-center">Actions (all time)</th>
-                <th className="px-4 py-3 font-medium">Last Activity</th>
+              <tr className="border-b border-border text-left text-sm text-muted">
+                <th className="pb-3 font-medium">Subscriber</th>
+                <th className="pb-3 font-medium">Plan</th>
+                <th className="py-3 pr-4 font-medium text-center">Actions (all time)</th>
+                <th className="pb-3 font-medium">Last Activity</th>
               </tr>
             </thead>
             <tbody>
               {bySubscriber.map((s) => (
                 <tr key={s.name} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-medium">{s.name}</td>
-                  <td className="px-4 py-3">
+                  <td className="pb-3 font-medium">{s.name}</td>
+                  <td className="py-3 pr-4">
                     <span className="rounded bg-surface px-2 py-0.5 text-xs">{s.plan}</span>
                   </td>
-                  <td className="px-4 py-3 text-center">{s.total_actions}</td>
-                  <td className="px-4 py-3 text-xs text-muted">
+                  <td className="py-3 pr-4 text-center">{s.total_actions}</td>
+                  <td className="py-3 pr-4 text-xs text-muted">
                     {s.last_action ? new Date(s.last_action).toLocaleString() : "Never"}
                   </td>
                 </tr>
@@ -71,12 +71,12 @@ export default async function UsagePage() {
       {/* Action Breakdown (30 days) */}
       {byAction.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-3 text-sm font-medium">Actions (Last 30 Days)</h2>
-          <div className="grid grid-cols-4 gap-3">
+          <h2 className="mb-4">Actions (Last 30 Days)</h2>
+          <div className="flex flex-wrap gap-8">
             {byAction.map((a) => (
-              <div key={a.action} className="rounded-lg border border-border bg-surface p-4 text-center">
-                <p className="text-xl font-semibold">{a.count}</p>
-                <p className="text-[10px] text-muted">{a.action}</p>
+              <div key={a.action}>
+                <p className="text-2xl font-semibold">{a.count}</p>
+                <p className="text-sm text-muted">{a.action}</p>
               </div>
             ))}
           </div>
@@ -85,29 +85,29 @@ export default async function UsagePage() {
 
       {/* Recent Log */}
       <section>
-        <h2 className="mb-3 text-sm font-medium">Recent Activity</h2>
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
+        <h2 className="mb-4">Recent Activity</h2>
+        <div>
+          <table className="w-full">
             <thead>
-              <tr className="border-b border-border bg-surface text-left text-xs text-muted">
-                <th className="px-4 py-2 font-medium">Action</th>
-                <th className="px-4 py-2 font-medium">Subscriber</th>
-                <th className="px-4 py-2 font-medium">Site</th>
-                <th className="px-4 py-2 font-medium">Time</th>
+              <tr className="border-b border-border text-left text-sm text-muted">
+                <th className="pb-3 font-medium">Action</th>
+                <th className="pb-3 font-medium">Subscriber</th>
+                <th className="pb-3 font-medium">Site</th>
+                <th className="pb-3 font-medium">Time</th>
               </tr>
             </thead>
             <tbody>
               {recent.map((r, i) => (
                 <tr key={i} className="border-b border-border last:border-0">
-                  <td className="px-4 py-2 text-xs font-medium">{r.action}</td>
-                  <td className="px-4 py-2 text-xs text-muted">{r.subscriber_name}</td>
-                  <td className="px-4 py-2 text-xs text-muted">{r.site_name || "—"}</td>
-                  <td className="px-4 py-2 text-xs text-muted">{new Date(r.created_at).toLocaleString()}</td>
+                  <td className="py-3 pr-4 text-xs font-medium">{r.action}</td>
+                  <td className="py-3 pr-4 text-xs text-muted">{r.subscriber_name}</td>
+                  <td className="py-3 pr-4 text-xs text-muted">{r.site_name || "—"}</td>
+                  <td className="py-3 pr-4 text-xs text-muted">{new Date(r.created_at).toLocaleString()}</td>
                 </tr>
               ))}
               {recent.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-muted">No usage logged</td>
+                  <td colSpan={4} className="py-8 text-center text-sm text-muted">No usage logged</td>
                 </tr>
               )}
             </tbody>

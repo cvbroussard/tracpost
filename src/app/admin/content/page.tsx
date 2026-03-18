@@ -36,16 +36,16 @@ export default async function ContentQueuePage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="mb-1 text-lg font-semibold">Content Queue</h1>
-      <p className="mb-8 text-sm text-muted">Scheduled posts, recent activity, and flagged assets</p>
+      <h1>Content Queue</h1>
+      <p className="mt-2 mb-8 text-muted">Scheduled posts, recent activity, and flagged assets</p>
 
       {/* Flagged Assets */}
       {flagged.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-3 text-sm font-medium text-warning">Flagged Assets ({flagged.length})</h2>
+          <h2 className="mb-4 text-warning">Flagged Assets ({flagged.length})</h2>
           <div className="space-y-2">
             {flagged.map((f) => (
-              <div key={f.id} className="rounded-lg border border-warning/30 bg-surface p-4">
+              <div key={f.id} className="border-b border-border py-4 last:border-0">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm">{f.context_note || f.media_type}</p>
@@ -64,31 +64,31 @@ export default async function ContentQueuePage() {
 
       {/* Scheduled */}
       <section className="mb-8">
-        <h2 className="mb-3 text-sm font-medium">Scheduled ({scheduled.length})</h2>
+        <h2 className="mb-4">Scheduled ({scheduled.length})</h2>
         {scheduled.length > 0 ? (
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
+          <div>
+            <table className="w-full">
               <thead>
-                <tr className="border-b border-border bg-surface text-left text-xs text-muted">
-                  <th className="px-4 py-2 font-medium">Caption</th>
-                  <th className="px-4 py-2 font-medium">Account</th>
-                  <th className="px-4 py-2 font-medium">Pillar</th>
-                  <th className="px-4 py-2 font-medium">Scheduled</th>
-                  <th className="px-4 py-2 font-medium">Authority</th>
+                <tr className="border-b border-border text-left text-sm text-muted">
+                  <th className="pb-3 font-medium">Caption</th>
+                  <th className="pb-3 font-medium">Account</th>
+                  <th className="pb-3 font-medium">Pillar</th>
+                  <th className="pb-3 font-medium">Scheduled</th>
+                  <th className="pb-3 font-medium">Authority</th>
                 </tr>
               </thead>
               <tbody>
                 {scheduled.map((p) => (
                   <tr key={p.id} className="border-b border-border last:border-0">
-                    <td className="max-w-xs truncate px-4 py-2">{p.caption || "Awaiting caption"}</td>
-                    <td className="px-4 py-2 text-xs text-muted">{p.account_name} ({p.platform})</td>
-                    <td className="px-4 py-2">
+                    <td className="max-w-xs truncate py-3 pr-4">{p.caption || "Awaiting caption"}</td>
+                    <td className="py-3 pr-4 text-xs text-muted">{p.account_name} ({p.platform})</td>
+                    <td className="py-3 pr-4">
                       <span className="rounded bg-surface px-2 py-0.5 text-xs">{p.content_pillar || "—"}</span>
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted">
+                    <td className="py-3 pr-4 text-xs text-muted">
                       {p.scheduled_at ? new Date(p.scheduled_at).toLocaleString() : "—"}
                     </td>
-                    <td className="px-4 py-2 text-xs">{p.authority || "platform"}</td>
+                    <td className="py-3 pr-4 text-xs">{p.authority || "platform"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -101,22 +101,22 @@ export default async function ContentQueuePage() {
 
       {/* Recent */}
       <section>
-        <h2 className="mb-3 text-sm font-medium">Recent Activity</h2>
+        <h2 className="mb-4">Recent Activity</h2>
         {recent.length > 0 ? (
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
+          <div>
+            <table className="w-full">
               <thead>
-                <tr className="border-b border-border bg-surface text-left text-xs text-muted">
-                  <th className="px-4 py-2 font-medium">Caption</th>
-                  <th className="px-4 py-2 font-medium">Account</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Published</th>
+                <tr className="border-b border-border text-left text-sm text-muted">
+                  <th className="pb-3 font-medium">Caption</th>
+                  <th className="pb-3 font-medium">Account</th>
+                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Published</th>
                 </tr>
               </thead>
               <tbody>
                 {recent.map((p) => (
                   <tr key={p.id} className="border-b border-border last:border-0">
-                    <td className="max-w-xs truncate px-4 py-2">
+                    <td className="max-w-xs truncate py-3 pr-4">
                       {p.platform_post_url ? (
                         <a href={p.platform_post_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
                           {p.caption || "—"}
@@ -125,13 +125,13 @@ export default async function ContentQueuePage() {
                         p.caption || "—"
                       )}
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted">{p.account_name} ({p.platform})</td>
-                    <td className="px-4 py-2">
+                    <td className="py-3 pr-4 text-xs text-muted">{p.account_name} ({p.platform})</td>
+                    <td className="py-3 pr-4">
                       <span className={`text-xs ${p.status === "published" ? "text-success" : "text-danger"}`}>
                         {p.status}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted">
+                    <td className="py-3 pr-4 text-xs text-muted">
                       {p.published_at ? new Date(p.published_at).toLocaleString() : "—"}
                     </td>
                   </tr>

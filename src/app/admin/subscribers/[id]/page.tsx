@@ -25,10 +25,9 @@ export default async function SubscriberDetail({
       ORDER BY created_at DESC
     `,
     sql`
-      SELECT sa.id, sa.platform, sa.account_name, sa.status, sa.token_expires_at, s.name AS site_name
+      SELECT sa.id, sa.platform, sa.account_name, sa.status, sa.token_expires_at
       FROM social_accounts sa
-      JOIN sites s ON sa.site_id = s.id
-      WHERE s.subscriber_id = ${id}
+      WHERE sa.subscriber_id = ${id}
       ORDER BY sa.created_at DESC
     `,
     sql`
@@ -36,8 +35,7 @@ export default async function SubscriberDetail({
              sa.account_name, sa.platform
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      JOIN sites s ON sa.site_id = s.id
-      WHERE s.subscriber_id = ${id}
+      WHERE sa.subscriber_id = ${id}
       ORDER BY sp.created_at DESC
       LIMIT 10
     `,
@@ -127,7 +125,7 @@ export default async function SubscriberDetail({
                   <tr key={acc.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-2 font-medium">{acc.account_name}</td>
                     <td className="px-4 py-2 text-xs">{acc.platform}</td>
-                    <td className="px-4 py-2 text-xs text-muted">{acc.site_name}</td>
+                    <td className="px-4 py-2 text-xs text-muted">{acc.platform}</td>
                     <td className="px-4 py-2">
                       <span className={`text-xs ${acc.status === "active" ? "text-success" : "text-danger"}`}>
                         {acc.status}

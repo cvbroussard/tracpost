@@ -10,14 +10,12 @@ export default async function SubscribersPage() {
       (SELECT COUNT(*)::int FROM sites WHERE subscriber_id = sub.id) AS site_count,
       (
         SELECT COUNT(*)::int FROM social_accounts sa
-        JOIN sites s ON sa.site_id = s.id
-        WHERE s.subscriber_id = sub.id AND sa.status = 'active'
+        WHERE sa.subscriber_id = sub.id AND sa.status = 'active'
       ) AS account_count,
       (
         SELECT COUNT(*)::int FROM social_posts sp
         JOIN social_accounts sa ON sp.account_id = sa.id
-        JOIN sites s ON sa.site_id = s.id
-        WHERE s.subscriber_id = sub.id AND sp.status = 'published'
+        WHERE sa.subscriber_id = sub.id AND sp.status = 'published'
       ) AS published_count
     FROM subscribers sub
     ORDER BY sub.created_at DESC

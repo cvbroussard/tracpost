@@ -7,19 +7,19 @@ export default async function ContentQueuePage() {
     sql`
       SELECT sp.id, sp.caption, sp.hashtags, sp.media_urls, sp.media_type,
              sp.scheduled_at, sp.content_pillar, sp.authority,
-             sa.account_name, sa.platform, s.name AS site_name
+             sa.account_name, sa.platform, sub.name AS subscriber_name
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      JOIN sites s ON sa.site_id = s.id
+      JOIN subscribers sub ON sa.subscriber_id = sub.id
       WHERE sp.status = 'scheduled'
       ORDER BY sp.scheduled_at ASC
     `,
     sql`
       SELECT sp.id, sp.caption, sp.status, sp.published_at, sp.platform_post_url,
-             sa.account_name, sa.platform, s.name AS site_name
+             sa.account_name, sa.platform, sub.name AS subscriber_name
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      JOIN sites s ON sa.site_id = s.id
+      JOIN subscribers sub ON sa.subscriber_id = sub.id
       WHERE sp.status IN ('published', 'failed')
       ORDER BY COALESCE(sp.published_at, sp.updated_at) DESC
       LIMIT 20

@@ -17,28 +17,29 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const site = await resolveBlogSite(blogHost);
   if (!site) return {};
 
-  const post = await getBlogPost(site.siteId, slug);
-  if (!post) return {};
+  const p = await getBlogPost(site.siteId, slug);
+  if (!p) return {};
 
-  const title = (post.meta_title as string) || (post.title as string);
-  const description = (post.meta_description as string) || (post.excerpt as string);
+  const row = p as Record<string, unknown>;
+  const metaTitle = String(row.meta_title || row.title || "");
+  const metaDesc = String(row.meta_description || row.excerpt || "");
   const canonicalUrl = `https://${blogHost}/${slug}`;
 
   return {
-    title,
-    description,
+    title: metaTitle,
+    description: metaDesc,
     alternates: {
       canonical: canonicalUrl,
     },
     openGraph: {
-      title,
-      description,
+      title: metaTitle,
+      description: metaDesc,
       url: canonicalUrl,
-      images: post.og_image_url ? [post.og_image_url as string] : undefined,
+      images: row.og_image_url ? [String(row.og_image_url)] : undefined,
       type: "article",
-      publishedTime: post.published_at as string,
-      section: post.content_pillar as string,
-      tags: Array.isArray(post.tags) ? (post.tags as string[]) : undefined,
+      publishedTime: row.published_at ? String(row.published_at) : undefined,
+      section: row.content_pillar ? String(row.content_pillar) : undefined,
+      tags: Array.isArray(row.tags) ? (row.tags as string[]) : undefined,
     },
   };
 }
@@ -57,12 +58,20 @@ export default async function BlogPostPage({ params }: Props) {
     notFound();
   }
 
-  const post = await getBlogPost(site.siteId, slug);
-  if (!post) notFound();
+  const postRow = await getBlogPost(site.siteId, slug);
+  if (!postRow) notFound();
 
+  const post = postRow as Record<string, unknown>;
+  const title = String(post.title || "");
+  const body = String(post.body || "");
+  const excerpt = String(post.excerpt || "");
+  const ogImage = post.og_image_url ? String(post.og_image_url) : null;
+  const publishedAt = post.published_at ? String(post.published_at) : null;
+  const pillar = post.content_pillar ? String(post.content_pillar) : null;
+  const metaTitle = post.meta_title ? String(post.meta_title) : title;
+  const metaDesc = post.meta_description ? String(post.meta_description) : excerpt;
   const schemaJson = post.schema_json as Record<string, unknown> | null;
   const tags = Array.isArray(post.tags) ? (post.tags as string[]) : [];
-  const pillar = post.content_pillar ? String(post.content_pillar) : null;
 
   return (
     <article>
@@ -84,15 +93,15 @@ export default async function BlogPostPage({ params }: Props) {
 
       <header style={{ marginBottom: 32 }}>
         <h1 style={{ marginBottom: 12 }}>
-          {String(post.title)}
+          {title}
         </h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 14 }}>
           <span className="blog-muted">By {site.siteName}</span>
-          {post.published_at && (
+          {publishedAt && (
             <>
               <span className="blog-muted">·</span>
               <time className="blog-muted">
-                {new Date(String(post.published_at)).toLocaleDateString("en-US", {
+                {new Date(publishedAt).toLocaleDateString("en-US", {
                   year: "numeric",
                   month: "long",
                   day: "numeric",
@@ -115,10 +124,10 @@ export default async function BlogPostPage({ params }: Props) {
         </div>
       </header>
 
-      {post.og_image_url && (
+      {ogImage && (
         <img
-          src={String(post.og_image_url)}
-          alt={String(post.title)}
+          src={ogImage}
+          alt={title}
           style={{
             width: "100%",
             borderRadius: "var(--blog-radius)",
@@ -130,7 +139,7 @@ export default async function BlogPostPage({ params }: Props) {
       {/* Blog body */}
       <div
         className="blog-prose"
-        dangerouslySetInnerHTML={{ __html: markdownToHtml(String(post.body)) }}
+        dangerouslySetInnerHTML={{ __html: markdownToHtml(body) }}
       />
 
       {/* Tags */}

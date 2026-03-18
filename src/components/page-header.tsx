@@ -31,7 +31,7 @@ export function PageHeader({ siteName, children }: PageHeaderProps) {
   const pageTitle = PAGE_TITLES[relative] || relative.split("/").pop() || "Dashboard";
 
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between border-b border-border bg-surface px-5">
+    <div className="flex shrink-0 items-center justify-between border-b border-border bg-surface px-5 py-3">
       <div className="flex items-center gap-3 text-sm">
         <span className="font-medium text-foreground">{siteName}</span>
         <span className="text-border">/</span>

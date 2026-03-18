@@ -1,31 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import {
-  InstagramIcon,
-  TikTokIcon,
-  GoogleIcon,
-  FacebookIcon,
-  PinterestIcon,
-  TwitterIcon,
-  YouTubeIcon,
-  LinkedInIcon,
-  PlatformIcon,
-} from "@/components/platform-icons";
+import { PlatformIcon } from "@/components/platform-icons";
 
 interface ConnectModalProps {
   siteId: string | null;
 }
 
 const PLATFORMS = [
-  { key: "instagram", label: "Instagram", icon: InstagramIcon, ready: true },
-  { key: "tiktok", label: "TikTok", icon: TikTokIcon, ready: true },
-  { key: "facebook", label: "Facebook", icon: FacebookIcon, ready: false, note: "Pending app review" },
-  { key: "gbp", label: "Google Business", icon: GoogleIcon, ready: false, note: "Pending API access" },
-  { key: "youtube", label: "YouTube", icon: YouTubeIcon, ready: false },
-  { key: "twitter", label: "Twitter / X", icon: TwitterIcon, ready: true },
-  { key: "linkedin", label: "LinkedIn", icon: LinkedInIcon, ready: false },
-  { key: "pinterest", label: "Pinterest", icon: PinterestIcon, ready: true },
+  { key: "instagram", label: "Instagram", ready: true },
+  { key: "tiktok", label: "TikTok", ready: true },
+  { key: "facebook", label: "Facebook", ready: false, note: "Pending app review" },
+  { key: "gbp", label: "Google Business", ready: false, note: "Pending API access" },
+  { key: "youtube", label: "YouTube", ready: false },
+  { key: "twitter", label: "Twitter / X", ready: true },
+  { key: "linkedin", label: "LinkedIn", ready: false },
+  { key: "pinterest", label: "Pinterest", ready: true },
 ];
 
 export function ConnectButton({ siteId }: ConnectModalProps) {
@@ -96,7 +86,6 @@ export function ConnectButton({ siteId }: ConnectModalProps) {
 
             <div className="grid grid-cols-2 gap-3">
               {PLATFORMS.map((p) => {
-                const IconComponent = p.icon;
                 const isConnecting = connecting === p.key;
                 return (
                   <button
@@ -109,7 +98,7 @@ export function ConnectButton({ siteId }: ConnectModalProps) {
                         : "border-border opacity-40"
                     }`}
                   >
-                    <IconComponent platform={p.key} size={20} />
+                    <PlatformIcon platform={p.key} size={20} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">
                         {isConnecting ? "Connecting..." : p.label}

@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
+import { seedBlogContent } from "@/lib/blog-seed";
 
 /**
  * GET /api/blog?site_id=xxx — List blog posts for a site (subscriber dashboard).
@@ -74,6 +75,12 @@ export async function POST(req: NextRequest) {
     `;
     if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
+    // Check if this is a new enable (was disabled or didn't exist)
+    const [prev] = await sql`
+      SELECT blog_enabled FROM blog_settings WHERE site_id = ${site_id}
+    `;
+    const wasEnabled = prev?.blog_enabled === true;
+
     // Upsert blog_settings
     await sql`
       INSERT INTO blog_settings (site_id, blog_enabled, blog_title, blog_description, subdomain, updated_at)
@@ -86,6 +93,15 @@ export async function POST(req: NextRequest) {
         subdomain = COALESCE(${subdomain}, blog_settings.subdomain),
         updated_at = NOW()
     `;
+
+    // Seed content on first enable
+    if (blog_enabled && !wasEnabled) {
+      const seed = await seedBlogContent(site_id).catch((err) => {
+        console.error("Blog seed failed:", err instanceof Error ? err.message : err);
+        return { welcomePostId: null, queuedTopics: 0 };
+      });
+      return NextResponse.json({ success: true, seed });
+    }
 
     return NextResponse.json({ success: true });
   }

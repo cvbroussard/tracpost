@@ -13,22 +13,19 @@ const TOKEN_URL = "https://api.x.com/2/oauth2/token";
 const USER_URL = "https://api.x.com/2/users/me";
 
 /**
- * Generate PKCE code verifier and challenge.
+ * Generate a PKCE code verifier.
  */
-function generatePKCE(): { codeVerifier: string; codeChallenge: string } {
-  const codeVerifier = randomBytes(32).toString("base64url");
-  const codeChallenge = createHash("sha256")
-    .update(codeVerifier)
-    .digest("base64url");
-  return { codeVerifier, codeChallenge };
+export function generateCodeVerifier(): string {
+  return randomBytes(32).toString("base64url");
 }
 
 /**
  * Build X OAuth authorization URL.
- * Returns the URL and the code_verifier (must be stored for token exchange).
  */
-export function getTwitterAuthUrl(state: string): { authUrl: string; codeVerifier: string } {
-  const { codeVerifier, codeChallenge } = generatePKCE();
+export function getTwitterAuthUrl(state: string, codeVerifier: string): string {
+  const codeChallenge = createHash("sha256")
+    .update(codeVerifier)
+    .digest("base64url");
 
   const params = new URLSearchParams({
     response_type: "code",
@@ -40,10 +37,7 @@ export function getTwitterAuthUrl(state: string): { authUrl: string; codeVerifie
     code_challenge_method: "S256",
   });
 
-  return {
-    authUrl: `${AUTH_URL}?${params}`,
-    codeVerifier,
-  };
+  return `${AUTH_URL}?${params}`;
 }
 
 /**

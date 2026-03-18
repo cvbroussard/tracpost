@@ -2,9 +2,7 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { PlatformIcon } from "@/components/platform-icons";
-import { ConnectInstagramButton } from "./connect-instagram";
-import { ConnectGoogleButton } from "./connect-google";
-import { ConnectTikTokButton } from "./connect-tiktok";
+import { ConnectButton } from "./connect-modal";
 import { LinkAccountForm } from "./link-account";
 import { DisconnectButton } from "./disconnect-button";
 
@@ -58,13 +56,7 @@ export default async function AccountsPage() {
           <h1 className="mb-1 text-lg font-semibold">Social Accounts</h1>
           <p className="text-sm text-muted">Connect and link accounts to your sites</p>
         </div>
-        <div className="flex gap-2">
-          <ConnectInstagramButton />
-          <ConnectTikTokButton />
-          {session.activeSiteId && (
-            <ConnectGoogleButton siteId={session.activeSiteId} />
-          )}
-        </div>
+        <ConnectButton siteId={session.activeSiteId} />
       </div>
 
       {accounts.length > 0 ? (

@@ -60,7 +60,7 @@ export default async function AccountsPage() {
       </div>
 
       {accounts.length > 0 ? (
-        <div className="space-y-4">
+        <div>
           {accounts.map((acc) => {
             const expires = acc.token_expires_at ? new Date(acc.token_expires_at) : null;
             const daysLeft = expires ? Math.ceil((expires.getTime() - Date.now()) / 86400000) : null;
@@ -68,53 +68,50 @@ export default async function AccountsPage() {
             const accountLinks = linksByAccount.get(acc.id) || [];
 
             return (
-              <div key={acc.id} className="rounded-lg border border-border bg-surface p-5">
+              <div key={acc.id} className="border-b border-border py-6 last:border-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <PlatformIcon platform={acc.platform} size={24} />
+                    <PlatformIcon platform={acc.platform} size={22} />
                     <div>
-                      <h3 className="text-sm font-medium">{acc.account_name}</h3>
-                      <p className="mt-0.5 text-xs text-muted">{acc.platform}</p>
+                      <p className="font-medium">{acc.account_name}</p>
+                      <p className="text-sm text-muted">{acc.platform}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-xs ${acc.status === "active" ? "text-success" : "text-danger"}`}>
+                  <div className="flex items-center gap-4">
+                    <span className={`text-sm ${acc.status === "active" ? "text-success" : "text-danger"}`}>
                       {acc.status}
                     </span>
                     <DisconnectButton accountId={acc.id} accountName={acc.account_name} />
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-3 gap-4 border-t border-border pt-4 text-center">
+                <div className="mt-4 flex gap-8">
                   <div>
-                    <p className="text-lg font-semibold">{acc.published}</p>
-                    <p className="text-[10px] text-muted">Published</p>
+                    <p className="text-2xl font-semibold">{acc.published}</p>
+                    <p className="text-sm text-muted">Published</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold">{acc.scheduled}</p>
-                    <p className="text-[10px] text-muted">Scheduled</p>
+                    <p className="text-2xl font-semibold">{acc.scheduled}</p>
+                    <p className="text-sm text-muted">Scheduled</p>
                   </div>
                   <div>
-                    <p className={`text-lg font-semibold ${urgent ? "text-danger" : ""}`}>
+                    <p className={`text-2xl font-semibold ${urgent ? "text-danger" : ""}`}>
                       {daysLeft !== null ? `${daysLeft}d` : "—"}
                     </p>
-                    <p className="text-[10px] text-muted">Token Expires</p>
+                    <p className="text-sm text-muted">Token Expires</p>
                   </div>
                 </div>
 
                 {/* Linked sites */}
-                <div className="mt-4 border-t border-border pt-4">
-                  <p className="mb-2 text-xs text-muted">Linked Sites</p>
+                <div className="mt-4 flex items-center gap-3">
                   {accountLinks.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {accountLinks.map((link) => (
-                        <span key={link.siteId} className="rounded bg-accent/10 px-2 py-1 text-xs text-accent">
-                          {link.siteName}
-                        </span>
-                      ))}
-                    </div>
+                    accountLinks.map((link) => (
+                      <span key={link.siteId} className="rounded bg-accent/10 px-2 py-1 text-xs text-accent">
+                        {link.siteName}
+                      </span>
+                    ))
                   ) : (
-                    <p className="text-xs text-warning">Not linked to any site</p>
+                    <span className="text-sm text-warning">Not linked to any site</span>
                   )}
                   {sites.length > 0 && (
                     <LinkAccountForm
@@ -129,11 +126,11 @@ export default async function AccountsPage() {
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border px-8 py-16 text-center">
-          <span className="mb-3 text-3xl">◉</span>
-          <h3 className="mb-1 text-sm font-medium">No accounts connected</h3>
-          <p className="max-w-xs text-xs text-muted">
-            Connect your Instagram account to start publishing content automatically.
+        <div className="py-16 text-center">
+          <p className="mb-2 text-3xl">◉</p>
+          <h3>No accounts connected</h3>
+          <p className="mt-1 text-muted">
+            Connect a social account to start publishing content automatically.
           </p>
         </div>
       )}

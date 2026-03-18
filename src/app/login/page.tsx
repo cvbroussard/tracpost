@@ -28,7 +28,6 @@ export default function LoginPage() {
         return;
       }
 
-      // In production, redirect to studio subdomain
       const isStudio =
         window.location.hostname === "studio.tracpost.com";
       const isProduction =
@@ -48,40 +47,43 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-8">
       <div className="w-full max-w-sm">
-        <h1 className="mb-1 text-center text-lg font-semibold">TracPost</h1>
-        <p className="mb-8 text-center text-sm text-muted">Sign in to your dashboard</p>
+        <div className="mb-8 flex flex-col items-center">
+          <img src="/icon.svg" alt="TracPost" className="mb-4 h-10 w-10" />
+          <h1 className="text-center">TracPost</h1>
+          <p className="mt-1 text-center text-muted">Sign in to your dashboard</p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-surface p-5">
-          <div className="mb-4">
-            <label className="mb-1 block text-xs text-muted">Email</label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
               placeholder="you@example.com"
               autoFocus
+              className="w-full px-3 py-2.5"
             />
           </div>
 
-          <div className="mb-4">
-            <label className="mb-1 block text-xs text-muted">Password</label>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+              className="w-full px-3 py-2.5"
             />
           </div>
 
-          {error && <p className="mb-4 text-xs text-danger">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
 
           <button
             type="submit"
             disabled={loading || !email || !password}
-            className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+            className="w-full bg-accent py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>

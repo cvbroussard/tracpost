@@ -43,38 +43,38 @@ export default async function AdminOverview() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="mb-1 text-lg font-semibold">Platform Overview</h1>
-      <p className="mb-8 text-sm text-muted">Cross-subscriber health at a glance</p>
+      <h1>Platform Overview</h1>
+      <p className="mt-2 mb-8 text-muted">Cross-subscriber health at a glance</p>
 
-      <div className="mb-8 grid grid-cols-3 gap-4">
+      <div className="mb-8 grid grid-cols-3 gap-8">
         {stats.map((s) => (
           <Link
             key={s.label}
             href={s.href}
-            className="group rounded-lg border border-border bg-surface p-5 transition-colors hover:border-accent/30"
+            className="group transition-colors"
           >
-            <p className={`text-2xl font-semibold ${s.danger ? "text-danger" : ""}`}>
+            <p className={`text-3xl font-semibold ${s.danger ? "text-danger" : ""}`}>
               {s.value}
             </p>
-            <p className="text-xs text-muted group-hover:text-foreground">{s.label}</p>
-            {s.sub && <p className="text-[10px] text-muted">{s.sub}</p>}
+            <p className="text-sm text-muted group-hover:text-foreground">{s.label}</p>
+            {s.sub && <p className="text-sm text-dim">{s.sub}</p>}
           </Link>
         ))}
       </div>
 
-      <div className="rounded-lg border border-border bg-surface p-5">
-        <h2 className="mb-4 text-sm font-medium">Asset Pipeline</h2>
-        <div className="grid grid-cols-4 gap-4">
+      <section>
+        <h2 className="mb-4">Asset Pipeline</h2>
+        <div className="grid grid-cols-4 gap-6">
           {pipeline.map((p) => (
-            <div key={p.label} className="text-center">
-              <p className={`text-xl font-semibold ${p.danger ? "text-danger" : ""}`}>
+            <div key={p.label}>
+              <p className={`text-2xl font-semibold ${p.danger ? "text-danger" : ""}`}>
                 {p.value}
               </p>
-              <p className="text-xs text-muted">{p.label}</p>
+              <p className="text-sm text-muted">{p.label}</p>
             </div>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

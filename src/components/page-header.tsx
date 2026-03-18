@@ -55,7 +55,6 @@ export function PageHeader({ siteName, siteIcon, children }: PageHeaderProps) {
         <span className="font-medium text-foreground">{siteName}</span>
 
         {/* Breadcrumbs — root is always Dashboard */}
-        <span className="text-dim">/</span>
         {crumbs.length === 0 && !currentPage ? (
           <span className="text-muted">Dashboard</span>
         ) : (

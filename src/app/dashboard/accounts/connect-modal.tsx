@@ -19,7 +19,7 @@ const PLATFORMS = [
   { key: "facebook", label: "Facebook", icon: FacebookIcon, ready: false, note: "Pending app review" },
   { key: "gbp", label: "Google Business", icon: GoogleIcon, ready: false, note: "Pending API access" },
   { key: "youtube", label: "YouTube", icon: PlatformIcon, ready: false },
-  { key: "twitter", label: "Twitter / X", icon: PlatformIcon, ready: false },
+  { key: "twitter", label: "Twitter / X", icon: PlatformIcon, ready: true },
   { key: "linkedin", label: "LinkedIn", icon: PlatformIcon, ready: false },
   { key: "pinterest", label: "Pinterest", icon: PlatformIcon, ready: false },
 ];

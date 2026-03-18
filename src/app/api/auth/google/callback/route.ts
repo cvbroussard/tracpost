@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeGoogleCode, discoverGbpLocations } from "@/lib/google";
 import { sql } from "@/lib/db";
+import { encrypt } from "@/lib/crypto";
 import { studioUrl } from "@/lib/subdomains";
 
 /**
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
       )
       VALUES (
         ${state.site_id}, ${googleAccountId}, ${email},
-        ${accessToken}, ${refreshToken}, ${expiresAt},
+        ${encrypt(accessToken)}, ${encrypt(refreshToken)}, ${expiresAt},
         ${"{business.manage,userinfo.email}"},
         true
       )
@@ -100,7 +101,7 @@ export async function GET(req: NextRequest) {
         )
         VALUES (
           ${state.subscriber_id}, 'gbp', ${loc.locationName}, ${loc.locationId},
-          ${accessToken}, ${expiresAt},
+          ${encrypt(accessToken)}, ${expiresAt},
           ${"{business.manage}"},
           'active',
           ${JSON.stringify({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForToken, discoverInstagramAccounts, discoverFacebookPages } from "@/lib/meta";
 import { sql } from "@/lib/db";
+import { encrypt } from "@/lib/crypto";
 import { studioUrl } from "@/lib/subdomains";
 
 /**
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
         )
         VALUES (
           ${state.subscriber_id}, 'instagram', ${ig.igUsername}, ${ig.igUserId},
-          ${accessToken}, ${expiresAt},
+          ${encrypt(accessToken)}, ${expiresAt},
           ${'{instagram_basic,instagram_content_publish,pages_manage_posts,pages_read_engagement}'},
           'active',
           ${JSON.stringify({ page_id: ig.pageId, page_name: ig.pageName })}
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
         )
         VALUES (
           ${state.subscriber_id}, 'facebook', ${fb.pageName}, ${fb.pageId},
-          ${fb.pageAccessToken}, ${expiresAt},
+          ${encrypt(fb.pageAccessToken)}, ${expiresAt},
           ${'{pages_manage_posts,pages_show_list,pages_read_engagement}'},
           'active',
           ${JSON.stringify({ page_id: fb.pageId, page_name: fb.pageName })}

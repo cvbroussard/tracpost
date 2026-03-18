@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeTikTokCode, getTikTokUserInfo } from "@/lib/tiktok";
 import { sql } from "@/lib/db";
+import { encrypt } from "@/lib/crypto";
 import { studioUrl } from "@/lib/subdomains";
 
 /**
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest) {
       )
       VALUES (
         ${state.subscriber_id}, 'tiktok', ${accountName}, ${openId},
-        ${accessToken}, ${refreshToken}, ${expiresAt},
+        ${encrypt(accessToken)}, ${encrypt(refreshToken)}, ${expiresAt},
         ${"{user.info.basic,video.publish,video.upload}"},
         'active',
         ${JSON.stringify(userMeta)}

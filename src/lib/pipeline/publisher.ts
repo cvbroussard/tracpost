@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db";
+import { decrypt } from "@/lib/crypto";
 import { getAdapter } from "./adapters/registry";
 
 /**
@@ -37,7 +38,7 @@ export async function publishPost(postId: string): Promise<{ success: boolean; e
   try {
     const result = await adapter.publish({
       platformAccountId: post.platform_account_id,
-      accessToken: post.access_token_encrypted, // TODO: decrypt
+      accessToken: decrypt(post.access_token_encrypted as string),
       caption: fullCaption,
       mediaUrls: post.media_urls as string[],
       mediaType: post.media_type,

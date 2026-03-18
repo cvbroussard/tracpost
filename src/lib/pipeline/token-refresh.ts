@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db";
+import { encrypt, decrypt } from "@/lib/crypto";
 import { getAdapter } from "./adapters/registry";
 
 /**
@@ -29,14 +30,16 @@ export async function refreshExpiringTokens(): Promise<{ refreshed: number; fail
       }
 
       // Use refresh token if available (TikTok, Twitter, etc.), otherwise access token (Meta)
-      const tokenForRefresh = account.refresh_token_encrypted || account.access_token_encrypted;
+      const tokenForRefresh = decrypt(
+        (account.refresh_token_encrypted || account.access_token_encrypted) as string
+      );
       const { accessToken, expiresIn } = await adapter.refreshToken(tokenForRefresh);
 
       const newExpiry = new Date(Date.now() + expiresIn * 1000).toISOString();
 
       await sql`
         UPDATE social_accounts
-        SET access_token_encrypted = ${accessToken},
+        SET access_token_encrypted = ${encrypt(accessToken)},
             token_expires_at = ${newExpiry},
             updated_at = NOW()
         WHERE id = ${account.id}

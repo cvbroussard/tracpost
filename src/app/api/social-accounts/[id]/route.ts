@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { decrypt } from "@/lib/crypto";
 
 /**
  * DELETE /api/social-accounts/[id]
@@ -30,7 +31,7 @@ export async function DELETE(
   if (account.access_token_encrypted) {
     try {
       const revokeRes = await fetch(
-        `https://graph.facebook.com/v21.0/${account.account_id}/permissions?access_token=${account.access_token_encrypted}`,
+        `https://graph.facebook.com/v21.0/${account.account_id}/permissions?access_token=${decrypt(account.access_token_encrypted as string)}`,
         { method: "DELETE" }
       );
       const revokeData = await revokeRes.json();

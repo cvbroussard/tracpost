@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { PlatformIcon } from "@/components/platform-icons";
 import { ConnectButton } from "./connect-modal";
+import { AccountName } from "./account-name";
 import { LinkAccountForm } from "./link-account";
 import { DisconnectButton } from "./disconnect-button";
 
@@ -73,7 +74,7 @@ export default async function AccountsPage() {
                   <div className="flex items-center gap-3">
                     <PlatformIcon platform={acc.platform} size={22} />
                     <div>
-                      <p className="font-medium">{acc.account_name}</p>
+                      <AccountName name={acc.account_name} />
                       <p className="text-sm text-muted">{acc.platform}</p>
                     </div>
                   </div>

@@ -30,7 +30,7 @@ export function TopBar({ subscriberName, variant = "studio" }: TopBarProps) {
   return (
     <header className="flex h-13 shrink-0 items-center justify-between bg-black px-5">
       <div className="flex items-center gap-3">
-        <img src="/icon.svg" alt="TracPost" className="h-6 w-6" />
+        <img src="/icon-dark.svg" alt="TracPost" className="h-6 w-6" />
         <span className="font-semibold tracking-wider text-white">
           TRACPOST
         </span>

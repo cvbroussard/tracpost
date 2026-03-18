@@ -20,15 +20,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getBlogPost(site.siteId, slug);
   if (!post) return {};
 
+  const title = (post.meta_title as string) || (post.title as string);
+  const description = (post.meta_description as string) || (post.excerpt as string);
+  const canonicalUrl = `https://${blogHost}/${slug}`;
+
   return {
-    title: (post.meta_title as string) || (post.title as string),
-    description: (post.meta_description as string) || (post.excerpt as string),
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
     openGraph: {
-      title: (post.meta_title as string) || (post.title as string),
-      description: (post.meta_description as string) || (post.excerpt as string),
+      title,
+      description,
+      url: canonicalUrl,
       images: post.og_image_url ? [post.og_image_url as string] : undefined,
       type: "article",
       publishedTime: post.published_at as string,
+      section: post.content_pillar as string,
+      tags: Array.isArray(post.tags) ? (post.tags as string[]) : undefined,
     },
   };
 }
@@ -51,6 +61,8 @@ export default async function BlogPostPage({ params }: Props) {
   if (!post) notFound();
 
   const schemaJson = post.schema_json as Record<string, unknown> | null;
+  const tags = Array.isArray(post.tags) ? (post.tags as string[]) : [];
+  const pillar = post.content_pillar ? String(post.content_pillar) : null;
 
   return (
     <article>
@@ -62,56 +74,83 @@ export default async function BlogPostPage({ params }: Props) {
         />
       )}
 
-      <Link href="/blog" className="mb-6 inline-block text-xs text-accent hover:underline">
+      <Link
+        href="/blog"
+        className="blog-muted"
+        style={{ fontSize: 14, textDecoration: "none", display: "inline-block", marginBottom: 32 }}
+      >
         &larr; All Posts
       </Link>
 
-      <header className="mb-8">
-        <h1 className="mb-3 text-2xl font-bold leading-tight">
+      <header style={{ marginBottom: 32 }}>
+        <h1 style={{ marginBottom: 12 }}>
           {String(post.title)}
         </h1>
-        <div className="flex items-center gap-3 text-xs text-muted">
-          {post.published_at ? (
-            <time>
-              {new Date(String(post.published_at)).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </time>
-          ) : null}
-          {post.content_pillar ? (
-            <span className="rounded bg-surface-hover px-2 py-0.5">
-              {String(post.content_pillar)}
-            </span>
-          ) : null}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 14 }}>
+          <span className="blog-muted">By {site.siteName}</span>
+          {post.published_at && (
+            <>
+              <span className="blog-muted">·</span>
+              <time className="blog-muted">
+                {new Date(String(post.published_at)).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </time>
+            </>
+          )}
+          {pillar && (
+            <>
+              <span className="blog-muted">·</span>
+              <Link
+                href={`/blog/pillar/${encodeURIComponent(pillar)}`}
+                className="blog-accent"
+                style={{ textDecoration: "none", fontSize: 14 }}
+              >
+                {pillar}
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
-      {post.og_image_url ? (
+      {post.og_image_url && (
         <img
           src={String(post.og_image_url)}
           alt={String(post.title)}
-          className="mb-8 w-full rounded-lg object-cover"
+          style={{
+            width: "100%",
+            borderRadius: "var(--blog-radius)",
+            marginBottom: 32,
+          }}
         />
-      ) : null}
+      )}
 
-      {/* Blog body — rendered as HTML from markdown */}
+      {/* Blog body */}
       <div
-        className="prose prose-invert max-w-none"
+        className="blog-prose"
         dangerouslySetInnerHTML={{ __html: markdownToHtml(String(post.body)) }}
       />
 
       {/* Tags */}
-      {Array.isArray(post.tags) && post.tags.length > 0 && (
-        <div className="mt-8 flex flex-wrap gap-2">
-          {(post.tags as string[]).map((tag) => (
-            <span
+      {tags.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 48, paddingTop: 24, borderTop: "1px solid var(--blog-border)" }}>
+          {tags.map((tag) => (
+            <Link
               key={tag}
-              className="rounded-full bg-surface-hover px-3 py-1 text-xs text-muted"
+              href={`/blog/tag/${encodeURIComponent(tag)}`}
+              style={{
+                fontSize: 13,
+                padding: "4px 12px",
+                borderRadius: "var(--blog-radius)",
+                border: "1px solid var(--blog-border)",
+                color: "var(--blog-muted)",
+                textDecoration: "none",
+              }}
             >
               {tag}
-            </span>
+            </Link>
           ))}
         </div>
       )}
@@ -120,11 +159,13 @@ export default async function BlogPostPage({ params }: Props) {
 }
 
 /**
- * Simple markdown→HTML converter for blog body content.
- * Handles headings, paragraphs, bold, italic, links, and lists.
+ * Markdown→HTML converter for blog body content.
+ * Handles headings, paragraphs, bold, italic, links, images, and lists.
  */
 function markdownToHtml(md: string): string {
   return md
+    // Images
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
     // Headings
     .replace(/^### (.+)$/gm, "<h3>$1</h3>")
     .replace(/^## (.+)$/gm, "<h2>$1</h2>")
@@ -132,8 +173,9 @@ function markdownToHtml(md: string): string {
     // Bold and italic
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    // Links
-    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-accent hover:underline">$1</a>')
+    // Links (open external in new tab)
+    .replace(/\[(.+?)\]\((https?:\/\/.+?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>')
     // Unordered lists
     .replace(/^- (.+)$/gm, "<li>$1</li>")
     .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
@@ -142,7 +184,7 @@ function markdownToHtml(md: string): string {
     .map((block) => {
       const trimmed = block.trim();
       if (!trimmed) return "";
-      if (trimmed.startsWith("<h") || trimmed.startsWith("<ul")) return trimmed;
+      if (trimmed.startsWith("<h") || trimmed.startsWith("<ul") || trimmed.startsWith("<img")) return trimmed;
       return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
     })
     .join("\n");

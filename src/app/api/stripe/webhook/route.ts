@@ -35,18 +35,15 @@ export async function POST(req: NextRequest) {
 
   switch (event.type) {
     case "checkout.session.completed": {
-      const session = event.data.object;
-      await handleCheckoutCompleted(session);
+      await handleCheckoutCompleted(event.data.object as unknown as Record<string, unknown>);
       break;
     }
     case "customer.subscription.updated": {
-      const subscription = event.data.object;
-      await handleSubscriptionUpdated(subscription);
+      await handleSubscriptionUpdated(event.data.object as unknown as Record<string, unknown>);
       break;
     }
     case "customer.subscription.deleted": {
-      const subscription = event.data.object;
-      await handleSubscriptionDeleted(subscription);
+      await handleSubscriptionDeleted(event.data.object as unknown as Record<string, unknown>);
       break;
     }
     default:

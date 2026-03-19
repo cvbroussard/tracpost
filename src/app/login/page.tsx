@@ -10,6 +10,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -109,6 +112,59 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
+
+        {/* Forgot password */}
+        {!forgotMode && !forgotSent && (
+          <button
+            onClick={() => setForgotMode(true)}
+            className="mt-4 w-full text-center text-sm text-muted hover:text-foreground"
+          >
+            Forgot your password?
+          </button>
+        )}
+
+        {forgotMode && !forgotSent && (
+          <div className="mt-4 space-y-3">
+            <p className="text-sm text-muted">
+              Enter your email and we&apos;ll send you a sign-in link.
+            </p>
+            <button
+              onClick={async () => {
+                if (!email) return;
+                setForgotLoading(true);
+                try {
+                  await fetch("/api/auth/forgot-password", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email }),
+                  });
+                  setForgotSent(true);
+                } finally {
+                  setForgotLoading(false);
+                }
+              }}
+              disabled={forgotLoading || !email}
+              className="w-full border border-border py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
+            >
+              {forgotLoading ? "Sending..." : "Send sign-in link"}
+            </button>
+            <button
+              onClick={() => setForgotMode(false)}
+              className="w-full text-center text-sm text-muted hover:text-foreground"
+            >
+              Back to sign in
+            </button>
+          </div>
+        )}
+
+        {forgotSent && (
+          <div className="mt-4 text-center">
+            <p className="text-sm text-success">Check your email for a sign-in link.</p>
+            <p className="mt-1 text-sm text-muted">
+              Once signed in, go to My Account to set a new password.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

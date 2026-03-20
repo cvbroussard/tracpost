@@ -55,9 +55,10 @@ export default async function DashboardLayout({
   }
 
   // Determine if checklist should show
+  // Gates: 3+ platforms, 5+ assets, blog enabled, autopilot active
+  // Playbook is auto-generated — not a subscriber gate
   const setupComplete = checklistState
-    ? checklistState.connectedPlatforms.length >= ALL_PLATFORMS.length
-      && checklistState.hasPlaybook
+    ? checklistState.connectedPlatforms.length >= 3
       && checklistState.assetCount >= 5
       && checklistState.blogEnabled
       && checklistState.autopilotActive

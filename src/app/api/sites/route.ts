@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, domain, blog_url, url, external_id, brand_voice } = body;
+    const { name, domain, blog_url, url, external_id, brand_voice, business_type, location } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -22,14 +22,15 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = await sql`
-      INSERT INTO sites (subscriber_id, name, domain, blog_url, url, external_id, brand_voice)
+      INSERT INTO sites (subscriber_id, name, domain, blog_url, url, external_id, brand_voice, business_type, location)
       VALUES (
         ${auth.subscriberId}, ${name},
         ${domain || null}, ${blog_url || null},
         ${url || (domain ? `https://${domain}` : null)},
-        ${external_id || null}, ${JSON.stringify(brand_voice || {})}
+        ${external_id || null}, ${JSON.stringify(brand_voice || {})},
+        ${business_type || null}, ${location || null}
       )
-      RETURNING id, subscriber_id, name, domain, blog_url, url, external_id, brand_voice, created_at
+      RETURNING id, subscriber_id, name, domain, blog_url, url, external_id, brand_voice, business_type, location, created_at
     `;
 
     return NextResponse.json({ site: rows[0] }, { status: 201 });

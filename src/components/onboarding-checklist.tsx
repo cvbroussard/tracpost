@@ -57,22 +57,13 @@ export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; 
     },
     {
       key: "platforms",
-      label: "Connect all social platforms",
-      done: missingPlatforms.length === 0,
-      detail: missingPlatforms.length > 0
-        ? `${state.connectedPlatforms.length} of ${state.allPlatforms.length} connected`
-        : "All platforms connected",
+      label: "Connect 3+ social platforms",
+      done: state.connectedPlatforms.length >= 3,
+      detail: state.connectedPlatforms.length >= 3
+        ? `${state.connectedPlatforms.length} platforms connected`
+        : `${state.connectedPlatforms.length} of 3 minimum`,
       href: `${prefix}/accounts`,
-      missing: missingPlatforms,
-    },
-    {
-      key: "playbook",
-      label: "Complete Brand Intelligence",
-      done: state.hasPlaybook,
-      detail: state.hasPlaybook
-        ? "Playbook generated"
-        : "Builds your content voice and strategy",
-      href: `${prefix}/brand`,
+      missing: state.connectedPlatforms.length < 3 ? missingPlatforms.slice(0, 5) : [],
     },
     {
       key: "assets",

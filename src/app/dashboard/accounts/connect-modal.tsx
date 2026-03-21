@@ -10,7 +10,7 @@ interface ConnectModalProps {
 const PLATFORMS = [
   { key: "instagram", label: "Instagram", ready: true },
   { key: "tiktok", label: "TikTok", ready: true },
-  { key: "facebook", label: "Facebook", ready: false, note: "Pending app review" },
+  { key: "facebook", label: "Facebook", ready: true },
   { key: "gbp", label: "Google Business", ready: false, note: "Pending API access" },
   { key: "youtube", label: "YouTube", ready: true },
   { key: "twitter", label: "Twitter / X", ready: true },

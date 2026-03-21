@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     try {
       const userInfo = await getLinkedInUserInfo(accessToken);
       accountName = userInfo.name;
-      accountId = userInfo.id;
+      accountId = userInfo.sub;
     } catch (e) {
       console.warn("LinkedIn user info failed (non-fatal):", e instanceof Error ? e.message : e);
     }
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
       VALUES (
         ${state.subscriber_id}, 'linkedin', ${accountName}, ${accountId},
         ${encrypt(accessToken)}, ${refreshToken ? encrypt(refreshToken) : null}, ${expiresAt},
-        ${"{w_member_social}"},
+        ${"{openid,profile,w_member_social}"},
         'active',
         ${JSON.stringify({ name: accountName, person_urn: personUrn })}
       )

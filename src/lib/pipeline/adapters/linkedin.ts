@@ -12,10 +12,11 @@ class LinkedInAdapter implements PlatformAdapter {
   readonly platform = "linkedin";
 
   async publish(input: PublishInput): Promise<PublishResult> {
-    const { platformAccountId, accessToken, caption, mediaUrls, mediaType } = input;
+    const { platformAccountId, accessToken, caption, mediaUrls, mediaType, accountMetadata } = input;
 
-    // platformAccountId is the LinkedIn URN (e.g., "urn:li:person:xxx" or "urn:li:organization:xxx")
-    const author = platformAccountId;
+    // Build author URN — prefer person_urn from metadata, fall back to constructing from account_id
+    const author = (accountMetadata?.person_urn as string)
+      || (platformAccountId.startsWith("urn:") ? platformAccountId : `urn:li:person:${platformAccountId}`);
 
     // Upload media if present
     let mediaAsset: string | null = null;

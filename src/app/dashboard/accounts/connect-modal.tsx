@@ -14,7 +14,7 @@ const PLATFORMS = [
   { key: "gbp", label: "Google Business", ready: false, note: "Pending API access" },
   { key: "youtube", label: "YouTube", ready: true },
   { key: "twitter", label: "Twitter / X", ready: true },
-  { key: "linkedin", label: "LinkedIn", ready: false },
+  { key: "linkedin", label: "LinkedIn", ready: true },
   { key: "pinterest", label: "Pinterest", ready: true },
 ];
 

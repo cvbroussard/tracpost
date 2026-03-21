@@ -52,10 +52,17 @@ export async function sendWelcomeEmail(email: string, magicUrl: string, isNew: b
             ? "Your content engine is ready to set up. Click below to open your dashboard and get started."
             : "Click below to sign in to your dashboard."}
         </p>
-        <a href="${magicUrl}" style="display: inline-block; background: #3b82f6; color: #fff; padding: 12px 24px; font-size: 15px; font-weight: 500; text-decoration: none; border-radius: 2px;">
-          Open Your Dashboard
-        </a>
-        <p style="font-size: 13px; color: #9ca3af; margin-top: 32px;">
+        <div style="margin-bottom: 16px;">
+          <a href="${magicUrl}" style="display: inline-block; background: #3b82f6; color: #fff; padding: 12px 24px; font-size: 15px; font-weight: 500; text-decoration: none; border-radius: 2px;">
+            Open Your Dashboard
+          </a>
+        </div>
+        <div style="margin-bottom: 32px;">
+          <a href="${magicUrl.replace(/^https?:\/\/[^/]+/, "tracpost-studio:/")}" style="display: inline-block; border: 1px solid #e5e7eb; color: #4b5563; padding: 10px 24px; font-size: 14px; text-decoration: none; border-radius: 2px;">
+            Open in TracPost Studio App
+          </a>
+        </div>
+        <p style="font-size: 13px; color: #9ca3af;">
           This link expires in 7 days. If you didn't request this, you can ignore this email.
         </p>
       </div>

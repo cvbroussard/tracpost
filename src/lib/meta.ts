@@ -97,10 +97,13 @@ export async function discoverInstagramAccounts(
 
   if (pagesRes.ok && pagesData.data?.length > 0) {
     for (const page of pagesData.data) {
+      console.log("Page found:", page.id, page.name, "IG:", JSON.stringify(page.instagram_business_account));
       if (!page.instagram_business_account) continue;
       const ig = await fetchIgAccount(page.instagram_business_account.id, page, accessToken);
       if (ig) accounts.push(ig);
     }
+  } else {
+    console.log("me/accounts returned no pages or failed:", pagesRes.status);
   }
 
   // Strategy 2: Direct Page ID queries (fallback)
@@ -115,6 +118,26 @@ export async function discoverInstagramAccounts(
       if (pageRes.ok && pageData.instagram_business_account) {
         const ig = await fetchIgAccount(pageData.instagram_business_account.id, pageData, accessToken);
         if (ig) accounts.push(ig);
+      }
+    }
+  }
+
+  // Strategy 3: If me/accounts found pages but no IG, try querying each page directly for IG
+  if (accounts.length === 0 && pagesRes.ok && pagesData.data?.length > 0) {
+    console.log("Pages found but no IG link in me/accounts — trying direct queries");
+    for (const page of pagesData.data) {
+      const directRes = await fetch(
+        `${GRAPH_BASE}/${page.id}?fields=id,name,instagram_business_account{id,username}&access_token=${accessToken}`
+      );
+      const directData = await directRes.json();
+      console.log("Direct page query:", page.id, JSON.stringify(directData));
+      if (directRes.ok && directData.instagram_business_account) {
+        accounts.push({
+          igUserId: directData.instagram_business_account.id,
+          igUsername: directData.instagram_business_account.username || directData.instagram_business_account.id,
+          pageName: directData.name || page.name,
+          pageId: directData.id || page.id,
+        });
       }
     }
   }

@@ -14,9 +14,10 @@ export function getMetaAuthUrl(state: string): string {
     client_id: process.env.META_APP_ID!,
     redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/instagram/callback`,
     scope: [
-      "instagram_basic",
+      "instagram_business_basic",
       "instagram_content_publish",
       "pages_read_engagement",
+      "public_profile",
     ].join(","),
     response_type: "code",
     state,

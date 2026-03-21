@@ -103,10 +103,7 @@ export function ConnectButton({ siteId }: ConnectModalProps) {
                       <p className="text-sm font-medium">
                         {isConnecting ? "Connecting..." : p.label}
                       </p>
-                      {p.note && (
-                        <p className="truncate text-xs text-muted">{p.note}</p>
-                      )}
-                      {!p.ready && !p.note && (
+                      {!p.ready && (
                         <p className="text-xs text-muted">Coming soon</p>
                       )}
                     </div>

@@ -1,4 +1,7 @@
-import type { PlatformAdapter, PublishInput, PublishResult, TokenResult } from "./types";
+import type {
+  PlatformAdapter, PublishInput, PublishResult, TokenResult,
+  FetchCommentsInput, CommentData, ReplyInput,
+} from "./types";
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";
 
@@ -98,6 +101,50 @@ export const instagramAdapter: PlatformAdapter = {
 
   getPostUrl(platformPostId: string): string {
     return `https://www.instagram.com/p/${platformPostId}/`;
+  },
+
+  async fetchComments(input: FetchCommentsInput): Promise<CommentData[]> {
+    const { accessToken, platformPostId, since } = input;
+    const fields = "id,text,timestamp,username,from";
+    let url = `${GRAPH_BASE}/${platformPostId}/comments?fields=${fields}&access_token=${accessToken}&limit=50`;
+    if (since) {
+      url += `&since=${Math.floor(new Date(since).getTime() / 1000)}`;
+    }
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      console.warn("IG fetchComments failed:", JSON.stringify(data.error || data));
+      return [];
+    }
+
+    return (data.data || []).map((c: Record<string, unknown>) => ({
+      platformCommentId: c.id as string,
+      platformPostId,
+      authorName: (c.from as Record<string, string>)?.username || (c.username as string) || "Unknown",
+      authorUsername: (c.username as string) || undefined,
+      authorPlatformId: (c.from as Record<string, string>)?.id || undefined,
+      body: c.text as string,
+      commentedAt: c.timestamp as string,
+      rawData: c,
+    }));
+  },
+
+  async replyToComment(input: ReplyInput): Promise<{ success: boolean; platformReplyId?: string }> {
+    const { accessToken, platformCommentId, body } = input;
+    const res = await fetch(`${GRAPH_BASE}/${platformCommentId}/replies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: body, access_token: accessToken }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(`IG reply failed: ${JSON.stringify(data.error || data)}`);
+    }
+
+    return { success: true, platformReplyId: data.id };
   },
 };
 

@@ -6,6 +6,7 @@ import { generateMissingCaptions } from "./caption-generator";
 import { publishDuePosts } from "./publisher";
 import { generateMissingBlogPosts } from "./blog-generator";
 import { sendPushNotification } from "@/lib/notifications";
+import { syncInboxEngagement } from "@/lib/inbox/sync";
 
 export interface PipelineRunResult {
   siteId: string;
@@ -16,6 +17,8 @@ export interface PipelineRunResult {
   blogPostsGenerated: number;
   postsPublished: number;
   postsFailed: number;
+  inboxCommentsAdded: number;
+  inboxReviewsAdded: number;
   errors: string[];
 }
 
@@ -40,6 +43,8 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     blogPostsGenerated: 0,
     postsPublished: 0,
     postsFailed: 0,
+    inboxCommentsAdded: 0,
+    inboxReviewsAdded: 0,
     errors: [],
   };
 
@@ -101,6 +106,17 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     result.errors.push(`publish: ${msg}`);
+  }
+
+  // Step 7: Sync inbox engagement (comments + reviews)
+  try {
+    const inboxResult = await syncInboxEngagement(siteId);
+    result.inboxCommentsAdded = inboxResult.commentsAdded;
+    result.inboxReviewsAdded = inboxResult.reviewsAdded;
+    result.errors.push(...inboxResult.errors);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    result.errors.push(`inbox-sync: ${msg}`);
   }
 
   // Send push notification if there are meaningful results

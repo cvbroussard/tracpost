@@ -172,10 +172,20 @@ export default async function AnalyticsPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate">{(post.caption as string)?.slice(0, 100) || "No caption"}</p>
-                      <p className="mt-1 text-sm text-muted">
-                        {post.account_name as string} · {post.published_at
+                      <p className="mt-1 flex items-center gap-2 text-sm text-muted">
+                        <span>{post.account_name as string} · {post.published_at
                           ? new Date(post.published_at as string).toLocaleDateString()
-                          : "—"}
+                          : "—"}</span>
+                        {post.platform_post_url && (
+                          <a
+                            href={post.platform_post_url as string}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-accent hover:text-accent/80"
+                          >
+                            View ↗
+                          </a>
+                        )}
                       </p>
                     </div>
                   </div>

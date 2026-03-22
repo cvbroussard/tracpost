@@ -27,8 +27,7 @@ export async function GET(
   const comments = await sql`
     SELECT ic.*, sp.caption AS post_caption, sp.media_urls AS post_media_urls, sp.platform_post_url
     FROM inbox_comments ic
-    LEFT JOIN social_posts sp ON sp.platform_post_id = ic.platform_post_id AND sp.platform = ic.platform
-    WHERE ic.subscriber_id = ${auth.subscriberId}
+    LEFT JOIN social_posts sp ON sp.platform_post_id = ic.platform_post_id     WHERE ic.subscriber_id = ${auth.subscriberId}
       AND (ic.platform_post_id = ${id} OR ic.post_id::text = ${id})
       ${siteId ? sql`AND ic.site_id = ${siteId}` : sql``}
       AND ic.is_hidden = false

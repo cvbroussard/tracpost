@@ -40,7 +40,7 @@ export default async function AnalyticsPage() {
     `,
     // Top posts (most recent published with analytics if available)
     sql`
-      SELECT sp.id, sp.caption, sp.published_at, sp.platform_post_url,
+      SELECT sp.id, sp.caption, sp.published_at, sp.platform_post_url, sp.media_urls,
              sa.platform, sa.account_name,
              pa.likes, pa.comments, pa.shares, pa.reach
       FROM social_posts sp
@@ -153,7 +153,23 @@ export default async function AnalyticsPage() {
               <div key={post.id as string} className="border-b border-border py-4 last:border-0">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
-                    <PlatformIcon platform={post.platform as string} size={18} />
+                    {/* Thumbnail with platform badge */}
+                    <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-surface-hover">
+                      {(post.media_urls as string[])?.[0] ? (
+                        <img
+                          src={(post.media_urls as string[])[0]}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted">
+                          <PlatformIcon platform={post.platform as string} size={20} />
+                        </div>
+                      )}
+                      <div className="absolute top-0.5 right-0.5 rounded-full bg-background/80 p-0.5">
+                        <PlatformIcon platform={post.platform as string} size={10} />
+                      </div>
+                    </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate">{(post.caption as string)?.slice(0, 100) || "No caption"}</p>
                       <p className="mt-1 text-sm text-muted">

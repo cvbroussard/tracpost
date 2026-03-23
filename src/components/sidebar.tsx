@@ -43,12 +43,22 @@ export function Sidebar({ subscriberName, sites, activeSiteId }: SidebarProps) {
     href: prefix + item.path || "/",
   }));
 
+  const handleSiteChange = async (siteId: string) => {
+    await fetch("/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activeSiteId: siteId }),
+    });
+    window.location.reload();
+  };
+
   return (
     <aside className="flex h-full w-48 flex-col border-r border-border bg-surface">
       <SidebarBrand
         subscriberName={subscriberName}
         sites={sites}
         activeSiteId={activeSiteId}
+        onSiteChange={handleSiteChange}
       />
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-3">
         {nav.map((item) => {

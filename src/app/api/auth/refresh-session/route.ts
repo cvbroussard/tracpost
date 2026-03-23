@@ -26,7 +26,7 @@ export async function POST() {
     subscriberName: session.subscriberName,
     plan: session.plan,
     sites: sites.map((s) => ({ id: s.id, name: s.name, url: s.url })),
-    activeSiteId: sites[0]?.id || null,
+    activeSiteId: sites.find((s) => s.id === session.activeSiteId) ? session.activeSiteId : sites[0]?.id || null,
   };
 
   const response = NextResponse.json({ ok: true });

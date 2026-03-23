@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateKiosk } from "@/lib/spotlight/kiosk-auth";
 import { sql } from "@/lib/db";
+import { publishSpotlight } from "@/lib/spotlight/publish";
 
 /**
  * POST /api/spotlight/kiosk/interact
@@ -61,6 +62,13 @@ export async function POST(req: NextRequest) {
     INSERT INTO spotlight_analytics (session_id, site_id, event)
     VALUES (${session_id}, ${kiosk.siteId}, 'review_submitted')
   `;
+
+  // Trigger social post publishing if consent given (non-blocking)
+  if (photo_consent) {
+    publishSpotlight(session_id).catch((err) => {
+      console.error("Spotlight publish error:", err instanceof Error ? err.message : err);
+    });
+  }
 
   return NextResponse.json({
     success: true,

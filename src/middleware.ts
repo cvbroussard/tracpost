@@ -41,21 +41,21 @@ export function middleware(req: NextRequest) {
     if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
       return new NextResponse("Not Found", { status: 404 });
     }
+
+    // Set x-blog-host as a request header so server components can read it
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-blog-host", hostname);
+
     // Already on /blog path — pass through with host header
     if (pathname.startsWith("/blog")) {
-      const response = NextResponse.next();
-      response.headers.set("x-blog-host", hostname);
-      return response;
+      return NextResponse.next({ request: { headers: requestHeaders } });
     }
     // Rewrite: / → /blog, /empire-music → /blog/empire-music,
     // /empire-music/my-post → /blog/empire-music/my-post
     const rewritePath = pathname === "/" ? "/blog" : `/blog${pathname}`;
     const url = req.nextUrl.clone();
     url.pathname = rewritePath;
-    // Pass the original hostname for domain→site resolution
-    const response = NextResponse.rewrite(url);
-    response.headers.set("x-blog-host", hostname);
-    return response;
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
   }
 
   if (subdomain === "studio") {

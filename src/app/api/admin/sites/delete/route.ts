@@ -3,22 +3,41 @@ import { sql } from "@/lib/db";
 
 /**
  * POST /api/admin/sites/delete
- * Body: { siteId }
+ * Body: { siteId, action: "approve" | "deny" }
  *
- * Soft-delete a site: sets deleted_at, disables autopilot, disables blog.
- * Data is preserved for 30 days before hard purge.
+ * approve: Soft-delete a site (subscriber requested deletion).
+ *   Sets deleted_at, disables autopilot + blog, sets deletion_status = 'approved'.
+ *
+ * deny: Reject the subscriber's deletion request.
+ *   Clears deletion fields, site continues as normal.
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { siteId } = body;
+  const { siteId, action = "approve" } = body;
 
   if (!siteId) {
     return NextResponse.json({ error: "siteId required" }, { status: 400 });
   }
 
-  // Verify site exists and isn't already deleted
+  if (action === "deny") {
+    const [site] = await sql`
+      UPDATE sites
+      SET deletion_status = NULL,
+          deletion_requested_at = NULL,
+          deletion_reason = NULL,
+          updated_at = NOW()
+      WHERE id = ${siteId} AND deletion_status = 'pending' AND deleted_at IS NULL
+      RETURNING id, name
+    `;
+    if (!site) {
+      return NextResponse.json({ error: "No pending deletion request found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, siteId, action: "denied", siteName: site.name });
+  }
+
+  // Approve: soft delete
   const [site] = await sql`
-    SELECT id, name, subscriber_id FROM sites
+    SELECT id, name FROM sites
     WHERE id = ${siteId} AND deleted_at IS NULL
   `;
 
@@ -26,7 +45,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Site not found or already deleted" }, { status: 404 });
   }
 
-  // Soft delete: mark deleted, disable autopilot, update deletion status
   await sql`
     UPDATE sites
     SET deleted_at = NOW(),
@@ -45,6 +63,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     siteId,
+    action: "approved",
     siteName: site.name,
     deletedAt: new Date().toISOString(),
   });

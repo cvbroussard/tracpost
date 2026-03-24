@@ -113,7 +113,12 @@ export default async function SubscriberDetail({
                       {new Date(site.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <SiteActions siteId={site.id} siteName={site.name} isDeleted={isDeleted} />
+                      <SiteActions
+                        siteId={site.id}
+                        siteName={site.name}
+                        isDeleted={isDeleted}
+                        deletionStatus={(site.deletion_status as string) || null}
+                      />
                     </td>
                   </tr>
                 );

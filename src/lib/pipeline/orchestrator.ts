@@ -51,6 +51,29 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     errors: [],
   };
 
+  // Gate: check that all "existing" accounts the subscriber owns are connected
+  // before running the pipeline. New accounts created by admin can backfill later.
+  const [siteRow] = await sql`
+    SELECT metadata FROM sites WHERE id = ${siteId}
+  `;
+  const siteMeta = (siteRow?.metadata || {}) as Record<string, unknown>;
+  const existingAccounts = (siteMeta.existing_accounts || []) as string[];
+
+  if (existingAccounts.length > 0) {
+    const connectedPlatforms = await sql`
+      SELECT DISTINCT sa.platform
+      FROM social_accounts sa
+      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
+    `;
+    const connected = new Set(connectedPlatforms.map((r) => r.platform as string));
+    const missing = existingAccounts.filter((p) => !connected.has(p));
+    if (missing.length > 0) {
+      result.errors.push(`waiting: subscriber's existing accounts not yet connected: ${missing.join(", ")}`);
+      return result;
+    }
+  }
+
   // Step 0: Sync RSS feeds (ingest new items before triage)
   try {
     result.rssItemsIngested = await syncRssFeeds(siteId);
@@ -187,7 +210,10 @@ async function notifyPipelineResults(
  */
 export async function runAllPipelines(): Promise<PipelineRunResult[]> {
   const sites = await sql`
-    SELECT id FROM sites WHERE autopilot_enabled = true AND deleted_at IS NULL
+    SELECT id FROM sites
+    WHERE autopilot_enabled = true
+      AND deleted_at IS NULL
+      AND provisioning_status = 'complete'
   `;
 
   const results: PipelineRunResult[] = [];

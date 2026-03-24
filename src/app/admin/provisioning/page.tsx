@@ -3,6 +3,7 @@ import Link from "next/link";
 import { generateProfileKit } from "@/lib/provisioning/profile-kit";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
 import { ProfileKitPanel } from "./profile-kit-panel";
+import { ProvisionActions } from "./provision-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function ProvisioningPage() {
       s.blog_slug,
       s.brand_playbook,
       s.brand_playbook IS NOT NULL AS has_playbook,
+      s.provisioning_status,
       s.metadata AS site_metadata,
       s.deleted_at,
       (
@@ -60,7 +62,7 @@ export default async function ProvisioningPage() {
             const meta = (sub.metadata || {}) as Record<string, unknown>;
             const onboardingStatus = meta.onboarding_status as string;
             const isNew = onboardingStatus === "new" || onboardingStatus === "complete";
-            const allProvisioned = missing.length === 0 && sub.has_playbook && sub.blog_enabled;
+            const allProvisioned = sub.provisioning_status === "complete";
 
             // Generate profile kit if playbook exists
             let profileKit = null;
@@ -89,12 +91,12 @@ export default async function ProvisioningPage() {
                   <div>
                     <div className="flex items-center gap-3">
                       <h2 style={{ marginTop: 0 }}>{sub.site_name || sub.subscriber_name}</h2>
-                      {allProvisioned ? (
+                      {sub.provisioning_status === "complete" ? (
                         <span className="rounded bg-success/10 px-2 py-0.5 text-xs text-success">Ready</span>
-                      ) : isNew ? (
-                        <span className="rounded bg-warning/10 px-2 py-0.5 text-xs text-warning">New</span>
-                      ) : (
+                      ) : sub.provisioning_status === "in_progress" ? (
                         <span className="rounded bg-accent/10 px-2 py-0.5 text-xs text-accent">In progress</span>
+                      ) : (
+                        <span className="rounded bg-warning/10 px-2 py-0.5 text-xs text-warning">Requested</span>
                       )}
                     </div>
                     <p className="text-sm text-muted">
@@ -104,12 +106,18 @@ export default async function ProvisioningPage() {
                       {sub.email} · {sub.site_url || "No website"}
                     </p>
                   </div>
-                  <Link
-                    href={`/admin/subscribers/${sub.subscriber_id}`}
-                    className="text-sm text-accent hover:underline"
-                  >
-                    View subscriber
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <ProvisionActions
+                      siteId={sub.site_id as string}
+                      status={sub.provisioning_status as string | null}
+                    />
+                    <Link
+                      href={`/admin/subscribers/${sub.subscriber_id}`}
+                      className="text-sm text-accent hover:underline"
+                    >
+                      View subscriber
+                    </Link>
+                  </div>
                 </div>
 
                 {/* Provisioning checklist */}

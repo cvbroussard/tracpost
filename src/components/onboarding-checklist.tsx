@@ -6,10 +6,12 @@ import Link from "next/link";
 export interface ChecklistState {
   connectedPlatforms: string[];
   allPlatforms: string[];
+  existingAccounts: string[];
   hasPlaybook: boolean;
   assetCount: number;
   blogEnabled: boolean;
   autopilotActive: boolean;
+  provisioningStatus: string | null;
 }
 
 const REQUIRED_ASSETS = 5;
@@ -20,77 +22,116 @@ const PLATFORM_LABELS: Record<string, string> = {
   facebook: "Facebook",
   gbp: "Google Business",
   youtube: "YouTube",
-  twitter: "Twitter / X",
+  twitter: "X (Twitter)",
   linkedin: "LinkedIn",
   pinterest: "Pinterest",
 };
 
-// TODO: Replace with actual App Store URL once published
-const APP_STORE_URL = "https://testflight.apple.com/join/tracpost";
-
 export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; prefix: string }) {
-  const [showQR, setShowQR] = useState(false);
   const [appDismissed, setAppDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("tp-app-installed") === "true";
   });
 
-  const missingPlatforms = state.allPlatforms.filter(
+  const isProvisioning = state.provisioningStatus === "requested" || state.provisioningStatus === "in_progress";
+  const isProvisioned = state.provisioningStatus === "complete";
+
+  // Existing accounts the subscriber needs to connect
+  const existingNotConnected = state.existingAccounts.filter(
     (p) => !state.connectedPlatforms.includes(p)
   );
 
-  function markAppInstalled() {
-    setAppDismissed(true);
-    localStorage.setItem("tp-app-installed", "true");
+  // Platforms being created by platform (not in existingAccounts)
+  const platformCreating = state.allPlatforms.filter(
+    (p) => !state.existingAccounts.includes(p) && !state.connectedPlatforms.includes(p)
+  );
+
+  // Build steps based on provisioning state
+  const steps: Step[] = [];
+
+  // Step: Platform provisioning (behind the curtain)
+  if (isProvisioning) {
+    steps.push({
+      key: "provisioning",
+      label: state.provisioningStatus === "requested"
+        ? "Setting up your site"
+        : "Provisioning in progress",
+      done: false,
+      detail: "Our team is configuring your social accounts and brand profile",
+      href: null,
+      isCurtain: true,
+    });
+  } else if (!isProvisioned && state.provisioningStatus === null) {
+    // No provisioning started — shouldn't normally happen
+    steps.push({
+      key: "provisioning",
+      label: "Site setup pending",
+      done: false,
+      detail: "Your site is being prepared",
+      href: null,
+      isCurtain: true,
+    });
   }
 
-  const steps = [
-    {
-      key: "app",
-      label: "Get TracPost Studio",
-      done: appDismissed || state.assetCount > 0, // If they've uploaded assets, they have the app or don't need it
-      detail: appDismissed || state.assetCount > 0
-        ? "App installed"
-        : "Capture content from your phone",
-      href: null, // Special handling — not a page link
-      isApp: true,
-    },
-    {
-      key: "platforms",
-      label: "Connect 3+ social platforms",
-      done: state.connectedPlatforms.length >= 3,
-      detail: state.connectedPlatforms.length >= 3
-        ? `${state.connectedPlatforms.length} platforms connected`
-        : `${state.connectedPlatforms.length} of 3 minimum`,
+  // Step: Connect your existing accounts (subscriber action)
+  if (state.existingAccounts.length > 0) {
+    const allExistingConnected = existingNotConnected.length === 0;
+    steps.push({
+      key: "connect-existing",
+      label: "Connect your accounts",
+      done: allExistingConnected,
+      detail: allExistingConnected
+        ? `${state.existingAccounts.length} account${state.existingAccounts.length !== 1 ? "s" : ""} connected`
+        : `${existingNotConnected.length} account${existingNotConnected.length !== 1 ? "s" : ""} to connect`,
       href: `${prefix}/accounts`,
-      missing: state.connectedPlatforms.length < 3 ? missingPlatforms.slice(0, 5) : [],
-    },
-    {
-      key: "assets",
-      label: `Capture ${REQUIRED_ASSETS}+ content assets`,
-      done: state.assetCount >= REQUIRED_ASSETS,
-      detail: state.assetCount >= REQUIRED_ASSETS
-        ? `${state.assetCount} assets ready`
-        : `${state.assetCount} of ${REQUIRED_ASSETS} — use the app or upload here`,
-      href: `${prefix}/capture`,
-    },
-    {
-      key: "blog",
-      label: "Enable your blog",
-      done: state.blogEnabled,
-      detail: state.blogEnabled
-        ? "Blog is live"
-        : "Your SEO engine",
-      href: `${prefix}/blog`,
-    },
-  ];
-
-  const completedCount = steps.filter((s) => s.done).length;
-  const allDone = completedCount === steps.length;
-
-  if (allDone && state.autopilotActive) {
-    return null;
+      missing: existingNotConnected,
+    });
   }
+
+  // Step: Capture content
+  steps.push({
+    key: "assets",
+    label: `Capture ${REQUIRED_ASSETS}+ content assets`,
+    done: state.assetCount >= REQUIRED_ASSETS,
+    detail: state.assetCount >= REQUIRED_ASSETS
+      ? `${state.assetCount} assets ready`
+      : `${state.assetCount} of ${REQUIRED_ASSETS}`,
+    href: `${prefix}/capture`,
+  });
+
+  // Step: Get the app
+  const hasApp = appDismissed || state.assetCount > 0;
+  steps.push({
+    key: "app",
+    label: "Get TracPost Studio",
+    done: hasApp,
+    detail: hasApp ? "App installed" : "Capture content from your phone",
+    href: null,
+    isApp: true,
+  });
+
+  // Behind-the-curtain items (informational, not subscriber actions)
+  const curtainItems: { label: string; done: boolean }[] = [];
+
+  if (isProvisioned || isProvisioning) {
+    curtainItems.push({ label: "Brand playbook", done: state.hasPlaybook });
+    curtainItems.push({ label: "Blog", done: state.blogEnabled });
+
+    if (platformCreating.length > 0) {
+      const platformConnected = platformCreating.filter((p) => state.connectedPlatforms.includes(p));
+      curtainItems.push({
+        label: `New accounts (${platformConnected.length}/${platformCreating.length})`,
+        done: platformConnected.length === platformCreating.length,
+      });
+    }
+  }
+
+  const subscriberSteps = steps.filter((s) => !s.isCurtain);
+  const completedCount = subscriberSteps.filter((s) => s.done).length;
+  const totalSteps = subscriberSteps.length;
+  const allDone = completedCount === totalSteps && isProvisioned;
+
+  if (allDone && state.autopilotActive) return null;
 
   return (
     <div className="flex h-full w-72 flex-col border-l border-border bg-surface">
@@ -102,142 +143,48 @@ export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; 
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-border">
             <div
               className="h-full bg-accent transition-all"
-              style={{ width: `${(completedCount / steps.length) * 100}%` }}
+              style={{ width: `${totalSteps > 0 ? (completedCount / totalSteps) * 100 : 0}%` }}
             />
           </div>
           <span style={{ fontSize: 13 }} className="text-muted">
-            {completedCount}/{steps.length}
+            {completedCount}/{totalSteps}
           </span>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        {steps.map((step) => (
-          <div key={step.key} className="mb-4">
-            {/* App step — special rendering */}
-            {"isApp" in step && step.isApp && !step.done ? (
+        {/* Provisioning status (curtain) */}
+        {isProvisioning && (
+          <div className="mb-4">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent" />
               <div>
-                <div className="flex items-start gap-3">
-                  <span
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: "50%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      flexShrink: 0,
-                      marginTop: 2,
-                      background: "var(--color-accent)",
-                      color: "#fff",
-                    }}
-                  >
-                    1
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p style={{ fontSize: 14, fontWeight: 500 }}>
-                      {step.label}
-                    </p>
-                    <p style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 2 }}>
-                      {step.detail}
-                    </p>
-
-                    {/* App install actions */}
-                    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                      <button
-                        onClick={() => setShowQR(!showQR)}
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 500,
-                          padding: "6px 12px",
-                          background: "var(--color-accent)",
-                          color: "#fff",
-                          border: "none",
-                          cursor: "pointer",
-                          textAlign: "left",
-                        }}
-                      >
-                        {showQR ? "Hide QR Code" : "Download for iPhone"}
-                      </button>
-
-                      {showQR && (
-                        <div style={{
-                          padding: 12,
-                          background: "#fff",
-                          borderRadius: "var(--tp-radius)",
-                          textAlign: "center",
-                        }}>
-                          {/* QR code placeholder — replace with actual QR image */}
-                          <div style={{
-                            width: 120,
-                            height: 120,
-                            margin: "0 auto 8px",
-                            background: "#f3f4f6",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            borderRadius: 4,
-                            fontSize: 11,
-                            color: "#6b7280",
-                          }}>
-                            QR Code
-                          </div>
-                          <a
-                            href={APP_STORE_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ fontSize: 12, color: "var(--color-accent)", textDecoration: "none" }}
-                          >
-                            Open link instead
-                          </a>
-                        </div>
-                      )}
-
-                      <button
-                        onClick={markAppInstalled}
-                        style={{
-                          fontSize: 12,
-                          color: "var(--color-muted)",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          textAlign: "left",
-                          padding: 0,
-                        }}
-                      >
-                        I&apos;ve installed it →
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <p style={{ fontSize: 14, fontWeight: 500 }}>
+                  {state.provisioningStatus === "requested" ? "Setting up your site" : "Provisioning in progress"}
+                </p>
+                <p style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 2 }}>
+                  Our team is configuring your accounts and brand profile
+                </p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Subscriber action steps */}
+        {subscriberSteps.map((step) => (
+          <div key={step.key} className="mb-4">
+            {"isApp" in step && step.isApp && !step.done ? (
+              <AppStep onDismiss={() => {
+                setAppDismissed(true);
+                localStorage.setItem("tp-app-installed", "true");
+              }} />
             ) : (
-              /* Standard step */
               <Link
                 href={step.href || "#"}
-                className="flex items-start gap-3 transition-colors"
+                className="flex items-start gap-3"
                 style={{ textDecoration: "none", color: "inherit" }}
               >
-                <span
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    flexShrink: 0,
-                    marginTop: 2,
-                    background: step.done ? "var(--color-success)" : "var(--color-surface-hover)",
-                    color: step.done ? "#fff" : "var(--color-muted)",
-                  }}
-                >
-                  {step.done ? "✓" : ""}
-                </span>
+                <StepIcon done={step.done} />
                 <div className="min-w-0 flex-1">
                   <p style={{
                     fontSize: 14,
@@ -254,21 +201,14 @@ export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; 
               </Link>
             )}
 
-            {/* Show missing platforms inline */}
-            {"missing" in step && step.missing && (step.missing as string[]).length > 0 && !step.done && (
+            {/* Missing platforms */}
+            {"missing" in step && step.missing && step.missing.length > 0 && !step.done && (
               <div style={{ marginLeft: 32, marginTop: 6 }}>
-                {(step.missing as string[]).map((platform) => (
-                  <div
-                    key={platform}
-                    style={{
-                      fontSize: 13,
-                      color: "var(--color-muted)",
-                      padding: "3px 0",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
+                {step.missing.map((platform) => (
+                  <div key={platform} style={{
+                    fontSize: 13, color: "var(--color-muted)", padding: "3px 0",
+                    display: "flex", alignItems: "center", gap: 6,
+                  }}>
                     <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-warning)", flexShrink: 0 }} />
                     {PLATFORM_LABELS[platform] || platform}
                   </div>
@@ -278,15 +218,43 @@ export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; 
           </div>
         ))}
 
-        {/* Autopilot status */}
-        <div
-          style={{
-            marginTop: 16,
-            padding: "12px",
+        {/* Behind the curtain — platform progress */}
+        {curtainItems.length > 0 && (
+          <div style={{
+            marginTop: 12,
+            padding: 12,
             borderRadius: "var(--tp-radius)",
-            background: allDone ? "rgba(34, 197, 94, 0.1)" : "var(--color-surface-hover)",
-          }}
-        >
+            background: "var(--color-surface-hover)",
+          }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 8 }}>
+              Handled for you
+            </p>
+            {curtainItems.map((item) => (
+              <div key={item.label} style={{
+                display: "flex", alignItems: "center", gap: 8,
+                fontSize: 13, color: "var(--color-muted)", padding: "2px 0",
+              }}>
+                <span style={{
+                  width: 14, height: 14, borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 9, fontWeight: 600,
+                  background: item.done ? "var(--color-success)" : "var(--color-surface-hover)",
+                  color: item.done ? "#fff" : "var(--color-muted)",
+                  border: item.done ? "none" : "1px solid var(--color-border)",
+                }}>
+                  {item.done ? "✓" : ""}
+                </span>
+                {item.label}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Autopilot status */}
+        <div style={{
+          marginTop: 16, padding: 12, borderRadius: "var(--tp-radius)",
+          background: allDone ? "rgba(34, 197, 94, 0.1)" : "var(--color-surface-hover)",
+        }}>
           {allDone ? (
             <>
               <p style={{ fontSize: 14, fontWeight: 600, color: "var(--color-success)" }}>
@@ -302,10 +270,89 @@ export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; 
                 Autopilot activates when setup is complete
               </p>
               <p style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 4 }}>
-                {steps.length - completedCount} step{steps.length - completedCount !== 1 ? "s" : ""} remaining
+                {totalSteps - completedCount} step{totalSteps - completedCount !== 1 ? "s" : ""} remaining
               </p>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Sub-components ──────────────────────────────────────────────
+
+interface Step {
+  key: string;
+  label: string;
+  done: boolean;
+  detail: string;
+  href: string | null;
+  isCurtain?: boolean;
+  isApp?: boolean;
+  missing?: string[];
+}
+
+function StepIcon({ done }: { done: boolean }) {
+  return (
+    <span style={{
+      width: 20, height: 20, borderRadius: "50%",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: 11, fontWeight: 600, flexShrink: 0, marginTop: 2,
+      background: done ? "var(--color-success)" : "var(--color-surface-hover)",
+      color: done ? "#fff" : "var(--color-muted)",
+    }}>
+      {done ? "✓" : ""}
+    </span>
+  );
+}
+
+function AppStep({ onDismiss }: { onDismiss: () => void }) {
+  const [showQR, setShowQR] = useState(false);
+
+  return (
+    <div className="flex items-start gap-3">
+      <StepIcon done={false} />
+      <div className="min-w-0 flex-1">
+        <p style={{ fontSize: 14, fontWeight: 500 }}>Get TracPost Studio</p>
+        <p style={{ fontSize: 13, color: "var(--color-muted)", marginTop: 2 }}>
+          Capture content from your phone
+        </p>
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            onClick={() => setShowQR(!showQR)}
+            style={{
+              fontSize: 13, fontWeight: 500, padding: "6px 12px",
+              background: "var(--color-accent)", color: "#fff",
+              border: "none", cursor: "pointer", textAlign: "left",
+            }}
+          >
+            {showQR ? "Hide QR Code" : "Download for iPhone"}
+          </button>
+          {showQR && (
+            <div style={{
+              padding: 12, background: "#fff",
+              borderRadius: "var(--tp-radius)", textAlign: "center",
+            }}>
+              <div style={{
+                width: 120, height: 120, margin: "0 auto 8px",
+                background: "#f3f4f6", display: "flex", alignItems: "center",
+                justifyContent: "center", borderRadius: 4, fontSize: 11, color: "#6b7280",
+              }}>
+                QR Code
+              </div>
+            </div>
+          )}
+          <button
+            onClick={onDismiss}
+            style={{
+              fontSize: 12, color: "var(--color-muted)",
+              background: "none", border: "none", cursor: "pointer",
+              textAlign: "left", padding: 0,
+            }}
+          >
+            I&apos;ve installed it →
+          </button>
         </div>
       </div>
     </div>

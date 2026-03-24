@@ -34,7 +34,11 @@ export default async function DashboardLayout({
         JOIN site_social_links ssl ON ssl.social_account_id = sa.id
         WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
       `,
-      sql`SELECT brand_playbook IS NOT NULL AS has_playbook, autopilot_enabled FROM sites WHERE id = ${siteId}`,
+      sql`
+        SELECT brand_playbook IS NOT NULL AS has_playbook, autopilot_enabled,
+               provisioning_status, metadata
+        FROM sites WHERE id = ${siteId}
+      `,
       sql`SELECT COUNT(*)::int AS count FROM media_assets WHERE site_id = ${siteId}`,
       sql`SELECT blog_enabled FROM blog_settings WHERE site_id = ${siteId}`,
     ]);
@@ -43,22 +47,26 @@ export default async function DashboardLayout({
     const hasPlaybook = siteData[0]?.has_playbook === true;
     const autopilotActive = siteData[0]?.autopilot_enabled === true;
     const blogEnabled = blogData[0]?.blog_enabled === true;
+    const provisioningStatus = (siteData[0]?.provisioning_status as string) || null;
+    const siteMeta = (siteData[0]?.metadata || {}) as Record<string, unknown>;
+    const existingAccounts = (siteMeta.existing_accounts || []) as string[];
 
     checklistState = {
       connectedPlatforms,
       allPlatforms: ALL_PLATFORMS,
+      existingAccounts,
       hasPlaybook,
       assetCount: assetCount[0]?.count || 0,
       blogEnabled,
       autopilotActive,
+      provisioningStatus,
     };
   }
 
-  // Determine if checklist should show
-  // Gates: 3+ platforms, 5+ assets, blog enabled, autopilot active
-  // Playbook is auto-generated — not a subscriber gate
+  // Checklist hides when provisioning is complete and all subscriber steps done
   const setupComplete = checklistState
-    ? checklistState.connectedPlatforms.length >= 3
+    ? checklistState.provisioningStatus === "complete"
+      && checklistState.existingAccounts.every((p) => checklistState!.connectedPlatforms.includes(p))
       && checklistState.assetCount >= 5
       && checklistState.blogEnabled
       && checklistState.autopilotActive

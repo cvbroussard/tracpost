@@ -29,13 +29,16 @@ export function BrandPlaybookView({ siteId, playbook: initialPlaybook, subscribe
   const offerStatement = offerCore?.offerStatement as Record<string, string> | undefined;
   const positioning = playbook.brandPositioning as Record<string, unknown> | undefined;
   const selectedAngles = (positioning?.selectedAngles || []) as BrandAngle[];
-  const contentHooks = playbook.contentHooks as Record<string, unknown> | undefined;
-  const lovedHooks = (contentHooks?.lovedHooks || []) as { text: string; category: string }[];
   const audience = playbook.audienceResearch as Record<string, unknown> | undefined;
   const langMap = audience?.languageMap as Record<string, string[]> | undefined;
-  const painPoints = (audience?.painPoints || []) as { pain: string; severity: string }[];
   const transformation = audience?.transformationJourney as Record<string, string> | undefined;
   const version = (playbook.version as string) || "";
+
+  // Curated audience phrases — a taste, not the full map
+  const audiencePhrases = [
+    ...(langMap?.painPhrases?.slice(0, 3) || []),
+    ...(langMap?.desirePhrases?.slice(0, 3) || []),
+  ];
 
   async function handleRefine() {
     if (!angle.trim()) return;
@@ -66,12 +69,12 @@ export function BrandPlaybookView({ siteId, playbook: initialPlaybook, subscribe
         <h1>Brand Intelligence</h1>
         <p className="mt-2 text-muted">
           {refined
-            ? "Your playbook has been sharpened with your unique angle."
-            : "Your baseline playbook is ready. Tell us what makes you different to sharpen it."}
+            ? "Your brand playbook has been sharpened around your unique angle. This drives every caption, blog post, and social hook we create for you."
+            : "Your brand playbook is ready. Tell us what makes you different to sharpen it."}
         </p>
         {version && (
           <span className="mt-2 inline-block rounded bg-surface-hover px-2 py-0.5 text-[10px] text-muted">
-            {version.includes("refined") ? "Refined" : "Baseline"}
+            {version.includes("refined") ? "Sharpened" : "Baseline"}
           </span>
         )}
       </div>
@@ -140,163 +143,122 @@ export function BrandPlaybookView({ siteId, playbook: initialPlaybook, subscribe
         )}
       </div>
 
-      {/* Offer Statement */}
+      {/* Your Promise */}
       {offerStatement?.finalStatement && (
         <section className="mb-8">
-          <div className="rounded bg-accent/5 p-5">
-            <h4 className="mb-2 text-sm font-medium text-accent">Your Offer Statement</h4>
-            <p className="text-sm italic leading-relaxed">
-              &ldquo;{offerStatement.finalStatement}&rdquo;
+          <h2 className="mb-4">Your Promise</h2>
+          <p className="text-sm italic leading-relaxed">
+            &ldquo;{offerStatement.finalStatement}&rdquo;
+          </p>
+          {offerStatement.emotionalCore && (
+            <p className="mt-3 text-xs text-muted">
+              {offerStatement.emotionalCore}
             </p>
-            {offerStatement.emotionalCore && (
-              <p className="mt-3 text-xs text-muted">
-                Emotional core: {offerStatement.emotionalCore}
-              </p>
-            )}
-          </div>
+          )}
         </section>
       )}
 
-      {/* Brand Angle */}
+      {/* Your Brand */}
       {selectedAngles.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-4">Brand Angle</h2>
-          <div className="border-b border-border pb-4">
-            <p className="font-medium">{selectedAngles[0].name}</p>
-            <p className="mt-1 text-sm italic text-muted">&ldquo;{selectedAngles[0].tagline}&rdquo;</p>
-            <p className="mt-2 text-sm text-muted">Tone: {selectedAngles[0].tone}</p>
-            {selectedAngles[0].contentThemes?.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1">
+          <h2 className="mb-4">Your Brand</h2>
+          <div className="space-y-3">
+            <div className="flex items-baseline justify-between border-b border-border py-2">
+              <span className="text-sm text-muted">Positioning</span>
+              <span className="text-sm font-medium">{selectedAngles[0].name}</span>
+            </div>
+            <div className="flex items-baseline justify-between border-b border-border py-2">
+              <span className="text-sm text-muted">Tagline</span>
+              <span className="max-w-xs text-right text-sm italic">{selectedAngles[0].tagline}</span>
+            </div>
+            <div className="flex items-baseline justify-between border-b border-border py-2">
+              <span className="text-sm text-muted">Voice</span>
+              <span className="max-w-sm text-right text-sm">{selectedAngles[0].tone}</span>
+            </div>
+          </div>
+          {selectedAngles[0].contentThemes?.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-xs text-muted">Content themes we create around</p>
+              <div className="flex flex-wrap gap-1">
                 {selectedAngles[0].contentThemes.map((theme, i) => (
-                  <span key={i} className="rounded bg-surface-hover px-1.5 py-0.5 text-xs text-muted">
+                  <span key={i} className="rounded bg-surface-hover px-2 py-1 text-xs text-muted">
                     {theme}
                   </span>
                 ))}
               </div>
-            )}
-          </div>
-          {selectedAngles.length > 1 && (
-            <div className="mt-4 space-y-3">
-              <p className="text-xs text-muted">Alternative angles</p>
-              {selectedAngles.slice(1).map((a, i) => (
-                <div key={i} className="border-b border-border pb-3">
-                  <p className="text-sm font-medium">{a.name}</p>
-                  <p className="text-xs italic text-muted">&ldquo;{a.tagline}&rdquo;</p>
-                </div>
-              ))}
             </div>
           )}
         </section>
       )}
 
-      {/* Transformation Journey */}
+      {/* Your Customer */}
       {transformation && (
         <section className="mb-8">
-          <h2 className="mb-4">Customer Journey</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <h2 className="mb-4">Your Customer</h2>
+          <div className="space-y-4">
             <div>
-              <p className="mb-1.5 text-xs font-medium text-danger">Where they are now</p>
-              <p className="text-sm leading-relaxed text-muted">{transformation.currentState}</p>
+              <p className="mb-1.5 text-xs font-medium text-muted">Where they are now</p>
+              <p className="text-sm leading-relaxed">{transformation.currentState}</p>
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-medium text-success">Where they want to be</p>
-              <p className="text-sm leading-relaxed text-muted">{transformation.desiredState}</p>
+              <p className="mb-1.5 text-xs font-medium text-muted">Where they want to be</p>
+              <p className="text-sm leading-relaxed">{transformation.desiredState}</p>
             </div>
           </div>
         </section>
       )}
 
-      {/* Pain Points */}
-      {painPoints.length > 0 && (
+      {/* How We Speak to Them */}
+      {audiencePhrases.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-4">Pain Points</h2>
-          <div className="space-y-2">
-            {painPoints.map((p, i) => (
-              <div key={i} className="flex items-baseline justify-between border-b border-border py-2">
-                <span className="text-sm">{p.pain}</span>
-                <span className={`rounded px-1.5 py-0.5 text-[10px] ${
-                  p.severity === "critical" ? "bg-danger/10 text-danger"
-                    : p.severity === "moderate" ? "bg-warning/10 text-warning"
-                    : "bg-surface-hover text-muted"
-                }`}>
-                  {p.severity}
-                </span>
-              </div>
+          <h2 className="mb-4">How We Speak to Them</h2>
+          <p className="mb-3 text-sm text-muted">
+            Every caption and blog post uses language your customers actually use — not marketing speak.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {audiencePhrases.map((phrase, i) => (
+              <span
+                key={i}
+                className="rounded bg-surface-hover px-2 py-1 text-xs"
+              >
+                &ldquo;{phrase}&rdquo;
+              </span>
             ))}
           </div>
         </section>
       )}
 
-      {/* Audience Language */}
-      {langMap && (
-        <section className="mb-8">
-          <h2 className="mb-4">Audience Language</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {langMap.painPhrases?.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-danger">Pain phrases</p>
-                <div className="flex flex-wrap gap-1">
-                  {langMap.painPhrases.map((p, i) => (
-                    <span key={i} className="rounded bg-danger/10 px-1.5 py-0.5 text-xs text-danger">{p}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {langMap.desirePhrases?.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-success">Desire phrases</p>
-                <div className="flex flex-wrap gap-1">
-                  {langMap.desirePhrases.map((p, i) => (
-                    <span key={i} className="rounded bg-success/10 px-1.5 py-0.5 text-xs text-success">{p}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {langMap.searchPhrases?.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-accent">Search phrases</p>
-                <div className="flex flex-wrap gap-1">
-                  {langMap.searchPhrases.map((p, i) => (
-                    <span key={i} className="rounded bg-accent/10 px-1.5 py-0.5 text-xs text-accent">{p}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {langMap.emotionalTriggers?.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-muted">Emotional triggers</p>
-                <div className="flex flex-wrap gap-1">
-                  {langMap.emotionalTriggers.map((p, i) => (
-                    <span key={i} className="rounded bg-surface-hover px-1.5 py-0.5 text-xs text-muted">{p}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Hook Bank Preview */}
-      {lovedHooks.length > 0 && (
-        <section className="mb-8">
-          <h2 className="mb-4">Hook Bank ({lovedHooks.length} hooks)</h2>
-          <div className="space-y-2">
-            {lovedHooks.slice(0, 10).map((hook, i) => (
-              <div key={i} className="border-b border-border py-2">
-                <p className="text-sm">&ldquo;{hook.text}&rdquo;</p>
-                <span className="mt-1 inline-block rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted capitalize">
-                  {hook.category.replace("_", " ")}
-                </span>
-              </div>
-            ))}
-            {lovedHooks.length > 10 && (
-              <p className="text-xs text-muted pt-2">
-                + {lovedHooks.length - 10} more hooks in the bank
+      {/* What's Working For You */}
+      <section className="mb-8">
+        <div
+          style={{
+            borderRadius: "var(--tp-radius)",
+            background: "var(--color-surface-hover)",
+            padding: 16,
+          }}
+        >
+          <p className="text-sm font-medium" style={{ marginBottom: 8 }}>
+            What your playbook powers
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="text-center">
+              <p className="text-lg font-semibold text-accent">
+                {((playbook.contentHooks as Record<string, unknown>)?.lovedHooks as unknown[])?.length || 0}
               </p>
-            )}
+              <p className="text-xs text-muted">Content hooks</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-accent">
+                {selectedAngles[0]?.contentThemes?.length || 0}
+              </p>
+              <p className="text-xs text-muted">Content themes</p>
+            </div>
           </div>
-        </section>
-      )}
+          <p className="mt-3 text-xs text-muted">
+            These feed your social captions, blog posts, and publishing schedule automatically.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

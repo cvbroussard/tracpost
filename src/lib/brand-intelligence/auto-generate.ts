@@ -204,16 +204,25 @@ export async function refinePlaybook(
 ${JSON.stringify(existing, null, 2)}
 
 ## Your Task
-Regenerate the ENTIRE playbook, reshaping every section through the lens of the owner's unique angle. This is not a generic ${businessType} anymore — the angle fundamentally changes:
-- **Who** the target audience is (narrower, more specific)
-- **What** pain points matter (different from generic)
-- **How** the brand positions itself (the angle IS the positioning)
-- **What** content hooks resonate (must reflect the angle)
-- **What** the offer statement promises (the angle's promise)
+Regenerate the playbook, reshaping it through the lens of the owner's unique angle. This is not a generic ${businessType} anymore.
 
-The owner's angle should be the DNA of every element. If the angle says "serious cooks" — the audience is serious cooks, not homeowners. If the angle says "culinary experience" — the pain points are about cooking workflow, not aesthetics.
+**PRESERVE from baseline** (this research is still valid):
+- Competitive landscape (existing solutions, market gaps) — update positioning opportunities to reflect the angle
+- Congregation points (where the audience hangs out) — narrow to the angle's specific audience
+- Urgency gateway structure — rewrite the problem/urgency through the angle's lens
 
-Keep the same JSON structure as the existing playbook. Generate 50 hooks in lovedHooks. Generate 3 brand angles where the first is the strongest interpretation of the owner's angle.
+**RESHAPE around the angle**:
+- **Audience**: Narrow the target. If the angle says "serious cooks" — the audience is serious cooks, not generic homeowners
+- **Transformation journey**: Rewrite current/desired state through the angle's specific world
+- **Pain points**: New pains specific to the angle's audience (not generic category pains)
+- **Language map**: New phrases the angle's audience actually uses — pain phrases, desire phrases, search queries, emotional triggers
+- **Brand positioning**: The angle IS the primary positioning. Generate 3 angles where the first is the strongest interpretation of the owner's words
+- **Content hooks**: 50 new hooks that only make sense for this specific angle — not generic ${businessType} hooks
+- **Offer statement**: The angle's promise, not the category's promise
+
+The test: if you removed the business type and just read the playbook, could you tell this is about the owner's specific angle? If it reads like any other ${businessType}, you haven't gone far enough.
+
+Keep the same JSON structure as the existing playbook. Generate 50 hooks in lovedHooks. Generate 3 brand angles.
 
 Respond with ONLY valid JSON (no markdown fencing).`,
       },

@@ -17,7 +17,7 @@ export async function POST() {
 
   const sites = await sql`
     SELECT id, name, url FROM sites
-    WHERE subscriber_id = ${session.subscriberId}
+    WHERE subscriber_id = ${session.subscriberId} AND deleted_at IS NULL
     ORDER BY created_at ASC
   `;
 

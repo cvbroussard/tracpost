@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { SiteActions } from "./site-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,9 @@ export default async function SubscriberDetail({
 
   const [sites, accounts, recentPosts, usage] = await Promise.all([
     sql`
-      SELECT id, name, url, autopilot_enabled, created_at
+      SELECT id, name, url, autopilot_enabled, deleted_at, created_at
       FROM sites WHERE subscriber_id = ${id}
-      ORDER BY created_at DESC
+      ORDER BY deleted_at ASC NULLS FIRST, created_at DESC
     `,
     sql`
       SELECT sa.id, sa.platform, sa.account_name, sa.status, sa.token_expires_at
@@ -83,23 +84,35 @@ export default async function SubscriberDetail({
                 <th className="px-4 py-2 font-medium">URL</th>
                 <th className="px-4 py-2 font-medium">Autopilot</th>
                 <th className="px-4 py-2 font-medium">Created</th>
+                <th className="px-4 py-2 font-medium"></th>
               </tr>
             </thead>
             <tbody>
-              {sites.map((site) => (
-                <tr key={site.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-2 font-medium">{site.name}</td>
-                  <td className="px-4 py-2 text-xs text-muted">{site.url}</td>
-                  <td className="px-4 py-2">
-                    <span className={`text-xs ${site.autopilot_enabled ? "text-success" : "text-muted"}`}>
-                      {site.autopilot_enabled ? "On" : "Off"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-xs text-muted">
-                    {new Date(site.created_at).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
+              {sites.map((site) => {
+                const isDeleted = !!site.deleted_at;
+                return (
+                  <tr key={site.id} className={`border-b border-border last:border-0 ${isDeleted ? "opacity-50" : ""}`}>
+                    <td className="px-4 py-2 font-medium">
+                      {site.name}
+                      {isDeleted && (
+                        <span className="ml-2 rounded bg-danger/10 px-1.5 py-0.5 text-[10px] text-danger">deleted</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-muted">{site.url}</td>
+                    <td className="px-4 py-2">
+                      <span className={`text-xs ${site.autopilot_enabled ? "text-success" : "text-muted"}`}>
+                        {site.autopilot_enabled ? "On" : "Off"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-xs text-muted">
+                      {new Date(site.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <SiteActions siteId={site.id} siteName={site.name} isDeleted={isDeleted} />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

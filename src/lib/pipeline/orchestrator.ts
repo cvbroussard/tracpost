@@ -187,7 +187,7 @@ async function notifyPipelineResults(
  */
 export async function runAllPipelines(): Promise<PipelineRunResult[]> {
   const sites = await sql`
-    SELECT id FROM sites WHERE autopilot_enabled = true
+    SELECT id FROM sites WHERE autopilot_enabled = true AND deleted_at IS NULL
   `;
 
   const results: PipelineRunResult[] = [];

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   // Fetch subscriber's sites
   const sites = await sql`
     SELECT id, name, url FROM sites
-    WHERE subscriber_id = ${subscriber.id}
+    WHERE subscriber_id = ${subscriber.id} AND deleted_at IS NULL
     ORDER BY created_at ASC
   `;
 

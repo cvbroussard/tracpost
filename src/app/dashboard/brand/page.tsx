@@ -52,6 +52,7 @@ export default async function BrandPage() {
         initialPhase={initialPhase as "onboarding" | "angles" | "hooks" | "complete"}
         initialAngles={initialAngles as never}
         initialHooks={initialHooks as never}
+        initialPlaybook={hasPlaybook ? (playbook as Record<string, unknown>) : undefined}
       />
     </div>
   );

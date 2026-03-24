@@ -112,7 +112,7 @@ export async function resolveBlogSiteBySlug(siteSlug: string): Promise<BlogSite 
            bs.blog_title, bs.blog_description, bs.theme
     FROM sites s
     JOIN blog_settings bs ON bs.site_id = s.id
-    WHERE s.blog_slug = ${siteSlug} AND bs.blog_enabled = true
+    WHERE s.blog_slug = ${siteSlug} AND bs.blog_enabled = true AND s.deleted_at IS NULL
   `;
   return row ? toBlogSite(row) : null;
 }
@@ -170,7 +170,7 @@ export async function getAllBlogSites(): Promise<Array<{
             WHERE bp.site_id = s.id AND bp.status = 'published') AS latest_post_date
     FROM sites s
     JOIN blog_settings bs ON bs.site_id = s.id
-    WHERE bs.blog_enabled = true AND s.blog_slug IS NOT NULL
+    WHERE bs.blog_enabled = true AND s.blog_slug IS NOT NULL AND s.deleted_at IS NULL
     ORDER BY s.name ASC
   `;
   return rows.map((r) => ({

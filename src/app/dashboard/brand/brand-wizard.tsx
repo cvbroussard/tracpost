@@ -33,11 +33,13 @@ export function BrandWizard({
   initialPhase,
   initialAngles,
   initialHooks,
+  initialPlaybook,
 }: {
   siteId: string;
   initialPhase: Phase;
   initialAngles?: BrandAngle[];
   initialHooks?: ContentHook[];
+  initialPlaybook?: Record<string, unknown>;
 }) {
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export function BrandWizard({
   const [ratedHooks, setRatedHooks] = useState<RatedHook[]>([]);
 
   // Result state
-  const [playbook, setPlaybook] = useState<Record<string, unknown> | null>(null);
+  const [playbook, setPlaybook] = useState<Record<string, unknown> | null>(initialPlaybook || null);
 
   const apiCall = useCallback(
     async (body: Record<string, unknown>) => {
@@ -508,35 +510,107 @@ export function BrandWizard({
             </p>
           </div>
 
-          {playbook && (
-            <div className="space-y-6">
-              {/* Offer statement preview */}
-              <div className="rounded-lg bg-accent/5 p-5">
-                <h4 className="mb-2 text-accent">Your Offer Statement</h4>
-                <p className="italic">
-                  &ldquo;{(playbook as Record<string, Record<string, Record<string, string>>>).offerCore?.offerStatement?.finalStatement}&rdquo;
-                </p>
-              </div>
+          {playbook && (() => {
+            const pb = playbook as Record<string, unknown>;
+            const offerCore = pb.offerCore as Record<string, unknown> | undefined;
+            const offerStatement = offerCore?.offerStatement as Record<string, string> | undefined;
+            const positioning = pb.brandPositioning as Record<string, unknown> | undefined;
+            const selectedAngles = (positioning?.selectedAngles || []) as BrandAngle[];
+            const contentHooks = pb.contentHooks as Record<string, unknown> | undefined;
+            const lovedHooks = (contentHooks?.lovedHooks || []) as ContentHook[];
+            const likedHooks = (contentHooks?.likedHooks || []) as ContentHook[];
+            const hookSummary = contentHooks?.summary as Record<string, number> | undefined;
+            const audience = pb.audienceResearch as Record<string, unknown> | undefined;
+            const langMap = audience?.languageMap as Record<string, string[]> | undefined;
 
-              {/* Hook bank summary */}
-              <div>
-                <h4 className="mb-2">Hook Bank</h4>
-                <p className="text-muted">
-                  {ratedHooks.filter((h) => h.rating === "loved").length} fire hooks,{" "}
-                  {ratedHooks.filter((h) => h.rating === "liked").length} liked hooks saved
-                </p>
-              </div>
+            // Use playbook summary if available, fall back to rated hooks from wizard
+            const lovedCount = hookSummary?.loved ?? ratedHooks.filter((h) => h.rating === "loved").length;
+            const likedCount = hookSummary?.liked ?? ratedHooks.filter((h) => h.rating === "liked").length;
+            const totalHooks = lovedHooks.length + likedHooks.length;
 
-              <div className="text-center pt-4">
-                <a
-                  href="/dashboard"
-                  className="bg-accent px-6 py-2.5 text-sm font-medium text-white"
-                >
-                  Go to Dashboard
-                </a>
+            return (
+              <div className="space-y-6">
+                {/* Offer statement */}
+                {offerStatement?.finalStatement && (
+                  <div className="rounded-lg bg-accent/5 p-5">
+                    <h4 className="mb-2 text-sm font-medium text-accent">Your Offer Statement</h4>
+                    <p className="text-sm italic leading-relaxed">
+                      &ldquo;{offerStatement.finalStatement}&rdquo;
+                    </p>
+                  </div>
+                )}
+
+                {/* Brand angle */}
+                {selectedAngles.length > 0 && (
+                  <div>
+                    <h4 className="mb-3 text-sm font-medium">Brand Angle</h4>
+                    <div className="rounded-lg border border-border p-4">
+                      <p className="font-semibold">{selectedAngles[0].name}</p>
+                      <p className="mt-1 text-sm italic text-muted">&ldquo;{selectedAngles[0].tagline}&rdquo;</p>
+                      <p className="mt-2 text-sm text-muted">Tone: {selectedAngles[0].tone}</p>
+                      {selectedAngles[0].contentThemes?.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {selectedAngles[0].contentThemes.map((theme, i) => (
+                            <span key={i} className="rounded bg-surface-hover px-1.5 py-0.5 text-xs text-muted">
+                              {theme}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Hook bank */}
+                <div>
+                  <h4 className="mb-2 text-sm font-medium">Hook Bank</h4>
+                  <p className="text-sm text-muted">
+                    {totalHooks > 0
+                      ? `${totalHooks} hooks — ${lovedCount} loved, ${likedCount} liked`
+                      : "Hooks ready for caption generation"}
+                  </p>
+                </div>
+
+                {/* Audience language */}
+                {langMap && (
+                  <div>
+                    <h4 className="mb-3 text-sm font-medium">Audience Language</h4>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {langMap.painPhrases?.length > 0 && (
+                        <div>
+                          <p className="mb-1.5 text-xs font-medium text-danger">Pain Phrases</p>
+                          <div className="flex flex-wrap gap-1">
+                            {langMap.painPhrases.slice(0, 5).map((p, i) => (
+                              <span key={i} className="rounded bg-danger/10 px-1.5 py-0.5 text-xs text-danger">{p}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {langMap.desirePhrases?.length > 0 && (
+                        <div>
+                          <p className="mb-1.5 text-xs font-medium text-success">Desire Phrases</p>
+                          <div className="flex flex-wrap gap-1">
+                            {langMap.desirePhrases.slice(0, 5).map((p, i) => (
+                              <span key={i} className="rounded bg-success/10 px-1.5 py-0.5 text-xs text-success">{p}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-4 text-center">
+                  <a
+                    href="/dashboard"
+                    className="bg-accent px-6 py-2.5 text-sm font-medium text-white"
+                  >
+                    Go to Dashboard
+                  </a>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
     </div>

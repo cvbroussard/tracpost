@@ -21,7 +21,7 @@ export default async function SubscriberDetail({
 
   const [sites, accounts, recentPosts, usage] = await Promise.all([
     sql`
-      SELECT id, name, url, autopilot_enabled, deleted_at, created_at
+      SELECT id, name, url, autopilot_enabled, deleted_at, deletion_status, deletion_requested_at, deletion_reason, created_at
       FROM sites WHERE subscriber_id = ${id}
       ORDER BY deleted_at ASC NULLS FIRST, created_at DESC
     `,
@@ -96,6 +96,11 @@ export default async function SubscriberDetail({
                       {site.name}
                       {isDeleted && (
                         <span className="ml-2 rounded bg-danger/10 px-1.5 py-0.5 text-[10px] text-danger">deleted</span>
+                      )}
+                      {site.deletion_status === "pending" && !isDeleted && (
+                        <span className="ml-2 rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning" title={site.deletion_reason ? `Reason: ${site.deletion_reason}` : undefined}>
+                          deletion requested
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-2 text-xs text-muted">{site.url}</td>

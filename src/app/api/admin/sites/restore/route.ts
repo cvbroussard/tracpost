@@ -27,7 +27,11 @@ export async function POST(req: NextRequest) {
 
   await sql`
     UPDATE sites
-    SET deleted_at = NULL, updated_at = NOW()
+    SET deleted_at = NULL,
+        deletion_status = NULL,
+        deletion_requested_at = NULL,
+        deletion_reason = NULL,
+        updated_at = NOW()
     WHERE id = ${siteId}
   `;
 

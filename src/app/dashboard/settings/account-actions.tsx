@@ -4,8 +4,16 @@ import { useState } from "react";
 
 export function AccountActions({
   cancelledAt,
+  siteId,
+  siteName,
+  deletionStatus: initialDeletionStatus,
+  deletionRequestedAt,
 }: {
   cancelledAt: string | null;
+  siteId: string;
+  siteName: string;
+  deletionStatus: string | null;
+  deletionRequestedAt: string | null;
 }) {
   const [exporting, setExporting] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
@@ -18,6 +26,56 @@ export function AccountActions({
     cancelledAt ? graceEndDate(cancelledAt) : null
   );
   const [revoking, setRevoking] = useState(false);
+
+  // Site deletion request state
+  const [deletionStatus, setDeletionStatus] = useState(initialDeletionStatus);
+  const [showDeleteSite, setShowDeleteSite] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [requestingDelete, setRequestingDelete] = useState(false);
+  const [revokingDelete, setRevokingDelete] = useState(false);
+
+  async function requestSiteDeletion() {
+    setRequestingDelete(true);
+    try {
+      const res = await fetch("/api/sites/delete-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, reason: deleteReason || undefined }),
+      });
+      if (res.ok) {
+        setDeletionStatus("pending");
+        setShowDeleteSite(false);
+      } else {
+        const data = await res.json();
+        alert(data.error || "Request failed");
+      }
+    } catch {
+      alert("Request failed");
+    } finally {
+      setRequestingDelete(false);
+    }
+  }
+
+  async function cancelSiteDeletion() {
+    setRevokingDelete(true);
+    try {
+      const res = await fetch("/api/sites/delete-request", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId }),
+      });
+      if (res.ok) {
+        setDeletionStatus(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || "Request failed");
+      }
+    } catch {
+      alert("Request failed");
+    } finally {
+      setRevokingDelete(false);
+    }
+  }
 
   async function requestExport() {
     setExporting(true);
@@ -220,6 +278,90 @@ export function AccountActions({
           )}
         </section>
       )}
+      {/* Site Deletion Request */}
+      <section className="mb-8">
+        {deletionStatus === "pending" ? (
+          <div className="rounded-lg bg-warning/10 p-4">
+            <p className="font-medium text-warning">
+              Site deletion requested
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              Your request to delete <strong>{siteName}</strong> is pending review.
+              {deletionRequestedAt && (
+                <> Submitted {new Date(deletionRequestedAt).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}.</>
+              )}
+              {" "}The platform team will review and process your request. Your data remains intact until approved.
+            </p>
+            <button
+              onClick={cancelSiteDeletion}
+              disabled={revokingDelete}
+              className="mt-3 bg-accent px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+            >
+              {revokingDelete ? "Cancelling..." : "Cancel Request"}
+            </button>
+          </div>
+        ) : deletionStatus === "approved" ? (
+          <div className="rounded-lg bg-danger/10 p-4">
+            <p className="font-medium text-danger">
+              Site scheduled for deletion
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              <strong>{siteName}</strong> has been approved for deletion and will be removed within 30 days.
+              Export your data before then.
+            </p>
+          </div>
+        ) : (
+          <>
+            <h2 className="mb-1 text-muted">Delete Site</h2>
+            <p className="mb-4 text-sm text-muted">
+              Request deletion of <strong>{siteName}</strong>. The platform team will review your request.
+              Your data is preserved until the request is approved.
+            </p>
+
+            {showDeleteSite ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    Why are you deleting this site? (optional)
+                  </label>
+                  <input
+                    value={deleteReason}
+                    onChange={(e) => setDeleteReason(e.target.value)}
+                    placeholder="Closing this location, consolidating sites, etc."
+                    className="w-full px-3 py-2.5"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={requestSiteDeletion}
+                    disabled={requestingDelete}
+                    className="bg-danger px-4 py-2 text-sm font-medium text-white hover:opacity-80 disabled:opacity-50"
+                  >
+                    {requestingDelete ? "Submitting..." : "Request Deletion"}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteSite(false)}
+                    className="border border-border px-4 py-2 text-sm text-muted hover:text-foreground"
+                  >
+                    Never mind
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowDeleteSite(true)}
+                className="border border-danger/40 px-4 py-2 text-sm font-medium text-danger hover:bg-danger/10"
+              >
+                Delete This Site
+              </button>
+            )}
+          </>
+        )}
+      </section>
     </>
   );
 }

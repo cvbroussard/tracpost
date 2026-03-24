@@ -26,10 +26,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Site not found or already deleted" }, { status: 404 });
   }
 
-  // Soft delete: mark deleted, disable autopilot, disable blog
+  // Soft delete: mark deleted, disable autopilot, update deletion status
   await sql`
     UPDATE sites
-    SET deleted_at = NOW(), autopilot_enabled = false, updated_at = NOW()
+    SET deleted_at = NOW(),
+        autopilot_enabled = false,
+        deletion_status = 'approved',
+        updated_at = NOW()
     WHERE id = ${siteId}
   `;
 

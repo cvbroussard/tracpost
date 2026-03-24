@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { ApiKeySection } from "./api-key-section";
 import { AccountActions } from "./account-actions";
+import { OnboardingTip } from "@/components/onboarding-tip";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function SettingsPage() {
   const [site] = await sql`
     SELECT s.name, s.url, s.brand_voice, s.autopilot_enabled, s.cadence_config,
            s.content_pillars, s.autopilot_config, s.created_at,
+           s.deletion_requested_at, s.deletion_status,
            sub.name AS subscriber_name, sub.plan, sub.cancelled_at
     FROM sites s
     JOIN subscribers sub ON s.subscriber_id = sub.id
@@ -132,6 +134,10 @@ export default async function SettingsPage() {
 
       <AccountActions
         cancelledAt={site?.cancelled_at ? String(site.cancelled_at) : null}
+        siteId={siteId}
+        siteName={site?.name ? String(site.name) : "this site"}
+        deletionStatus={site?.deletion_status ? String(site.deletion_status) : null}
+        deletionRequestedAt={site?.deletion_requested_at ? String(site.deletion_requested_at) : null}
       />
     </div>
   );

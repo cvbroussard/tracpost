@@ -8,6 +8,7 @@ export interface ChecklistState {
   allPlatforms: string[];
   existingAccounts: string[];
   hasPlaybook: boolean;
+  isPlaybookRefined: boolean;
   assetCount: number;
   blogEnabled: boolean;
   autopilotActive: boolean;
@@ -110,11 +111,27 @@ export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; 
     isApp: true,
   });
 
+  // Sharpen playbook — subscriber action, only if baseline exists but not yet refined
+  if (state.hasPlaybook && !state.isPlaybookRefined) {
+    steps.push({
+      key: "sharpen",
+      label: "Sharpen your playbook",
+      done: false,
+      detail: "Tell us what makes you different",
+      href: `${prefix}/brand`,
+    });
+  }
+
   // Behind-the-curtain items (informational, not subscriber actions)
   const curtainItems: { label: string; done: boolean }[] = [];
 
   if (isProvisioned || isProvisioning) {
-    curtainItems.push({ label: "Brand playbook", done: state.hasPlaybook });
+    curtainItems.push({ label: "Baseline playbook", done: state.hasPlaybook });
+
+    if (state.hasPlaybook) {
+      curtainItems.push({ label: "Sharpened playbook", done: state.isPlaybookRefined });
+    }
+
     curtainItems.push({ label: "Blog", done: state.blogEnabled });
 
     if (platformCreating.length > 0) {

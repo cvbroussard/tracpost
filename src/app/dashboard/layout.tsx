@@ -36,7 +36,7 @@ export default async function DashboardLayout({
       `,
       sql`
         SELECT brand_playbook IS NOT NULL AS has_playbook, autopilot_enabled,
-               provisioning_status, metadata
+               provisioning_status, metadata, brand_voice
         FROM sites WHERE id = ${siteId}
       `,
       sql`SELECT COUNT(*)::int AS count FROM media_assets WHERE site_id = ${siteId}`,
@@ -50,12 +50,15 @@ export default async function DashboardLayout({
     const provisioningStatus = (siteData[0]?.provisioning_status as string) || null;
     const siteMeta = (siteData[0]?.metadata || {}) as Record<string, unknown>;
     const existingAccounts = (siteMeta.existing_accounts || []) as string[];
+    const brandVoice = (siteData[0]?.brand_voice || {}) as Record<string, unknown>;
+    const isPlaybookRefined = !!brandVoice._subscriberAngle;
 
     checklistState = {
       connectedPlatforms,
       allPlatforms: ALL_PLATFORMS,
       existingAccounts,
       hasPlaybook,
+      isPlaybookRefined,
       assetCount: assetCount[0]?.count || 0,
       blogEnabled,
       autopilotActive,

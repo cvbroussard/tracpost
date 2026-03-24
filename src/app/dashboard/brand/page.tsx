@@ -1,8 +1,7 @@
 import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { BrandWizard } from "./brand-wizard";
-import { OnboardingTip } from "@/components/onboarding-tip";
+import { BrandPlaybookView } from "./brand-playbook-view";
 
 export const dynamic = "force-dynamic";
 
@@ -13,47 +12,48 @@ export default async function BrandPage() {
 
   const siteId = session.activeSiteId;
 
-  // Check current state
   const [site] = await sql`
-    SELECT brand_playbook, brand_wizard_state
+    SELECT brand_playbook, brand_voice, provisioning_status
     FROM sites
     WHERE id = ${siteId} AND subscriber_id = ${session.subscriberId}
   `;
 
   if (!site) redirect("/dashboard");
 
-  // Determine initial phase and pre-load data
   const playbook = site.brand_playbook as Record<string, unknown> | null;
-  const wizardState = site.brand_wizard_state as Record<string, unknown> | null;
-
-  let initialPhase: string = "onboarding";
-  let initialAngles: unknown[] | undefined;
-  let initialHooks: unknown[] | undefined;
-
-  if (playbook && (playbook as Record<string, unknown>).offerCore) {
-    initialPhase = "complete";
-  } else if (wizardState) {
-    initialPhase = (wizardState.phase as string) || "onboarding";
-    initialAngles = wizardState.generatedAngles as unknown[];
-    initialHooks = wizardState.generatedHooks as unknown[];
-  }
-
-  const hasPlaybook = playbook && (playbook as Record<string, unknown>).offerCore;
+  const hasPlaybook = playbook && playbook.offerCore;
+  const brandVoice = (site.brand_voice || {}) as Record<string, unknown>;
+  const subscriberAngle = (brandVoice._subscriberAngle as string) || null;
+  const isProvisioning = site.provisioning_status === "requested" || site.provisioning_status === "in_progress";
 
   return (
-    <div className="py-4">
-      <OnboardingTip
-        tipKey="brand"
-        message="Your playbook is the DNA of every caption, blog post, and hook. The more detail you share about your business and audience, the sharper your content will be."
-        incomplete={!hasPlaybook}
-      />
-      <BrandWizard
-        siteId={siteId}
-        initialPhase={initialPhase as "onboarding" | "angles" | "hooks" | "complete"}
-        initialAngles={initialAngles as never}
-        initialHooks={initialHooks as never}
-        initialPlaybook={hasPlaybook ? (playbook as Record<string, unknown>) : undefined}
-      />
+    <div className="mx-auto max-w-2xl py-4">
+      {!hasPlaybook && isProvisioning && (
+        <div className="py-16 text-center">
+          <div className="mb-4 mx-auto h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <h1>Generating Your Brand Playbook</h1>
+          <p className="mt-2 text-muted">
+            Our team is building your brand intelligence. This typically takes a few minutes.
+          </p>
+        </div>
+      )}
+
+      {!hasPlaybook && !isProvisioning && (
+        <div className="py-16 text-center">
+          <h1>Brand Intelligence</h1>
+          <p className="mt-2 text-muted">
+            Your brand playbook will appear here once provisioning begins.
+          </p>
+        </div>
+      )}
+
+      {hasPlaybook ? (
+        <BrandPlaybookView
+          siteId={siteId}
+          playbook={playbook as Record<string, unknown>}
+          subscriberAngle={subscriberAngle}
+        />
+      ) : null}
     </div>
   );
 }

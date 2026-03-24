@@ -168,6 +168,109 @@ Requirements:
 }
 
 /**
+ * Refine an existing playbook with the subscriber's unique angle.
+ * Takes the baseline playbook and reshapes audience, positioning,
+ * hooks, and offer around the subscriber's differentiator.
+ */
+export async function refinePlaybook(
+  siteId: string,
+  angle: string
+): Promise<BrandPlaybook> {
+  // Load existing playbook
+  const [site] = await sql`
+    SELECT brand_playbook, business_type, location FROM sites WHERE id = ${siteId}
+  `;
+
+  if (!site?.brand_playbook) {
+    throw new Error("No existing playbook to refine");
+  }
+
+  const existing = site.brand_playbook as unknown as BrandPlaybook;
+  const businessType = (site.business_type as string) || "business";
+  const location = (site.location as string) || "";
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 8192,
+    messages: [
+      {
+        role: "user",
+        content: `You are a brand strategist. I have a baseline brand playbook for a **${businessType}** in **${location}**. The owner has shared their unique angle — their differentiator that separates them from every other ${businessType}.
+
+## The Owner's Angle
+"${angle}"
+
+## Existing Baseline Playbook
+${JSON.stringify(existing, null, 2)}
+
+## Your Task
+Regenerate the ENTIRE playbook, reshaping every section through the lens of the owner's unique angle. This is not a generic ${businessType} anymore — the angle fundamentally changes:
+- **Who** the target audience is (narrower, more specific)
+- **What** pain points matter (different from generic)
+- **How** the brand positions itself (the angle IS the positioning)
+- **What** content hooks resonate (must reflect the angle)
+- **What** the offer statement promises (the angle's promise)
+
+The owner's angle should be the DNA of every element. If the angle says "serious cooks" — the audience is serious cooks, not homeowners. If the angle says "culinary experience" — the pain points are about cooking workflow, not aesthetics.
+
+Keep the same JSON structure as the existing playbook. Generate 50 hooks in lovedHooks. Generate 3 brand angles where the first is the strongest interpretation of the owner's angle.
+
+Respond with ONLY valid JSON (no markdown fencing).`,
+      },
+    ],
+  });
+
+  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  const cleaned = text.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
+  const playbook = JSON.parse(cleaned) as BrandPlaybook;
+  playbook.generatedAt = new Date().toISOString();
+  playbook.version = "2.1-refined";
+
+  // Store refined playbook
+  await sql`
+    UPDATE sites
+    SET brand_playbook = ${JSON.stringify(playbook)},
+        updated_at = NOW()
+    WHERE id = ${siteId}
+  `;
+
+  // Replace hook_bank with refined hooks
+  await sql`DELETE FROM hook_bank WHERE site_id = ${siteId}`;
+  const hooks = playbook.contentHooks.lovedHooks || [];
+  for (const hook of hooks) {
+    await sql`
+      INSERT INTO hook_bank (site_id, text, category, rating)
+      VALUES (${siteId}, ${hook.text}, ${hook.category}, 'loved')
+      ON CONFLICT DO NOTHING
+    `;
+  }
+
+  // Update brand_voice
+  const primaryAngle = playbook.brandPositioning.selectedAngles[0];
+  const brandVoice = {
+    tone: primaryAngle?.tone || "",
+    keywords: playbook.audienceResearch.languageMap.desirePhrases.slice(0, 10),
+    avoid: [],
+    _source: "refined_v2.1",
+    _subscriberAngle: angle,
+  };
+
+  await sql`
+    UPDATE sites
+    SET brand_voice = ${JSON.stringify(brandVoice)}, updated_at = NOW()
+    WHERE id = ${siteId}
+  `;
+
+  // Regenerate content topics
+  await sql`DELETE FROM content_topics WHERE site_id = ${siteId}`;
+  generateContentTopics(siteId, playbook).catch((err) => {
+    console.error("Topic regeneration failed:", err instanceof Error ? err.message : err);
+  });
+
+  return playbook;
+}
+
+/**
  * Generate 40 content topics from the playbook.
  */
 async function generateContentTopics(siteId: string, playbook: BrandPlaybook): Promise<void> {

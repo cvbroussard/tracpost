@@ -10,7 +10,7 @@ import {
   getHookBank,
 } from "@/lib/brand-intelligence";
 import type { OnboardingInput, RatedHook } from "@/lib/brand-intelligence";
-import { autoGeneratePlaybook } from "@/lib/brand-intelligence/auto-generate";
+import { autoGeneratePlaybook, refinePlaybook } from "@/lib/brand-intelligence/auto-generate";
 
 /**
  * POST /api/brand-intelligence — Multi-action endpoint for the brand wizard.
@@ -52,6 +52,15 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "business_type required" }, { status: 400 });
         }
         const playbook = await autoGeneratePlaybook(site_id, business_type, location, website_url);
+        return NextResponse.json({ playbook, phase: "complete" });
+      }
+
+      case "refine": {
+        const { angle } = body;
+        if (!angle) {
+          return NextResponse.json({ error: "angle is required" }, { status: 400 });
+        }
+        const playbook = await refinePlaybook(site_id, angle);
         return NextResponse.json({ playbook, phase: "complete" });
       }
 

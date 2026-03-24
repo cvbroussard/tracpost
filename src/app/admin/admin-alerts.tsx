@@ -23,14 +23,13 @@ export async function AdminAlerts() {
       WHERE s.deletion_status = 'pending' AND s.deleted_at IS NULL
       ORDER BY s.deletion_requested_at ASC
     `,
-    // Subscribers with sites that have no playbook and were created in the last 7 days
+    // Sites with provisioning explicitly requested by subscriber
     sql`
       SELECT sub.id AS subscriber_id, sub.name AS subscriber_name, s.name AS site_name, s.created_at
       FROM subscribers sub
       JOIN sites s ON s.subscriber_id = sub.id
-      WHERE s.brand_playbook IS NULL
+      WHERE s.provisioning_status = 'requested'
         AND s.deleted_at IS NULL
-        AND s.created_at > NOW() - INTERVAL '7 days'
       ORDER BY s.created_at DESC
     `,
     // Social accounts with tokens expiring in the next 7 days

@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { AccountProfile } from "./account-profile";
+import { SitesSection } from "./sites-section";
 import { ApiKeySection } from "../settings/api-key-section";
 import { AccountActions } from "../settings/account-actions";
 
@@ -23,10 +24,30 @@ export default async function MyAccountPage() {
   const meta = (subscriber.metadata || {}) as Record<string, unknown>;
   const stripe = meta.stripe as Record<string, string> | undefined;
 
+  // Fetch all sites for this subscriber
+  const allSites = await sql`
+    SELECT id, name, business_type, location, provisioning_status,
+           autopilot_enabled, deleted_at, created_at
+    FROM sites
+    WHERE subscriber_id = ${session.subscriberId}
+    ORDER BY deleted_at ASC NULLS FIRST, created_at DESC
+  `;
+
+  const sitesData = allSites.map((s) => ({
+    id: s.id as string,
+    name: s.name as string,
+    business_type: (s.business_type as string) || null,
+    location: (s.location as string) || null,
+    provisioning_status: (s.provisioning_status as string) || null,
+    autopilot_enabled: s.autopilot_enabled as boolean,
+    deleted_at: s.deleted_at ? String(s.deleted_at) : null,
+    created_at: s.created_at as string,
+  }));
+
   return (
     <div className="mx-auto max-w-4xl">
       <h1>My Account</h1>
-      <p className="mt-2 mb-8 text-muted">Manage your profile, security, and billing</p>
+      <p className="mt-2 mb-8 text-muted">Manage your profile, sites, and billing</p>
 
       {/* Profile */}
       <section className="mb-8">
@@ -43,6 +64,9 @@ export default async function MyAccountPage() {
           />
         </div>
       </section>
+
+      {/* Sites */}
+      <SitesSection initialSites={sitesData} />
 
       {/* Plan & Billing */}
       <section className="mb-8">

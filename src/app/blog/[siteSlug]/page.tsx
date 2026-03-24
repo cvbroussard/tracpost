@@ -115,9 +115,11 @@ export default async function HubPage({ params }: Props) {
 
   // Build description from playbook or blog description
   const playbook = siteInfo.brand_playbook as Record<string, unknown> | null;
-  const aboutText = site.blogDescription
-    || (playbook?.brandPositioning as Record<string, unknown>)?.tagline as string
-    || "";
+  const playbookTagline = (playbook?.brandPositioning as Record<string, unknown>)?.selectedAngles;
+  const taglineText = Array.isArray(playbookTagline) && playbookTagline[0]
+    ? String((playbookTagline[0] as Record<string, unknown>).tagline || "")
+    : "";
+  const aboutText = site.blogDescription || taglineText || "";
 
   // Generate schema
   const schema = await generateHubSchema({

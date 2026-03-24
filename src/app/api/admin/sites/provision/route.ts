@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const [site] = await sql`
       UPDATE sites
       SET provisioning_status = 'in_progress', updated_at = NOW()
-      WHERE id = ${siteId} AND provisioning_status = 'requested' AND deleted_at IS NULL
+      WHERE id = ${siteId} AND provisioning_status IN ('requested', 'in_progress') AND deleted_at IS NULL
       RETURNING id, name, business_type, location, url, brand_playbook IS NOT NULL AS has_playbook
     `;
     if (!site) {

@@ -51,6 +51,7 @@ export function ProvisionActions({ siteId, status }: ProvisionActionsProps) {
   }
 
   if (currentStatus === "in_progress") {
+    const hasFailed = automationLog?.some((item) => item.includes("failed"));
     return (
       <div>
         {automationLog && automationLog.length > 0 && (
@@ -67,13 +68,24 @@ export function ProvisionActions({ siteId, status }: ProvisionActionsProps) {
             ))}
           </div>
         )}
-        <button
-          onClick={() => advance("complete")}
-          disabled={loading}
-          className="bg-success/20 px-3 py-1 text-xs font-medium text-success hover:bg-success/30 disabled:opacity-50"
-        >
-          {loading ? "..." : "Mark Complete"}
-        </button>
+        <div className="flex gap-2">
+          {hasFailed && (
+            <button
+              onClick={() => advance("start")}
+              disabled={loading}
+              className="bg-warning/20 px-3 py-1 text-xs font-medium text-warning hover:bg-warning/30 disabled:opacity-50"
+            >
+              {loading ? "Retrying..." : "Retry"}
+            </button>
+          )}
+          <button
+            onClick={() => advance("complete")}
+            disabled={loading}
+            className="bg-success/20 px-3 py-1 text-xs font-medium text-success hover:bg-success/30 disabled:opacity-50"
+          >
+            {loading ? "..." : "Mark Complete"}
+          </button>
+        </div>
       </div>
     );
   }

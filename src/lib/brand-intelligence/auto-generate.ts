@@ -30,7 +30,7 @@ export async function autoGeneratePlaybook(
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 8192,
+    max_tokens: 16384,
     messages: [
       {
         role: "user",
@@ -191,7 +191,7 @@ export async function refinePlaybook(
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 8192,
+    max_tokens: 16384,
     messages: [
       {
         role: "user",

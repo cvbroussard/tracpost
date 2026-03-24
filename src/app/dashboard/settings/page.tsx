@@ -1,9 +1,7 @@
 import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { ApiKeySection } from "./api-key-section";
-import { AccountActions } from "./account-actions";
-import { OnboardingTip } from "@/components/onboarding-tip";
+import { SiteDeletion } from "./site-deletion";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +22,8 @@ export default async function SettingsPage() {
   const [site] = await sql`
     SELECT s.name, s.url, s.brand_voice, s.autopilot_enabled, s.cadence_config,
            s.content_pillars, s.autopilot_config, s.created_at,
-           s.deletion_requested_at, s.deletion_status,
-           sub.name AS subscriber_name, sub.plan, sub.cancelled_at
+           s.deletion_requested_at, s.deletion_status
     FROM sites s
-    JOIN subscribers sub ON s.subscriber_id = sub.id
     WHERE s.id = ${siteId}
   `;
 
@@ -52,10 +48,6 @@ export default async function SettingsPage() {
           <div className="flex items-baseline justify-between border-b border-border py-2">
             <span className="text-sm text-muted">Site URL</span>
             <span className="font-medium">{site?.url || "—"}</span>
-          </div>
-          <div className="flex items-baseline justify-between border-b border-border py-2">
-            <span className="text-sm text-muted">Plan</span>
-            <span className="font-medium">{site?.plan || "—"}</span>
           </div>
         </div>
       </section>
@@ -130,10 +122,8 @@ export default async function SettingsPage() {
         )}
       </section>
 
-      <ApiKeySection />
-
-      <AccountActions
-        cancelledAt={site?.cancelled_at ? String(site.cancelled_at) : null}
+      {/* Site Deletion */}
+      <SiteDeletion
         siteId={siteId}
         siteName={site?.name ? String(site.name) : "this site"}
         deletionStatus={site?.deletion_status ? String(site.deletion_status) : null}

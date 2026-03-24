@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { AccountProfile } from "./account-profile";
 import { ApiKeySection } from "../settings/api-key-section";
+import { AccountActions } from "../settings/account-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export default async function MyAccountPage() {
 
   const [subscriber] = await sql`
     SELECT id, name, email, plan, password_hash IS NOT NULL AS has_password,
-           metadata, created_at
+           metadata, cancelled_at, created_at
     FROM subscribers
     WHERE id = ${session.subscriberId}
   `;
@@ -79,6 +80,11 @@ export default async function MyAccountPage() {
 
       {/* API Key */}
       <ApiKeySection />
+
+      {/* Account Actions: Data Export + Cancel Account */}
+      <AccountActions
+        cancelledAt={subscriber?.cancelled_at ? String(subscriber.cancelled_at) : null}
+      />
     </div>
   );
 }

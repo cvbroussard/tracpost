@@ -51,6 +51,25 @@ export async function authenticateRequest(
     }
   }
 
+  // Path 3: Admin cookie + subscriber_id param (admin acting on behalf of subscriber)
+  const adminCookie = cookieStore.get("tp_admin")?.value;
+  if (adminCookie === "authenticated") {
+    const url = new URL(req.url);
+    const subscriberId = url.searchParams.get("subscriber_id");
+    if (subscriberId) {
+      const [sub] = await sql`
+        SELECT id, name, plan FROM subscribers WHERE id = ${subscriberId} AND is_active = true
+      `;
+      if (sub) {
+        return {
+          subscriberId: sub.id as string,
+          subscriberName: sub.name as string,
+          plan: (sub.plan as string) || "free",
+        };
+      }
+    }
+  }
+
   return NextResponse.json(
     { error: "Missing or invalid authentication" },
     { status: 401 }

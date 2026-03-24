@@ -4,6 +4,7 @@ import { generateProfileKit } from "@/lib/provisioning/profile-kit";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
 import { ProfileKitPanel } from "./profile-kit-panel";
 import { ProvisionActions } from "./provision-actions";
+import { AdminConnectButton } from "./admin-connect-button";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +134,13 @@ export default async function ProvisioningPage() {
                 </div>
 
                 {/* Profile Kit */}
+                {/* Connect accounts (admin OAuth on behalf of subscriber) */}
+                <AdminConnectButton
+                  siteId={sub.site_id as string}
+                  subscriberId={sub.subscriber_id as string}
+                  connectedPlatforms={connected}
+                />
+
                 {profileKit && (
                   <ProfileKitPanel
                     kit={profileKit}

@@ -204,16 +204,21 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-border px-6 py-12 md:px-12">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src="/icon.svg" alt="TracPost" className="h-5 w-5" />
-            <span className="text-sm text-muted">TracPost</span>
+        <div className="mx-auto max-w-4xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <img src="/icon.svg" alt="TracPost" className="h-5 w-5" />
+              <span className="text-sm text-muted">TracPost</span>
+            </div>
+            <div className="flex gap-6 text-sm text-muted">
+              <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
+              <Link href="/terms" className="hover:text-foreground">Terms</Link>
+              <a href="mailto:support@tracpost.com" className="hover:text-foreground">Support</a>
+            </div>
           </div>
-          <div className="flex gap-6 text-sm text-muted">
-            <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
-            <Link href="/terms" className="hover:text-foreground">Terms</Link>
-            <a href="mailto:support@tracpost.com" className="hover:text-foreground">Support</a>
-          </div>
+          <p className="mt-6 text-xs text-dim">
+            TracPost is a product of Eppux LLC &middot; Pittsburgh, PA &middot; &copy; 2026
+          </p>
         </div>
       </footer>
     </div>

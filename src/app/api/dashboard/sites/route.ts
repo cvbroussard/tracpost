@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, businessType, location, domain, existingAccounts } = body;
+  const { name, businessType, location, domain, phone, existingAccounts } = body;
 
   if (!name || !businessType || !location) {
     return NextResponse.json(
@@ -35,10 +35,11 @@ export async function POST(req: NextRequest) {
     ? `${blogSlug}-${Date.now().toString(36).slice(-4)}`
     : blogSlug;
 
-  // Store existing accounts signal in metadata for provisioning
-  const metadata = existingAccounts?.length
-    ? JSON.stringify({ existing_accounts: existingAccounts })
-    : "{}";
+  // Store provisioning metadata
+  const metaObj: Record<string, unknown> = {};
+  if (existingAccounts?.length) metaObj.existing_accounts = existingAccounts;
+  if (phone) metaObj.phone = phone;
+  const metadata = JSON.stringify(metaObj);
 
   const [site] = await sql`
     INSERT INTO sites (subscriber_id, name, domain, url, business_type, location, blog_slug, provisioning_status, metadata)

@@ -39,6 +39,7 @@ export function SitesSection({ initialSites }: { initialSites: SiteInfo[] }) {
   const [businessType, setBusinessType] = useState("");
   const [location, setLocation] = useState("");
   const [domain, setDomain] = useState("");
+  const [phone, setPhone] = useState("");
   const [existingAccounts, setExistingAccounts] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export function SitesSection({ initialSites }: { initialSites: SiteInfo[] }) {
     setBusinessType("");
     setLocation("");
     setDomain("");
+    setPhone("");
     setExistingAccounts(new Set());
     setError(null);
   }
@@ -69,6 +71,7 @@ export function SitesSection({ initialSites }: { initialSites: SiteInfo[] }) {
           businessType,
           location,
           domain: domain || undefined,
+          phone: phone || undefined,
           existingAccounts: Array.from(existingAccounts),
         }),
       });
@@ -152,6 +155,19 @@ export function SitesSection({ initialSites }: { initialSites: SiteInfo[] }) {
                 className="w-full text-sm"
               />
             </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Business Phone</label>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(412) 555-1234"
+                className="w-full text-sm"
+                type="tel"
+              />
+              <p className="mt-1 text-[11px] text-dim">
+                Shown on your Google Business listing. Used for verification.
+              </p>
+            </div>
           </div>
 
           <div className="mt-4">
@@ -225,6 +241,12 @@ export function SitesSection({ initialSites }: { initialSites: SiteInfo[] }) {
               <div className="flex justify-between border-b border-border py-2 text-sm">
                 <span className="text-muted">Domain</span>
                 <span>{domain}</span>
+              </div>
+            )}
+            {phone && (
+              <div className="flex justify-between border-b border-border py-2 text-sm">
+                <span className="text-muted">Phone</span>
+                <span>{phone}</span>
               </div>
             )}
           </div>

@@ -30,7 +30,11 @@ export async function authenticateRequest(
       return authenticateBySessionToken(token);
     }
     // API keys have tp_ prefix (no s_)
-    return authenticateByApiKey(token);
+    if (token.startsWith("tp_")) {
+      return authenticateByApiKey(token);
+    }
+    // Device session tokens (mobile app via QR invite) — no prefix
+    return authenticateByDeviceSession(token);
   }
 
   // Path 2: Session cookie (dashboard calls)
@@ -105,6 +109,48 @@ async function authenticateByApiKey(
     subscriberId: rows[0].id,
     subscriberName: rows[0].name,
     plan: rows[0].plan,
+  };
+}
+
+/**
+ * Authenticate by device session token (mobile app via QR invite).
+ * Token is hashed with SHA-256 and matched against team_members.session_token_hash.
+ */
+async function authenticateByDeviceSession(
+  token: string
+): Promise<AuthContext | NextResponse> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const sessionHash = hashArray
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  const rows = await sql`
+    SELECT tm.subscriber_id, tm.name, tm.role,
+           sub.plan
+    FROM team_members tm
+    JOIN subscribers sub ON tm.subscriber_id = sub.id
+    WHERE tm.session_token_hash = ${sessionHash}
+      AND tm.is_active = true
+      AND sub.is_active = true
+  `;
+
+  if (rows.length === 0) {
+    return NextResponse.json({ error: "Invalid or revoked session" }, { status: 401 });
+  }
+
+  // Update last active
+  sql`
+    UPDATE team_members SET last_active_at = NOW()
+    WHERE session_token_hash = ${sessionHash}
+  `.catch(() => {});
+
+  return {
+    subscriberId: rows[0].subscriber_id as string,
+    subscriberName: rows[0].name as string,
+    plan: (rows[0].plan as string) || "free",
   };
 }
 

@@ -237,7 +237,7 @@ export function AccountProfile({ subscriberId, initialName, initialOwnerName, in
           <PhoneField
             value={phone}
             onChange={setPhone}
-            className="px-2 py-1 text-right"
+            className="px-2 py-1"
             style={{ width: 180 }}
           />
           <button
@@ -257,7 +257,7 @@ export function AccountProfile({ subscriberId, initialName, initialOwnerName, in
           <PhoneField
             value={companyPhone}
             onChange={setCompanyPhone}
-            className="px-2 py-1 text-right"
+            className="px-2 py-1"
             style={{ width: 180 }}
           />
           <button

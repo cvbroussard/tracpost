@@ -7,20 +7,17 @@ interface Props {
   subscriberId: string;
   initialName: string;
   initialOwnerName: string;
-  initialPhone: string;
   initialCompanyPhone: string;
   hasPassword: boolean;
 }
 
-export function AccountProfile({ subscriberId, initialName, initialOwnerName, initialPhone, initialCompanyPhone, hasPassword }: Props) {
+export function AccountProfile({ subscriberId, initialName, initialOwnerName, initialCompanyPhone, hasPassword }: Props) {
   const [name, setName] = useState(initialName);
   const [ownerName, setOwnerName] = useState(initialOwnerName);
-  const [phone, setPhone] = useState(initialPhone);
   const [companyPhone, setCompanyPhone] = useState(initialCompanyPhone);
   const [saving, setSaving] = useState(false);
   const [nameSuccess, setNameSuccess] = useState(false);
   const [ownerNameSuccess, setOwnerNameSuccess] = useState(false);
-  const [phoneSuccess, setPhoneSuccess] = useState(false);
   const [companyPhoneSuccess, setCompanyPhoneSuccess] = useState(false);
 
   // Password flow
@@ -72,24 +69,7 @@ export function AccountProfile({ subscriberId, initialName, initialOwnerName, in
     }
   }
 
-  async function savePhone() {
-    if (phone === initialPhone) return;
-    setSaving(true);
-    setPhoneSuccess(false);
-    try {
-      const res = await fetch("/api/account/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.trim() }),
-      });
-      if (res.ok) {
-        setPhoneSuccess(true);
-        setTimeout(() => setPhoneSuccess(false), 3000);
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
+
 
   async function saveName() {
     if (!name.trim() || name === initialName) return;
@@ -226,26 +206,6 @@ export function AccountProfile({ subscriberId, initialName, initialOwnerName, in
             className="border border-border px-3 py-1 text-sm text-muted hover:text-foreground disabled:opacity-30"
           >
             {saving ? "..." : nameSuccess ? "Saved" : "Save"}
-          </button>
-        </div>
-      </div>
-
-      {/* Phone */}
-      <div className="flex items-center justify-between border-b border-border py-2">
-        <span className="text-sm text-muted">Phone</span>
-        <div className="flex items-center gap-2">
-          <PhoneField
-            value={phone}
-            onChange={setPhone}
-            className="px-2 py-1"
-            style={{ width: 180 }}
-          />
-          <button
-            onClick={savePhone}
-            disabled={saving || phone === initialPhone}
-            className="border border-border px-3 py-1 text-sm text-muted hover:text-foreground disabled:opacity-30"
-          >
-            {saving ? "..." : phoneSuccess ? "Saved" : "Save"}
           </button>
         </div>
       </div>

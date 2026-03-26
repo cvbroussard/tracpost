@@ -70,7 +70,6 @@ export default async function MyAccountPage() {
             subscriberId={subscriber.id as string}
             initialName={subscriber.name as string}
             initialOwnerName={(ownerMember?.owner_name as string) || ""}
-            initialPhone={(ownerMember?.phone as string) || ""}
             initialCompanyPhone={(subscriber.company_phone as string) || ""}
             hasPassword={subscriber.has_password as boolean}
           />

@@ -29,9 +29,10 @@ export async function generateSlots(
 
   // Fetch connected social accounts for this site
   const accounts = await sql`
-    SELECT id, platform
-    FROM social_accounts
-    WHERE site_id = ${siteId} AND status = 'active'
+    SELECT sa.id, sa.platform
+    FROM social_accounts sa
+    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
   `;
 
   if (accounts.length === 0) return 0;

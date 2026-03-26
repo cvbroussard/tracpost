@@ -97,10 +97,12 @@ export default async function DashboardLayout({
           />
         </div>
         <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
-        {/* Right aside: onboarding checklist */}
-        {checklistState && !setupComplete && (
+        {/* Right aside — always visible */}
+        {checklistState && (
           <div className="hidden lg:block">
-            <OnboardingChecklist state={checklistState} prefix={prefix} />
+            <div className="flex h-full w-72 flex-col border-l border-border bg-surface">
+              <OnboardingChecklist state={checklistState} prefix={prefix} defaultCollapsed={setupComplete} />
+            </div>
           </div>
         )}
       </div>

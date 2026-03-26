@@ -28,7 +28,8 @@ const PLATFORM_LABELS: Record<string, string> = {
   pinterest: "Pinterest",
 };
 
-export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; prefix: string }) {
+export function OnboardingChecklist({ state, prefix, defaultCollapsed = false }: { state: ChecklistState; prefix: string; defaultCollapsed?: boolean }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [appDismissed, setAppDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("tp-app-installed") === "true";
@@ -148,18 +149,22 @@ export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; 
   const totalSteps = subscriberSteps.length;
   const allDone = completedCount === totalSteps && isProvisioned;
 
-  if (allDone && state.autopilotActive) return null;
-
   return (
-    <div className="flex h-full w-72 flex-col border-l border-border bg-surface">
-      <div className="border-b border-border px-5 py-4">
-        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
-          {allDone ? "Ready to launch" : "Setup Progress"}
-        </h3>
+    <>
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="w-full border-b border-border px-5 py-4 text-left"
+      >
+        <div className="flex items-center justify-between">
+          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+            {allDone ? "Ready to launch" : "Setup Progress"}
+          </h3>
+          <span className="text-xs text-muted">{collapsed ? "▸" : "▾"}</span>
+        </div>
         <div className="flex items-center gap-2">
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-border">
             <div
-              className="h-full bg-accent transition-all"
+              className={`h-full transition-all ${allDone ? "bg-success" : "bg-accent"}`}
               style={{ width: `${totalSteps > 0 ? (completedCount / totalSteps) * 100 : 0}%` }}
             />
           </div>
@@ -167,8 +172,9 @@ export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; 
             {completedCount}/{totalSteps}
           </span>
         </div>
-      </div>
+      </button>
 
+      {!collapsed && (
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {/* Provisioning status (curtain) */}
         {isProvisioning && (
@@ -293,7 +299,8 @@ export function OnboardingChecklist({ state, prefix }: { state: ChecklistState; 
           )}
         </div>
       </div>
-    </div>
+      )}
+    </>
   );
 }
 

@@ -18,6 +18,15 @@ interface Member {
   isActive: boolean;
 }
 
+// Editable state per member
+interface EditState {
+  name: string;
+  phone: string;
+  email: string;
+  role: string;
+  siteId: string;
+}
+
 interface Site {
   id: string;
   name: string;
@@ -44,6 +53,8 @@ export function TeamGrid({
 }) {
   const [members, setMembers] = useState(initialMembers);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [editState, setEditState] = useState<EditState | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
   // Add form state
@@ -56,6 +67,47 @@ export function TeamGrid({
   const [adding, setAdding] = useState(false);
 
   const canAdd = activeCount < userLimit && (plan === "pro" || plan === "authority");
+
+  function toggleExpand(member: Member) {
+    if (expanded === member.id) {
+      setExpanded(null);
+      setEditState(null);
+    } else {
+      setExpanded(member.id);
+      setEditState({
+        name: member.name,
+        phone: member.phone || "",
+        email: member.email || "",
+        role: member.role,
+        siteId: member.siteId || "",
+      });
+    }
+  }
+
+  async function saveEdit(id: string) {
+    if (!editState) return;
+    setEditSaving(true);
+
+    // Save role + site scope
+    await fetch(`/api/dashboard/team/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: editState.role,
+        siteId: editState.siteId || null,
+      }),
+    });
+
+    // Update local state
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? { ...m, name: editState.name, phone: editState.phone || null, email: editState.email || null, role: editState.role, siteId: editState.siteId || null }
+          : m
+      )
+    );
+    setEditSaving(false);
+  }
 
   async function handleAdd() {
     if (!newName || !newRole) return;
@@ -256,7 +308,7 @@ export function TeamGrid({
             return (
               <div key={member.id} className="border-b border-border last:border-0">
                 <button
-                  onClick={() => setExpanded(isOpen ? null : member.id)}
+                  onClick={() => toggleExpand(member)}
                   className="flex w-full items-center justify-between py-3 text-left"
                 >
                   <div className="flex items-center gap-3">
@@ -281,106 +333,164 @@ export function TeamGrid({
                   </div>
                 </button>
 
-                {isOpen && (
-                  <div className="pb-4 pl-4">
-                    {/* QR Code */}
-                    {member.inviteToken && !member.inviteConsumed && (
-                      <div className="mb-4">
-                        <p className="mb-2 text-xs text-muted">Invite QR Code</p>
-                        <div
-                          className="inline-flex flex-col items-center border border-border p-4"
-                          style={{ background: "#fff", borderRadius: "var(--tp-radius)" }}
-                        >
-                          {/* QR placeholder — replace with actual QR library */}
-                          <div
-                            style={{
-                              width: 120,
-                              height: 120,
-                              background: "#f3f4f6",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              borderRadius: 4,
-                              fontSize: 11,
-                              color: "#6b7280",
-                            }}
-                          >
-                            QR Code
+                {isOpen && editState && (
+                  <div className="pb-4">
+                    <div className="flex gap-6">
+                      {/* Left: editable fields */}
+                      <div className="flex-1 space-y-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-[10px] text-muted">Name</label>
+                            <input
+                              value={editState.name}
+                              onChange={(e) => setEditState({ ...editState, name: e.target.value })}
+                              className="w-full text-sm"
+                              disabled={member.role === "owner"}
+                            />
                           </div>
-                          <p className="mt-2 font-mono text-[10px] text-muted" style={{ maxWidth: 160, wordBreak: "break-all" }}>
-                            {member.inviteToken.slice(0, 20)}...
-                          </p>
+                          <div>
+                            <label className="mb-1 block text-[10px] text-muted">Role</label>
+                            <select
+                              value={editState.role}
+                              onChange={(e) => setEditState({ ...editState, role: e.target.value })}
+                              className="w-full text-sm"
+                              disabled={member.role === "owner"}
+                            >
+                              <option value="owner" disabled>Owner</option>
+                              <option value="capture">Capture</option>
+                              <option value="engagement">Engagement</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[10px] text-muted">Phone</label>
+                            <PhoneField
+                              value={editState.phone}
+                              onChange={(v) => setEditState({ ...editState, phone: v })}
+                              className="w-full text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[10px] text-muted">Email</label>
+                            <input
+                              value={editState.email}
+                              onChange={(e) => setEditState({ ...editState, email: e.target.value })}
+                              placeholder="john@example.com"
+                              className="w-full text-sm"
+                              type="email"
+                            />
+                          </div>
+                          {sites.length > 1 && (
+                            <div>
+                              <label className="mb-1 block text-[10px] text-muted">Site Access</label>
+                              <select
+                                value={editState.siteId}
+                                onChange={(e) => setEditState({ ...editState, siteId: e.target.value })}
+                                className="w-full text-sm"
+                                disabled={member.role === "owner"}
+                              >
+                                <option value="">All Sites</option>
+                                {sites.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                         </div>
-                        {member.inviteExpires && (
-                          <p className="mt-1 text-[10px] text-dim">
-                            Expires {new Date(member.inviteExpires).toLocaleString()}
-                          </p>
-                        )}
-                        <div className="mt-2 flex gap-2">
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(
-                                `https://tracpost.com/invite/${member.inviteToken}`
-                              );
-                            }}
-                            className="text-xs text-accent hover:underline"
-                          >
-                            Copy link
-                          </button>
-                          <button
-                            onClick={() => handleRegenerate(member.id)}
-                            className="text-xs text-muted hover:text-foreground"
-                          >
-                            Regenerate
-                          </button>
+
+                        {/* Device status + actions */}
+                        <div className="flex items-center gap-3 text-xs">
+                          {member.hasDevice ? (
+                            <>
+                              <span className="text-success">Device connected</span>
+                              {member.lastActiveAt && (
+                                <span className="text-muted" suppressHydrationWarning>Active {timeAgo(member.lastActiveAt)}</span>
+                              )}
+                              <button
+                                onClick={() => handleRevokeDevice(member.id)}
+                                className="text-muted hover:text-danger"
+                              >
+                                Revoke device
+                              </button>
+                            </>
+                          ) : member.inviteConsumed ? (
+                            <span className="text-muted">
+                              No device connected ·{" "}
+                              <button onClick={() => handleRegenerate(member.id)} className="text-accent hover:underline">
+                                Resend invite
+                              </button>
+                            </span>
+                          ) : (
+                            <span className="text-muted">Invite pending</span>
+                          )}
+                        </div>
+
+                        {/* Save + Remove */}
+                        <div className="flex items-center gap-3">
+                          {member.role !== "owner" && (
+                            <button
+                              onClick={() => saveEdit(member.id)}
+                              disabled={editSaving}
+                              className="bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                            >
+                              {editSaving ? "Saving..." : "Save"}
+                            </button>
+                          )}
+                          {member.role !== "owner" && (
+                            <button
+                              onClick={() => handleRevoke(member.id)}
+                              className="text-xs text-danger hover:underline"
+                            >
+                              Remove user
+                            </button>
+                          )}
                         </div>
                       </div>
-                    )}
 
-                    {/* Invite consumed but no device */}
-                    {member.inviteConsumed && !member.hasDevice && (
-                      <p className="mb-3 text-xs text-muted">
-                        Invite used but no device connected.{" "}
-                        <button
-                          onClick={() => handleRegenerate(member.id)}
-                          className="text-accent hover:underline"
-                        >
-                          Send new invite
-                        </button>
-                      </p>
-                    )}
-
-                    {/* Active device */}
-                    {member.hasDevice && (
-                      <div className="mb-3 flex items-center gap-3 text-xs">
-                        <span className="text-success">Device connected</span>
-                        {member.lastActiveAt && (
-                          <span className="text-muted">Last active {timeAgo(member.lastActiveAt)}</span>
-                        )}
-                        <button
-                          onClick={() => handleRevokeDevice(member.id)}
-                          className="text-muted hover:text-danger"
-                        >
-                          Revoke device
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Contact info */}
-                    <div className="mb-3 space-y-1 text-xs text-muted">
-                      {member.phone && <p>Phone: {member.phone}</p>}
-                      {member.email && <p>Email: {member.email}</p>}
+                      {/* Right: QR code */}
+                      {member.inviteToken && !member.inviteConsumed && (
+                        <div className="shrink-0">
+                          <div
+                            className="flex flex-col items-center border border-border p-3"
+                            style={{ background: "#fff", borderRadius: "var(--tp-radius)" }}
+                          >
+                            <div
+                              style={{
+                                width: 100,
+                                height: 100,
+                                background: "#f3f4f6",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                borderRadius: 4,
+                                fontSize: 10,
+                                color: "#6b7280",
+                              }}
+                            >
+                              QR Code
+                            </div>
+                          </div>
+                          {member.inviteExpires && (
+                            <p className="mt-1 text-center text-[10px] text-dim" suppressHydrationWarning>
+                              Expires {timeAgo(member.inviteExpires)}
+                            </p>
+                          )}
+                          <div className="mt-2 flex justify-center gap-2">
+                            <button
+                              onClick={() => navigator.clipboard.writeText(`https://tracpost.com/invite/${member.inviteToken}`)}
+                              className="text-[10px] text-accent hover:underline"
+                            >
+                              Copy link
+                            </button>
+                            <button
+                              onClick={() => handleRegenerate(member.id)}
+                              className="text-[10px] text-muted hover:text-foreground"
+                            >
+                              Regenerate
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    {/* Revoke access */}
-                    {member.role !== "owner" && (
-                      <button
-                        onClick={() => handleRevoke(member.id)}
-                        className="text-xs text-danger hover:underline"
-                      >
-                        Remove user
-                      </button>
-                    )}
                   </div>
                 )}
               </div>

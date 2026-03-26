@@ -24,8 +24,6 @@ export function ConnectButton({ siteId, connectedPlatforms = [] }: ConnectButton
   const [connecting, setConnecting] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const available = PLATFORMS.filter((p) => !connectedPlatforms.includes(p.key));
-
   async function handleConnect(platform: string) {
     setConnecting(platform);
     setError("");
@@ -52,20 +50,20 @@ export function ConnectButton({ siteId, connectedPlatforms = [] }: ConnectButton
     }
   }
 
-  if (available.length === 0) {
-    return (
-      <span className="text-xs text-success">All platforms connected</span>
-    );
-  }
+  const allConnected = connectedPlatforms.length >= PLATFORMS.length;
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="border border-border px-3 py-1.5 text-sm text-muted transition-colors hover:border-foreground hover:text-foreground"
-      >
-        + Connect
-      </button>
+      {allConnected ? (
+        <span className="text-xs text-success">All platforms connected</span>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="border border-border px-3 py-1.5 text-sm text-muted transition-colors hover:border-foreground hover:text-foreground"
+        >
+          + Connect
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -92,19 +90,29 @@ export function ConnectButton({ siteId, connectedPlatforms = [] }: ConnectButton
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              {available.map((p) => {
+              {PLATFORMS.map((p) => {
+                const isConnected = connectedPlatforms.includes(p.key);
                 const isConnecting = connecting === p.key;
                 return (
                   <button
                     key={p.key}
-                    onClick={() => handleConnect(p.key)}
-                    disabled={isConnecting}
-                    className="flex items-center gap-3 border border-border p-3 text-left transition-colors hover:border-foreground disabled:opacity-50"
+                    onClick={() => !isConnected && handleConnect(p.key)}
+                    disabled={isConnected || isConnecting}
+                    className={`flex items-center gap-3 border p-3 text-left transition-colors ${
+                      isConnected
+                        ? "border-border opacity-40 cursor-default"
+                        : "border-border hover:border-foreground disabled:opacity-50"
+                    }`}
                   >
                     <PlatformIcon platform={p.key} size={20} />
-                    <p className="text-sm font-medium">
-                      {isConnecting ? "Connecting..." : p.label}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">
+                        {isConnecting ? "Connecting..." : p.label}
+                      </p>
+                      {isConnected && (
+                        <p className="text-[10px] text-success">Connected</p>
+                      )}
+                    </div>
                   </button>
                 );
               })}

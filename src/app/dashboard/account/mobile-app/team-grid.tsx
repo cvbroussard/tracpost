@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PhoneField } from "@/components/phone-input";
 
 interface Member {
   id: string;
@@ -198,12 +199,10 @@ export function TeamGrid({
             {newMethod === "sms" && (
               <div>
                 <label className="mb-1 block text-xs text-muted">Phone *</label>
-                <input
+                <PhoneField
                   value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
-                  placeholder="(412) 555-1234"
+                  onChange={setNewPhone}
                   className="w-full text-sm"
-                  type="tel"
                 />
               </div>
             )}

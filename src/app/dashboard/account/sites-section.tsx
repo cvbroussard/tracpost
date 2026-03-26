@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PhoneField } from "@/components/phone-input";
 
 interface SiteInfo {
   id: string;
@@ -157,12 +158,10 @@ export function SitesSection({ initialSites }: { initialSites: SiteInfo[] }) {
             </div>
             <div>
               <label className="mb-1 block text-xs text-muted">Business Phone</label>
-              <input
+              <PhoneField
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="(412) 555-1234"
+                onChange={setPhone}
                 className="w-full text-sm"
-                type="tel"
               />
               <p className="mt-1 text-[11px] text-dim">
                 Shown on your Google Business listing. Used for verification.

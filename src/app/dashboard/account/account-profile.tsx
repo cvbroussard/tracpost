@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PhoneField } from "@/components/phone-input";
 
 interface Props {
   subscriberId: string;
@@ -233,13 +234,11 @@ export function AccountProfile({ subscriberId, initialName, initialOwnerName, in
       <div className="flex items-center justify-between border-b border-border py-2">
         <span className="text-sm text-muted">Phone</span>
         <div className="flex items-center gap-2">
-          <input
+          <PhoneField
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={setPhone}
             className="px-2 py-1 text-right"
-            style={{ width: 160 }}
-            placeholder="(412) 555-1234"
-            type="tel"
+            style={{ width: 180 }}
           />
           <button
             onClick={savePhone}
@@ -255,13 +254,11 @@ export function AccountProfile({ subscriberId, initialName, initialOwnerName, in
       <div className="flex items-center justify-between border-b border-border py-2">
         <span className="text-sm text-muted">Company phone</span>
         <div className="flex items-center gap-2">
-          <input
+          <PhoneField
             value={companyPhone}
-            onChange={(e) => setCompanyPhone(e.target.value)}
+            onChange={setCompanyPhone}
             className="px-2 py-1 text-right"
-            style={{ width: 160 }}
-            placeholder="(412) 555-0000"
-            type="tel"
+            style={{ width: 180 }}
           />
           <button
             onClick={saveCompanyPhone}

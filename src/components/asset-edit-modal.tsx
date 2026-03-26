@@ -68,7 +68,7 @@ export function AssetEditModal({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           className="mb-4 w-full rounded-lg border border-border bg-background p-3 text-sm text-foreground outline-none focus:border-accent"
-          rows={3}
+          rows={6}
           placeholder="Describe this content..."
         />
 

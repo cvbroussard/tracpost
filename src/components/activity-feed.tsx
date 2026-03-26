@@ -66,7 +66,7 @@ export function ActivityFeed({ items }: { items: ActivityItem[] }) {
                     {item.detail && (
                       <p className="mt-0.5 truncate text-[11px] text-dim">{item.detail}</p>
                     )}
-                    <p className="mt-1 text-[10px] text-dim">{timeAgo(item.timestamp)}</p>
+                    <p className="mt-1 text-[10px] text-dim" suppressHydrationWarning>{timeAgo(item.timestamp)}</p>
                   </div>
                 </div>
               ))}

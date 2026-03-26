@@ -5,7 +5,8 @@ import { OnboardingTip } from "@/components/onboarding-tip";
 
 interface UploadItem {
   id: string;
-  file: File;
+  file?: File;
+  sourceUrl?: string;
   preview: string;
   contextNote: string;
   status: "pending" | "uploading" | "done" | "error";
@@ -17,7 +18,11 @@ export default function CapturePage() {
   const [siteId, setSiteId] = useState<string>("");
   const [sites, setSites] = useState<Array<{ id: string; name: string }>>([]);
   const [loaded, setLoaded] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [showUrlInput, setShowUrlInput] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
 
   // Load sites on mount
   const loadSites = useCallback(async () => {
@@ -52,6 +57,47 @@ export default function CapturePage() {
     setItems((prev) => [...prev, ...newItems]);
   }
 
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.items?.length) setDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setDragging(false);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragging(false);
+    dragCounter.current = 0;
+    handleFiles(e.dataTransfer.files);
+  }
+
+  function addUrlItem() {
+    const url = urlInput.trim();
+    if (!url) return;
+    setItems((prev) => [...prev, {
+      id: crypto.randomUUID(),
+      sourceUrl: url,
+      preview: url,
+      contextNote: "",
+      status: "pending",
+    }]);
+    setUrlInput("");
+    setShowUrlInput(false);
+  }
+
   function updateNote(id: string, note: string) {
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, contextNote: note } : item))
@@ -61,7 +107,7 @@ export default function CapturePage() {
   function removeItem(id: string) {
     setItems((prev) => {
       const item = prev.find((i) => i.id === id);
-      if (item?.preview) URL.revokeObjectURL(item.preview);
+      if (item?.file && item.preview) URL.revokeObjectURL(item.preview);
       return prev.filter((i) => i.id !== id);
     });
   }
@@ -72,50 +118,68 @@ export default function CapturePage() {
     );
 
     try {
-      // 1. Get presigned URL
-      const presignRes = await fetch("/api/upload/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          site_id: siteId,
-          content_type: item.file.type,
-          filename: item.file.name,
-        }),
-      });
+      if (item.sourceUrl) {
+        // URL-based upload — send URL directly to the asset API
+        const assetRes = await fetch("/api/assets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            site_id: siteId,
+            storage_url: item.sourceUrl,
+            media_type: guessMediaType(item.sourceUrl),
+            context_note: item.contextNote || null,
+            source: "url",
+          }),
+        });
 
-      if (!presignRes.ok) {
-        const err = await presignRes.json();
-        throw new Error(err.error || "Failed to get upload URL");
-      }
+        if (!assetRes.ok) {
+          const err = await assetRes.json();
+          throw new Error(err.error || "Failed to register asset");
+        }
+      } else if (item.file) {
+        // File-based upload — presign + upload to R2 + register
+        const presignRes = await fetch("/api/upload/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            site_id: siteId,
+            content_type: item.file.type,
+            filename: item.file.name,
+          }),
+        });
 
-      const { upload_url, public_url, media_type } = await presignRes.json();
+        if (!presignRes.ok) {
+          const err = await presignRes.json();
+          throw new Error(err.error || "Failed to get upload URL");
+        }
 
-      // 2. Upload file directly to R2
-      const uploadRes = await fetch(upload_url, {
-        method: "PUT",
-        headers: { "Content-Type": item.file.type },
-        body: item.file,
-      });
+        const { upload_url, public_url, media_type } = await presignRes.json();
 
-      if (!uploadRes.ok) {
-        throw new Error(`Upload failed: ${uploadRes.status}`);
-      }
+        const uploadRes = await fetch(upload_url, {
+          method: "PUT",
+          headers: { "Content-Type": item.file.type },
+          body: item.file,
+        });
 
-      // 3. Register asset in DB
-      const assetRes = await fetch("/api/assets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          site_id: siteId,
-          storage_url: public_url,
-          media_type,
-          context_note: item.contextNote || null,
-        }),
-      });
+        if (!uploadRes.ok) {
+          throw new Error(`Upload failed: ${uploadRes.status}`);
+        }
 
-      if (!assetRes.ok) {
-        const err = await assetRes.json();
-        throw new Error(err.error || "Failed to register asset");
+        const assetRes = await fetch("/api/assets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            site_id: siteId,
+            storage_url: public_url,
+            media_type,
+            context_note: item.contextNote || null,
+          }),
+        });
+
+        if (!assetRes.ok) {
+          const err = await assetRes.json();
+          throw new Error(err.error || "Failed to register asset");
+        }
       }
 
       setItems((prev) =>
@@ -142,7 +206,13 @@ export default function CapturePage() {
   const hasItems = items.length > 0;
 
   return (
-    <div className="mx-auto max-w-lg">
+    <div
+      className="mx-auto max-w-lg"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <OnboardingTip
         tipKey="capture"
         message="The pipeline needs raw material. Upload 5+ photos or videos — training sessions, results, facility shots — and the AI handles triage, captioning, and scheduling."
@@ -158,7 +228,7 @@ export default function CapturePage() {
           <select
             value={siteId}
             onChange={(e) => setSiteId(e.target.value)}
-            className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground"
+            className="w-full text-sm"
           >
             <option value="">Select a site</option>
             {sites.map((s) => (
@@ -169,7 +239,7 @@ export default function CapturePage() {
       )}
 
       {/* Capture buttons */}
-      <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="mb-6 grid grid-cols-4 gap-2">
         <button
           onClick={() => {
             if (fileRef.current) {
@@ -178,7 +248,7 @@ export default function CapturePage() {
               fileRef.current.click();
             }
           }}
-          className="rounded-lg border border-border px-2 py-4 text-sm font-medium transition-colors hover:bg-surface active:bg-surface-hover sm:px-4"
+          className="border border-border px-2 py-4 text-sm font-medium transition-colors hover:bg-surface active:bg-surface-hover"
         >
           <span className="mb-1 block text-2xl">▣</span>
           Library
@@ -191,7 +261,7 @@ export default function CapturePage() {
               fileRef.current.click();
             }
           }}
-          className="rounded-lg border border-border px-2 py-4 text-sm font-medium transition-colors hover:bg-surface active:bg-surface-hover sm:px-4"
+          className="border border-border px-2 py-4 text-sm font-medium transition-colors hover:bg-surface active:bg-surface-hover"
         >
           <span className="mb-1 block text-2xl">◉</span>
           Photo
@@ -204,12 +274,42 @@ export default function CapturePage() {
               fileRef.current.click();
             }
           }}
-          className="rounded-lg border border-border px-2 py-4 text-sm font-medium transition-colors hover:bg-surface active:bg-surface-hover sm:px-4"
+          className="border border-border px-2 py-4 text-sm font-medium transition-colors hover:bg-surface active:bg-surface-hover"
         >
           <span className="mb-1 block text-2xl">▶</span>
           Video
         </button>
+        <button
+          onClick={() => setShowUrlInput(!showUrlInput)}
+          className={`border px-2 py-4 text-sm font-medium transition-colors ${
+            showUrlInput ? "border-accent text-accent" : "border-border hover:bg-surface active:bg-surface-hover"
+          }`}
+        >
+          <span className="mb-1 block text-2xl">🔗</span>
+          URL
+        </button>
       </div>
+
+      {/* URL input */}
+      {showUrlInput && (
+        <div className="mb-6 flex gap-2">
+          <input
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addUrlItem()}
+            placeholder="Paste image or video URL"
+            className="flex-1 text-sm"
+            autoFocus
+          />
+          <button
+            onClick={addUrlItem}
+            disabled={!urlInput.trim()}
+            className="bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+      )}
 
       <input
         ref={fileRef}
@@ -226,7 +326,7 @@ export default function CapturePage() {
           {items.map((item) => (
             <div
               key={item.id}
-              className={`rounded-lg border p-3 ${
+              className={`border p-3 ${
                 item.status === "done"
                   ? "border-success/30 bg-success/5"
                   : item.status === "error"
@@ -240,16 +340,19 @@ export default function CapturePage() {
                     src={item.preview}
                     alt=""
                     className="h-16 w-16 rounded object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                   />
                 ) : (
                   <div className="flex h-16 w-16 items-center justify-center rounded bg-surface-hover text-xs text-muted">
-                    {item.file.type.startsWith("video/") ? "▶" : "▣"}
+                    {item.file?.type.startsWith("video/") ? "▶" : item.sourceUrl ? "🔗" : "▣"}
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm">{item.file.name}</p>
+                  <p className="truncate text-sm">
+                    {item.file?.name || item.sourceUrl || "Unknown"}
+                  </p>
                   <p className="text-xs text-muted">
-                    {(item.file.size / 1024 / 1024).toFixed(1)} MB
+                    {item.file ? `${(item.file.size / 1024 / 1024).toFixed(1)} MB` : "URL import"}
                     {item.status === "uploading" && " — uploading..."}
                     {item.status === "done" && " — uploaded"}
                     {item.status === "error" && ` — ${item.error}`}
@@ -269,8 +372,8 @@ export default function CapturePage() {
                   type="text"
                   value={item.contextNote}
                   onChange={(e) => updateNote(item.id, e.target.value)}
-                  placeholder="Context note (optional) — e.g. 'heel work at park'"
-                  className="w-full rounded border border-border bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:border-accent"
+                  placeholder="Context note — e.g. 'Custom walnut island with knife storage'"
+                  className="w-full text-xs"
                 />
               )}
             </div>
@@ -280,7 +383,7 @@ export default function CapturePage() {
             <div className="sticky bottom-4 pt-2">
               <button
                 onClick={uploadAll}
-                className="w-full rounded-lg bg-accent px-4 py-4 text-base font-medium text-white shadow-lg transition-colors hover:bg-accent-hover active:bg-accent-hover"
+                className="w-full bg-accent px-4 py-4 text-base font-medium text-white transition-colors hover:bg-accent-hover active:bg-accent-hover"
               >
                 Upload {pending.length} {pending.length === 1 ? "file" : "files"}
               </button>
@@ -293,14 +396,45 @@ export default function CapturePage() {
         </div>
       )}
 
+      {/* Drop zone / empty state */}
       {!hasItems && (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border px-8 py-16 text-center">
-          <span className="mb-3 text-3xl">◉</span>
-          <p className="text-xs text-muted">
-            Snap a photo, record a clip, or choose from your camera roll
+        <div
+          className={`flex flex-col items-center justify-center border border-dashed px-8 py-16 text-center transition-colors ${
+            dragging
+              ? "border-accent bg-accent/5"
+              : "border-border"
+          }`}
+        >
+          <span className="mb-3 text-3xl">{dragging ? "◎" : "◉"}</span>
+          <p className="text-sm font-medium">
+            {dragging ? "Drop files here" : "Drag & drop files here"}
           </p>
+          <p className="mt-1 text-xs text-muted">
+            or use the buttons above to browse, capture, or paste a URL
+          </p>
+        </div>
+      )}
+
+      {/* Drag overlay when items exist */}
+      {hasItems && dragging && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80"
+        >
+          <div className="border-2 border-dashed border-accent p-12 text-center">
+            <span className="mb-3 block text-4xl">◎</span>
+            <p className="text-sm font-medium">Drop files to add to queue</p>
+          </div>
         </div>
       )}
     </div>
   );
+}
+
+function guessMediaType(url: string): string {
+  const lower = url.toLowerCase();
+  if (lower.match(/\.(mp4|mov|avi|webm|mkv)/)) return "video/mp4";
+  if (lower.match(/\.(gif)/)) return "image/gif";
+  if (lower.match(/\.(png)/)) return "image/png";
+  if (lower.match(/\.(webp)/)) return "image/webp";
+  return "image/jpeg";
 }

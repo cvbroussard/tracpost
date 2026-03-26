@@ -5,13 +5,16 @@ import { useState } from "react";
 interface Props {
   subscriberId: string;
   initialName: string;
+  initialPhone: string;
   hasPassword: boolean;
 }
 
-export function AccountProfile({ subscriberId, initialName, hasPassword }: Props) {
+export function AccountProfile({ subscriberId, initialName, initialPhone, hasPassword }: Props) {
   const [name, setName] = useState(initialName);
+  const [phone, setPhone] = useState(initialPhone);
   const [saving, setSaving] = useState(false);
   const [nameSuccess, setNameSuccess] = useState(false);
+  const [phoneSuccess, setPhoneSuccess] = useState(false);
 
   // Password flow
   const [showPassword, setShowPassword] = useState(false);
@@ -23,6 +26,25 @@ export function AccountProfile({ subscriberId, initialName, hasPassword }: Props
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  async function savePhone() {
+    if (phone === initialPhone) return;
+    setSaving(true);
+    setPhoneSuccess(false);
+    try {
+      const res = await fetch("/api/account/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.trim() }),
+      });
+      if (res.ok) {
+        setPhoneSuccess(true);
+        setTimeout(() => setPhoneSuccess(false), 3000);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function saveName() {
     if (!name.trim() || name === initialName) return;
@@ -138,6 +160,28 @@ export function AccountProfile({ subscriberId, initialName, hasPassword }: Props
             className="border border-border px-3 py-1 text-sm text-muted hover:text-foreground disabled:opacity-30"
           >
             {saving ? "..." : nameSuccess ? "Saved" : "Save"}
+          </button>
+        </div>
+      </div>
+
+      {/* Phone */}
+      <div className="flex items-center justify-between border-b border-border py-2">
+        <span className="text-sm text-muted">Phone</span>
+        <div className="flex items-center gap-2">
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="px-2 py-1 text-right"
+            style={{ width: 160 }}
+            placeholder="(412) 555-1234"
+            type="tel"
+          />
+          <button
+            onClick={savePhone}
+            disabled={saving || phone === initialPhone}
+            className="border border-border px-3 py-1 text-sm text-muted hover:text-foreground disabled:opacity-30"
+          >
+            {saving ? "..." : phoneSuccess ? "Saved" : "Save"}
           </button>
         </div>
       </div>

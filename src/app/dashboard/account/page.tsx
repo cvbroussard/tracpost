@@ -66,15 +66,10 @@ export default async function MyAccountPage() {
             <span className="text-sm text-muted">Email</span>
             <span className="font-medium">{subscriber.email || "—"}</span>
           </div>
-          {ownerMember?.phone && (
-            <div className="flex items-baseline justify-between border-b border-border py-2">
-              <span className="text-sm text-muted">Phone</span>
-              <span className="font-medium">{ownerMember.phone as string}</span>
-            </div>
-          )}
           <AccountProfile
             subscriberId={subscriber.id as string}
             initialName={subscriber.name as string}
+            initialPhone={(ownerMember?.phone as string) || ""}
             hasPassword={subscriber.has_password as boolean}
           />
           <div className="flex items-baseline justify-between border-b border-border py-2">

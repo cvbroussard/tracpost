@@ -174,10 +174,9 @@ async function notifyPipelineResults(
   try {
     // Look up subscriber_id from the site
     const siteRows = await sql`
-      SELECT s.subscriber_id, si.name as site_name
-      FROM sites si
-      JOIN subscribers s ON si.subscriber_id = s.id
-      WHERE si.id = ${siteId}
+      SELECT subscriber_id, name as site_name
+      FROM sites
+      WHERE id = ${siteId}
     `;
     if (siteRows.length === 0) return;
 

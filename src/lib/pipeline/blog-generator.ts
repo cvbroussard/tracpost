@@ -711,10 +711,35 @@ function parseBlogResponse(text: string): {
       tags: Array.isArray(parsed.tags) ? parsed.tags.map(String) : [],
     };
   } catch {
+    // JSON parse failed — try to salvage fields from the raw text
+    const titleMatch = cleaned.match(/"title"\s*:\s*"([^"]+)"/);
+    const bodyMatch = cleaned.match(/"body"\s*:\s*"([\s\S]+?)"\s*,\s*"excerpt"/);
+    const excerptMatch = cleaned.match(/"excerpt"\s*:\s*"([^"]+)"/);
+
+    if (bodyMatch) {
+      // Unescape the extracted body string
+      const body = bodyMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+      return {
+        title: titleMatch ? titleMatch[1] : "Untitled Post",
+        body,
+        excerpt: excerptMatch ? excerptMatch[1] : body.slice(0, 200),
+        tags: [],
+      };
+    }
+
+    // Complete fallback — strip JSON artifacts and use as body
+    const stripped = cleaned
+      .replace(/^\s*\{?\s*"title"\s*:.*$/m, "")
+      .replace(/^\s*"body"\s*:\s*"/m, "")
+      .replace(/"\s*,\s*"excerpt"[\s\S]*$/m, "")
+      .replace(/\\n/g, "\n")
+      .replace(/\\"/g, '"')
+      .trim();
+
     return {
-      title: "Untitled Post",
-      body: text,
-      excerpt: text.slice(0, 200),
+      title: titleMatch ? titleMatch[1] : "Untitled Post",
+      body: stripped || text,
+      excerpt: stripped.slice(0, 200),
       tags: [],
     };
   }

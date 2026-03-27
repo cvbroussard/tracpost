@@ -6,6 +6,8 @@ import { TagPicker, type PillarGroup } from "./tag-picker";
 interface AssetEditModalProps {
   assetId: string;
   siteId: string;
+  imageUrl: string;
+  mediaType: string;
   initialNote: string;
   initialPillar: string;
   initialTags: string[];
@@ -18,6 +20,8 @@ interface AssetEditModalProps {
 export function AssetEditModal({
   assetId,
   siteId,
+  imageUrl,
+  mediaType,
   initialNote,
   initialPillar,
   initialTags,
@@ -88,92 +92,112 @@ export function AssetEditModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg border border-border bg-surface p-6"
+        className="flex w-full max-w-4xl max-h-[90vh] border border-border bg-surface"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-4 text-sm font-semibold">Edit Asset</h3>
+        {/* Left: Image */}
+        <div className="hidden sm:flex w-2/5 shrink-0 items-center justify-center bg-background">
+          {mediaType?.startsWith("video") ? (
+            <div className="flex h-full w-full items-center justify-center text-4xl text-muted">▶</div>
+          ) : (
+            <img
+              src={imageUrl}
+              alt=""
+              className="h-full w-full object-contain"
+              style={{ maxHeight: "90vh" }}
+            />
+          )}
+        </div>
 
-        <label className="mb-1 block text-xs text-muted">Context Note</label>
-        <textarea
-          value={note}
-          onChange={(e) => {
-            setNote(e.target.value);
-            suggestFromNote(e.target.value);
-          }}
-          className="mb-4 w-full text-sm"
-          rows={6}
-          placeholder="Describe this content — AI will suggest tags as you type..."
-        />
-
-        {/* Suggested tags display */}
-        {pillarConfig.length > 0 && (
-          <div className="mb-4">
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-xs text-muted">
-                {suggesting ? "Suggesting tags..." : tags.length > 0 ? "Tags" : "Tags (write a note to get suggestions)"}
-              </label>
-              <button
-                onClick={() => setShowFullPicker(!showFullPicker)}
-                className="text-[10px] text-accent hover:underline"
-              >
-                {showFullPicker ? "Hide all tags" : "Browse all tags"}
-              </button>
-            </div>
-
-            {/* Selected tags as chips */}
-            {tags.length > 0 && !showFullPicker && (
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {tags.map((tagId) => {
-                  const tagLabel = pillarConfig
-                    .flatMap((p) => p.tags)
-                    .find((t) => t.id === tagId)?.label || tagId;
-                  return (
-                    <button
-                      key={tagId}
-                      onClick={() => setTags(tags.filter((t) => t !== tagId))}
-                      className="flex items-center gap-1 rounded bg-accent/20 px-2 py-0.5 text-xs text-accent"
-                    >
-                      {tagLabel}
-                      <span className="text-accent/60">✕</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Full tag picker (expandable) */}
-            {showFullPicker && (
-              <div className="max-h-48 overflow-y-auto">
-                <TagPicker
-                  pillarConfig={pillarConfig}
-                  selectedPillar={pillar}
-                  selectedTags={tags}
-                  onPillarChange={setPillar}
-                  onTagsChange={setTags}
-                />
-              </div>
-            )}
+        {/* Right: Form */}
+        <div className="flex flex-1 flex-col overflow-y-auto p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Edit Asset</h3>
+            <button onClick={onClose} className="text-muted hover:text-foreground">✕</button>
           </div>
-        )}
 
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-xs text-muted hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
+          <label className="mb-1 block text-xs text-muted">Context Note</label>
+          <textarea
+            value={note}
+            onChange={(e) => {
+              setNote(e.target.value);
+              suggestFromNote(e.target.value);
+            }}
+            className="mb-4 w-full text-sm"
+            rows={4}
+            placeholder="Describe this content — AI will suggest tags as you type..."
+          />
+
+          {/* Tags */}
+          {pillarConfig.length > 0 && (
+            <div className="mb-4 flex-1">
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-xs text-muted">
+                  {suggesting ? "Suggesting tags..." : tags.length > 0 ? "Tags" : "Tags (write a note to get suggestions)"}
+                </label>
+                <button
+                  onClick={() => setShowFullPicker(!showFullPicker)}
+                  className="text-[10px] text-accent hover:underline"
+                >
+                  {showFullPicker ? "Hide all tags" : "Browse all tags"}
+                </button>
+              </div>
+
+              {/* Selected tags as chips */}
+              {tags.length > 0 && !showFullPicker && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {tags.map((tagId) => {
+                    const tagLabel = pillarConfig
+                      .flatMap((p) => p.tags)
+                      .find((t) => t.id === tagId)?.label || tagId;
+                    return (
+                      <button
+                        key={tagId}
+                        onClick={() => setTags(tags.filter((t) => t !== tagId))}
+                        className="flex items-center gap-1 rounded bg-accent/20 px-2 py-0.5 text-xs text-accent"
+                      >
+                        {tagLabel}
+                        <span className="text-accent/60">✕</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Full tag picker */}
+              {showFullPicker && (
+                <div className="max-h-64 overflow-y-auto">
+                  <TagPicker
+                    pillarConfig={pillarConfig}
+                    selectedPillar={pillar}
+                    selectedTags={tags}
+                    onPillarChange={setPillar}
+                    onTagsChange={setTags}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-xs text-muted hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

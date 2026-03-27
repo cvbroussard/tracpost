@@ -121,6 +121,8 @@ export function MediaGrid({
         <AssetEditModal
           assetId={editing.id}
           siteId={siteId}
+          imageUrl={editing.storage_url}
+          mediaType={editing.media_type}
           initialNote={editing.context_note || ""}
           initialPillar={editing.content_pillar || ""}
           initialTags={editing.content_pillars || []}

@@ -25,13 +25,14 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
 
   // Fetch site config for thresholds
   const [site] = await sql`
-    SELECT autopilot_config, content_pillars, brand_voice
+    SELECT autopilot_config, content_pillars, pillar_config, brand_voice
     FROM sites
     WHERE id = ${asset.site_id}
   `;
 
   const config = (site?.autopilot_config || {}) as AutopilotConfig;
   const availablePillars = (site?.content_pillars || []) as ContentPillar[];
+  const pillarConfig = (site?.pillar_config || []) as Array<{ id: string; label: string; description: string; tags: Array<{ id: string; label: string }> }>;
 
   // Use AI vision for images, heuristic for video
   let result: TriageResult;
@@ -42,7 +43,7 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
 
   if (mediaType.startsWith("image") && asset.storage_url) {
     try {
-      result = await visionTriage(asset, config, availablePillars, site?.brand_voice, personaPrompt);
+      result = await visionTriage(asset, config, availablePillars, pillarConfig, site?.brand_voice, personaPrompt);
     } catch (err: unknown) {
       console.error("Vision triage failed, falling back to heuristic:", err);
       result = heuristicTriage(asset, config, availablePillars);
@@ -67,6 +68,7 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
       quality_score = ${result.quality_score},
       content_pillar = ${result.content_pillar},
       content_pillars = ${result.content_pillars},
+      content_tags = ${result.content_tags || []},
       platform_fit = ${result.platform_fit},
       flag_reason = ${result.flag_reason || null},
       shelve_reason = ${result.shelve_reason || null},
@@ -97,6 +99,7 @@ async function visionTriage(
   asset: Record<string, unknown>,
   config: AutopilotConfig,
   pillars: ContentPillar[],
+  pillarConfig?: Array<{ id: string; label: string; description: string; tags: Array<{ id: string; label: string }> }>,
   brandVoice?: unknown,
   personaPrompt?: string | null
 ): Promise<TriageResult> {
@@ -106,6 +109,15 @@ async function visionTriage(
   const storageUrl = asset.storage_url as string;
 
   const pillarList = pillars.length > 0 ? pillars.join(", ") : "general";
+
+  // Build two-tier pillar guidance if available
+  const pillarGuidance = pillarConfig && pillarConfig.length > 0
+    ? pillarConfig.map((p) => {
+        const tagList = p.tags.map((t) => `${t.id} (${t.label})`).join(", ");
+        return `**${p.id}** (${p.label}): ${p.description}\n  Tags: ${tagList}`;
+      }).join("\n\n")
+    : "";
+
   const brandContext = brandVoice
     ? `Brand context: ${JSON.stringify(brandVoice)}`
     : "";
@@ -127,13 +139,14 @@ async function visionTriage(
 
 Context note from subscriber: "${contextNote}"
 ${subscriberPillar ? `Subscriber suggested pillar: ${subscriberPillar}` : ""}
-Available content pillars: ${pillarList}
+${pillarGuidance ? `## Content Pillars & Tags\n${pillarGuidance}\n` : `Available content pillars: ${pillarList}`}
 ${brandContext}
 
 Respond with ONLY valid JSON (no markdown):
 {
   "quality_score": <0.0-1.0, based on: sharpness, lighting, composition, visual appeal>,
-  "content_pillars": [<1-3 matching pillars from: ${pillarList}, ordered by relevance>],
+  "content_pillars": [<1-3 matching pillar IDs from the pillars above, ordered by relevance>],
+  "content_tags": [<2-5 matching tag IDs from the tags above, ordered by relevance>],
   "platform_fit": [<array of: "ig_feed", "ig_story", "ig_reel", "gbp", "youtube", "youtube_short", "fb_feed", "tiktok", "twitter", "linkedin", "pinterest">],
   "has_faces": <true/false>,
   "has_text_overlay": <true/false>,
@@ -164,13 +177,18 @@ ${personaPrompt || 'If no known characters list is provided, return "detected_pe
 
   // Extract pillars from AI response (array) with fallback
   let contentPillars: ContentPillar[] = Array.isArray(parsed.content_pillars)
-    ? parsed.content_pillars.filter((p: string) => pillars.includes(p as ContentPillar))
+    ? parsed.content_pillars
     : parsed.content_pillar
       ? [parsed.content_pillar]
       : [pillars[0] || "general"];
 
+  // Extract content tags (two-tier system)
+  const contentTags: string[] = Array.isArray(parsed.content_tags)
+    ? parsed.content_tags
+    : [];
+
   // Apply subscriber pillar override if valid
-  if (subscriberPillar && pillars.includes(subscriberPillar as ContentPillar)) {
+  if (subscriberPillar) {
     if (!contentPillars.includes(subscriberPillar as ContentPillar)) {
       contentPillars.unshift(subscriberPillar as ContentPillar);
     }
@@ -198,6 +216,7 @@ ${personaPrompt || 'If no known characters list is provided, return "detected_pe
     quality_score: Math.round(quality * 100) / 100,
     content_pillar: contentPillars[0],
     content_pillars: contentPillars,
+    content_tags: contentTags,
     platform_fit: platformFit,
     triage_status: triageStatus,
     flag_reason: flagReason,
@@ -285,6 +304,7 @@ function heuristicTriage(
     quality_score: Math.round(quality * 100) / 100,
     content_pillar: pillar,
     content_pillars: [pillar],
+    content_tags: [],
     platform_fit: platformFit,
     triage_status: triageStatus,
     flag_reason: flagReason,

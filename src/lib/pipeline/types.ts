@@ -84,6 +84,7 @@ export interface TriageResult {
   quality_score: number;       // 0.00 – 1.00
   content_pillar: ContentPillar;   // primary (backward compat)
   content_pillars: ContentPillar[]; // all matching pillars
+  content_tags: string[];      // specific tags from two-tier system
   platform_fit: PlatformFormat[];
   triage_status: TriageStatus; // triaged | shelved | flagged
   flag_reason?: string;

@@ -40,7 +40,7 @@ export function AssetEditModal({
   // Debounced AI tag suggestion
   const suggestFromNote = useCallback((text: string) => {
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
-    if (text.length < 15) return;
+    if (text.length < 50) return;
 
     suggestTimer.current = setTimeout(async () => {
       setSuggesting(true);

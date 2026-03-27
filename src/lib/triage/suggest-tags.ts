@@ -61,6 +61,7 @@ ${tagMap.map((p) => `[${p.pillar}] ${p.pillarLabel}: ${p.description}\n  Tags: $
 Rules:
 - Pick the PRIMARY pillar (the one that best fits the overall content)
 - Select 3-5 tags from ANY pillar that best distinguish this content from other content
+- Match on substantive nouns (materials, brands, techniques, equipment) — ignore filler words and adjectives
 - Prefer specific tags (a named vendor, a specific material) over broad ones (style, philosophy)
 
 Return ONLY JSON, no markdown: {"pillar":"pillar_id","tags":["tag_id_1","tag_id_2","tag_id_3"]}`,

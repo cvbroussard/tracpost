@@ -137,7 +137,7 @@ export function AssetEditModal({
               }}
               className="w-full flex-1 text-sm"
               style={{ minHeight: 120 }}
-              placeholder="Describe this content — AI will suggest tags as you type..."
+              placeholder="List details: brass bar sink, walnut countertop, inset dishwasher panel, touch faucet..."
             />
           </div>
         </div>

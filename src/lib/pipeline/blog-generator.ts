@@ -242,13 +242,15 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   const parsed = parseBlogResponse(text);
 
   // Replace image placeholders with real URLs
+  // Handle all variants the AI might produce: {{IMAGE_1}}, {IMAGE_1}, IMAGE_1
   const allImages = [
     { url: asset.storage_url as string, context: (asset.context_note as string) || "" },
     ...imageUrls,
   ];
   for (let i = 0; i < allImages.length; i++) {
-    const placeholder = `{{IMAGE_${i + 1}}}`;
-    parsed.body = parsed.body.replace(new RegExp(placeholder.replace(/[{}]/g, "\\$&"), "g"), allImages[i].url);
+    const n = i + 1;
+    const pattern = new RegExp(`\\{\\{IMAGE_${n}\\}\\}|\\{IMAGE_${n}\\}|IMAGE_${n}`, "g");
+    parsed.body = parsed.body.replace(pattern, allImages[i].url);
   }
 
   // Fix any corrupted assets.tracpost.com URLs the AI may have mangled

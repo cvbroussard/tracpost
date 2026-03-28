@@ -35,27 +35,32 @@ export default async function BlogPage({ searchParams }: Props) {
   let posts;
   let totalCount;
 
+  // Status priority: flagged first, then draft, then published
+  // CASE: flagged=0, draft=1, published=2
   if (statusFilter === "all") {
     if (sortOrder === "oldest") {
       posts = await sql`
         SELECT id, slug, title, excerpt, body, og_image_url, status,
                content_type, content_pillar, metadata, published_at, created_at
         FROM blog_posts WHERE site_id = ${siteId}
-        ORDER BY created_at ASC LIMIT ${PER_PAGE} OFFSET ${offset}
+        ORDER BY CASE status WHEN 'flagged' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END, created_at ASC
+        LIMIT ${PER_PAGE} OFFSET ${offset}
       `;
     } else if (sortOrder === "title") {
       posts = await sql`
         SELECT id, slug, title, excerpt, body, og_image_url, status,
                content_type, content_pillar, metadata, published_at, created_at
         FROM blog_posts WHERE site_id = ${siteId}
-        ORDER BY title ASC LIMIT ${PER_PAGE} OFFSET ${offset}
+        ORDER BY CASE status WHEN 'flagged' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END, title ASC
+        LIMIT ${PER_PAGE} OFFSET ${offset}
       `;
     } else {
       posts = await sql`
         SELECT id, slug, title, excerpt, body, og_image_url, status,
                content_type, content_pillar, metadata, published_at, created_at
         FROM blog_posts WHERE site_id = ${siteId}
-        ORDER BY created_at DESC LIMIT ${PER_PAGE} OFFSET ${offset}
+        ORDER BY CASE status WHEN 'flagged' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END, created_at DESC
+        LIMIT ${PER_PAGE} OFFSET ${offset}
       `;
     }
     const [countRow] = await sql`SELECT COUNT(*)::int AS total FROM blog_posts WHERE site_id = ${siteId}`;

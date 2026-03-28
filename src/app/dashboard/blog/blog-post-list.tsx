@@ -162,6 +162,7 @@ export function BlogPostList({
         }
         setRepromptUrl(null);
         setRepromptNote("");
+        router.refresh();
       } else {
         const err = await res.json();
         alert(err.error || "Re-prompt failed");

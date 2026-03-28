@@ -41,8 +41,8 @@ export const blogProseStyles = `
   .preview-prose h2 { font-size: 1.3em; }
   .preview-prose h3 { font-size: 1.1em; }
   .preview-prose p { margin-bottom: 1.25em; }
-  .preview-prose a { color: var(--accent); text-decoration: none; }
-  .preview-prose a:hover { text-decoration: underline; }
+  .preview-prose a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .preview-prose a:hover { opacity: 0.8; }
   .preview-prose strong { font-weight: 600; }
   .preview-prose ul, .preview-prose ol { margin-bottom: 1.25em; padding-left: 1.5em; }
   .preview-prose li { margin-bottom: 0.4em; }

@@ -6,6 +6,7 @@ import { ProfileKitPanel } from "./profile-kit-panel";
 import { ProvisionActions } from "./provision-actions";
 import { AdminConnectButton } from "./admin-connect-button";
 import { AdminPillarEditor } from "./pillar-config-editor";
+import { ImageStyleEditor } from "./image-style-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,8 @@ export default async function ProvisioningPage() {
       s.brand_playbook IS NOT NULL AS has_playbook,
       s.provisioning_status,
       s.pillar_config,
+      s.image_style,
+      s.image_variations,
       s.metadata AS site_metadata,
       s.deleted_at,
       (
@@ -149,6 +152,13 @@ export default async function ProvisioningPage() {
                   initialConfig={
                     (sub.pillar_config as Array<{ id: string; framework?: string; label: string; description: string; tags: Array<{ id: string; label: string }> }>) || []
                   }
+                />
+
+                {/* Image Style */}
+                <ImageStyleEditor
+                  siteId={sub.site_id as string}
+                  initialStyle={(sub.image_style as string) || ""}
+                  initialVariations={(sub.image_variations as string[]) || []}
                 />
 
                 {profileKit && (

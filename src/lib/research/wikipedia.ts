@@ -311,7 +311,9 @@ async function searchCommonsImages(
 async function generateImagePrompts(
   entities: ExtractedEntities,
   contextNote: string,
-  corrections: Array<{ entity_key: string; correction: string }> = []
+  corrections: Array<{ entity_key: string; correction: string }> = [],
+  baseStyle: string = "",
+  variations: string[] = []
 ): Promise<Array<{ prompt: string; alt: string }>> {
   const allEntities = [
     ...entities.materials,
@@ -321,6 +323,18 @@ async function generateImagePrompts(
   ];
 
   if (allEntities.length === 0) return [];
+
+  // Use site variations if available, otherwise fall back to defaults
+  const variationList = variations.length > 0
+    ? variations
+    : [
+        "Wide environmental shot — full context, architectural framing",
+        "Tight detail close-up — material texture, grain, surface quality",
+        "Process and craftsmanship — hands working with tools, mid-fabrication",
+        "Single object vignette — one piece isolated, clean background",
+        "Lifestyle context — the material in a styled, lived-in setting",
+        "Raw material origin — the material before fabrication, natural state",
+      ];
 
   try {
     const response = await anthropic.messages.create({
@@ -335,27 +349,19 @@ Context note (how these materials/vendors are being used):
 
 Entities: ${allEntities.join(", ")}
 
-Generate prompts for images that show the CRAFT and ORIGIN behind these materials:
-- Raw materials being processed (lumber mill, metal workshop, tile workshop)
-- Artisans and craftspeople working with these materials
-- The material in its pre-installation state (slab, sheet, raw tile)
+Generate prompts for images that show the CRAFT and ORIGIN behind these materials.
+${baseStyle ? `\n## Photography Style (apply to ALL images)\n${baseStyle}` : ""}
 
-Each prompt should be a detailed editorial photograph description.
-CRITICAL: Each image MUST use a DIFFERENT photographic style. Pick from these:
-- Warm natural daylight, soft shadows, wide environmental shot
-- Cool industrial lighting, overhead fluorescent, gritty workshop atmosphere
-- Tight macro close-up, shallow depth of field, detail texture shot
-- High contrast side-lighting, dramatic moody tone, chiaroscuro
-- Soft overcast diffused light, muted earth tones, quiet intimate moment
-- Bright clean studio-adjacent, even lighting, product-forward composition
+Each image MUST use a DIFFERENT composition from this list (pick 2-3, do NOT repeat):
+${variationList.map((v, i) => `${i + 1}. ${v}`).join("\n")}
 
-Do NOT repeat the same lighting or mood across prompts. Vary framing (wide, medium, close-up).
+Do NOT repeat the same framing across prompts.
 ${corrections.length > 0
   ? `\nIMPORTANT — Apply these subscriber corrections for accuracy:\n${corrections.map((c) => `- ${c.entity_key}: "${c.correction}"`).join("\n")}`
   : ""}
 
 Return ONLY JSON array, no markdown:
-[{"prompt": "Editorial photograph of...", "alt": "Short alt text for the image"}]`,
+[{"prompt": "...", "alt": "Short alt text"}]`,
       }],
     });
 
@@ -468,7 +474,13 @@ Content note: "${contextNote}"
   const editorialImagesMeta: EditorialImageMeta[] = [];
 
   if (siteId) {
-    // Fetch persistent corrections for entities in this context
+    // Fetch site image style + corrections
+    const [siteStyle] = await sql`
+      SELECT image_style, image_variations FROM sites WHERE id = ${siteId}
+    `;
+    const baseStyle = (siteStyle?.image_style as string) || "";
+    const variations = (siteStyle?.image_variations || []) as string[];
+
     const allEntityKeys = [
       ...entities.brands, ...entities.materials,
       ...entities.techniques, ...entities.products,
@@ -482,7 +494,7 @@ Content note: "${contextNote}"
       ` as Array<{ entity_key: string; correction: string }>;
     }
 
-    const imagePrompts = await generateImagePrompts(entities, contextNote, corrections);
+    const imagePrompts = await generateImagePrompts(entities, contextNote, corrections, baseStyle, variations);
     if (imagePrompts.length > 0) {
       for (const imgPrompt of imagePrompts.slice(0, 3)) {
         try {

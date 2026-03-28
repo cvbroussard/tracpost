@@ -282,6 +282,15 @@ Respond with ONLY valid JSON (no markdown fencing).`,
     WHERE id = ${siteId}
   `;
 
+  // Derive image style from the sharpened playbook
+  try {
+    const { deriveImageStyle } = await import("@/lib/image-gen/derive-style");
+    const siteName = (await sql`SELECT name FROM sites WHERE id = ${siteId}`)[0]?.name as string || "";
+    await deriveImageStyle(siteId, siteName, businessType, angle);
+  } catch (err) {
+    console.error("Image style derivation failed:", err instanceof Error ? err.message : err);
+  }
+
   // Seed blog content now that the playbook is sharpened
   try {
     const { seedBlogContent } = await import("@/lib/blog-seed");

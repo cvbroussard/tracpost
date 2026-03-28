@@ -90,9 +90,12 @@ export async function POST(req: NextRequest) {
   const newBody = (post.body as string).replace(image_url, newUrl);
 
   // Update editorial_images metadata
+  const updatedPrompt = mode === "new"
+    ? `${imageEntry.prompt}. IMPORTANT CORRECTION: ${adjustment}`
+    : imageEntry.prompt;
   const updatedImages = editorialImages.map((img) =>
     img.url === image_url
-      ? { ...img, url: newUrl, prompt: adjustedPrompt }
+      ? { ...img, url: newUrl, prompt: updatedPrompt }
       : img
   );
   const updatedMetadata = { ...metadata, editorial_images: updatedImages };

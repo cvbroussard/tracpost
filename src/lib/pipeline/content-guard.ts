@@ -56,7 +56,10 @@ When in doubt, PASS. False positives waste the subscriber's time.`,
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
     const cleaned = text.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
-    const result = JSON.parse(cleaned);
+    // Extract just the JSON object — Haiku sometimes appends explanation text
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { pass: true, flags: [] };
+    const result = JSON.parse(jsonMatch[0]);
 
     return {
       pass: result.pass === true,

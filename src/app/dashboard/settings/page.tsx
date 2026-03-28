@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { SiteDeletion } from "./site-deletion";
 import { EditExistingAccounts } from "./edit-existing-accounts";
+import { BlogSettings } from "../blog/blog-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -20,14 +21,25 @@ export default async function SettingsPage() {
 
   const siteId = session.activeSiteId;
 
-  const [site] = await sql`
-    SELECT s.name, s.url, s.brand_voice, s.autopilot_enabled, s.cadence_config,
-           s.content_pillars, s.pillar_config, s.autopilot_config, s.created_at,
-           s.deletion_requested_at, s.deletion_status,
-           s.provisioning_status, s.metadata AS site_metadata
-    FROM sites s
-    WHERE s.id = ${siteId}
-  `;
+  const [[site], blogSettingsRows] = await Promise.all([
+    sql`
+      SELECT s.name, s.url, s.brand_voice, s.autopilot_enabled, s.cadence_config,
+             s.content_pillars, s.pillar_config, s.autopilot_config, s.created_at,
+             s.deletion_requested_at, s.deletion_status,
+             s.provisioning_status, s.metadata AS site_metadata
+      FROM sites s
+      WHERE s.id = ${siteId}
+    `,
+    sql`
+      SELECT blog_enabled, subdomain, custom_domain, blog_title, blog_description
+      FROM blog_settings WHERE site_id = ${siteId}
+    `,
+  ]);
+
+  const blogSettings = blogSettingsRows[0] || {
+    blog_enabled: false, subdomain: null, custom_domain: null,
+    blog_title: null, blog_description: null,
+  };
 
   const brandVoice = (site?.brand_voice || {}) as Record<string, unknown>;
   const cadence = (site?.cadence_config || {}) as Record<string, number>;
@@ -122,6 +134,21 @@ export default async function SettingsPage() {
             No brand voice configured. Complete the Brand Intelligence wizard to generate one.
           </p>
         )}
+      </section>
+
+      {/* Blog */}
+      <section className="mb-8">
+        <h2 className="mb-4">Blog</h2>
+        <BlogSettings
+          siteId={siteId}
+          initialSettings={blogSettings as {
+            blog_enabled: boolean;
+            subdomain: string | null;
+            custom_domain: string | null;
+            blog_title: string | null;
+            blog_description: string | null;
+          }}
+        />
       </section>
 
       {/* Editable existing accounts — only while provisioning is pending */}

@@ -1,9 +1,7 @@
 import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { BlogSettings } from "./blog-settings";
 import { BlogPostList } from "./blog-post-list";
-import { OnboardingTip } from "@/components/onboarding-tip";
 
 export const dynamic = "force-dynamic";
 
@@ -31,23 +29,6 @@ export default async function BlogPage({ searchParams }: Props) {
   const sortOrder = params.sort || "newest";
   const currentPage = Math.max(1, parseInt(params.page || "1", 10));
   const offset = (currentPage - 1) * PER_PAGE;
-
-  // Settings query
-  const [settingsRows] = await Promise.all([
-    sql`
-      SELECT blog_enabled, subdomain, custom_domain, blog_title, blog_description
-      FROM blog_settings
-      WHERE site_id = ${siteId}
-    `,
-  ]);
-
-  const settings = settingsRows || {
-    blog_enabled: false,
-    subdomain: null,
-    custom_domain: null,
-    blog_title: null,
-    blog_description: null,
-  };
 
   // Post queries — branch on status filter and sort
   // Count query for pagination
@@ -121,33 +102,12 @@ export default async function BlogPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <OnboardingTip
-        tipKey="blog"
-        message="Your blog is your SEO engine. Every post is a page Google indexes. This is how clients find you when they search for what you do."
-        incomplete={!settings.blog_enabled}
-      />
-
-      <div className="mb-6 flex items-baseline justify-between">
-        <div>
-          <h1 className="mb-1 text-lg font-semibold">Blog</h1>
-          <p className="text-sm text-muted">
-            {settings.blog_enabled
-              ? "Posts generate automatically from your uploads"
-              : "Enable the blog to start generating posts"}
-          </p>
-        </div>
+      <div className="mb-6">
+        <h1 className="mb-1 text-lg font-semibold">Blog</h1>
+        <p className="text-sm text-muted">
+          Review and publish generated posts
+        </p>
       </div>
-
-      <BlogSettings
-        siteId={siteId}
-        initialSettings={settings as {
-          blog_enabled: boolean;
-          subdomain: string | null;
-          custom_domain: string | null;
-          blog_title: string | null;
-          blog_description: string | null;
-        }}
-      />
 
       <BlogPostList
         posts={posts as Array<{

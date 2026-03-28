@@ -242,19 +242,19 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   const parsed = parseBlogResponse(text);
 
   // Replace image placeholders with real URLs
-  // Handle all variants the AI might produce: {{IMAGE_1}}, {IMAGE_1}, IMAGE_1
-  const allImages = [
-    { url: asset.storage_url as string, context: (asset.context_note as string) || "" },
-    ...imageUrls,
-  ];
-  for (let i = 0; i < allImages.length; i++) {
+  // Placeholders map 1:1 to inlineImages (not the seed asset — that's the OG image only)
+  for (let i = 0; i < imageUrls.length; i++) {
     const n = i + 1;
     const pattern = new RegExp(`\\{\\{IMAGE_${n}\\}\\}|\\{IMAGE_${n}\\}|IMAGE_${n}`, "g");
-    parsed.body = parsed.body.replace(pattern, allImages[i].url);
+    parsed.body = parsed.body.replace(pattern, imageUrls[i].url);
   }
 
   // Fix any corrupted assets.tracpost.com URLs the AI may have mangled
   // Collect all known valid URLs (subscriber images + editorial images from research)
+  const allImages = [
+    { url: asset.storage_url as string },
+    ...imageUrls,
+  ];
   const validUrls = allImages.map((img) => img.url);
   const editorialMatches = research.match(/https:\/\/assets\.tracpost\.com\/[^\s)]+/g) || [];
   validUrls.push(...editorialMatches);

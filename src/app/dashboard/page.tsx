@@ -73,7 +73,18 @@ export default async function DashboardOverview() {
          WHERE site_id = ${siteId} AND triage_status = 'triaged') AS triaged,
         (SELECT COUNT(*)::int FROM publishing_slots
          WHERE site_id = ${siteId} AND status = 'open'
-           AND scheduled_at <= ${sevenDaysFromNow}) AS open_slots
+           AND scheduled_at <= ${sevenDaysFromNow}) AS open_slots,
+        (SELECT MAX(created_at) FROM media_assets
+         WHERE site_id = ${siteId}) AS last_upload,
+        (SELECT COUNT(*)::int FROM media_assets
+         WHERE site_id = ${siteId}
+           AND created_at > NOW() - INTERVAL '14 days') AS recent_uploads,
+        (SELECT COUNT(*)::int FROM blog_posts
+         WHERE site_id = ${siteId}
+           AND status IN ('draft', 'published')) AS total_posts,
+        (SELECT COUNT(DISTINCT source_asset_id)::int FROM blog_posts
+         WHERE site_id = ${siteId}
+           AND status IN ('draft', 'published')) AS unique_assets_used
     `,
     detectContentGaps(siteId),
   ]);
@@ -84,6 +95,37 @@ export default async function DashboardOverview() {
 
   const triaged = h?.triaged || 0;
   const openSlots = h?.open_slots || 0;
+  const lastUpload = h?.last_upload ? new Date(h.last_upload as string) : null;
+  const recentUploads = (h?.recent_uploads as number) || 0;
+  const totalPosts = (h?.total_posts as number) || 0;
+  const uniqueAssetsUsed = (h?.unique_assets_used as number) || 0;
+
+  // Days since last upload
+  const daysSinceUpload = lastUpload
+    ? Math.floor((Date.now() - lastUpload.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  // Freshness state
+  let freshnessColor = "text-muted";
+  let freshnessLabel = "";
+  if (daysSinceUpload === null) {
+    freshnessLabel = "No uploads yet";
+    freshnessColor = "text-muted";
+  } else if (daysSinceUpload <= 3) {
+    freshnessLabel = "Content fresh";
+    freshnessColor = "text-success";
+  } else if (daysSinceUpload <= 7) {
+    freshnessLabel = `${daysSinceUpload}d since last upload`;
+    freshnessColor = "text-foreground";
+  } else if (daysSinceUpload <= 14) {
+    freshnessLabel = `${daysSinceUpload}d since last upload`;
+    freshnessColor = "text-warning";
+  } else {
+    freshnessLabel = `${daysSinceUpload}d since last upload — content going stale`;
+    freshnessColor = "text-danger";
+  }
+
+  // Pipeline health
   let healthColor = "bg-muted";
   let healthLabel = "No slots scheduled";
   if (openSlots > 0) {
@@ -105,12 +147,23 @@ export default async function DashboardOverview() {
   return (
     <div className="mx-auto max-w-4xl">
       {/* Pipeline status */}
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-2 flex items-center gap-3">
         <span className={`inline-block h-2.5 w-2.5 rounded-full ${healthColor}`} />
         <span className="font-medium">{healthLabel}</span>
         <span className="text-sm text-muted">
           {triaged} ready · {openSlots} open slots · {p.scheduled} scheduled
         </span>
+      </div>
+
+      {/* Content freshness */}
+      <div className="mb-6 flex items-center gap-3">
+        <span className={`inline-block h-2.5 w-2.5 rounded-full ${daysSinceUpload === null ? "bg-muted" : daysSinceUpload <= 3 ? "bg-success" : daysSinceUpload <= 7 ? "bg-foreground" : daysSinceUpload <= 14 ? "bg-warning" : "bg-danger"}`} />
+        <span className={`font-medium ${freshnessColor}`}>{freshnessLabel}</span>
+        {totalPosts > 0 && (
+          <span className="text-sm text-muted">
+            {recentUploads} uploads last 14d · {uniqueAssetsUsed}/{totalPosts} unique assets in posts
+          </span>
+        )}
       </div>
 
       {/* Low inventory nudge */}
@@ -125,6 +178,13 @@ export default async function DashboardOverview() {
           {triaged === 0
             ? `No content ready. ${openSlots} slots need content this week.`
             : `${openSlots - triaged} more assets needed to fill this week's slots.`}
+        </div>
+      )}
+
+      {/* Stale content nudge */}
+      {daysSinceUpload !== null && daysSinceUpload > 14 && (
+        <div className="mb-6 rounded-lg bg-danger/10 p-3 text-sm font-medium text-danger">
+          Your content is going stale. Upload new photos or videos to keep posts fresh and relevant.
         </div>
       )}
 

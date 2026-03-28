@@ -55,18 +55,20 @@ export async function generateEditorialImage(
 
     const data = await res.json();
     const parts = data.candidates?.[0]?.content?.parts || [];
+    // Gemini returns camelCase: inlineData, not inline_data
     const imagePart = parts.find(
-      (p: Record<string, unknown>) => p.inline_data
+      (p: Record<string, unknown>) => p.inlineData || p.inline_data
     );
 
-    if (!imagePart?.inline_data?.data) {
+    const imageData = imagePart?.inlineData || imagePart?.inline_data;
+    if (!imageData?.data) {
       console.warn("Gemini returned no image data");
       return null;
     }
 
     return {
-      data: Buffer.from(imagePart.inline_data.data, "base64"),
-      mimeType: imagePart.inline_data.mime_type || "image/png",
+      data: Buffer.from(imageData.data, "base64"),
+      mimeType: imageData.mimeType || imageData.mime_type || "image/png",
     };
   } catch (err) {
     console.warn(

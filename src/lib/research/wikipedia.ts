@@ -327,16 +327,18 @@ Generate prompts for images that show the CRAFT and ORIGIN behind these material
 - The material in its pre-installation state (slab, sheet, raw tile)
 
 Each prompt should be a detailed editorial photograph description.
-Include: subject, setting, lighting, composition, "documentary style"
+CRITICAL: Each image MUST use a DIFFERENT photographic style. Pick from these:
+- Warm natural daylight, soft shadows, wide environmental shot
+- Cool industrial lighting, overhead fluorescent, gritty workshop atmosphere
+- Tight macro close-up, shallow depth of field, detail texture shot
+- High contrast side-lighting, dramatic moody tone, chiaroscuro
+- Soft overcast diffused light, muted earth tones, quiet intimate moment
+- Bright clean studio-adjacent, even lighting, product-forward composition
+
+Do NOT repeat the same lighting or mood across prompts. Vary framing (wide, medium, close-up).
 
 Return ONLY JSON array, no markdown:
-[{"prompt": "Editorial photograph of...", "alt": "Short alt text for the image"}]
-
-Example:
-[
-  {"prompt": "Editorial photograph of a Moroccan artisan hand-cutting zellige tiles in a traditional workshop in Fez, natural daylight, raw terracotta pieces and finished glazed tiles on the workbench, documentary style", "alt": "Artisan hand-cutting zellige tiles in a Fez workshop"},
-  {"prompt": "Editorial photograph of a black walnut wood slab being planed on a workbench in a lumber mill, visible grain pattern, sawdust, natural light from workshop windows, documentary style", "alt": "Black walnut slab being planed in a lumber mill"}
-]`,
+[{"prompt": "Editorial photograph of...", "alt": "Short alt text for the image"}]`,
       }],
     });
 

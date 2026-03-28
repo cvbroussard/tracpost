@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { TagPicker, type PillarGroup } from "./tag-picker";
 
 interface Vendor {
@@ -48,6 +48,78 @@ export function AssetEditModal({
   const [suggesting, setSuggesting] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Vendor hashtag autocomplete state
+  const [hashQuery, setHashQuery] = useState<string | null>(null);
+  const [hashIndex, setHashIndex] = useState(0);
+  const [hashStart, setHashStart] = useState(0);
+
+  const hashMatches = hashQuery !== null
+    ? vendors.filter((v) =>
+        v.slug.startsWith(hashQuery.toLowerCase()) ||
+        v.name.toLowerCase().startsWith(hashQuery.toLowerCase())
+      ).slice(0, 6)
+    : [];
+
+  function handleNoteChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value;
+    setNote(val);
+    suggestFromNote(val);
+
+    // Detect # autocomplete trigger
+    const pos = e.target.selectionStart;
+    const before = val.slice(0, pos);
+    const hashMatch = before.match(/#([a-zA-Z0-9_]*)$/);
+    if (hashMatch) {
+      setHashQuery(hashMatch[1]);
+      setHashStart(pos - hashMatch[0].length);
+      setHashIndex(0);
+    } else {
+      setHashQuery(null);
+    }
+  }
+
+  function handleNoteKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (hashQuery === null || hashMatches.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHashIndex((i) => Math.min(i + 1, hashMatches.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHashIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      insertVendorTag(hashMatches[hashIndex]);
+    } else if (e.key === "Escape") {
+      setHashQuery(null);
+    }
+  }
+
+  function insertVendorTag(vendor: Vendor) {
+    const before = note.slice(0, hashStart);
+    const after = note.slice(textareaRef.current?.selectionStart || hashStart + (hashQuery?.length || 0) + 1);
+    const inserted = `#${vendor.slug} `;
+    const newNote = before + inserted + after;
+    setNote(newNote);
+    setHashQuery(null);
+
+    // Auto-add vendor to selection
+    setVendorIds((prev) =>
+      prev.includes(vendor.id) ? prev : [...prev, vendor.id]
+    );
+
+    // Restore cursor position
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        const pos = hashStart + inserted.length;
+        textareaRef.current.selectionStart = pos;
+        textareaRef.current.selectionEnd = pos;
+        textareaRef.current.focus();
+      }
+    });
+  }
 
   // Debounced AI tag suggestion
   const suggestFromNote = useCallback((text: string) => {
@@ -142,16 +214,42 @@ export function AssetEditModal({
             </div>
 
             <label className="mb-1 block text-xs text-muted">Context Note</label>
-            <textarea
-              value={note}
-              onChange={(e) => {
-                setNote(e.target.value);
-                suggestFromNote(e.target.value);
-              }}
-              className="w-full flex-1 text-sm"
-              style={{ minHeight: 120 }}
-              placeholder="List details: brass bar sink, walnut countertop, inset dishwasher panel, touch faucet..."
-            />
+            <div className="relative flex-1">
+              <textarea
+                ref={textareaRef}
+                value={note}
+                onChange={handleNoteChange}
+                onKeyDown={handleNoteKeyDown}
+                className="w-full h-full text-sm"
+                style={{ minHeight: 120 }}
+                placeholder="List details: brass bar sink, #VendorName, walnut countertop, https://vendor.com/product..."
+              />
+              {hashQuery !== null && hashMatches.length > 0 && (
+                <div className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded border border-border bg-surface shadow-lg">
+                  {hashMatches.map((v, i) => (
+                    <button
+                      key={v.id}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        insertVendorTag(v);
+                      }}
+                      className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
+                        i === hashIndex ? "bg-accent/10 text-accent" : "text-foreground hover:bg-surface-hover"
+                      }`}
+                    >
+                      <span>
+                        <span className="text-muted">#</span>
+                        {v.slug}
+                        <span className="ml-2 text-xs text-muted">{v.name}</span>
+                      </span>
+                      {v.url && (
+                        <span className="text-[10px] text-muted">↗</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

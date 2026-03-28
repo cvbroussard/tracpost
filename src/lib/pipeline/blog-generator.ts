@@ -240,6 +240,39 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   const text = response.content[0].type === "text" ? response.content[0].text : "";
   const parsed = parseBlogResponse(text);
 
+  // Replace image placeholders with real URLs
+  const allImages = [
+    { url: asset.storage_url as string, context: (asset.context_note as string) || "" },
+    ...imageUrls,
+  ];
+  for (let i = 0; i < allImages.length; i++) {
+    const placeholder = `{{IMAGE_${i + 1}}}`;
+    parsed.body = parsed.body.replace(new RegExp(placeholder.replace(/[{}]/g, "\\$&"), "g"), allImages[i].url);
+  }
+
+  // Fix any corrupted assets.tracpost.com URLs the AI may have mangled
+  // Collect all known valid URLs (subscriber images + editorial images from research)
+  const validUrls = allImages.map((img) => img.url);
+  const editorialMatches = research.match(/https:\/\/assets\.tracpost\.com\/[^\s)]+/g) || [];
+  validUrls.push(...editorialMatches);
+
+  // Replace any malformed tracpost URLs with the closest valid match
+  parsed.body = parsed.body.replace(
+    /https:\/\/assets\.tracpost\.com\/[^\s)"]+/g,
+    (found) => {
+      if (validUrls.includes(found)) return found;
+      // Find closest match by longest common prefix
+      let best = found;
+      let bestLen = 0;
+      for (const valid of validUrls) {
+        let common = 0;
+        while (common < found.length && common < valid.length && found[common] === valid[common]) common++;
+        if (common > bestLen) { bestLen = common; best = valid; }
+      }
+      return bestLen > 40 ? best : found; // Only fix if strong match
+    }
+  );
+
   // Content safety scan — flag issues before storing
   const guard = await scanContent(
     parsed.title,
@@ -536,9 +569,10 @@ Their desire: ${lang.desirePhrases.slice(0, 3).join("; ")}
 Target search query: ${lang.searchPhrases[Math.floor(Math.random() * lang.searchPhrases.length)] || ""}
 
 ## Available Images
-Place images at natural points using markdown: ![brief alt text](url)
+Place images at natural points using markdown: ![brief alt text](IMAGE_PLACEHOLDER)
+IMPORTANT: Use EXACTLY these placeholder tokens as the URL — do NOT modify them.
 ${inlineImages && inlineImages.length > 0
-  ? inlineImages.map((img, i) => `Image ${i + 1}: ${img.url}${img.context ? ` (${img.context})` : ""}`).join("\n")
+  ? inlineImages.map((img, i) => `{{IMAGE_${i + 1}}}${img.context ? ` — ${img.context}` : ""}`).join("\n")
   : "No images available — text only."}
 
 ${existingTitles && existingTitles.length > 0
@@ -611,9 +645,10 @@ Their desire: ${lang.desirePhrases.slice(0, 3).join("; ")}
 Target search query: ${lang.searchPhrases[Math.floor(Math.random() * lang.searchPhrases.length)] || ""}
 
 ## Available Images
-Place 2-3 of these images at natural points using markdown: ![brief alt text](url)
+Place 2-3 images at natural points using markdown: ![brief alt text](IMAGE_PLACEHOLDER)
+IMPORTANT: Use EXACTLY these placeholder tokens as the URL — do NOT modify them.
 ${inlineImages && inlineImages.length > 0
-  ? inlineImages.map((img, i) => `Image ${i + 1}: ${img.url}${img.context ? ` (${img.context})` : ""}`).join("\n")
+  ? inlineImages.map((img, i) => `{{IMAGE_${i + 1}}}${img.context ? ` — ${img.context}` : ""}`).join("\n")
   : "No images available — text only."}
 
 ${existingTitles && existingTitles.length > 0
@@ -685,9 +720,10 @@ If the topic references specific brands, products, materials, techniques, or ind
 - Never fabricate facts about real companies or products.
 
 ## Available Images
-Place 2-3 of these images at natural points using markdown: ![brief alt text](url)
+Place 2-3 images at natural points using markdown: ![brief alt text](IMAGE_PLACEHOLDER)
+IMPORTANT: Use EXACTLY these placeholder tokens as the URL — do NOT modify them.
 ${inlineImages && inlineImages.length > 0
-  ? inlineImages.map((img, i) => `Image ${i + 1}: ${img.url}${img.context ? ` (${img.context})` : ""}`).join("\n")
+  ? inlineImages.map((img, i) => `{{IMAGE_${i + 1}}}${img.context ? ` — ${img.context}` : ""}`).join("\n")
   : "No images available — text only."}
 
 ${existingTitles && existingTitles.length > 0
@@ -744,9 +780,10 @@ function buildBasicBlogPrompt(
   if (inlineImages && inlineImages.length > 0) {
     parts.push("");
     parts.push("## Available Images");
-    parts.push("Place 2-3 of these images at contextually relevant points using markdown: ![description](url)");
+    parts.push("Place 2-3 images using markdown: ![description](IMAGE_PLACEHOLDER)");
+    parts.push("IMPORTANT: Use EXACTLY these placeholder tokens as the URL — do NOT modify them.");
     inlineImages.forEach((img, i) => {
-      parts.push(`Image ${i + 1}: ${img.url}${img.context ? ` (context: ${img.context})` : ""}`);
+      parts.push(`{{IMAGE_${i + 1}}}${img.context ? ` — ${img.context}` : ""}`);
     });
   }
 

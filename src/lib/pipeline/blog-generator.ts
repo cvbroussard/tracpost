@@ -186,6 +186,17 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
     }
   }
 
+  // Cap vendor links to avoid over-linking — inline deep links get priority
+  const MAX_VENDOR_LINKS = 3;
+  if (vendorLinks.length > MAX_VENDOR_LINKS) {
+    // Inline URLs (deep links from context note) are more specific — keep those first
+    const deepLinks = vendorLinks.filter((l) => l.includes("/", l.indexOf("://") + 3));
+    const baseLinks = vendorLinks.filter((l) => !deepLinks.includes(l));
+    const capped = [...deepLinks, ...baseLinks].slice(0, MAX_VENDOR_LINKS);
+    vendorLinks.length = 0;
+    vendorLinks.push(...capped);
+  }
+
   // Classify content type based on context
   const existingTypeRows = await sql`
     SELECT DISTINCT content_type

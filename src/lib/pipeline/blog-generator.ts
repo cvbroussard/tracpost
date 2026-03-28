@@ -148,8 +148,22 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   `;
   const existingTitles = existingPosts.map((p) => p.title as string);
 
+  // Collect already-used external image URLs for dedup
+  const usedImageRows = await sql`
+    SELECT body FROM blog_posts
+    WHERE site_id = ${asset.site_id} AND status IN ('draft', 'published')
+  `;
+  const usedImageUrls: string[] = [];
+  for (const row of usedImageRows) {
+    const matches = ((row.body as string) || "").match(/!\[.*?\]\((https?:\/\/upload\.wikimedia[^)]+)\)/g) || [];
+    for (const m of matches) {
+      const url = m.match(/\((https?:\/\/[^)]+)\)/)?.[1];
+      if (url) usedImageUrls.push(url);
+    }
+  }
+
   // Research entities mentioned in the context note
-  const research = await researchContextNote((asset.context_note as string) || "");
+  const research = await researchContextNote((asset.context_note as string) || "", usedImageUrls);
 
   // Fetch vendor URLs linked to this asset (from vendor table)
   const assetVendors = await sql`

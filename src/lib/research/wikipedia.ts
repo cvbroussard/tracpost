@@ -292,7 +292,8 @@ async function searchCommonsImages(
  * for Wikimedia Commons that complement the subscriber's own photos.
  */
 async function generateImageSearchQueries(
-  entities: ExtractedEntities
+  entities: ExtractedEntities,
+  contextNote: string
 ): Promise<string[]> {
   const allEntities = [
     ...entities.materials,
@@ -309,15 +310,24 @@ async function generateImageSearchQueries(
       max_tokens: 256,
       messages: [{
         role: "user",
-        content: `Generate 2-4 SHORT image search queries for Wikimedia Commons. Topics: ${allEntities.join(", ")}
+        content: `Generate 2-4 SHORT image search queries for Wikimedia Commons.
 
-I need photos of: raw materials, workshops, craftsmanship, origin locations, or historical context.
-NOT finished products — the business has those.
+Context note (how these materials/vendors are being used):
+"${contextNote}"
 
-KEEP QUERIES SHORT — 2-3 words max. Commons search works best with simple terms.
-Good: "zellige Morocco", "walnut lumber", "cabinetry workshop"
-Bad: "zellige tilework craftsmanship Morocco traditional artisan" (too long, zero results)
+Entities: ${allEntities.join(", ")}
 
+I need editorial photos that show HOW these materials exist BEFORE they become a finished product:
+- Material in its raw/processed form as used in this context (e.g., "walnut lumber slab" not "walnut tree autumn")
+- Workshop or manufacturing process
+- Origin location or cultural context
+
+CRITICAL: Match the image to how the material is USED, not its biological/botanical identity.
+- "black walnut countertop" → search "walnut wood slab" or "walnut lumber grain"
+- "zellige backsplash" → search "zellige workshop Morocco" or "zellige tiles Fez"
+- NOT tree photos, NOT leaf close-ups, NOT botanical specimens
+
+KEEP QUERIES SHORT — 2-3 words max.
 Return ONLY a JSON array of strings.`,
       }],
     });
@@ -369,8 +379,12 @@ function isRelevantResult(summary: WikiSummary, searchTerm: string, contextNote:
  * 1. Wikipedia article images (incidental — whatever's on the page)
  * 2. Wikimedia Commons search (intentional — targeted visual queries)
  */
-export async function researchContextNote(contextNote: string): Promise<string> {
+export async function researchContextNote(
+  contextNote: string,
+  excludeImageUrls: string[] = []
+): Promise<string> {
   if (!contextNote) return "";
+  const excludeSet = new Set(excludeImageUrls);
 
   const terms = await extractResearchTerms(contextNote);
   if (terms.length === 0) return "";
@@ -419,12 +433,13 @@ Content note: "${contextNote}"
     if (summary) {
       let entry = `**${summary.title}**: ${summary.extract}`;
 
-      if (summary.images.length > 0) {
+      const freshImages = summary.images.filter((img) => !excludeSet.has(img.url));
+      if (freshImages.length > 0) {
         entry += "\nReference images (public domain, can be embedded in blog):";
-        for (const img of summary.images) {
+        for (const img of freshImages) {
           entry += `\n- ![${img.description}](${img.url})`;
         }
-      } else if (summary.thumbnail) {
+      } else if (summary.thumbnail && !excludeSet.has(summary.thumbnail)) {
         entry += `\nReference image: ![${summary.title}](${summary.thumbnail})`;
       }
 
@@ -433,15 +448,15 @@ Content note: "${contextNote}"
   }
 
   // 2. Targeted Wikimedia Commons search for editorial images
-  const imageQueries = await generateImageSearchQueries(entities);
+  const imageQueries = await generateImageSearchQueries(entities, contextNote);
   if (imageQueries.length > 0) {
     const commonsImages: Array<{ url: string; description: string; query: string }> = [];
 
     for (const query of imageQueries) {
       const images = await searchCommonsImages(query, 2);
       for (const img of images) {
-        // Deduplicate by URL
-        if (!commonsImages.some((c) => c.url === img.url)) {
+        // Deduplicate by URL and exclude already-used images
+        if (!commonsImages.some((c) => c.url === img.url) && !excludeSet.has(img.url)) {
           commonsImages.push({ ...img, query });
         }
       }

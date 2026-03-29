@@ -137,6 +137,13 @@ async function visionTriage(
     ? `Brand context: ${JSON.stringify(brandVoice)}`
     : "";
 
+  // Download image and convert to base64 — Claude can't always fetch R2 URLs directly
+  const imgRes = await fetch(storageUrl, { signal: AbortSignal.timeout(10000) });
+  if (!imgRes.ok) throw new Error(`Failed to download image: ${imgRes.status}`);
+  const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+  const imgBase64 = imgBuffer.toString("base64");
+  const imgMimeType = imgRes.headers.get("content-type") || "image/jpeg";
+
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 512,
@@ -146,7 +153,7 @@ async function visionTriage(
         content: [
           {
             type: "image",
-            source: { type: "url", url: storageUrl },
+            source: { type: "base64", media_type: imgMimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: imgBase64 },
           },
           {
             type: "text",
@@ -191,10 +198,13 @@ ${personaPrompt || 'If no known characters list is provided, return "detected_pe
     ],
   });
 
-  // Parse response
-  const text =
+  // Parse response — strip markdown fencing if present
+  const rawText =
     response.content[0].type === "text" ? response.content[0].text : "";
-  const parsed = JSON.parse(text);
+  const cleaned = rawText.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("No JSON in vision response");
+  const parsed = JSON.parse(jsonMatch[0]);
 
   // Extract pillars from AI response (array) with fallback
   let contentPillars: ContentPillar[] = Array.isArray(parsed.content_pillars)

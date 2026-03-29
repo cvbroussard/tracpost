@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/sidebar";
 import { MobileNav } from "@/components/mobile-nav";
 import { OnboardingChecklist, type ChecklistState } from "@/components/onboarding-checklist";
 import { ActivityFeed } from "@/components/activity-feed";
+import { ContextualHelp } from "@/components/contextual-help";
 
 const ALL_PLATFORMS = [
   "instagram", "tiktok", "facebook", "gbp",
@@ -107,6 +108,7 @@ export default async function DashboardLayout({
             <div className="flex h-full w-72 flex-col border-l border-border bg-surface">
               <OnboardingChecklist state={checklistState} prefix={prefix} defaultCollapsed={setupComplete} />
               <ActivityFeed items={activityItems} />
+              <ContextualHelp />
             </div>
           </div>
         )}

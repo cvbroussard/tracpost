@@ -92,15 +92,19 @@ export async function editEditorialImage(
   if (!apiKey) return null;
 
   try {
-    // Fetch the existing image and convert to base64
-    const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10000) });
-    if (!imgRes.ok) {
-      console.warn("Failed to fetch image for editing:", imgRes.status);
+    // Fetch the existing image, convert HEIC if needed
+    const { fetchAndConvert } = await import("@/lib/image-utils");
+    let imgBuffer: Buffer;
+    let imgMimeType: string;
+    try {
+      const converted = await fetchAndConvert(imageUrl);
+      imgBuffer = converted.data;
+      imgMimeType = converted.mimeType;
+    } catch (err) {
+      console.warn("Failed to fetch image for editing:", err instanceof Error ? err.message : err);
       return null;
     }
-    const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
     const imgBase64 = imgBuffer.toString("base64");
-    const imgMimeType = imgRes.headers.get("content-type") || "image/png";
 
     const res = await fetch(
       `${API_BASE}/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,

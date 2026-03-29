@@ -137,12 +137,10 @@ async function visionTriage(
     ? `Brand context: ${JSON.stringify(brandVoice)}`
     : "";
 
-  // Download image and convert to base64 — Claude can't always fetch R2 URLs directly
-  const imgRes = await fetch(storageUrl, { signal: AbortSignal.timeout(10000) });
-  if (!imgRes.ok) throw new Error(`Failed to download image: ${imgRes.status}`);
-  const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+  // Download image, convert HEIC if needed, encode as base64
+  const { fetchAndConvert } = await import("@/lib/image-utils");
+  const { data: imgBuffer, mimeType: imgMimeType } = await fetchAndConvert(storageUrl);
   const imgBase64 = imgBuffer.toString("base64");
-  const imgMimeType = imgRes.headers.get("content-type") || "image/jpeg";
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",

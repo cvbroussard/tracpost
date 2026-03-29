@@ -159,7 +159,7 @@ ${brandContext}
 
 Respond with ONLY valid JSON (no markdown):
 {
-  "quality_score": <0.0-1.0, based on: sharpness, lighting, composition, visual appeal>,
+  "quality_score": <0.0-1.0, see scoring guide below>,
   "content_pillars": [<1-3 matching pillar IDs from the pillars above, ordered by relevance>],
   "content_tags": [<2-5 matching tag IDs from the tags above, ordered by relevance>],
   "platform_fit": [<array of: "ig_feed", "ig_story", "ig_reel", "gbp", "youtube", "youtube_short", "fb_feed", "tiktok", "twitter", "linkedin", "pinterest">],
@@ -177,7 +177,13 @@ Rules:
 - Professional/business content suits linkedin and gbp
 - Visual/aesthetic content suits pinterest
 - If subscriber provided a pillar, prefer it unless clearly wrong
-- Score quality honestly: blurry/dark/poorly composed = low, clear/well-lit/engaging = high
+- Quality scoring guide (technical publishability, NOT content value):
+  0.9-1.0: Finished/completed work, good lighting, sharp, publishable as-is. Hero class.
+  0.7-0.8: Decent composition but imperfect — in-progress work with good framing, minor lighting issues, some staging clutter.
+  0.5-0.6: Rough but identifiable — poor lighting, construction debris visible, blurry areas, but the subject is clear.
+  0.3-0.4: Very rough — dark, blurry, heavy clutter, hard to identify the subject.
+  0.0-0.2: Unusable — accidental shot, completely dark, no discernible subject.
+- Score based on whether the IMAGE can be published, not whether the subject matter is interesting.
 ${personaPrompt || 'If no known characters list is provided, return "detected_personas": []'}`,
           },
         ],

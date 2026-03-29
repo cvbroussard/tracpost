@@ -8,7 +8,7 @@ import { editEditorialImage, generateEditorialImage } from "./gemini";
 import { uploadBufferToR2 } from "@/lib/r2";
 import { sql } from "@/lib/db";
 
-const QUALITY_CUTOFF = 0.6;
+const QUALITY_CUTOFF = 0.7;
 
 const POST_PRODUCTION_PROMPT = `Enhance this photograph to professional publication quality. Apply these post-production adjustments:
 

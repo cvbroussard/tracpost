@@ -54,6 +54,15 @@ export async function POST(req: NextRequest) {
   const imageEntry = editorialImages.find((img) => img.url === image_url);
   const isEditorial = !!imageEntry;
 
+  // Direct replace — no AI, just swap the URL
+  if (mode === "replace" && reference_url) {
+    const newBody = (post.body as string).replace(image_url, reference_url);
+    await sql`
+      UPDATE blog_posts SET body = ${newBody} WHERE id = ${post_id}
+    `;
+    return NextResponse.json({ success: true, new_url: reference_url });
+  }
+
   // Generate or edit image based on mode
   let image;
   try {

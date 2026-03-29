@@ -54,7 +54,7 @@ export function BlogPostList({
   const [acting, setActing] = useState<string | null>(null);
   const [repromptUrl, setRepromptUrl] = useState<string | null>(null);
   const [repromptNote, setRepromptNote] = useState("");
-  const [repromptMode, setRepromptMode] = useState<"edit" | "new">("edit");
+  const [repromptMode, setRepromptMode] = useState<"edit" | "new" | "replace">("edit");
   const [reprompting, setReprompting] = useState(false);
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState<string | null>(null);
@@ -173,6 +173,47 @@ export function BlogPostList({
     } catch {
       return null;
     }
+  }
+
+  async function handleReplace() {
+    if (!previewing || !repromptUrl || !referenceFile) return;
+    setReprompting(true);
+    try {
+      const siteMatch = repromptUrl.match(/sites\/([^/]+)/);
+      const siteId = siteMatch?.[1] || "";
+      if (!siteId) { alert("Could not determine site"); return; }
+
+      const newUrl = await uploadReference(referenceFile, siteId);
+      if (!newUrl) { alert("Upload failed"); return; }
+
+      // Swap URL in post body via API
+      const res = await fetch("/api/blog/reprompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post_id: previewing.id,
+          image_url: repromptUrl,
+          adjustment: "direct_replace",
+          mode: "replace",
+          reference_url: newUrl,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (previewing.body) {
+          setPreviewing({ ...previewing, body: previewing.body.replace(repromptUrl, data.new_url) });
+        }
+        setRepromptUrl(null);
+        setRepromptNote("");
+        setReferenceFile(null);
+        setReferencePreview(null);
+        router.refresh();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Replace failed");
+      }
+    } catch { alert("Replace failed"); }
+    finally { setReprompting(false); }
   }
 
   async function handleReprompt() {
@@ -444,22 +485,30 @@ export function BlogPostList({
                               </button>
                               <button
                                 onClick={() => setRepromptMode("new")}
-                                className={`px-2.5 py-1 rounded-r ${repromptMode === "new" ? "bg-accent text-white" : "text-muted"}`}
+                                className={`px-2.5 py-1 ${repromptMode === "new" ? "bg-accent text-white" : "text-muted"}`}
                               >
                                 New
+                              </button>
+                              <button
+                                onClick={() => setRepromptMode("replace")}
+                                className={`px-2.5 py-1 rounded-r ${repromptMode === "replace" ? "bg-accent text-white" : "text-muted"}`}
+                              >
+                                Replace
                               </button>
                             </div>
                           </div>
                           <p className="mb-2 text-[10px] text-muted">
                             {repromptMode === "edit"
                               ? "Make one change at a time: remove something, change a color, adjust a detail. For bigger changes, switch to New."
-                              : "Describe the scene you want. This replaces the image entirely. Factual corrections here (e.g., spray paint not brush) will apply to future articles."}
+                              : repromptMode === "new"
+                              ? "Describe the scene you want. This replaces the image entirely. Factual corrections here (e.g., spray paint not brush) will apply to future articles."
+                              : "Upload your own image to swap in directly. No AI processing — your photo goes in as-is."}
                           </p>
-                          {/* Reference image preview */}
+                          {/* Reference/Replace image preview */}
                           {referencePreview && (
                             <div className="mb-2 flex items-center gap-2">
                               <img src={referencePreview} alt="Reference" className="h-12 w-12 rounded object-cover" />
-                              <span className="text-[10px] text-muted">Reference image</span>
+                              <span className="text-[10px] text-muted">{repromptMode === "replace" ? "Will replace current image" : "Reference image"}</span>
                               <button
                                 onClick={() => { setReferenceFile(null); setReferencePreview(null); }}
                                 className="text-[10px] text-muted hover:text-danger"
@@ -469,18 +518,20 @@ export function BlogPostList({
                             </div>
                           )}
                           <div className="flex gap-2">
-                            <input
-                              value={repromptNote}
-                              onChange={(e) => setRepromptNote(e.target.value)}
-                              onKeyDown={(e) => e.key === "Enter" && handleReprompt()}
-                              className="flex-1 text-sm"
-                              placeholder={referenceFile
-                                ? "e.g., make it look like the reference image"
-                                : repromptMode === "edit"
-                                ? "e.g., change sign to Mitchel & Mitchel, remove person on left"
-                                : "e.g., spray paint line not brush, woman making tile"}
-                              autoFocus
-                            />
+                            {repromptMode !== "replace" && (
+                              <input
+                                value={repromptNote}
+                                onChange={(e) => setRepromptNote(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && handleReprompt()}
+                                className="flex-1 text-sm"
+                                placeholder={referenceFile
+                                  ? "e.g., make it look like the reference image"
+                                  : repromptMode === "edit"
+                                  ? "e.g., change sign to Mitchel & Mitchel, remove person on left"
+                                  : "e.g., spray paint line not brush, woman making tile"}
+                                autoFocus
+                              />
+                            )}
                             <label className="flex cursor-pointer items-center rounded bg-surface-hover px-2 py-1.5 text-[10px] text-muted hover:text-foreground">
                               <input
                                 type="file"
@@ -488,15 +539,25 @@ export function BlogPostList({
                                 className="hidden"
                                 onChange={handleReferenceFile}
                               />
-                              {referenceFile ? "Change" : "Ref"}
+                              {referenceFile ? "Change" : repromptMode === "replace" ? "Choose image" : "Ref"}
                             </label>
-                            <button
-                              onClick={handleReprompt}
-                              disabled={reprompting || !repromptNote.trim()}
-                              className="bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-                            >
-                              {reprompting ? (repromptMode === "edit" ? "Editing..." : "Generating...") : (repromptMode === "edit" ? "Edit" : "Regenerate")}
-                            </button>
+                            {repromptMode === "replace" ? (
+                              <button
+                                onClick={handleReplace}
+                                disabled={reprompting || !referenceFile}
+                                className="bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                              >
+                                {reprompting ? "Replacing..." : "Replace"}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={handleReprompt}
+                                disabled={reprompting || !repromptNote.trim()}
+                                className="bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                              >
+                                {reprompting ? (repromptMode === "edit" ? "Editing..." : "Generating...") : (repromptMode === "edit" ? "Edit" : "Regenerate")}
+                              </button>
+                            )}
                             <button
                               onClick={() => { setRepromptUrl(null); setRepromptNote(""); setReferenceFile(null); setReferencePreview(null); }}
                               className="px-2 py-1.5 text-xs text-muted hover:text-foreground"

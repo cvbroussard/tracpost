@@ -50,23 +50,23 @@ export async function POST(req: NextRequest) {
     entities: string[];
   }>;
 
-  // Find the image entry by URL
+  // Find the image entry by URL — may be editorial or subscriber photo
   const imageEntry = editorialImages.find((img) => img.url === image_url);
-  if (!imageEntry) {
-    return NextResponse.json(
-      { error: "Image not found in post metadata. Only editorial images can be re-prompted." },
-      { status: 400 }
-    );
-  }
+  const isEditorial = !!imageEntry;
 
   // Generate or edit image based on mode
   let image;
   try {
     if (mode === "edit") {
+      // Edit works on any image — editorial or subscriber photo
       image = await editEditorialImage(image_url, adjustment);
-    } else {
+    } else if (isEditorial && imageEntry) {
+      // New mode with original prompt — editorial only
       const adjustedPrompt = `${imageEntry.prompt}. IMPORTANT CORRECTION: ${adjustment}`;
       image = await generateEditorialImage(adjustedPrompt);
+    } else {
+      // New mode on subscriber photo — generate from adjustment text + site style
+      image = await generateEditorialImage(adjustment);
     }
   } catch (genErr) {
     console.error("Image gen/edit error:", genErr instanceof Error ? genErr.message : genErr);
@@ -84,23 +84,27 @@ export async function POST(req: NextRequest) {
 
   // Upload to R2
   const ext = image.mimeType.includes("png") ? "png" : "jpg";
-  const fname = seoFilename(imageEntry.alt || adjustment, ext);
-  const key = `sites/${post.site_id}/editorial/${fname}`;
+  const fname = seoFilename(isEditorial ? (imageEntry?.alt || adjustment) : adjustment, ext);
+  const folder = isEditorial ? "editorial" : "enhanced";
+  const key = `sites/${post.site_id}/${folder}/${fname}`;
   const newUrl = await uploadBufferToR2(key, image.data, image.mimeType);
 
   // Replace URL in post body
   const newBody = (post.body as string).replace(image_url, newUrl);
 
-  // Update editorial_images metadata
-  const updatedPrompt = mode === "new"
-    ? `${imageEntry.prompt}. IMPORTANT CORRECTION: ${adjustment}`
-    : imageEntry.prompt;
-  const updatedImages = editorialImages.map((img) =>
-    img.url === image_url
-      ? { ...img, url: newUrl, prompt: updatedPrompt }
-      : img
-  );
-  const updatedMetadata = { ...metadata, editorial_images: updatedImages };
+  // Update editorial_images metadata if this was an editorial image
+  let updatedMetadata = metadata;
+  if (isEditorial && imageEntry) {
+    const updatedPrompt = mode === "new"
+      ? `${imageEntry.prompt}. IMPORTANT CORRECTION: ${adjustment}`
+      : imageEntry.prompt;
+    const updatedImages = editorialImages.map((img) =>
+      img.url === image_url
+        ? { ...img, url: newUrl, prompt: updatedPrompt }
+        : img
+    );
+    updatedMetadata = { ...metadata, editorial_images: updatedImages };
+  }
 
   await sql`
     UPDATE blog_posts
@@ -111,7 +115,7 @@ export async function POST(req: NextRequest) {
   // Only persist corrections from "new" mode — these are factual accuracy
   // corrections about the entity (e.g., "spray paint line not brush").
   // Edit mode corrections are stylistic tweaks for this specific image only.
-  if (mode === "new") {
+  if (mode === "new" && isEditorial && imageEntry) {
     for (const entityKey of imageEntry.entities) {
       await sql`
         INSERT INTO image_corrections (site_id, entity_key, correction)

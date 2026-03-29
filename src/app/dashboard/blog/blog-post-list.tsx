@@ -129,13 +129,12 @@ export function BlogPostList({
   const hasEditorialImages = (post: Post): boolean =>
     Array.isArray(post.metadata?.editorial_images) && (post.metadata.editorial_images as unknown[]).length > 0;
 
-  // Build prose HTML with clickable editorial images
+  // Build prose HTML with all images clickable for editing
   function buildProseHtml(body: string): string {
     const html = markdownToHtml(body);
-    // Add data attribute to editorial images so we can handle clicks
     return html.replace(
-      /<img ([^>]*src="[^"]*\/editorial\/[^"]*"[^>]*)>/g,
-      '<img $1 data-editorial="true" style="cursor:pointer;border:2px solid transparent;border-radius:8px;" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'transparent\'">'
+      /<img ([^>]*)>/g,
+      '<img $1 data-editable="true" style="cursor:pointer;border:2px solid transparent;border-radius:8px;" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'transparent\'">'
     );
   }
 
@@ -364,7 +363,7 @@ export function BlogPostList({
                 const html = buildProseHtml(previewing.body);
 
                 // If an editorial image is selected, split HTML and inject form
-                if (repromptUrl && hasEditorialImages(previewing)) {
+                if (repromptUrl) {
                   // Find the img tag with this URL and split after it
                   const imgPattern = `<img [^>]*src="${repromptUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>`;
                   const match = html.match(new RegExp(imgPattern));
@@ -377,7 +376,7 @@ export function BlogPostList({
                         <div
                           className="preview-prose"
                           onClick={(e) => {
-                            const img = (e.target as HTMLElement).closest("img[data-editorial]") as HTMLImageElement | null;
+                            const img = (e.target as HTMLElement).closest("img[data-editable]") as HTMLImageElement | null;
                             if (img) { setRepromptUrl(img.src); setRepromptNote(""); setRepromptMode("edit"); }
                           }}
                           dangerouslySetInnerHTML={{ __html: before }}
@@ -434,7 +433,7 @@ export function BlogPostList({
                         <div
                           className="preview-prose"
                           onClick={(e) => {
-                            const img = (e.target as HTMLElement).closest("img[data-editorial]") as HTMLImageElement | null;
+                            const img = (e.target as HTMLElement).closest("img[data-editable]") as HTMLImageElement | null;
                             if (img) { setRepromptUrl(img.src); setRepromptNote(""); setRepromptMode("edit"); }
                           }}
                           dangerouslySetInnerHTML={{ __html: after }}
@@ -449,8 +448,8 @@ export function BlogPostList({
                   <div
                     className="preview-prose"
                     onClick={(e) => {
-                      const img = (e.target as HTMLElement).closest("img[data-editorial]") as HTMLImageElement | null;
-                      if (img && hasEditorialImages(previewing)) { setRepromptUrl(img.src); setRepromptNote(""); setRepromptMode("edit"); }
+                      const img = (e.target as HTMLElement).closest("img[data-editable]") as HTMLImageElement | null;
+                      if (img) { setRepromptUrl(img.src); setRepromptNote(""); setRepromptMode("edit"); }
                     }}
                     dangerouslySetInnerHTML={{ __html: html }}
                   />

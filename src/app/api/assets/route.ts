@@ -2,6 +2,8 @@ import { sql } from "@/lib/db";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { runPipeline } from "@/lib/pipeline/orchestrator";
+import { fetchAndConvert } from "@/lib/image-utils";
+import { uploadBufferToR2 } from "@/lib/r2";
 
 /**
  * POST /api/assets — Register a new media asset.
@@ -44,13 +46,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Convert HEIC/HEIF to JPEG before storing — browsers can't display HEIC
+    let finalUrl = storage_url;
+    if (storage_url && media_type === "image" && (
+      storage_url.endsWith(".heic") || storage_url.endsWith(".heif")
+    )) {
+      try {
+        const { data, mimeType } = await fetchAndConvert(storage_url);
+        const key = storage_url
+          .replace("https://assets.tracpost.com/", "")
+          .replace(/\.heic$|\.heif$/, ".jpg");
+        finalUrl = await uploadBufferToR2(key, data, mimeType);
+      } catch (err) {
+        console.warn("HEIC conversion failed, using original:", err instanceof Error ? err.message : err);
+      }
+    }
+
     const [asset] = await sql`
       INSERT INTO media_assets (
         site_id, storage_url, media_type, context_note,
         source, triage_status, metadata
       )
       VALUES (
-        ${site_id}, ${storage_url}, ${media_type},
+        ${site_id}, ${finalUrl}, ${media_type},
         ${context_note || null}, 'upload', 'received',
         ${JSON.stringify(metadata || {})}
       )

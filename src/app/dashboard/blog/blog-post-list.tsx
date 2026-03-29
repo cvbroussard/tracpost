@@ -402,8 +402,8 @@ export function BlogPostList({
                           </div>
                           <p className="mb-2 text-[10px] text-muted">
                             {repromptMode === "edit"
-                              ? "Modify this image in place — keeps composition, changes details."
-                              : "Generate a completely new image from the adjusted prompt."}
+                              ? "Make one change at a time: remove something, change a color, adjust a detail. For bigger changes, switch to New."
+                              : "Describe the scene you want. This replaces the image entirely. Factual corrections here (e.g., spray paint not brush) will apply to future articles."}
                           </p>
                           <div className="flex gap-2">
                             <input

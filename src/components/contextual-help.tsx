@@ -16,14 +16,14 @@ const helpContent: Record<string, HelpItem[]> = {
         "Click any post to open the full preview. Read through the article for accuracy, tone, and flow. Check that vendor names and product details match reality. The content guard has already screened for safety issues — focus on industry accuracy.",
     },
     {
-      title: "Image editing: Edit vs New",
+      title: "Adjusting images",
       content:
-        "Click any image to adjust it. Edit mode makes small changes to the existing image (brighten, remove an object, change a color). New mode generates a completely different image from a description. Use Edit for tweaks, New for replacements.",
+        "Click any image to adjust it. Edit tweaks the current image — brighten, change a color, remove an object. New creates a fresh image from your description. Use Edit for fine-tuning, New for replacements.",
     },
     {
-      title: "Effective image prompts",
+      title: "Writing image adjustments",
       content:
-        "Keep Edit prompts simple — one change at a time. Good: \"brighter shadows\", \"remove the sign\", \"warmer tones\". Bad: \"create a new scene and remove the background\" (too many operations). For big changes, switch to New mode.",
+        "Keep it simple — one change at a time. Good: \"brighter shadows\", \"remove the sign\", \"warmer tones\". Bad: \"create a new scene and remove the background\" (too many changes at once). For major changes, switch to New.",
     },
     {
       title: "When to approve vs reject",
@@ -36,16 +36,16 @@ const helpContent: Record<string, HelpItem[]> = {
         "Posts marked as flagged were caught by the content safety scanner. Expand them to see the specific issues. Common flags: pricing mentions, hallucinated contact info. You can still publish flagged posts after reviewing the concerns.",
     },
     {
-      title: "Corrections persist",
+      title: "Corrections carry forward",
       content:
-        "When you use New mode to fix an editorial image (e.g., \"spray paint line, not brush\"), that correction applies to all future articles about the same vendor or material. You only need to correct it once.",
+        "When you use New to fix an image (e.g., \"spray paint line, not brush\"), that correction applies to all future articles about the same vendor or material. You only need to fix it once.",
     },
   ],
   "/dashboard/media": [
     {
       title: "Writing good context notes",
       content:
-        "List specific details, not marketing copy. Good: \"walnut slab countertop, brass bar sink, Texas Lightsmith, tile backsplash\". Bad: \"So many outstanding features in this beautiful kitchen\". The AI uses your details to generate accurate content.",
+        "List specific details, not marketing copy. Good: \"walnut slab countertop, brass bar sink, Texas Lightsmith, tile backsplash\". Bad: \"So many outstanding features in this beautiful kitchen\". Your details drive the content quality.",
     },
     {
       title: "Using vendor hashtags",
@@ -60,7 +60,7 @@ const helpContent: Record<string, HelpItem[]> = {
     {
       title: "Quality scores",
       content:
-        "The percentage on each asset indicates technical publishability. 90%+: hero quality. 70-89%: good, will be enhanced. Below 70%: rough, may be regenerated as an AI version. You can manually enhance any image during blog review.",
+        "The percentage on each asset indicates technical publishability. 90%+: hero quality. 70-89%: good, will be enhanced automatically. Below 70%: rough, a polished version will be created. You can also enhance any image manually during blog review.",
     },
   ],
   "/dashboard/capture": [
@@ -77,7 +77,7 @@ const helpContent: Record<string, HelpItem[]> = {
     {
       title: "Upload frequency",
       content:
-        "The content engine runs on fresh uploads. Upload regularly to keep blog posts diverse and relevant. The dashboard shows a freshness indicator — when it turns yellow, it's time to upload new content.",
+        "Fresh uploads keep your blog diverse and relevant. Upload regularly from job sites. The dashboard shows a freshness indicator — when it turns yellow, it's time to upload new content.",
     },
   ],
   "/dashboard": [
@@ -89,7 +89,7 @@ const helpContent: Record<string, HelpItem[]> = {
     {
       title: "Content freshness",
       content:
-        "Shows days since your last upload. Content quality depends on fresh material. After 14 days without uploads, the system warns that content is going stale.",
+        "Shows days since your last upload. Fresh material keeps your blog relevant. After 14 days without uploads, you'll see a staleness warning.",
     },
     {
       title: "Suggested uploads",

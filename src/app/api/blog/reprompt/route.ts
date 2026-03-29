@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
 
   // Verify ownership
   const [post] = await sql`
-    SELECT bp.id, bp.site_id, bp.body, bp.metadata
+    SELECT bp.id, bp.site_id, bp.body, bp.metadata, bp.title,
+           s.image_style
     FROM blog_posts bp
     JOIN sites s ON s.id = bp.site_id
     WHERE bp.id = ${post_id} AND s.subscriber_id = ${auth.subscriberId}
@@ -70,8 +71,9 @@ export async function POST(req: NextRequest) {
       // Reference-based edit: current image + reference + instruction
       image = await editWithReference(image_url, reference_url, adjustment);
     } else if (reference_url && mode === "new") {
-      // New mode with reference: use reference as inspiration for a new image
-      image = await editWithReference(reference_url, image_url, `Using the first image as the primary reference, create a new version: ${adjustment}`);
+      // New mode with explicit reference: use reference as inspiration
+      const siteStyle = (post.image_style as string) || "";
+      image = await editWithReference(reference_url, image_url, `Using the first image as the primary reference, create a production-quality version. ${adjustment}. ${siteStyle}`);
     } else if (mode === "edit") {
       // Standard edit: text instruction on single image
       image = await editEditorialImage(image_url, adjustment);
@@ -80,8 +82,15 @@ export async function POST(req: NextRequest) {
       const adjustedPrompt = `${imageEntry.prompt}. IMPORTANT CORRECTION: ${adjustment}`;
       image = await generateEditorialImage(adjustedPrompt);
     } else {
-      // New mode on subscriber photo — generate from adjustment text
-      image = await generateEditorialImage(adjustment);
+      // New mode on subscriber photo — use the current image as inspiration + site style
+      const siteStyle = (post.image_style as string) || "";
+      const articleTitle = (post.title as string) || "";
+      const richPrompt = `Generate a production-quality editorial photograph inspired by the reference image. Article: "${articleTitle}". ${adjustment}. ${siteStyle}`;
+      image = await editEditorialImage(image_url, richPrompt);
+      // If edit-based inspiration fails, try pure generation
+      if (!image) {
+        image = await generateEditorialImage(richPrompt);
+      }
     }
   } catch (genErr) {
     console.error("Image gen/edit error:", genErr instanceof Error ? genErr.message : genErr);

@@ -106,13 +106,17 @@ export async function POST(req: NextRequest) {
     WHERE id = ${post_id}
   `;
 
-  // Persist correction at entity level for future articles
-  for (const entityKey of imageEntry.entities) {
-    await sql`
-      INSERT INTO image_corrections (site_id, entity_key, correction)
-      VALUES (${post.site_id as string}, ${entityKey.toLowerCase()}, ${adjustment})
-      ON CONFLICT (site_id, entity_key, correction) DO NOTHING
-    `;
+  // Only persist corrections from "new" mode — these are factual accuracy
+  // corrections about the entity (e.g., "spray paint line not brush").
+  // Edit mode corrections are stylistic tweaks for this specific image only.
+  if (mode === "new") {
+    for (const entityKey of imageEntry.entities) {
+      await sql`
+        INSERT INTO image_corrections (site_id, entity_key, correction)
+        VALUES (${post.site_id as string}, ${entityKey.toLowerCase()}, ${adjustment})
+        ON CONFLICT (site_id, entity_key, correction) DO NOTHING
+      `;
+    }
   }
 
   return NextResponse.json({ success: true, new_url: newUrl });

@@ -27,7 +27,7 @@ interface ArticleSchemaInput {
  */
 export async function generateHubSchema(input: HubSchemaInput): Promise<Record<string, unknown>> {
   const { siteId, siteName, siteUrl, blogSlug, logoUrl } = input;
-  const hubUrl = `https://blog.tracpost.com/${blogSlug}`;
+  const hubUrl = `https://blog.tracpost.com/blog/${blogSlug}`;
 
   // Fetch social accounts for sameAs
   const socialAccounts = await sql`
@@ -149,7 +149,7 @@ export async function generateHubSchema(input: HubSchemaInput): Promise<Record<s
  * Generate Article JSON-LD schema for a blog post.
  */
 export function generateArticleSchema(input: ArticleSchemaInput): Record<string, unknown> {
-  const articleUrl = `https://blog.tracpost.com/${input.siteSlug}/${input.articleSlug}`;
+  const articleUrl = `https://blog.tracpost.com/blog/${input.siteSlug}/${input.articleSlug}`;
 
   const schema: Record<string, unknown> = {
     "@context": "https://schema.org",
@@ -159,12 +159,16 @@ export function generateArticleSchema(input: ArticleSchemaInput): Record<string,
     author: {
       "@type": "Organization",
       name: input.siteName,
-      url: `https://blog.tracpost.com/${input.siteSlug}`,
+      url: `https://blog.tracpost.com/blog/${input.siteSlug}`,
     },
     publisher: {
       "@type": "Organization",
       name: "Tracpost",
       url: "https://tracpost.com",
+      logo: {
+        "@type": "ImageObject",
+        url: "https://tracpost.com/logo.png",
+      },
     },
   };
 

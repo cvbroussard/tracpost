@@ -145,7 +145,7 @@ export async function getBlogPost(
   const [post] = await sql`
     SELECT id, slug, title, body, excerpt, meta_title, meta_description,
            og_image_url, schema_json, tags, content_pillar,
-           published_at, created_at
+           published_at, updated_at, created_at
     FROM blog_posts
     WHERE site_id = ${siteId} AND slug = ${slug} AND status = 'published'
   `;

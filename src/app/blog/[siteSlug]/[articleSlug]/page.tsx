@@ -36,21 +36,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!p) return {};
 
   const row = p as Record<string, unknown>;
-  const metaTitle = String(row.meta_title || row.title || "");
+  const articleTitle = String(row.title || "");
+  const metaTitle = String(row.meta_title || articleTitle);
   const metaDesc = String(row.meta_description || row.excerpt || "");
-  const canonicalUrl = `https://blog.tracpost.com/${siteSlug}/${articleSlug}`;
+  const canonicalUrl = `https://blog.tracpost.com/blog/${siteSlug}/${articleSlug}`;
+  const publishedIso = row.published_at ? new Date(String(row.published_at)).toISOString() : undefined;
+  const updatedIso = row.updated_at ? new Date(String(row.updated_at)).toISOString() : undefined;
 
   return {
-    title: metaTitle,
+    title: articleTitle,
     description: metaDesc,
     alternates: { canonical: canonicalUrl },
     openGraph: {
-      title: metaTitle,
+      title: articleTitle,
       description: metaDesc,
       url: canonicalUrl,
       images: row.og_image_url ? [String(row.og_image_url)] : undefined,
       type: "article",
-      publishedTime: row.published_at ? String(row.published_at) : undefined,
+      publishedTime: publishedIso,
+      modifiedTime: updatedIso,
       section: row.content_pillar ? String(row.content_pillar) : undefined,
       tags: Array.isArray(row.tags) ? (row.tags as string[]) : undefined,
     },

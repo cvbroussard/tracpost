@@ -36,6 +36,7 @@ export default async function ProvisioningPage() {
       s.pillar_config,
       s.image_style,
       s.image_variations,
+      s.image_processing_mode,
       s.metadata AS site_metadata,
       s.deleted_at,
       (
@@ -159,6 +160,7 @@ export default async function ProvisioningPage() {
                   siteId={sub.site_id as string}
                   initialStyle={(sub.image_style as string) || ""}
                   initialVariations={(sub.image_variations as string[]) || []}
+                  initialProcessingMode={(sub.image_processing_mode as string) || "auto"}
                 />
 
                 {profileKit && (

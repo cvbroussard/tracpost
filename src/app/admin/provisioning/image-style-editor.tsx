@@ -6,13 +6,16 @@ export function ImageStyleEditor({
   siteId,
   initialStyle,
   initialVariations,
+  initialProcessingMode,
 }: {
   siteId: string;
   initialStyle: string;
   initialVariations: string[];
+  initialProcessingMode: string;
 }) {
   const [style, setStyle] = useState(initialStyle);
   const [variations, setVariations] = useState(initialVariations);
+  const [processingMode, setProcessingMode] = useState(initialProcessingMode || "auto");
   const [isOpen, setIsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -23,7 +26,7 @@ export function ImageStyleEditor({
     await fetch("/api/admin/image-style", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ siteId, style, variations }),
+      body: JSON.stringify({ siteId, style, variations, processingMode }),
     });
     setSaving(false);
     setSaved(true);
@@ -55,6 +58,28 @@ export function ImageStyleEditor({
 
       {isOpen && (
         <div className="mt-2 rounded border border-border bg-background p-3">
+          <div className="mb-3">
+            <label className="mb-1 block text-[10px] text-muted">Upload Processing</label>
+            <div className="flex gap-1 text-[10px]">
+              {(["auto", "enhance", "off"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setProcessingMode(m)}
+                  className={`rounded px-2.5 py-1 ${
+                    processingMode === m ? "bg-accent text-white" : "bg-surface-hover text-muted"
+                  }`}
+                >
+                  {m === "auto" ? "Auto" : m === "enhance" ? "Enhance Only" : "Off"}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[9px] text-muted">
+              {processingMode === "auto" && "Quality gate — good photos get enhanced, poor photos get regenerated as AI hero images."}
+              {processingMode === "enhance" && "Always enhance, never regenerate. Preserves authenticity — for brands where real photos matter."}
+              {processingMode === "off" && "No image processing. Raw uploads published as-is."}
+            </p>
+          </div>
+
           <div className="mb-3">
             <label className="mb-1 block text-[10px] text-muted">Base Photography Style</label>
             <textarea

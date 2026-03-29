@@ -41,11 +41,10 @@ OUTPUT STYLE:`;
 /**
  * Process a media asset photo based on quality score.
  *
- * Above cutoff (0.6): ENHANCE — polish the existing photo with post-production.
- * Below cutoff (0.6): REGENERATE — use the photo as a reference to generate
- *   a production-quality "inspired by" version via AI.
- *
- * Either way, the subscriber gets a publishable hero image.
+ * Three site-level modes:
+ * - "auto": quality gate — enhance above 0.7, regenerate below
+ * - "enhance": always enhance, never regenerate (authenticity-first brands)
+ * - "off": no processing, raw uploads published as-is
  */
 export async function enhanceAssetPhoto(
   assetId: string
@@ -53,7 +52,7 @@ export async function enhanceAssetPhoto(
   const [asset] = await sql`
     SELECT ma.id, ma.site_id, ma.storage_url, ma.media_type,
            ma.quality_score, ma.context_note,
-           s.image_style
+           s.image_style, s.image_processing_mode
     FROM media_assets ma
     JOIN sites s ON s.id = ma.site_id
     WHERE ma.id = ${assetId}
@@ -61,6 +60,9 @@ export async function enhanceAssetPhoto(
 
   if (!asset) return null;
   if ((asset.media_type as string) !== "image") return null;
+
+  const processingMode = (asset.image_processing_mode as string) || "auto";
+  if (processingMode === "off") return null;
 
   const sourceUrl = asset.storage_url as string;
   if (!sourceUrl) return null;
@@ -72,8 +74,8 @@ export async function enhanceAssetPhoto(
   let result;
   let mode: "enhanced" | "regenerated";
 
-  if (qualityScore >= QUALITY_CUTOFF) {
-    // ENHANCE — polish the existing photo
+  if (processingMode === "enhance" || qualityScore >= QUALITY_CUTOFF) {
+    // ENHANCE — polish the existing photo, preserve authenticity
     mode = "enhanced";
     const fullPrompt = `${POST_PRODUCTION_PROMPT} ${siteStyle}`;
     result = await editEditorialImage(sourceUrl, fullPrompt);

@@ -288,6 +288,11 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   parsed.body = parsed.body.replace(/\[[^\]]*$/, "");
   // 4. Unclosed markdown link: [text](url without closing paren
   parsed.body = parsed.body.replace(/\[[^\]]*\]\([^)]*$/, "");
+  // 5. Bare R2 image URLs not in markdown syntax → wrap as image
+  parsed.body = parsed.body.replace(
+    /(?<!![\[\(])(https:\/\/assets\.tracpost\.com\/[^\s")\]]+\.(jpg|jpeg|png|webp))/g,
+    (url) => `\n\n![image](${url})\n\n`
+  );
 
   // Content safety scan — flag issues before storing
   const guard = await scanContent(
@@ -1116,6 +1121,11 @@ ${existingTitles.length > 0
   parsed.body = parsed.body.replace(/!\[\s*\]\(/g, "![image](");
   parsed.body = parsed.body.replace(/\[[^\]]*$/, "");
   parsed.body = parsed.body.replace(/\[[^\]]*\]\([^)]*$/, "");
+  // Wrap bare R2 image URLs that aren't already in markdown image syntax
+  parsed.body = parsed.body.replace(
+    /(?<!![\[\(])(https:\/\/assets\.tracpost\.com\/[^\s")\]]+\.(jpg|jpeg|png|webp))/g,
+    (url) => `\n\n![image](${url})\n\n`
+  );
 
   // Content guard
   const guard = await scanContent(parsed.title, parsed.body, (siteData.site_name as string) || "");

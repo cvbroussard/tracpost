@@ -122,7 +122,18 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
     }
   }
 
-  // Query 2-3 additional images from the media library for inline use
+  // Query 2-3 additional images, excluding those used in recent posts
+  const recentlyUsedImages = await sql`
+    SELECT UNNEST(media_urls) AS url FROM social_posts
+    WHERE trigger_type = 'blog_publish' LIMIT 0
+  `;
+  const recentPostImages = await sql`
+    SELECT bp.og_image_url FROM blog_posts bp
+    WHERE bp.site_id = ${asset.site_id}
+      AND bp.created_at > NOW() - INTERVAL '14 days'
+  `;
+  const recentUrls = recentPostImages.map((r) => r.og_image_url as string).filter(Boolean);
+
   const inlineImages = await sql`
     SELECT storage_url, context_note, content_pillar
     FROM media_assets
@@ -131,7 +142,9 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
       AND triage_status IN ('triaged', 'scheduled')
       AND quality_score > 0.6
       AND storage_url IS NOT NULL
+      AND storage_url != ALL(${recentUrls.length > 0 ? recentUrls : ["__none__"]})
     ORDER BY
+      COALESCE((metadata->>'used_count')::int, 0) ASC,
       CASE WHEN content_pillar = ${asset.content_pillar || ''} THEN 0 ELSE 1 END,
       quality_score DESC
     LIMIT 3
@@ -1002,7 +1015,14 @@ export async function generateFromPairing(
     await sql`UPDATE hook_bank SET used_count = used_count + 1, last_used_at = NOW() WHERE site_id = ${siteData.site_id} AND text = ${hook.text}`;
   }
 
-  // Inline images from other assets
+  // Inline images from other assets, excluding recently used
+  const recentPostImgs = await sql`
+    SELECT bp.og_image_url FROM blog_posts bp
+    WHERE bp.site_id = ${siteData.site_id}
+      AND bp.created_at > NOW() - INTERVAL '14 days'
+  `;
+  const recentImgUrls = recentPostImgs.map((r: Record<string, unknown>) => r.og_image_url as string).filter(Boolean);
+
   const inlineImages = await sql`
     SELECT storage_url, context_note
     FROM media_assets
@@ -1011,7 +1031,10 @@ export async function generateFromPairing(
       AND triage_status IN ('triaged', 'scheduled')
       AND quality_score > 0.5
       AND storage_url IS NOT NULL
-    ORDER BY quality_score DESC
+      AND storage_url != ALL(${recentImgUrls.length > 0 ? recentImgUrls : ["__none__"]})
+    ORDER BY
+      COALESCE((metadata->>'used_count')::int, 0) ASC,
+      quality_score DESC
     LIMIT 3
   `;
   const imageUrls = inlineImages.map((img: Record<string, unknown>) => ({

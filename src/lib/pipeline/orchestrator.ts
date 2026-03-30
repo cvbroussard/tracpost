@@ -139,6 +139,25 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     }
   }
 
+  // Step 5.5: Promote recently published blog posts that haven't been promoted
+  try {
+    const { promoteBlogPost } = await import("./blog-promoter");
+    const unpromoted = await sql`
+      SELECT id FROM blog_posts
+      WHERE site_id = ${siteId}
+        AND status = 'published'
+        AND promotion_status IS NULL
+        AND published_at > NOW() - INTERVAL '24 hours'
+      LIMIT 3
+    `;
+    for (const bp of unpromoted) {
+      await promoteBlogPost(bp.id as string);
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    result.errors.push(`blog-promote: ${msg}`);
+  }
+
   // Step 6: Publish posts that are due
   try {
     const pubResult = await publishDuePosts(siteId);

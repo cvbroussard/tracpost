@@ -125,6 +125,13 @@ export async function POST(req: NextRequest) {
         SET status = 'published', published_at = COALESCE(published_at, NOW()), updated_at = NOW()
         WHERE id = ${post_id}
       `;
+
+      // Fire-and-forget blog promotion to social platforms
+      import("@/lib/pipeline/blog-promoter").then(({ promoteBlogPost }) =>
+        promoteBlogPost(post_id).catch((err) =>
+          console.error(`Blog promotion failed for ${post_id}:`, err instanceof Error ? err.message : err)
+        )
+      );
     } else {
       await sql`
         UPDATE blog_posts SET status = 'draft', updated_at = NOW() WHERE id = ${post_id}

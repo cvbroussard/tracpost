@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   const rows = await sql`
-    SELECT id, name, plan, password_hash
+    SELECT id, name, plan, password_hash, metadata
     FROM subscribers
     WHERE email = ${email}
       AND is_active = true
@@ -40,12 +40,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
-  // Fetch subscriber's sites
+  // Fetch subscriber's sites — check own sites and parent's sites (for sub-subscribers)
+  const metadata = (subscriber.metadata || {}) as Record<string, unknown>;
+  const parentId = metadata.parent_subscriber_id as string | undefined;
+  const ownerId = parentId || subscriber.id;
+
   const sites = await sql`
     SELECT id, name, url FROM sites
-    WHERE subscriber_id = ${subscriber.id} AND deleted_at IS NULL
+    WHERE subscriber_id = ${ownerId} AND deleted_at IS NULL
     ORDER BY created_at ASC
   `;
+
+  // Use active_site_id from metadata if set, otherwise first site
+  const activeSiteFromMeta = metadata.active_site_id as string | undefined;
+  const activeSiteId = activeSiteFromMeta || sites[0]?.id || null;
 
   // Session payload — no API key stored
   const session = {
@@ -53,7 +61,7 @@ export async function POST(req: NextRequest) {
     subscriberName: subscriber.name,
     plan: subscriber.plan,
     sites: sites.map((s) => ({ id: s.id, name: s.name, url: s.url })),
-    activeSiteId: sites[0]?.id || null,
+    activeSiteId,
   };
 
   // Generate session token for native app clients

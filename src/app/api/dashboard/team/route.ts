@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 /**
  * GET /api/dashboard/team
@@ -29,8 +30,13 @@ export async function GET() {
 
 /**
  * POST /api/dashboard/team
- * Create a team member invite.
- * Body: { name, role, siteId?, email?, phone?, method: 'qr' | 'sms' | 'email' }
+ * Create a team member with email/password login + magic link.
+ * Body: { name, role, email, password, siteId?, phone? }
+ *
+ * Creates a sub-subscriber record (for email/password login) and a
+ * team_member record (for role/site scope + magic link). Both auth
+ * methods work automatically — email/password for desktop, magic link
+ * for mobile app onboarding.
  */
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -39,14 +45,24 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, role, siteId, email, phone, method = "qr" } = body;
+  const { name, role, email, password, siteId, phone } = body;
 
-  if (!name || !role) {
-    return NextResponse.json({ error: "name and role required" }, { status: 400 });
+  if (!name || !role || !email || !password) {
+    return NextResponse.json({ error: "name, role, email, and password are required" }, { status: 400 });
+  }
+
+  if (password.length < 8) {
+    return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
   }
 
   if (!["owner", "engagement", "capture"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+
+  // Check for existing email
+  const [existingEmail] = await sql`SELECT id FROM subscribers WHERE email = ${email}`;
+  if (existingEmail) {
+    return NextResponse.json({ error: "A user with this email already exists" }, { status: 409 });
   }
 
   // Check plan limits
@@ -66,34 +82,59 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Generate invite token
-  const inviteToken = crypto.randomBytes(32).toString("base64url");
-  const inviteExpires = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  // Create sub-subscriber record for email/password login
+  const passwordHash = await bcrypt.hash(password, 10);
+  const apiKeyHash = crypto.createHash("sha256").update(`team-${Date.now()}-${crypto.randomBytes(8).toString("hex")}`).digest("hex");
 
+  const [newSub] = await sql`
+    INSERT INTO subscribers (name, email, password_hash, api_key_hash, plan, is_active, metadata)
+    VALUES (
+      ${name}, ${email}, ${passwordHash}, ${apiKeyHash}, ${plan}, true,
+      ${JSON.stringify({ parent_subscriber_id: session.subscriberId, role })}::jsonb
+    )
+    RETURNING id
+  `;
+
+  // Link sub-subscriber to the same sites as the parent
+  const parentSites = await sql`SELECT id FROM sites WHERE subscriber_id = ${session.subscriberId}`;
+  // For now, set active site to the specified site or the first available
+  const activeSite = siteId || (parentSites[0]?.id as string) || null;
+  if (activeSite) {
+    await sql`
+      UPDATE subscribers
+      SET metadata = jsonb_set(COALESCE(metadata, '{}'), '{active_site_id}', ${JSON.stringify(activeSite)}::jsonb)
+      WHERE id = ${newSub.id}
+    `;
+  }
+
+  // Generate magic link token
+  const inviteToken = crypto.randomBytes(32).toString("base64url");
+  const inviteExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+
+  // Create team_member record for role/scope + magic link
   const [member] = await sql`
     INSERT INTO team_members (subscriber_id, site_id, name, email, phone, role, invite_token, invite_method, invite_expires)
     VALUES (
       ${session.subscriberId},
       ${siteId || null},
       ${name},
-      ${email || null},
+      ${email},
       ${phone || null},
       ${role},
       ${inviteToken},
-      ${method},
+      'qr',
       ${inviteExpires}
     )
     RETURNING id, name, role, invite_token, invite_expires
   `;
 
-  // Send invite via selected method
-  const inviteUrl = `https://tracpost.com/invite/${inviteToken}`;
-
-  if (method === "sms" && phone) {
+  // Send SMS invite if phone provided
+  if (phone) {
     try {
       const twilioSid = process.env.TWILIO_ACCOUNT_SID;
       const twilioAuth = process.env.TWILIO_AUTH_TOKEN;
       const twilioFrom = process.env.TWILIO_PHONE_NUMBER;
+      const inviteUrl = `https://tracpost.com/invite/${inviteToken}`;
 
       if (twilioSid && twilioAuth && twilioFrom) {
         await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
@@ -105,17 +146,14 @@ export async function POST(req: NextRequest) {
           body: new URLSearchParams({
             To: phone,
             From: twilioFrom,
-            Body: `${session.subscriberName} invited you to TracPost Studio. Tap to get started: ${inviteUrl}`,
+            Body: `${session.subscriberName} added you to TracPost. Log in at studio.tracpost.com with your email, or tap for the mobile app: ${inviteUrl}`,
           }),
         });
       }
     } catch (err) {
-      console.error("SMS invite send failed:", err instanceof Error ? err.message : err);
-      // Non-fatal — invite is created, SMS delivery is best-effort
+      console.error("SMS invite failed:", err instanceof Error ? err.message : err);
     }
   }
 
-  // TODO: If method === 'email', send email with invite link
-
-  return NextResponse.json({ member });
+  return NextResponse.json({ member, subscriber_id: newSub.id });
 }

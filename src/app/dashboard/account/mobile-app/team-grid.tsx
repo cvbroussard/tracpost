@@ -64,7 +64,7 @@ export function TeamGrid({
   const [newSiteId, setNewSiteId] = useState<string>("");
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newMethod, setNewMethod] = useState<"qr" | "sms" | "email">("sms");
+  const [newPassword, setNewPassword] = useState("");
   const [adding, setAdding] = useState(false);
 
   const canAdd = activeCount < userLimit && (plan === "pro" || plan === "authority");
@@ -111,7 +111,7 @@ export function TeamGrid({
   }
 
   async function handleAdd() {
-    if (!newName || !newRole) return;
+    if (!newName || !newRole || !newEmail || !newPassword) return;
     setAdding(true);
 
     const res = await fetch("/api/dashboard/team", {
@@ -122,8 +122,8 @@ export function TeamGrid({
         role: newRole,
         siteId: newSiteId || null,
         phone: newPhone || null,
-        email: newEmail || null,
-        method: newMethod,
+        email: newEmail,
+        password: newPassword,
       }),
     });
 
@@ -208,7 +208,7 @@ export function TeamGrid({
       {/* Add form */}
       {showAddForm && (
         <div className="mb-6">
-          <h3 className="mb-4 text-sm font-medium">Invite Team Member</h3>
+          <h3 className="mb-4 text-sm font-medium">Add Team Member</h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs text-muted">Name *</label>
@@ -230,6 +230,34 @@ export function TeamGrid({
                 <option value="engagement">Engagement — inbox + activity</option>
               </select>
             </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Email *</label>
+              <input
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="john@example.com"
+                className="w-full text-sm"
+                type="email"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Password *</label>
+              <input
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Minimum 8 characters"
+                className="w-full text-sm"
+                type="password"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Phone (optional — for mobile app invite)</label>
+              <PhoneField
+                value={newPhone}
+                onChange={setNewPhone}
+                className="w-full text-sm"
+              />
+            </div>
             {sites.length > 1 && (
               <div>
                 <label className="mb-1 block text-xs text-muted">Site Access</label>
@@ -245,54 +273,17 @@ export function TeamGrid({
                 </select>
               </div>
             )}
-            <div>
-              <label className="mb-1 block text-xs text-muted">Invite via</label>
-              <div className="flex gap-2">
-                {(["sms", "qr", "email"] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setNewMethod(m)}
-                    className={`flex-1 py-2 text-xs font-medium ${
-                      newMethod === m
-                        ? "bg-accent/10 text-accent"
-                        : "bg-surface-hover text-muted"
-                    }`}
-                  >
-                    {m === "sms" ? "SMS" : m === "qr" ? "QR Code" : "Email"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {newMethod === "sms" && (
-              <div>
-                <label className="mb-1 block text-xs text-muted">Phone *</label>
-                <PhoneField
-                  value={newPhone}
-                  onChange={setNewPhone}
-                  className="w-full text-sm"
-                />
-              </div>
-            )}
-            {newMethod === "email" && (
-              <div>
-                <label className="mb-1 block text-xs text-muted">Email *</label>
-                <input
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="john@example.com"
-                  className="w-full text-sm"
-                  type="email"
-                />
-              </div>
-            )}
           </div>
+          <p className="mt-3 text-[10px] text-muted">
+            User can log in with email/password on any device. A mobile app invite link is also generated automatically.
+          </p>
           <div className="mt-4 flex gap-3">
             <button
               onClick={handleAdd}
-              disabled={adding || !newName}
+              disabled={adding || !newName || !newEmail || !newPassword || newPassword.length < 8}
               className="bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
             >
-              {adding ? "Creating..." : "Create Invite"}
+              {adding ? "Creating..." : "Add User"}
             </button>
             <button
               onClick={() => setShowAddForm(false)}

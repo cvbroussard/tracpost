@@ -41,9 +41,16 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
   // Build persona prompt if site has characters defined
   const personaPrompt = await buildPersonaPrompt(asset.site_id as string).catch(() => null);
 
+  // Fetch subscriber's vendor list for auto-detection
+  const vendors = await sql`
+    SELECT v.id, v.name, v.slug FROM vendors v
+    JOIN sites s ON s.subscriber_id = v.subscriber_id
+    WHERE s.id = ${asset.site_id}
+  `;
+
   if (mediaType.startsWith("image") && asset.storage_url) {
     try {
-      result = await visionTriage(asset, config, availablePillars, pillarConfig, site?.brand_voice, personaPrompt);
+      result = await visionTriage(asset, config, availablePillars, pillarConfig, site?.brand_voice, personaPrompt, vendors);
     } catch (err: unknown) {
       console.error("Vision triage failed, falling back to heuristic:", err);
       result = heuristicTriage(asset, config, availablePillars);
@@ -88,6 +95,21 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
     })})
   `;
 
+  // Auto-detect and associate vendors from the image
+  const detectedVendors = result.ai_analysis?.detected_vendors as string[] | undefined;
+  if (detectedVendors && detectedVendors.length > 0 && vendors.length > 0) {
+    for (const slug of detectedVendors) {
+      const vendor = vendors.find((v) => v.slug === slug);
+      if (vendor) {
+        await sql`
+          INSERT INTO asset_vendors (asset_id, vendor_id)
+          VALUES (${assetId}, ${vendor.id})
+          ON CONFLICT DO NOTHING
+        `;
+      }
+    }
+  }
+
   // Auto-enhance triaged images
   if (result.triage_status === "triaged" && (asset.media_type as string) === "image") {
     try {
@@ -116,7 +138,8 @@ async function visionTriage(
   pillars: ContentPillar[],
   pillarConfig?: Array<{ id: string; label: string; description: string; tags: Array<{ id: string; label: string }> }>,
   brandVoice?: unknown,
-  personaPrompt?: string | null
+  personaPrompt?: string | null,
+  vendors?: Array<Record<string, unknown>>
 ): Promise<TriageResult> {
   const contextNote = (asset.context_note as string) || "";
   const metadata = (asset.metadata || {}) as Record<string, unknown>;
@@ -161,6 +184,7 @@ Context note from subscriber: "${contextNote}"
 ${subscriberPillar ? `Subscriber suggested pillar: ${subscriberPillar}` : ""}
 ${pillarGuidance ? `## Content Pillars & Tags\n${pillarGuidance}\n` : `Available content pillars: ${pillarList}`}
 ${brandContext}
+${vendors && vendors.length > 0 ? `\n## Known Vendors/Brands\nThe subscriber works with these vendors. If you recognize any of their products, materials, or equipment in the image, include them in detected_vendors.\n${vendors.map((v) => `- ${v.name} (${v.slug})`).join("\n")}` : ""}
 
 Respond with ONLY valid JSON (no markdown):
 {
@@ -172,6 +196,7 @@ Respond with ONLY valid JSON (no markdown):
   "has_text_overlay": <true/false>,
   "description": "<1-sentence description of what's in the image>",
   "quality_notes": "<brief note on quality issues if any>",
+  "detected_vendors": [<array of vendor slugs from the known vendors list that appear in this image, e.g. ["lacanche", "crystal_cabinet_works"]>],
   "detected_personas": [{"persona_id": "<id>", "persona_name": "<name>", "confidence": <0.0-1.0>, "role": "subject"|"background", "reasoning": "<why>"}]
 }
 
@@ -256,6 +281,7 @@ ${personaPrompt || 'If no known characters list is provided, return "detected_pe
       quality_notes: parsed.quality_notes,
       has_faces: parsed.has_faces,
       has_text_overlay: parsed.has_text_overlay,
+      detected_vendors: parsed.detected_vendors || [],
       detected_personas: parsed.detected_personas || [],
     },
   };

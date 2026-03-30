@@ -158,14 +158,20 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
           // Generate blog post using the existing generator
           const postId = await generateMissingBlogPosts(siteId);
           if (postId) {
-            // Tag the post with reward prompt metadata
+            // Tag the most recent post with reward prompt metadata
             const contentMeta = buildContentMetadata(pairing.rewardPrompt, pairing.asset.id);
-            await sql`
-              UPDATE blog_posts
-              SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(contentMeta)}::jsonb
+            const [latestPost] = await sql`
+              SELECT id FROM blog_posts
               WHERE site_id = ${siteId}
               ORDER BY created_at DESC LIMIT 1
             `;
+            if (latestPost) {
+              await sql`
+                UPDATE blog_posts
+                SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(contentMeta)}::jsonb
+                WHERE id = ${latestPost.id}
+              `;
+            }
             result.autopilotContentGenerated = 1;
           }
           result.blogPostsGenerated = postId || 0;

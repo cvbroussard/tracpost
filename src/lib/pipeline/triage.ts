@@ -84,6 +84,17 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
     WHERE id = ${assetId}
   `;
 
+  // Auto-generate context note if the asset doesn't have one
+  const autoContext = result.ai_analysis?.context_note as string | undefined;
+  if (autoContext && !(asset.context_note as string)) {
+    await sql`
+      UPDATE media_assets
+      SET context_note = ${autoContext},
+          metadata = COALESCE(metadata, '{}'::jsonb) || '{"context_auto_generated": true}'::jsonb
+      WHERE id = ${assetId}
+    `;
+  }
+
   // Log triage in history
   await sql`
     INSERT INTO subscriber_actions (site_id, action_type, target_type, target_id, payload)
@@ -184,6 +195,7 @@ Respond with ONLY valid JSON (no markdown):
   "has_faces": <true/false>,
   "has_text_overlay": <true/false>,
   "description": "<1-sentence description of what's in the image>",
+  "context_note": "<spec-style comma-separated list of specific materials, fixtures, vendors, techniques visible. Example: custom lacquer inset cabinets by Crystal Cabinet Works, Lacanche Sully range, zellige tile backsplash, rift-sawn white oak island. Only include what you can actually identify. No adjectives, no marketing language.>",
   "quality_notes": "<brief note on quality issues if any>",
   "detected_vendors": [<array of vendor slugs from the known vendors list that appear in this image, e.g. ["lacanche", "crystal_cabinet_works"]>],
   "detected_personas": [{"persona_id": "<id>", "persona_name": "<name>", "confidence": <0.0-1.0>, "role": "subject"|"background", "reasoning": "<why>"}]
@@ -267,6 +279,7 @@ ${personaPrompt || 'If no known characters list is provided, return "detected_pe
     ai_analysis: {
       engine: "claude-vision-v1",
       description: parsed.description,
+      context_note: parsed.context_note || null,
       quality_notes: parsed.quality_notes,
       has_faces: parsed.has_faces,
       has_text_overlay: parsed.has_text_overlay,

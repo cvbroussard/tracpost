@@ -7,6 +7,7 @@ import { ProvisionActions } from "./provision-actions";
 import { AdminConnectButton } from "./admin-connect-button";
 import { AdminPillarEditor } from "./pillar-config-editor";
 import { ImageStyleEditor } from "./image-style-editor";
+import { ContextReview } from "./context-review";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,25 @@ export default async function ProvisioningPage() {
               }
             }
 
+            // Fetch assets for context review
+            const siteAssets = sub.site_id ? await sql`
+              SELECT id, storage_url, context_note, quality_score, metadata, ai_analysis
+              FROM media_assets
+              WHERE site_id = ${sub.site_id}
+                AND triage_status IN ('triaged', 'scheduled')
+              ORDER BY quality_score DESC
+              LIMIT 50
+            ` : [];
+
+            const contextAssets = siteAssets.map((a) => ({
+              id: a.id as string,
+              storage_url: a.storage_url as string,
+              context_note: a.context_note as string | null,
+              quality_score: a.quality_score as number | null,
+              context_auto_generated: !!(a.metadata as Record<string, unknown>)?.context_auto_generated,
+              detected_vendors: ((a.ai_analysis as Record<string, unknown>)?.detected_vendors as string[]) || [],
+            }));
+
             return (
               <div
                 key={`${sub.subscriber_id}-${sub.site_id}`}
@@ -162,6 +182,14 @@ export default async function ProvisioningPage() {
                   initialVariations={(sub.image_variations as string[]) || []}
                   initialProcessingMode={(sub.image_processing_mode as string) || "auto"}
                 />
+
+                {/* Context Note Review */}
+                {contextAssets.length > 0 && (
+                  <ContextReview
+                    siteId={sub.site_id as string}
+                    initialAssets={contextAssets}
+                  />
+                )}
 
                 {profileKit && (
                   <ProfileKitPanel

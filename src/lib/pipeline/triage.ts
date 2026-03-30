@@ -110,20 +110,9 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
     }
   }
 
-  // Auto-enhance triaged images
-  if (result.triage_status === "triaged" && (asset.media_type as string) === "image") {
-    try {
-      const { enhanceAssetPhoto } = await import("@/lib/image-gen/enhance");
-      const enhancedUrl = await enhanceAssetPhoto(assetId);
-      if (enhancedUrl) {
-        // Use enhanced version as the primary URL, keep original in metadata
-        await sql`UPDATE media_assets SET storage_url = ${enhancedUrl} WHERE id = ${assetId}`;
-      }
-    } catch (err) {
-      console.warn("Photo enhancement failed:", err instanceof Error ? err.message : err);
-      // Non-blocking — original photo is still fine
-    }
-  }
+  // Enhancement is just-in-time, not at upload.
+  // Photos sit raw in the reservoir. Enhancement happens when the
+  // autopilot selects an asset for content generation.
 
   return result;
 }

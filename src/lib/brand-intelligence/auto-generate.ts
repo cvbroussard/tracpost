@@ -291,6 +291,15 @@ Respond with ONLY valid JSON (no markdown fencing).`,
     console.error("Image style derivation failed:", err instanceof Error ? err.message : err);
   }
 
+  // Generate reward prompt library from the sharpened playbook
+  try {
+    const { generateRewardPrompts } = await import("@/lib/brand-intelligence/reward-prompts");
+    const prompts = await generateRewardPrompts(siteId);
+    console.log(`Generated ${prompts.length} reward prompts for ${siteId}`);
+  } catch (err) {
+    console.error("Reward prompt generation failed:", err instanceof Error ? err.message : err);
+  }
+
   // Seed blog content now that the playbook is sharpened
   try {
     const { seedBlogContent } = await import("@/lib/blog-seed");

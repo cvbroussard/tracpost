@@ -1004,6 +1004,7 @@ export async function generateFromPairing(
   const [siteData] = await sql`
     SELECT s.id AS site_id, s.name AS site_name, s.url AS site_url,
            s.brand_voice, s.brand_playbook, s.image_style, s.content_vibe,
+           s.video_ratio,
            bs.blog_enabled, bs.blog_title
     FROM sites s
     LEFT JOIN blog_settings bs ON bs.site_id = s.id
@@ -1256,6 +1257,44 @@ ${existingTitles.length > 0
     console.warn("Hero image generation failed, using seed asset:", err instanceof Error ? err.message : err);
   }
 
+  // Generate video if this post's turn based on video_ratio
+  let videoUrl: string | null = null;
+  const videoRatio = (siteData.video_ratio as string) || "1:3";
+  if (videoRatio !== "0:1") {
+    try {
+      const [ratioNum, ratioDen] = videoRatio.split(":").map(Number);
+      if (ratioNum > 0 && ratioDen > 0) {
+        // Count recent posts to determine if this is a video post
+        const [recentCount] = await sql`
+          SELECT COUNT(*)::int AS cnt FROM blog_posts
+          WHERE site_id = ${siteData.site_id}
+            AND created_at > NOW() - INTERVAL '30 days'
+        `;
+        const postNumber = (recentCount?.cnt || 0) + 1;
+        const isVideoPost = postNumber % ratioDen < ratioNum;
+
+        if (isVideoPost) {
+          const { generateVideoFromImage } = await import("@/lib/video-gen/kling");
+          const siteContentVibe = (siteData.content_vibe as string) || "";
+          const videoPrompt = `${rewardPrompt.prompt.slice(0, 100)}. ${siteContentVibe}`.trim();
+
+          const video = await generateVideoFromImage(
+            heroUrl,
+            videoPrompt,
+            siteData.site_id as string,
+            { duration: "5", aspectRatio: "9:16" }
+          );
+
+          if (video) {
+            videoUrl = video.url;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Video generation failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
   // Content guard
   const guard = await scanContent(parsed.title, parsed.body, (siteData.site_name as string) || "");
   const postStatus = guard.pass ? "draft" : "flagged";
@@ -1282,6 +1321,7 @@ ${existingTitles.length > 0
         scene_type: rewardPrompt.scene,
         seed_asset_id: asset.id,
         editorial_images: researchResult.editorialImages,
+        ...(videoUrl ? { video_url: videoUrl } : {}),
         ...(guard.pass ? {} : { guard_flags: guard.flags }),
       })}::jsonb
     )

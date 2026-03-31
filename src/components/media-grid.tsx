@@ -14,6 +14,7 @@ interface Asset {
   content_pillar: string | null;
   content_pillars: string[] | null;
   content_tags: string[] | null;
+  source: string | null;
   flag_reason: string | null;
   created_at: string;
 }
@@ -107,6 +108,11 @@ export function MediaGrid({
               {a.media_type === "video" && (
                 <span className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
                   video
+                </span>
+              )}
+              {a.source === "ai_generated" && (
+                <span className="absolute right-1.5 top-1.5 rounded bg-accent/70 px-1.5 py-0.5 text-[10px] text-white">
+                  AI
                 </span>
               )}
             </div>

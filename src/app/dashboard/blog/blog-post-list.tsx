@@ -510,20 +510,20 @@ export function BlogPostList({
             })()}
 
             {/* Video preview */}
-            {previewing.metadata?.video_url && (
+            {(previewing.metadata as Record<string, unknown>)?.video_url ? (
               <div className="border-b border-border px-6 py-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">Video</span>
                   <span className="text-[10px] text-muted">9:16 vertical · social platforms + blog hero</span>
                 </div>
                 <video
-                  src={previewing.metadata.video_url as string}
+                  src={String((previewing.metadata as Record<string, unknown>).video_url)}
                   controls
                   className="mx-auto rounded-lg"
                   style={{ maxHeight: 300, maxWidth: 170 }}
                 />
               </div>
-            )}
+            ) : null}
 
             {/* Article preview */}
             <div className="px-6 py-6">

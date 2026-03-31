@@ -143,7 +143,9 @@ export default async function ArticlePage({ params }: Props) {
         <video
           src={videoUrl}
           poster={ogImage || undefined}
-          controls
+          autoPlay
+          muted
+          loop
           playsInline
           style={{
             width: "100%",

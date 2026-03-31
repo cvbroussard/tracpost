@@ -57,6 +57,11 @@ export default async function SiteControlPanel({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-3xl">
+      <div className="mb-4 flex items-center gap-1.5 text-xs text-muted">
+        <a href="/admin/sites" className="hover:text-accent">Site Controls</a>
+        <span>/</span>
+        <span className="text-foreground">{site.name}</span>
+      </div>
       <div className="mb-6">
         <h1 className="text-lg font-semibold">{site.name}</h1>
         <p className="text-sm text-muted">

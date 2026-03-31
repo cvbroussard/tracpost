@@ -496,14 +496,14 @@ export function BlogPostList({
             </div>
 
             {/* Guard flags */}
-            {previewing.status === "flagged" && guardFlags(previewing).length > 0 && (
+            {previewing.status === "flagged" && guardFlags(previewing).length > 0 ? (
               <div className="border-b border-border bg-danger/5 px-6 py-3">
                 <p className="mb-1 text-xs font-medium text-danger">Content issues detected:</p>
                 {guardFlags(previewing).map((flag, i) => (
                   <p key={i} className="text-xs text-danger/80">— {flag}</p>
                 ))}
               </div>
-            )}
+            ) : null}
 
             {/* Video preview */}
             {previewing.metadata?.video_url && (

@@ -75,17 +75,27 @@ export function MediaGrid({
             className="group relative overflow-hidden rounded-lg border border-border bg-surface text-left transition-colors hover:border-accent/40"
           >
             <div className="relative aspect-square bg-background">
-              {a.media_type === "image" ? (
+              {a.media_type === "video" ? (
+                <video
+                  src={a.storage_url}
+                  className="h-full w-full object-cover"
+                  muted
+                  playsInline
+                  preload="metadata"
+                  onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => {})}
+                  onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                />
+              ) : a.storage_url?.endsWith(".heic") || a.storage_url?.endsWith(".heif") ? (
+                <div className="flex h-full w-full items-center justify-center text-xs text-muted">
+                  HEIC — processing
+                </div>
+              ) : (
                 <img
                   src={a.storage_url}
                   alt={a.context_note || ""}
                   className="h-full w-full object-cover"
                   loading="lazy"
                 />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-3xl text-muted">
-                  ▶
-                </div>
               )}
               <span
                 className={`absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${

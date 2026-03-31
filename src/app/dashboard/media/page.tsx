@@ -162,7 +162,7 @@ export default async function MediaPage({ searchParams }: Props) {
 
       {filteredAssets.length > 0 ? (
         <MediaGrid
-          initialAssets={filteredAssets as Parameters<typeof MediaGrid>[0]["initialAssets"]}
+          initialAssets={filteredAssets as unknown as Parameters<typeof MediaGrid>[0]["initialAssets"]}
           availablePillars={pillars}
           pillarConfig={pillarConfig}
           siteId={siteId}

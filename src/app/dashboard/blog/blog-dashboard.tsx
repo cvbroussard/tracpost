@@ -242,10 +242,10 @@ export function BlogDashboard({
 
                 {isExpanded && post.body && (
                   <div className="border-t border-border px-4 py-4">
-                    {post.status === "flagged" && post.metadata?.guard_flags && (
+                    {post.status === "flagged" && Array.isArray((post.metadata as Record<string, unknown>)?.guard_flags) && (
                       <div className="mb-3 rounded bg-danger/10 px-3 py-2">
                         <p className="mb-1 text-xs font-medium text-danger">Content flagged:</p>
-                        {(post.metadata.guard_flags as string[]).map((flag, i) => (
+                        {((post.metadata as Record<string, unknown>).guard_flags as string[]).map((flag, i) => (
                           <p key={i} className="text-xs text-danger/80">- {flag}</p>
                         ))}
                       </div>

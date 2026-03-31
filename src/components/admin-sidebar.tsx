@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const baseNav = [
   { label: "Overview", path: "", icon: "◆" },
   { label: "Provisioning", path: "/provisioning", icon: "▸" },
+  { label: "Site Controls", path: "/sites", icon: "◎" },
   { label: "Subscribers", path: "/subscribers", icon: "◇" },
   { label: "Pipeline", path: "/pipeline", icon: "▶" },
   { label: "Connections", path: "/social", icon: "◉" },

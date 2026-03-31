@@ -1046,7 +1046,7 @@ export async function generateFromPairing(
 
   // 1 subscriber upload (proof of work / authenticity anchor)
   const uploadsInline = await sql`
-    SELECT storage_url, context_note
+    SELECT id, storage_url, context_note
     FROM media_assets
     WHERE site_id = ${siteData.site_id}
       AND id != ${asset.id}
@@ -1063,7 +1063,7 @@ export async function generateFromPairing(
 
   // 2 AI editorial (eye candy)
   const aiInline = await sql`
-    SELECT storage_url, context_note
+    SELECT id, storage_url, context_note
     FROM media_assets
     WHERE site_id = ${siteData.site_id}
       AND id != ${asset.id}
@@ -1084,7 +1084,7 @@ export async function generateFromPairing(
   // Fallback: if either pool is empty, fill from the other
   if (inlineImages.length < 3) {
     const fallback = await sql`
-      SELECT storage_url, context_note
+      SELECT id, storage_url, context_note
       FROM media_assets
       WHERE site_id = ${siteData.site_id}
         AND id != ${asset.id}
@@ -1097,6 +1097,20 @@ export async function generateFromPairing(
       LIMIT ${3 - inlineImages.length}
     `;
     inlineImages.push(...fallback);
+  }
+
+  // Increment used_count on selected inline images
+  for (const img of inlineImages) {
+    if (img.id) {
+      await sql`
+        UPDATE media_assets
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({
+          used_count: 1 + (((img as Record<string, unknown>).metadata as Record<string, unknown>)?.used_count as number || 0),
+          last_used_at: new Date().toISOString(),
+        })}::jsonb
+        WHERE id = ${img.id}
+      `;
+    }
   }
 
   const imageUrls = inlineImages.map((img: Record<string, unknown>) => ({

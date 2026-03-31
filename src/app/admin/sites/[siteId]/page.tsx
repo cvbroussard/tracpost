@@ -93,6 +93,7 @@ export default async function SiteControlPanel({ params }: Props) {
           rewardPrompts: rewardPrompts.length,
         }}
         platforms={platforms as Array<{ platform: string; account_name: string; status: string }>}
+        rewardPrompts={rewardPrompts as Array<{ category: string; scene: string; prompt: string; visual: string }>}
       />
     </div>
   );

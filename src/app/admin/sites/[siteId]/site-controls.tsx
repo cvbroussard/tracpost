@@ -90,17 +90,21 @@ export function SiteControls({
   site,
   counts,
   platforms,
+  rewardPrompts = [],
 }: {
   siteId: string;
   site: SiteData;
   counts: Counts;
   platforms: Platform[];
+  rewardPrompts?: Array<{ category: string; scene: string; prompt: string; visual: string }>;
 }) {
   const [contentVibe, setContentVibe] = useState(site.contentVibe);
   const [imageStyle, setImageStyle] = useState(site.imageStyle);
   const [variations, setVariations] = useState(site.imageVariations);
   const [processingMode, setProcessingMode] = useState(site.imageProcessingMode);
   const [saving, setSaving] = useState<string | null>(null);
+  const [showPrompts, setShowPrompts] = useState(false);
+  const [promptFilter, setPromptFilter] = useState("all");
   const [saved, setSaved] = useState<string | null>(null);
 
   async function saveSection(section: string, data: Record<string, unknown>) {
@@ -164,11 +168,72 @@ export function SiteControls({
           </Field>
 
           <div className="mb-3">
-            <ReadOnly label="Reward Prompts" value={`${counts.rewardPrompts} prompts in library`} />
+            <div className="flex items-baseline justify-between">
+              <span className="text-[10px] text-muted">Reward Prompts</span>
+              <button
+                onClick={() => setShowPrompts(true)}
+                className="text-[10px] text-accent hover:underline"
+              >
+                View {counts.rewardPrompts} prompts
+              </button>
+            </div>
             <p className="mt-1 text-[9px] text-muted">
-              Moment: {Math.round(counts.rewardPrompts / 3)} · Lifestyle: {Math.round(counts.rewardPrompts / 3)} · Social Proof: {Math.round(counts.rewardPrompts / 3)}
+              Moment: {rewardPrompts.filter(p => p.category === "moment").length} · Lifestyle: {rewardPrompts.filter(p => p.category === "lifestyle").length} · Social Proof: {rewardPrompts.filter(p => p.category === "social_proof").length}
             </p>
           </div>
+
+          {/* Reward Prompts Modal */}
+          {showPrompts && (
+            <div
+              className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-8"
+              onClick={() => setShowPrompts(false)}
+            >
+              <div
+                className="w-full max-w-2xl rounded-lg border border-border bg-surface"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <h3 className="text-sm font-semibold">Reward Prompt Library ({rewardPrompts.length})</h3>
+                  <button onClick={() => setShowPrompts(false)} className="text-muted hover:text-foreground">✕</button>
+                </div>
+                <div className="border-b border-border px-4 py-2">
+                  <div className="flex gap-1">
+                    {["all", "moment", "lifestyle", "social_proof"].map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setPromptFilter(cat)}
+                        className={`rounded px-2 py-1 text-[10px] ${promptFilter === cat ? "bg-accent text-white" : "bg-surface-hover text-muted"}`}
+                      >
+                        {cat === "all" ? "All" : cat === "social_proof" ? "Social Proof" : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="max-h-[60vh] overflow-y-auto px-4 py-2">
+                  {rewardPrompts
+                    .filter((p) => promptFilter === "all" || p.category === promptFilter)
+                    .map((p, i) => (
+                      <div key={i} className="border-b border-border py-2 last:border-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                            p.category === "moment" ? "bg-accent/10 text-accent"
+                              : p.category === "lifestyle" ? "bg-success/10 text-success"
+                              : "bg-warning/10 text-warning"
+                          }`}>
+                            {p.category}
+                          </span>
+                          <span className="rounded bg-surface-hover px-1.5 py-0.5 text-[9px] text-muted">
+                            {p.scene}
+                          </span>
+                        </div>
+                        <p className="text-xs">{p.prompt}</p>
+                        <p className="mt-0.5 text-[10px] text-muted">{p.visual}</p>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           <SaveButton
             section="content"

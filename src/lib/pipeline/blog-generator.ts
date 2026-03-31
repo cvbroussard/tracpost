@@ -1191,6 +1191,28 @@ ${existingTitles.length > 0
     }
   }
 
+  // Generate hero image from reward prompt visual + content vibe + site style
+  let heroUrl = asset.storageUrl;
+  try {
+    const { generateEditorialImage } = await import("@/lib/image-gen/gemini");
+    const { uploadBufferToR2 } = await import("@/lib/r2");
+    const { seoFilename } = await import("@/lib/seo-filename");
+
+    const siteImageStyle = (siteData.image_style as string) || "";
+    const siteContentVibe = (siteData.content_vibe as string) || "";
+    const heroPrompt = `${rewardPrompt.visual}. ${siteContentVibe}. ${siteImageStyle}`.trim();
+
+    const heroImage = await generateEditorialImage(heroPrompt);
+    if (heroImage) {
+      const ext = heroImage.mimeType.includes("png") ? "png" : "jpg";
+      const fname = seoFilename(parsed.title || "hero", ext);
+      const key = `sites/${siteData.site_id}/media/${fname}`;
+      heroUrl = await uploadBufferToR2(key, heroImage.data, heroImage.mimeType);
+    }
+  } catch (err) {
+    console.warn("Hero image generation failed, using seed asset:", err instanceof Error ? err.message : err);
+  }
+
   // Content guard
   const guard = await scanContent(parsed.title, parsed.body, (siteData.site_name as string) || "");
   const postStatus = guard.pass ? "draft" : "flagged";
@@ -1207,7 +1229,7 @@ ${existingTitles.length > 0
       ${parsed.body}, ${parsed.excerpt},
       ${parsed.meta_title || parsed.title},
       ${parsed.meta_description || parsed.excerpt},
-      ${asset.storageUrl},
+      ${heroUrl},
       '{}'::jsonb,
       ${parsed.tags}, ${asset.contentPillar || null},
       ${contentType}, ${postStatus},

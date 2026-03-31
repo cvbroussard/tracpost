@@ -1043,7 +1043,7 @@ export async function generateFromPairing(
   const recentImgUrls = recentPostImgs.map((r: Record<string, unknown>) => r.og_image_url as string).filter(Boolean);
   const excludeUrls = recentImgUrls.length > 0 ? recentImgUrls : ["__none__"];
 
-  // 2 subscriber uploads (proof of work)
+  // 1 subscriber upload (proof of work / authenticity anchor)
   const uploadsInline = await sql`
     SELECT storage_url, context_note
     FROM media_assets
@@ -1057,7 +1057,7 @@ export async function generateFromPairing(
     ORDER BY
       COALESCE((metadata->>'used_count')::int, 0) ASC,
       quality_score DESC
-    LIMIT 2
+    LIMIT 1
   `;
 
   // 2 AI editorial (eye candy)
@@ -1081,7 +1081,7 @@ export async function generateFromPairing(
   const inlineImages = [...uploadsInline, ...aiInline];
 
   // Fallback: if either pool is empty, fill from the other
-  if (inlineImages.length < 4) {
+  if (inlineImages.length < 3) {
     const fallback = await sql`
       SELECT storage_url, context_note
       FROM media_assets
@@ -1093,7 +1093,7 @@ export async function generateFromPairing(
         AND storage_url != ALL(${excludeUrls})
         AND storage_url != ALL(${inlineImages.map(i => i.storage_url as string)})
       ORDER BY COALESCE((metadata->>'used_count')::int, 0) ASC, quality_score DESC
-      LIMIT ${4 - inlineImages.length}
+      LIMIT ${3 - inlineImages.length}
     `;
     inlineImages.push(...fallback);
   }

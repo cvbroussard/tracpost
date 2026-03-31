@@ -1287,20 +1287,53 @@ ${existingTitles.length > 0
 
           if (video) {
             videoUrl = video.url;
-            // Register video as media asset
+            // Register video as media asset with full context
             try {
-              await sql`
+              const videoTags = asset.contentTags.slice(0, 5);
+              const [videoAsset] = await sql`
                 INSERT INTO media_assets (
                   site_id, storage_url, media_type, context_note,
-                  source, triage_status, quality_score, metadata
+                  source, triage_status, quality_score,
+                  content_pillar, content_tags,
+                  ai_analysis, metadata
                 ) VALUES (
                   ${siteData.site_id}, ${video.url}, 'video',
-                  ${rewardPrompt.prompt.slice(0, 100)},
+                  ${rewardPrompt.prompt.slice(0, 200)},
                   'ai_generated', 'triaged', 0.95,
-                  ${JSON.stringify({ ai_generated: true, duration: video.duration, generation_prompt: videoPrompt })}::jsonb
+                  ${asset.contentPillar || null},
+                  ${videoTags},
+                  ${JSON.stringify({
+                    scene_type: rewardPrompt.scene,
+                    description: rewardPrompt.visual,
+                    context_note: rewardPrompt.prompt.slice(0, 200),
+                  })}::jsonb,
+                  ${JSON.stringify({
+                    ai_generated: true,
+                    duration: video.duration,
+                    generation_prompt: videoPrompt,
+                    reward_category: rewardPrompt.category,
+                    scene_type: rewardPrompt.scene,
+                    source_asset_id: asset.id,
+                  })}::jsonb
                 )
+                RETURNING id
               `;
-            } catch { /* non-blocking */ }
+              // Inherit vendor associations from source asset
+              if (videoAsset) {
+                const srcVendors = await sql`
+                  SELECT vendor_id FROM asset_vendors WHERE asset_id = ${asset.id}
+                `;
+                for (const v of srcVendors) {
+                  await sql`
+                    INSERT INTO asset_vendors (asset_id, vendor_id)
+                    VALUES (${videoAsset.id}, ${v.vendor_id})
+                    ON CONFLICT DO NOTHING
+                  `;
+                }
+              }
+            } catch (err) {
+              console.warn("Video asset registration failed:", err instanceof Error ? err.message : err);
+            }
           }
         }
       }

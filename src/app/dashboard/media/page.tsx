@@ -27,7 +27,7 @@ export default async function MediaPage() {
       FROM media_assets
       WHERE site_id = ${siteId}
       ORDER BY created_at DESC
-      LIMIT 50
+      LIMIT 200
     `,
     sql`SELECT content_pillars, pillar_config FROM sites WHERE id = ${siteId}`,
     sql`SELECT id, name, slug, url FROM vendors WHERE subscriber_id = ${session.subscriberId} ORDER BY name ASC`,

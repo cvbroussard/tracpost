@@ -29,64 +29,137 @@ export default async function MediaPage({ searchParams }: Props) {
   const qualityFilter = params.quality || "all";
   const sortOrder = params.sort || "newest";
 
-  // Build filtered query
+  // Build WHERE conditions
+  const conditions: string[] = [`site_id = '${siteId}'`];
+
+  if (sourceFilter !== "all") {
+    conditions.push(`COALESCE(source, 'upload') = '${sourceFilter}'`);
+  }
+  if (sceneFilter !== "all") {
+    conditions.push(`ai_analysis->>'scene_type' = '${sceneFilter}'`);
+  }
+  if (qualityFilter === "high") {
+    conditions.push("quality_score >= 0.8");
+  } else if (qualityFilter === "medium") {
+    conditions.push("quality_score >= 0.5 AND quality_score < 0.8");
+  } else if (qualityFilter === "low") {
+    conditions.push("quality_score < 0.5");
+  }
+
+  // Use parameterized queries per sort to avoid SQL injection
+  // while still supporting dynamic WHERE
   let assets;
-  if (sortOrder === "quality") {
-    assets = await sql`
-      SELECT id, storage_url, media_type, context_note, triage_status,
-             quality_score, content_pillar, content_pillars, content_tags,
-             source, ai_analysis, metadata,
-             platform_fit, flag_reason, shelve_reason, created_at
-      FROM media_assets
-      WHERE site_id = ${siteId}
-        AND (${sourceFilter} = 'all' OR source = ${sourceFilter})
-        AND (${sceneFilter} = 'all' OR ai_analysis->>'scene_type' = ${sceneFilter})
-        AND (
-          ${qualityFilter} = 'all'
-          OR (${qualityFilter} = 'high' AND quality_score >= 0.8)
-          OR (${qualityFilter} = 'medium' AND quality_score >= 0.5 AND quality_score < 0.8)
-          OR (${qualityFilter} = 'low' AND quality_score < 0.5)
-        )
-      ORDER BY quality_score DESC
-      LIMIT 200
-    `;
-  } else if (sortOrder === "least_used") {
-    assets = await sql`
-      SELECT id, storage_url, media_type, context_note, triage_status,
-             quality_score, content_pillar, content_pillars, content_tags,
-             source, ai_analysis, metadata,
-             platform_fit, flag_reason, shelve_reason, created_at
-      FROM media_assets
-      WHERE site_id = ${siteId}
-        AND (${sourceFilter} = 'all' OR source = ${sourceFilter})
-        AND (${sceneFilter} = 'all' OR ai_analysis->>'scene_type' = ${sceneFilter})
-        AND (
-          ${qualityFilter} = 'all'
-          OR (${qualityFilter} = 'high' AND quality_score >= 0.8)
-          OR (${qualityFilter} = 'medium' AND quality_score >= 0.5 AND quality_score < 0.8)
-          OR (${qualityFilter} = 'low' AND quality_score < 0.5)
-        )
-      ORDER BY COALESCE((metadata->>'used_count')::int, 0) ASC, created_at DESC
-      LIMIT 200
-    `;
+  if (sourceFilter === "all" && sceneFilter === "all" && qualityFilter === "all") {
+    // No filters — simple query
+    if (sortOrder === "quality") {
+      assets = await sql`
+        SELECT id, storage_url, media_type, context_note, triage_status,
+               quality_score, content_pillar, content_pillars, content_tags,
+               source, ai_analysis, metadata,
+               platform_fit, flag_reason, shelve_reason, created_at
+        FROM media_assets WHERE site_id = ${siteId}
+        ORDER BY quality_score DESC LIMIT 200
+      `;
+    } else if (sortOrder === "least_used") {
+      assets = await sql`
+        SELECT id, storage_url, media_type, context_note, triage_status,
+               quality_score, content_pillar, content_pillars, content_tags,
+               source, ai_analysis, metadata,
+               platform_fit, flag_reason, shelve_reason, created_at
+        FROM media_assets WHERE site_id = ${siteId}
+        ORDER BY COALESCE((metadata->>'used_count')::int, 0) ASC, created_at DESC LIMIT 200
+      `;
+    } else {
+      assets = await sql`
+        SELECT id, storage_url, media_type, context_note, triage_status,
+               quality_score, content_pillar, content_pillars, content_tags,
+               source, ai_analysis, metadata,
+               platform_fit, flag_reason, shelve_reason, created_at
+        FROM media_assets WHERE site_id = ${siteId}
+        ORDER BY created_at DESC LIMIT 200
+      `;
+    }
+  } else if (sourceFilter !== "all" && sceneFilter === "all" && qualityFilter === "all") {
+    // Source filter only
+    if (sortOrder === "quality") {
+      assets = await sql`
+        SELECT id, storage_url, media_type, context_note, triage_status,
+               quality_score, content_pillar, content_pillars, content_tags,
+               source, ai_analysis, metadata,
+               platform_fit, flag_reason, shelve_reason, created_at
+        FROM media_assets WHERE site_id = ${siteId} AND COALESCE(source, 'upload') = ${sourceFilter}
+        ORDER BY quality_score DESC LIMIT 200
+      `;
+    } else if (sortOrder === "least_used") {
+      assets = await sql`
+        SELECT id, storage_url, media_type, context_note, triage_status,
+               quality_score, content_pillar, content_pillars, content_tags,
+               source, ai_analysis, metadata,
+               platform_fit, flag_reason, shelve_reason, created_at
+        FROM media_assets WHERE site_id = ${siteId} AND COALESCE(source, 'upload') = ${sourceFilter}
+        ORDER BY COALESCE((metadata->>'used_count')::int, 0) ASC, created_at DESC LIMIT 200
+      `;
+    } else {
+      assets = await sql`
+        SELECT id, storage_url, media_type, context_note, triage_status,
+               quality_score, content_pillar, content_pillars, content_tags,
+               source, ai_analysis, metadata,
+               platform_fit, flag_reason, shelve_reason, created_at
+        FROM media_assets WHERE site_id = ${siteId} AND COALESCE(source, 'upload') = ${sourceFilter}
+        ORDER BY created_at DESC LIMIT 200
+      `;
+    }
+  } else if (qualityFilter !== "all") {
+    // Quality filter (with optional source)
+    const qualityCondition = qualityFilter === "high" ? "AND quality_score >= 0.8"
+      : qualityFilter === "medium" ? "AND quality_score >= 0.5 AND quality_score < 0.8"
+      : "AND quality_score < 0.5";
+    // Can't use dynamic SQL in tagged template — branch per quality level
+    if (qualityFilter === "high") {
+      assets = await sql`
+        SELECT id, storage_url, media_type, context_note, triage_status,
+               quality_score, content_pillar, content_pillars, content_tags,
+               source, ai_analysis, metadata,
+               platform_fit, flag_reason, shelve_reason, created_at
+        FROM media_assets WHERE site_id = ${siteId}
+          AND quality_score >= 0.8
+          AND (${sourceFilter} = 'all' OR COALESCE(source, 'upload') = ${sourceFilter})
+        ORDER BY quality_score DESC LIMIT 200
+      `;
+    } else if (qualityFilter === "medium") {
+      assets = await sql`
+        SELECT id, storage_url, media_type, context_note, triage_status,
+               quality_score, content_pillar, content_pillars, content_tags,
+               source, ai_analysis, metadata,
+               platform_fit, flag_reason, shelve_reason, created_at
+        FROM media_assets WHERE site_id = ${siteId}
+          AND quality_score >= 0.5 AND quality_score < 0.8
+          AND (${sourceFilter} = 'all' OR COALESCE(source, 'upload') = ${sourceFilter})
+        ORDER BY quality_score DESC LIMIT 200
+      `;
+    } else {
+      assets = await sql`
+        SELECT id, storage_url, media_type, context_note, triage_status,
+               quality_score, content_pillar, content_pillars, content_tags,
+               source, ai_analysis, metadata,
+               platform_fit, flag_reason, shelve_reason, created_at
+        FROM media_assets WHERE site_id = ${siteId}
+          AND quality_score < 0.5
+          AND (${sourceFilter} = 'all' OR COALESCE(source, 'upload') = ${sourceFilter})
+        ORDER BY quality_score DESC LIMIT 200
+      `;
+    }
   } else {
+    // Scene filter (rare — most assets don't have scene_type yet)
     assets = await sql`
       SELECT id, storage_url, media_type, context_note, triage_status,
              quality_score, content_pillar, content_pillars, content_tags,
              source, ai_analysis, metadata,
              platform_fit, flag_reason, shelve_reason, created_at
-      FROM media_assets
-      WHERE site_id = ${siteId}
-        AND (${sourceFilter} = 'all' OR source = ${sourceFilter})
-        AND (${sceneFilter} = 'all' OR ai_analysis->>'scene_type' = ${sceneFilter})
-        AND (
-          ${qualityFilter} = 'all'
-          OR (${qualityFilter} = 'high' AND quality_score >= 0.8)
-          OR (${qualityFilter} = 'medium' AND quality_score >= 0.5 AND quality_score < 0.8)
-          OR (${qualityFilter} = 'low' AND quality_score < 0.5)
-        )
-      ORDER BY created_at DESC
-      LIMIT 200
+      FROM media_assets WHERE site_id = ${siteId}
+        AND ai_analysis->>'scene_type' = ${sceneFilter}
+        AND (${sourceFilter} = 'all' OR COALESCE(source, 'upload') = ${sourceFilter})
+      ORDER BY created_at DESC LIMIT 200
     `;
   }
 
@@ -94,7 +167,7 @@ export default async function MediaPage({ searchParams }: Props) {
   const counts = await sql`
     SELECT
       COUNT(*)::int AS total,
-      COUNT(*) FILTER (WHERE source = 'upload')::int AS uploads,
+      COUNT(*) FILTER (WHERE COALESCE(source, 'upload') = 'upload')::int AS uploads,
       COUNT(*) FILTER (WHERE source = 'ai_generated')::int AS ai_generated,
       COUNT(*) FILTER (WHERE quality_score >= 0.8)::int AS high_quality,
       COUNT(*) FILTER (WHERE quality_score >= 0.5 AND quality_score < 0.8)::int AS medium_quality,

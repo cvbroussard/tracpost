@@ -314,7 +314,8 @@ async function generateImagePrompts(
   contextNote: string,
   corrections: Array<{ entity_key: string; correction: string }> = [],
   baseStyle: string = "",
-  variations: string[] = []
+  variations: string[] = [],
+  contentVibe: string = ""
 ): Promise<Array<{ prompt: string; alt: string }>> {
   const allEntities = [
     ...entities.materials,
@@ -350,7 +351,9 @@ Context note (how these materials/vendors are being used):
 
 Entities: ${allEntities.join(", ")}
 
-Generate prompts for images that show the CRAFT and ORIGIN behind these materials.
+${contentVibe
+  ? `## Content Direction\n${contentVibe}\nGenerate images that match this vibe — show these materials and spaces IN USE, not being built or fabricated.`
+  : "Generate prompts for images that show the CRAFT and ORIGIN behind these materials."}
 ${baseStyle ? `\n## Photography Style (apply to ALL images)\n${baseStyle}` : ""}
 
 Each image MUST use a DIFFERENT composition from this list (pick 2-3, do NOT repeat):
@@ -478,10 +481,11 @@ Content note: "${contextNote}"
   if (siteId) {
     // Fetch site image style + corrections
     const [siteStyle] = await sql`
-      SELECT image_style, image_variations FROM sites WHERE id = ${siteId}
+      SELECT image_style, image_variations, content_vibe FROM sites WHERE id = ${siteId}
     `;
     const baseStyle = (siteStyle?.image_style as string) || "";
     const variations = (siteStyle?.image_variations || []) as string[];
+    const contentVibe = (siteStyle?.content_vibe as string) || "";
 
     const allEntityKeys = [
       ...entities.brands, ...entities.materials,
@@ -496,7 +500,7 @@ Content note: "${contextNote}"
       ` as Array<{ entity_key: string; correction: string }>;
     }
 
-    const imagePrompts = await generateImagePrompts(entities, contextNote, corrections, baseStyle, variations);
+    const imagePrompts = await generateImagePrompts(entities, contextNote, corrections, baseStyle, variations, contentVibe);
     if (imagePrompts.length > 0) {
       for (const imgPrompt of imagePrompts.slice(0, 3)) {
         try {

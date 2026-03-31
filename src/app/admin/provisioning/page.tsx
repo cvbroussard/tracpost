@@ -38,6 +38,7 @@ export default async function ProvisioningPage() {
       s.image_style,
       s.image_variations,
       s.image_processing_mode,
+      s.content_vibe,
       s.metadata AS site_metadata,
       s.deleted_at,
       (
@@ -181,6 +182,7 @@ export default async function ProvisioningPage() {
                   initialStyle={(sub.image_style as string) || ""}
                   initialVariations={(sub.image_variations as string[]) || []}
                   initialProcessingMode={(sub.image_processing_mode as string) || "auto"}
+                  initialContentVibe={(sub.content_vibe as string) || ""}
                 />
 
                 {/* Context Note Review */}

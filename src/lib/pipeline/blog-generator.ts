@@ -1003,7 +1003,7 @@ export async function generateFromPairing(
 
   const [siteData] = await sql`
     SELECT s.id AS site_id, s.name AS site_name, s.url AS site_url,
-           s.brand_voice, s.brand_playbook, s.image_style,
+           s.brand_voice, s.brand_playbook, s.image_style, s.content_vibe,
            bs.blog_enabled, bs.blog_title
     FROM sites s
     LEFT JOIN blog_settings bs ON bs.site_id = s.id
@@ -1106,6 +1106,7 @@ Reward scene: "${rewardPrompt.prompt}"
 Category: ${rewardPrompt.category} | Scene: ${rewardPrompt.scene}
 
 This article is about the OUTCOME — the moment, lifestyle, or recognition the customer experiences BECAUSE of this work. The product is the enabler, not the subject. Open with the reward scene. Make the reader feel it. Then connect to the craft and decisions that made it possible.
+${(siteData.content_vibe as string) ? `\n## Content Vibe\n${siteData.content_vibe}\nLet this vibe guide the tone, imagery references, and storytelling angle throughout the article.` : ""}
 
 ## Content Source
 Content pillar: ${asset.contentPillar || "general"}

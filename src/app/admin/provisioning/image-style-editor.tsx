@@ -7,15 +7,18 @@ export function ImageStyleEditor({
   initialStyle,
   initialVariations,
   initialProcessingMode,
+  initialContentVibe,
 }: {
   siteId: string;
   initialStyle: string;
   initialVariations: string[];
   initialProcessingMode: string;
+  initialContentVibe: string;
 }) {
   const [style, setStyle] = useState(initialStyle);
   const [variations, setVariations] = useState(initialVariations);
   const [processingMode, setProcessingMode] = useState(initialProcessingMode || "auto");
+  const [contentVibe, setContentVibe] = useState(initialContentVibe);
   const [isOpen, setIsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -26,7 +29,7 @@ export function ImageStyleEditor({
     await fetch("/api/admin/image-style", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ siteId, style, variations, processingMode }),
+      body: JSON.stringify({ siteId, style, variations, processingMode, contentVibe }),
     });
     setSaving(false);
     setSaved(true);
@@ -81,6 +84,20 @@ export function ImageStyleEditor({
           </div>
 
           <div className="mb-3">
+          <div className="mb-3">
+            <label className="mb-1 block text-[10px] text-muted">Content Vibe</label>
+            <textarea
+              value={contentVibe}
+              onChange={(e) => setContentVibe(e.target.value)}
+              className="w-full text-xs"
+              rows={2}
+              placeholder="Culinary lifestyle — cooking, entertaining, hosting. Show kitchens in use, not under construction."
+            />
+            <p className="mt-0.5 text-[9px] text-muted">
+              Controls what images and articles are ABOUT. Photography Style controls how they LOOK.
+            </p>
+          </div>
+
             <label className="mb-1 block text-[10px] text-muted">Base Photography Style</label>
             <textarea
               value={style}

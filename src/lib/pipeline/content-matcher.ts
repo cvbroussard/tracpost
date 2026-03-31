@@ -131,6 +131,7 @@ async function findMatchingAsset(
   prompt: RewardPrompt
 ): Promise<ContentPairing["asset"] | null> {
   // Get candidate assets — triaged, decent quality, not over-used, no existing post
+  // Prefer assets matching the reward prompt's scene type
   const candidates = await sql`
     SELECT ma.id, ma.storage_url, ma.context_note, ma.quality_score,
            ma.content_pillar, ma.content_tags, ma.ai_analysis,
@@ -143,6 +144,7 @@ async function findMatchingAsset(
       AND ma.quality_score >= 0.5
       AND bp.id IS NULL
     ORDER BY
+      CASE WHEN ma.ai_analysis->>'scene_type' = ${prompt.scene} THEN 0 ELSE 1 END,
       COALESCE((ma.metadata->>'used_count')::int, 0) ASC,
       ma.quality_score DESC
     LIMIT 20
@@ -150,7 +152,7 @@ async function findMatchingAsset(
 
   if (candidates.length === 0) return null;
 
-  // For small sets, just pick the least-used highest-quality asset
+  // For small sets, just pick the best scene-matched, least-used asset
   if (candidates.length <= 5) {
     return buildAssetResult(candidates[0], siteId);
   }

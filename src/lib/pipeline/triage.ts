@@ -196,6 +196,7 @@ Respond with ONLY valid JSON (no markdown):
   "has_text_overlay": <true/false>,
   "description": "<1-sentence description of what's in the image>",
   "context_note": "<spec-style comma-separated list of specific materials, fixtures, vendors, techniques visible. Example: custom lacquer inset cabinets by Crystal Cabinet Works, Lacanche Sully range, zellige tile backsplash, rift-sawn white oak island. Only include what you can actually identify. No adjectives, no marketing language.>",
+  "scene_type": "<one of: humans, environment, product, method, region — humans=people/animals visible, environment=space with no people, product=close-up of specific item/material, method=process/technique/craftsmanship shown, region=exterior/neighborhood/local context>",
   "quality_notes": "<brief note on quality issues if any>",
   "detected_vendors": [<array of vendor slugs from the known vendors list that appear in this image, e.g. ["lacanche", "crystal_cabinet_works"]>],
   "detected_personas": [{"persona_id": "<id>", "persona_name": "<name>", "confidence": <0.0-1.0>, "role": "subject"|"background", "reasoning": "<why>"}]
@@ -280,6 +281,7 @@ ${personaPrompt || 'If no known characters list is provided, return "detected_pe
       engine: "claude-vision-v1",
       description: parsed.description,
       context_note: parsed.context_note || null,
+      scene_type: parsed.scene_type || null,
       quality_notes: parsed.quality_notes,
       has_faces: parsed.has_faces,
       has_text_overlay: parsed.has_text_overlay,

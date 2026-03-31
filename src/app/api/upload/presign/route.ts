@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     const safeName = filename
       ? filename.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.[^.]+$/, "").slice(0, 60)
       : id;
-    const key = `sites/${site_id}/${date}/${safeName}.${ext}`;
+    const key = `sites/${site_id}/media/${safeName}-${date.slice(5)}.${ext}`;
 
     const mediaType = content_type.startsWith("video/") ? "video" : "image";
 

@@ -109,8 +109,7 @@ export async function POST(req: NextRequest) {
   // Upload to R2
   const ext = image.mimeType.includes("png") ? "png" : "jpg";
   const fname = seoFilename(isEditorial ? (imageEntry?.alt || adjustment) : adjustment, ext);
-  const folder = isEditorial ? "editorial" : "enhanced";
-  const key = `sites/${post.site_id}/${folder}/${fname}`;
+  const key = `sites/${post.site_id}/media/${fname}`;
   const newUrl = await uploadBufferToR2(key, image.data, image.mimeType);
 
   // Replace URL in post body

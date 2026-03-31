@@ -504,7 +504,7 @@ Content note: "${contextNote}"
           if (image) {
             const ext = image.mimeType.includes("png") ? "png" : "jpg";
             const fname = seoFilename(imgPrompt.alt, ext);
-            const key = `sites/${siteId}/editorial/${fname}`;
+            const key = `sites/${siteId}/media/${fname}`;
             const url = await uploadBufferToR2(key, image.data, image.mimeType);
 
             const meta: EditorialImageMeta = {

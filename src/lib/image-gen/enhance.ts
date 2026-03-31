@@ -98,7 +98,7 @@ export async function enhanceAssetPhoto(
   // Upload to R2
   const ext = result.mimeType.includes("png") ? "png" : "jpg";
   const fname = seoFilename(contextNote || "enhanced-photo", ext);
-  const key = `sites/${asset.site_id}/${mode}/${fname}`;
+  const key = `sites/${asset.site_id}/media/${fname}`;
   const newUrl = await uploadBufferToR2(key, result.data, result.mimeType);
 
   // Store new URL on the asset — keep original in metadata

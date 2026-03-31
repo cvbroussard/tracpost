@@ -119,6 +119,12 @@ export default async function ProvisioningPage() {
                   <div>
                     <div className="flex items-center gap-3">
                       <h2 style={{ marginTop: 0 }}>{sub.site_name || sub.subscriber_name}</h2>
+                      <a
+                        href={`/admin/sites/${sub.site_id}`}
+                        className="text-[10px] text-accent hover:underline"
+                      >
+                        Controls
+                      </a>
                       {sub.provisioning_status === "complete" ? (
                         <span className="rounded bg-success/10 px-2 py-0.5 text-xs text-success">Ready</span>
                       ) : sub.provisioning_status === "in_progress" ? (

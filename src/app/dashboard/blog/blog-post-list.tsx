@@ -496,14 +496,18 @@ export function BlogPostList({
             </div>
 
             {/* Guard flags */}
-            {previewing.status === "flagged" && guardFlags(previewing).length > 0 ? (
-              <div className="border-b border-border bg-danger/5 px-6 py-3">
-                <p className="mb-1 text-xs font-medium text-danger">Content issues detected:</p>
-                {guardFlags(previewing).map((flag, i) => (
-                  <p key={i} className="text-xs text-danger/80">— {flag}</p>
-                ))}
-              </div>
-            ) : null}
+            {(() => {
+              const flags = guardFlags(previewing);
+              if (previewing.status !== "flagged" || flags.length === 0) return null;
+              return (
+                <div className="border-b border-border bg-danger/5 px-6 py-3">
+                  <p className="mb-1 text-xs font-medium text-danger">Content issues detected:</p>
+                  {flags.map((flag, i) => (
+                    <p key={i} className="text-xs text-danger/80">— {flag}</p>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* Video preview */}
             {previewing.metadata?.video_url && (

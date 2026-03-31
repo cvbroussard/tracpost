@@ -118,7 +118,22 @@ export async function DELETE(
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   }
 
-  // Nullify blog post references before deleting
+  // Check if asset is used in blog posts
+  const refs = await sql`
+    SELECT id, title, status FROM blog_posts WHERE source_asset_id = ${id}
+  `;
+
+  const forceDelete = new URL(req.url).searchParams.get("force") === "true";
+
+  if (refs.length > 0 && !forceDelete) {
+    return NextResponse.json({
+      error: "Asset is used in blog posts",
+      posts: refs.map((r) => ({ id: r.id, title: r.title, status: r.status })),
+      requiresForce: true,
+    }, { status: 409 });
+  }
+
+  // Clear references and delete
   await sql`UPDATE blog_posts SET source_asset_id = NULL WHERE source_asset_id = ${id}`;
   await sql`DELETE FROM asset_vendors WHERE asset_id = ${id}`;
   await sql`DELETE FROM media_assets WHERE id = ${id}`;

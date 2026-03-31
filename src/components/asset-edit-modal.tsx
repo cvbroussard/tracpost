@@ -53,7 +53,7 @@ export function AssetEditModal({
   const [tags, setTags] = useState<string[]>(initialTags || []);
   const [vendorIds, setVendorIds] = useState<string[]>(initialVendorIds);
   const [saving, setSaving] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<boolean | "force">(false);
   const [deleting, setDeleting] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
@@ -381,15 +381,23 @@ export function AssetEditModal({
         <div className="flex items-center justify-between border-t border-border px-6 py-3">
           {confirmDelete ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-danger">Delete this asset?</span>
+              <span className="text-xs text-danger">{confirmDelete === "force" ? "Used in a blog post. Delete anyway?" : "Delete this asset?"}</span>
               <button
                 onClick={async () => {
                   setDeleting(true);
                   try {
-                    const res = await fetch(`/api/assets/${assetId}`, { method: "DELETE" });
+                    const force = confirmDelete === "force" ? "?force=true" : "";
+                    const res = await fetch(`/api/assets/${assetId}${force}`, { method: "DELETE" });
                     if (res.ok) {
                       onDeleted?.();
                       onClose();
+                    } else {
+                      const data = await res.json();
+                      if (data.requiresForce) {
+                        setConfirmDelete("force");
+                        setDeleting(false);
+                        return;
+                      }
                     }
                   } catch { /* ignore */ }
                   setDeleting(false);
@@ -397,7 +405,7 @@ export function AssetEditModal({
                 disabled={deleting}
                 className="rounded bg-danger px-3 py-1 text-xs font-medium text-white hover:bg-danger/90 disabled:opacity-50"
               >
-                {deleting ? "Deleting..." : "Yes, delete"}
+                {deleting ? "Deleting..." : confirmDelete === "force" ? "Yes, delete anyway" : "Yes, delete"}
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}

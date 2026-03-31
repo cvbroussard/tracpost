@@ -13,12 +13,14 @@ interface Counts {
 
 export function MediaFilters({
   sourceFilter,
+  mediaTypeFilter,
   sceneFilter,
   qualityFilter,
   sortOrder,
   counts,
 }: {
   sourceFilter: string;
+  mediaTypeFilter: string;
   sceneFilter: string;
   qualityFilter: string;
   sortOrder: string;
@@ -30,6 +32,7 @@ export function MediaFilters({
     const params = new URLSearchParams();
     const merged = {
       source: sourceFilter,
+      type: mediaTypeFilter,
       scene: sceneFilter,
       quality: qualityFilter,
       sort: sortOrder,
@@ -41,7 +44,9 @@ export function MediaFilters({
       }
     }
     const qs = params.toString();
-    router.push(`/dashboard/media${qs ? `?${qs}` : ""}`);
+    const url = `/dashboard/media${qs ? `?${qs}` : ""}`;
+    router.push(url);
+    router.refresh();
   }
 
   return (
@@ -71,6 +76,17 @@ export function MediaFilters({
           </button>
         ))}
       </div>
+
+      {/* Media type filter */}
+      <select
+        value={mediaTypeFilter}
+        onChange={(e) => updateParams({ type: e.target.value })}
+        className="bg-surface-hover px-2 py-1 text-[10px] text-muted"
+      >
+        <option value="all">All types</option>
+        <option value="image">Images</option>
+        <option value="video">Videos</option>
+      </select>
 
       {/* Scene type filter */}
       <select

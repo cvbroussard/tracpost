@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const auth = authResult as AuthContext;
 
   const body = await req.json();
-  const { post_id, image_url, adjustment = "", mode = "new", reference_url } = body;
+  const { post_id, image_url, adjustment = "", mode = "new", reference_url, is_hero } = body;
 
   if (!post_id || !image_url) {
     return NextResponse.json(
@@ -57,10 +57,12 @@ export async function POST(req: NextRequest) {
 
   // Direct replace — no AI, just swap the URL
   if (mode === "replace" && reference_url) {
-    const newBody = (post.body as string).replace(image_url, reference_url);
-    await sql`
-      UPDATE blog_posts SET body = ${newBody} WHERE id = ${post_id}
-    `;
+    if (is_hero) {
+      await sql`UPDATE blog_posts SET og_image_url = ${reference_url} WHERE id = ${post_id}`;
+    } else {
+      const newBody = (post.body as string).replace(image_url, reference_url);
+      await sql`UPDATE blog_posts SET body = ${newBody} WHERE id = ${post_id}`;
+    }
     return NextResponse.json({ success: true, new_url: reference_url });
   }
 
@@ -112,28 +114,34 @@ export async function POST(req: NextRequest) {
   const key = `sites/${post.site_id}/media/${fname}`;
   const newUrl = await uploadBufferToR2(key, image.data, image.mimeType);
 
-  // Replace URL in post body
-  const newBody = (post.body as string).replace(image_url, newUrl);
+  // Replace URL — hero updates og_image_url, inline updates body
+  if (is_hero) {
+    await sql`
+      UPDATE blog_posts SET og_image_url = ${newUrl} WHERE id = ${post_id}
+    `;
+  } else {
+    const newBody = (post.body as string).replace(image_url, newUrl);
 
-  // Update editorial_images metadata if this was an editorial image
-  let updatedMetadata = metadata;
-  if (isEditorial && imageEntry) {
-    const updatedPrompt = mode === "new"
-      ? `${imageEntry.prompt}. IMPORTANT CORRECTION: ${adjustment}`
-      : imageEntry.prompt;
-    const updatedImages = editorialImages.map((img) =>
-      img.url === image_url
-        ? { ...img, url: newUrl, prompt: updatedPrompt }
-        : img
-    );
-    updatedMetadata = { ...metadata, editorial_images: updatedImages };
+    // Update editorial_images metadata if this was an editorial image
+    let updatedMetadata = metadata;
+    if (isEditorial && imageEntry) {
+      const updatedPrompt = mode === "new"
+        ? `${imageEntry.prompt}. IMPORTANT CORRECTION: ${adjustment}`
+        : imageEntry.prompt;
+      const updatedImages = editorialImages.map((img) =>
+        img.url === image_url
+          ? { ...img, url: newUrl, prompt: updatedPrompt }
+          : img
+      );
+      updatedMetadata = { ...metadata, editorial_images: updatedImages };
+    }
+
+    await sql`
+      UPDATE blog_posts
+      SET body = ${newBody}, metadata = ${JSON.stringify(updatedMetadata)}::jsonb
+      WHERE id = ${post_id}
+    `;
   }
-
-  await sql`
-    UPDATE blog_posts
-    SET body = ${newBody}, metadata = ${JSON.stringify(updatedMetadata)}::jsonb
-    WHERE id = ${post_id}
-  `;
 
   // Only persist corrections from "new" mode — these are factual accuracy
   // corrections about the entity (e.g., "spray paint line not brush").

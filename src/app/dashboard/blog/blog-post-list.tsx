@@ -140,6 +140,78 @@ export function BlogPostList({
     );
   }
 
+  async function handleHeroEdit() {
+    if (!previewing || !repromptNote.trim()) return;
+    setReprompting(true);
+    try {
+      let referenceUrl: string | undefined;
+      if (referenceFile) {
+        const siteMatch = (previewing.og_image_url || "").match(/sites\/([^/]+)/);
+        const sid = siteMatch?.[1] || "";
+        if (sid) referenceUrl = (await uploadReference(referenceFile, sid)) || undefined;
+      }
+
+      const res = await fetch("/api/blog/reprompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post_id: previewing.id,
+          image_url: previewing.og_image_url,
+          adjustment: repromptNote.trim(),
+          mode: repromptMode,
+          reference_url: referenceUrl,
+          is_hero: true,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewing({ ...previewing, og_image_url: data.new_url });
+        setRepromptUrl(null);
+        setRepromptNote("");
+        setReferenceFile(null);
+        setReferencePreview(null);
+        router.refresh();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Edit failed");
+      }
+    } catch { alert("Edit failed"); }
+    finally { setReprompting(false); }
+  }
+
+  async function handleHeroReplace() {
+    if (!previewing || !referenceFile) return;
+    setReprompting(true);
+    try {
+      const siteMatch = (previewing.og_image_url || "").match(/sites\/([^/]+)/);
+      const sid = siteMatch?.[1] || "";
+      if (!sid) { alert("Could not determine site"); return; }
+
+      const newUrl = await uploadReference(referenceFile, sid);
+      if (!newUrl) { alert("Upload failed"); return; }
+
+      await fetch("/api/blog/reprompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post_id: previewing.id,
+          image_url: previewing.og_image_url,
+          adjustment: "direct_replace",
+          mode: "replace",
+          reference_url: newUrl,
+          is_hero: true,
+        }),
+      });
+      setPreviewing({ ...previewing, og_image_url: newUrl });
+      setRepromptUrl(null);
+      setRepromptNote("");
+      setReferenceFile(null);
+      setReferencePreview(null);
+      router.refresh();
+    } catch { alert("Replace failed"); }
+    finally { setReprompting(false); }
+  }
+
   function handleReferenceFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -438,12 +510,99 @@ export function BlogPostList({
               <style dangerouslySetInnerHTML={{ __html: blogProseStyles }} />
 
               {previewing.og_image_url && (
-                <img
-                  src={previewing.og_image_url}
-                  alt=""
-                  className="mb-6 w-full rounded-lg object-cover"
-                  style={{ maxHeight: 300 }}
-                />
+                <div className="mb-6">
+                  <img
+                    src={previewing.og_image_url}
+                    alt=""
+                    className="w-full rounded-lg object-cover cursor-pointer"
+                    style={{ maxHeight: 300, border: repromptUrl === previewing.og_image_url ? "2px solid var(--accent)" : "2px solid transparent" }}
+                    onClick={() => { setRepromptUrl(previewing.og_image_url!); setRepromptNote(""); setRepromptMode("edit"); }}
+                    onMouseEnter={(e) => (e.target as HTMLElement).style.borderColor = "var(--accent)"}
+                    onMouseLeave={(e) => {
+                      if (repromptUrl !== previewing.og_image_url) (e.target as HTMLElement).style.borderColor = "transparent";
+                    }}
+                  />
+                  {repromptUrl === previewing.og_image_url && (
+                    <div className="mt-2 rounded border border-accent/30 bg-accent/5 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-medium">Adjust hero image</p>
+                        <div className="flex rounded bg-surface-hover text-[10px]">
+                          <button
+                            onClick={() => setRepromptMode("edit")}
+                            className={`px-2.5 py-1 rounded-l ${repromptMode === "edit" ? "bg-accent text-white" : "text-muted"}`}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setRepromptMode("new")}
+                            className={`px-2.5 py-1 ${repromptMode === "new" ? "bg-accent text-white" : "text-muted"}`}
+                          >
+                            New
+                          </button>
+                          <button
+                            onClick={() => setRepromptMode("replace")}
+                            className={`px-2.5 py-1 rounded-r ${repromptMode === "replace" ? "bg-accent text-white" : "text-muted"}`}
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mb-2 text-[10px] text-muted">
+                        {repromptMode === "edit"
+                          ? "Make one change at a time."
+                          : repromptMode === "new"
+                          ? "Generate a new hero image."
+                          : "Upload your own hero image."}
+                      </p>
+                      {referencePreview && (
+                        <div className="mb-2 flex items-center gap-2">
+                          <img src={referencePreview} alt="Reference" className="h-12 w-12 rounded object-cover" />
+                          <span className="text-[10px] text-muted">{repromptMode === "replace" ? "Will replace hero" : "Reference"}</span>
+                          <button onClick={() => { setReferenceFile(null); setReferencePreview(null); }} className="text-[10px] text-muted hover:text-danger">✕</button>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        {repromptMode !== "replace" && (
+                          <input
+                            value={repromptNote}
+                            onChange={(e) => setRepromptNote(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handleHeroEdit()}
+                            className="flex-1 text-sm"
+                            placeholder={repromptMode === "edit" ? "e.g., brighter, warmer tones" : "e.g., luxury kitchen at golden hour"}
+                            autoFocus
+                          />
+                        )}
+                        <label className="flex cursor-pointer items-center rounded bg-surface-hover px-2 py-1.5 text-[10px] text-muted hover:text-foreground">
+                          <input type="file" accept="image/*" className="hidden" onChange={handleReferenceFile} />
+                          {referenceFile ? "Change" : repromptMode === "replace" ? "Choose image" : "Ref"}
+                        </label>
+                        {repromptMode === "replace" ? (
+                          <button
+                            onClick={handleHeroReplace}
+                            disabled={reprompting || !referenceFile}
+                            className="bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                          >
+                            {reprompting ? "Replacing..." : "Replace"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleHeroEdit}
+                            disabled={reprompting || !repromptNote.trim()}
+                            className="bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                          >
+                            {reprompting ? "Working..." : repromptMode === "edit" ? "Edit" : "Generate"}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { setRepromptUrl(null); setRepromptNote(""); setReferenceFile(null); setReferencePreview(null); }}
+                          className="px-2 py-1.5 text-xs text-muted hover:text-foreground"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
               <h1 className="mb-2 text-xl font-semibold">{previewing.title}</h1>

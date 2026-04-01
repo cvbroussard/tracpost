@@ -90,7 +90,11 @@ export default async function DashboardLayout({
     <div className="flex h-screen flex-col overflow-hidden">
       <div className="hidden md:block">
         <TopBar subscriberName={session.subscriberName} />
-        <PageHeader siteName={activeSite?.name || "TracPost"} />
+        <PageHeader
+          siteName={activeSite?.name || "TracPost"}
+          sites={session.sites}
+          activeSiteId={session.activeSiteId}
+        />
       </div>
       <MobileNav subscriberName={session.subscriberName} />
       <div className="flex flex-1 overflow-hidden">

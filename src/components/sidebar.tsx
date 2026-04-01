@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SidebarBrand } from "./sidebar-brand";
 
 interface SiteInfo {
   id: string;
@@ -47,23 +46,8 @@ export function Sidebar({ subscriberName, sites, activeSiteId }: SidebarProps) {
   const siteLinks = siteNav.map((item) => ({ ...item, href: prefix + item.path || "/" }));
   const accountLinks = accountNav.map((item) => ({ ...item, href: prefix + item.path || "/" }));
 
-  const handleSiteChange = async (siteId: string) => {
-    await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activeSiteId: siteId || null }),
-    });
-    window.location.href = "/dashboard";
-  };
-
   return (
     <aside className="flex h-full w-48 flex-col border-r border-border bg-surface">
-      <SidebarBrand
-        subscriberName={subscriberName}
-        sites={sites}
-        activeSiteId={activeSiteId}
-        onSiteChange={handleSiteChange}
-      />
       <nav className="flex flex-1 flex-col px-2 py-3">
         {activeSiteId ? (
           <>

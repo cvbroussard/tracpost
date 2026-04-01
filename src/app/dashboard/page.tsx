@@ -2,7 +2,7 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { AddSiteForm } from "./add-site";
+import { AccountPortal } from "./account-portal";
 import { detectContentGaps } from "@/lib/blog/content-gaps";
 
 export const dynamic = "force-dynamic";
@@ -11,21 +11,14 @@ export default async function DashboardOverview() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  // No site yet — inline form to add one
+  // No active site — show account portal with site picker
   if (!session.activeSiteId) {
     return (
-      <div className="mx-auto max-w-4xl">
-        <h1 className="mb-2">Welcome, {session.subscriberName}</h1>
-        <p className="mb-8 text-muted">Let&apos;s get started by adding your site.</p>
-        <div className="flex flex-col items-center rounded-lg border border-dashed border-border px-8 py-12">
-          <span className="mb-3 text-3xl">◆</span>
-          <h3 className="mb-1">Add your site</h3>
-          <p className="mb-6 max-w-xs text-center text-sm text-muted">
-            Enter your site URL to start generating social content.
-          </p>
-          <AddSiteForm />
-        </div>
-      </div>
+      <AccountPortal
+        subscriberName={session.subscriberName}
+        sites={session.sites}
+        plan={session.plan}
+      />
     );
   }
 

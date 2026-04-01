@@ -71,6 +71,17 @@ export function SidebarBrand({ subscriberName, sites, activeSiteId, onSiteChange
                 </div>
               </button>
             ))}
+            <div className="border-t border-border mt-1 pt-1">
+              <button
+                onClick={() => {
+                  onSiteChange?.("");
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted hover:bg-surface-hover hover:text-foreground"
+              >
+                ← All Sites
+              </button>
+            </div>
           </div>
         )}
       </div>

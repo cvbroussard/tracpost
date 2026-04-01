@@ -51,9 +51,9 @@ export function Sidebar({ subscriberName, sites, activeSiteId }: SidebarProps) {
     await fetch("/api/auth/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activeSiteId: siteId }),
+      body: JSON.stringify({ activeSiteId: siteId || null }),
     });
-    window.location.reload();
+    window.location.href = "/dashboard";
   };
 
   return (
@@ -65,34 +65,41 @@ export function Sidebar({ subscriberName, sites, activeSiteId }: SidebarProps) {
         onSiteChange={handleSiteChange}
       />
       <nav className="flex flex-1 flex-col px-2 py-3">
-        <div className="flex flex-col gap-0.5">
-          {siteLinks.map((item) => {
-            const fullPath = prefix + item.path;
-            const active =
-              item.path === ""
-                ? pathname === prefix || pathname === prefix + "/"
-                : pathname === fullPath || pathname === fullPath + "/";
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
-                  active
-                    ? "bg-accent-muted text-accent"
-                    : "text-muted hover:bg-surface-hover hover:text-foreground"
-                }`}
-              >
-                <span className="text-xs">{item.icon}</span>
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
-        <div className="mx-3 my-2 border-t border-border" />
+        {activeSiteId ? (
+          <>
+            <div className="flex flex-col gap-0.5">
+              {siteLinks.map((item) => {
+                const fullPath = prefix + item.path;
+                const active =
+                  item.path === ""
+                    ? pathname === prefix || pathname === prefix + "/"
+                    : pathname === fullPath || pathname === fullPath + "/";
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
+                      active
+                        ? "bg-accent-muted text-accent"
+                        : "text-muted hover:bg-surface-hover hover:text-foreground"
+                    }`}
+                  >
+                    <span className="text-xs">{item.icon}</span>
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+            <div className="mx-3 my-2 border-t border-border" />
+          </>
+        ) : (
+          <div className="mb-2 px-3 py-2">
+            <p className="text-[10px] text-muted">Select a site to access content tools</p>
+          </div>
+        )}
         <div className="flex flex-col gap-0.5">
           {accountLinks.map((item) => {
             const fullPath = prefix + item.path;
-            // Exact match only — prevent parent highlighting when a child is active
             const active = pathname === fullPath || pathname === fullPath + "/";
             return (
               <Link

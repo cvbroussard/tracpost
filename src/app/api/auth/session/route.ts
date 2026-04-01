@@ -37,6 +37,22 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { activeSiteId } = body;
 
+  // Allow clearing active site (return to account portal)
+  if (activeSiteId === null || activeSiteId === "") {
+    const updated = { ...session, activeSiteId: null };
+    const domain = cookieDomain();
+    const response = NextResponse.json({ ok: true, activeSiteId: null });
+    response.cookies.set("tp_session", JSON.stringify(updated), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+      ...(domain && { domain }),
+    });
+    return response;
+  }
+
   // Verify the site belongs to this subscriber
   const validSite = session.sites.find((s) => s.id === activeSiteId);
   if (!validSite) {

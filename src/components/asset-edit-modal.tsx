@@ -67,6 +67,12 @@ export function AssetEditModal({
   const [tags, setTags] = useState<string[]>(initialTags || []);
   const [brandIds, setBrandIds] = useState<string[]>(initialBrandIds);
   const [projectIds, setProjectIds] = useState<string[]>(initialProjectIds);
+  const [localBrands, setLocalBrands] = useState(brands);
+  const [localProjects, setLocalProjects] = useState(projects);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newProjectName, setNewProjectName] = useState("");
+  const [creatingBrand, setCreatingBrand] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<boolean | "force">(false);
   const [deleting, setDeleting] = useState(false);
@@ -82,7 +88,7 @@ export function AssetEditModal({
 
   // Hashtag autocomplete uses brands
   const hashMatches = hashQuery !== null
-    ? brands.filter((v) =>
+    ? localBrands.filter((v) =>
         v.slug.startsWith(hashQuery.toLowerCase()) ||
         v.name.toLowerCase().startsWith(hashQuery.toLowerCase())
       ).slice(0, 6)
@@ -175,6 +181,44 @@ export function AssetEditModal({
       setSuggesting(false);
     }, 800);
   }, [siteId]);
+
+  async function quickCreateBrand() {
+    if (!newBrandName.trim()) return;
+    setCreatingBrand(true);
+    try {
+      const res = await fetch("/api/brands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newBrandName.trim(), site_id: siteId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLocalBrands((prev) => [...prev, data.brand].sort((a: Brand, b: Brand) => a.name.localeCompare(b.name)));
+        setBrandIds((prev) => [...prev, data.brand.id]);
+        setNewBrandName("");
+      }
+    } catch { /* ignore */ }
+    setCreatingBrand(false);
+  }
+
+  async function quickCreateProject() {
+    if (!newProjectName.trim()) return;
+    setCreatingProject(true);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newProjectName.trim(), site_id: siteId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLocalProjects((prev) => [...prev, data.project].sort((a: Project, b: Project) => a.name.localeCompare(b.name)));
+        setProjectIds((prev) => [...prev, data.project.id]);
+        setNewProjectName("");
+      }
+    } catch { /* ignore */ }
+    setCreatingProject(false);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -365,11 +409,11 @@ export function AssetEditModal({
         )}
 
         {/* Row 3: Brands */}
-        {brandLabel && brands.length > 0 && (
+        {brandLabel && (
           <div className="border-t border-border px-6 py-4">
             <label className="mb-1.5 block text-xs text-muted">{brandLabel}</label>
-            <div className="flex flex-wrap gap-1.5">
-              {brands.map((b) => {
+            <div className="flex flex-wrap items-center gap-1.5">
+              {localBrands.map((b) => {
                 const selected = brandIds.includes(b.id);
                 return (
                   <button
@@ -392,16 +436,34 @@ export function AssetEditModal({
                   </button>
                 );
               })}
+              <span className="flex items-center gap-1">
+                <input
+                  value={newBrandName}
+                  onChange={(e) => setNewBrandName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && quickCreateBrand()}
+                  placeholder={`+ ${brandLabel}`}
+                  className="w-28 rounded bg-transparent px-2 py-0.5 text-xs text-muted outline-none placeholder:text-muted/50 focus:bg-surface-hover"
+                />
+                {newBrandName.trim() && (
+                  <button
+                    onClick={quickCreateBrand}
+                    disabled={creatingBrand}
+                    className="text-[10px] text-accent hover:underline"
+                  >
+                    {creatingBrand ? "..." : "Add"}
+                  </button>
+                )}
+              </span>
             </div>
           </div>
         )}
 
         {/* Row 4: Projects */}
-        {projectLabel && projects.length > 0 && (
+        {projectLabel && (
           <div className="border-t border-border px-6 py-4">
             <label className="mb-1.5 block text-xs text-muted">{projectLabel}</label>
-            <div className="flex flex-wrap gap-1.5">
-              {projects.map((p) => {
+            <div className="flex flex-wrap items-center gap-1.5">
+              {localProjects.map((p) => {
                 const selected = projectIds.includes(p.id);
                 return (
                   <button
@@ -421,6 +483,24 @@ export function AssetEditModal({
                   </button>
                 );
               })}
+              <span className="flex items-center gap-1">
+                <input
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && quickCreateProject()}
+                  placeholder={`+ ${projectLabel}`}
+                  className="w-28 rounded bg-transparent px-2 py-0.5 text-xs text-muted outline-none placeholder:text-muted/50 focus:bg-surface-hover"
+                />
+                {newProjectName.trim() && (
+                  <button
+                    onClick={quickCreateProject}
+                    disabled={creatingProject}
+                    className="text-[10px] text-accent hover:underline"
+                  >
+                    {creatingProject ? "..." : "Add"}
+                  </button>
+                )}
+              </span>
             </div>
           </div>
         )}

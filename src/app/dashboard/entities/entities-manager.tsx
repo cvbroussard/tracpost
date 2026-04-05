@@ -594,7 +594,12 @@ export function EntitiesManager({
                   )}
                 </div>
                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${statusColors[project.status] || ""}`}>{project.status}</span>
-                <span className="text-xs text-muted">{project.slug}</span>
+                <a
+                  href={`/dashboard/capture?project=${project.id}&projectName=${encodeURIComponent(project.name)}`}
+                  className="text-xs text-accent hover:underline"
+                >
+                  Upload
+                </a>
                 <button onClick={() => { setEditing(project.id); setEditFields({ name: project.name, status: project.status, start_date: project.start_date || "", end_date: project.end_date || "", address: project.address || "", description: project.description || "" }); }} className="text-xs text-muted hover:text-foreground">Edit</button>
                 <button onClick={() => deleteItem("projects", project.id)} className="text-xs text-muted hover:text-danger">Delete</button>
               </>

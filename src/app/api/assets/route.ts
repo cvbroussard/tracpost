@@ -7,6 +7,36 @@ import { uploadBufferToR2 } from "@/lib/r2";
 import { seoFilename } from "@/lib/seo-filename";
 
 /**
+ * Parse date from common camera filename patterns.
+ * Covers: 20201120_161314404_iOS, IMG_20201120_161314, PXL_20201120_161314
+ */
+function parseDateFromFilename(urlOrFilename: string): string | null {
+  // Extract filename from URL
+  const filename = decodeURIComponent(urlOrFilename.split("/").pop()?.split("?")[0] || "");
+
+  // Pattern: YYYYMMDD_HHMMSS (iOS, Android, Pixel)
+  const match = filename.match(/(\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])_(\d{2})(\d{2})(\d{2})/);
+  if (match) {
+    const [, year, month, day, hour, min, sec] = match;
+    const date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}`);
+    if (!isNaN(date.getTime()) && date.getFullYear() >= 2000 && date <= new Date()) {
+      return date.toISOString();
+    }
+  }
+
+  // Pattern: YYYY-MM-DD (in filename or path)
+  const dashMatch = filename.match(/(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])/);
+  if (dashMatch) {
+    const date = new Date(`${dashMatch[0]}T00:00:00`);
+    if (!isNaN(date.getTime()) && date.getFullYear() >= 2000 && date <= new Date()) {
+      return date.toISOString();
+    }
+  }
+
+  return null;
+}
+
+/**
  * POST /api/assets — Register a new media asset.
  *
  * The mobile capture app or any client calls this after uploading
@@ -66,9 +96,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Convert HEIC/HEIF to JPEG — browsers can't display HEIC
+    // Extract EXIF from original before conversion (conversion may strip it)
+    let preConvertExif: { dateTaken: string | null; lat: number | null; lng: number | null; camera: string | null } | null = null;
     if (finalUrl && media_type === "image" && (
       finalUrl.endsWith(".heic") || finalUrl.endsWith(".heif")
     )) {
+      try {
+        const { extractExif } = await import("@/lib/image-utils");
+        preConvertExif = await extractExif(finalUrl);
+      } catch { /* ignore */ }
+
       try {
         const { data, mimeType } = await fetchAndConvert(finalUrl);
         const date = new Date().toISOString().slice(0, 10);
@@ -104,8 +141,23 @@ export async function POST(req: NextRequest) {
 
     // Extract EXIF metadata + geo-match — non-blocking
     if (media_type?.startsWith("image")) {
-      import("@/lib/image-utils").then(({ extractExif }) =>
-        extractExif(finalUrl).then(async (exif) => {
+      (async () => {
+        try {
+          // Use pre-convert EXIF (from HEIC original) if available, otherwise extract from stored file
+          let exif = preConvertExif;
+          if (!exif || (!exif.dateTaken && exif.lat === null)) {
+            const { extractExif } = await import("@/lib/image-utils");
+            exif = await extractExif(finalUrl);
+          }
+
+          // Fallback: parse date from filename (covers Google Photos drag-and-drop)
+          if (!exif.dateTaken) {
+            const fileDate = parseDateFromFilename(storage_url || finalUrl);
+            if (fileDate) {
+              exif = { ...exif, dateTaken: fileDate };
+            }
+          }
+
           if (exif.dateTaken || exif.lat !== null) {
             const exifMeta = {
               ...(exif.dateTaken && { date_taken: exif.dateTaken }),
@@ -117,16 +169,16 @@ export async function POST(req: NextRequest) {
               SET date_taken = ${exif.dateTaken},
                   metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(exifMeta)}::jsonb
               WHERE id = ${asset.id}
-            `.catch(() => {});
+            `;
 
             // Auto-associate with nearby locations/projects
             if (exif.lat !== null && exif.lng !== null) {
               const { matchAssetToEntities } = await import("@/lib/geo-match");
-              await matchAssetToEntities(asset.id as string, site_id, exif.lat, exif.lng).catch(() => {});
+              await matchAssetToEntities(asset.id as string, site_id, exif.lat, exif.lng);
             }
           }
-        })
-      ).catch(() => {});
+        } catch { /* ignore */ }
+      })();
     }
 
     // Fire pipeline immediately — non-blocking (don't await)

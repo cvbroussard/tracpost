@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 
 interface UploadItem {
@@ -14,6 +16,18 @@ interface UploadItem {
 }
 
 export default function CapturePage() {
+  return (
+    <Suspense>
+      <CaptureForm />
+    </Suspense>
+  );
+}
+
+function CaptureForm() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get("project");
+  const projectName = searchParams.get("projectName");
+
   const [items, setItems] = useState<UploadItem[]>([]);
   const [siteId, setSiteId] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
@@ -129,9 +143,18 @@ export default function CapturePage() {
           }),
         });
 
+        const urlData = await assetRes.json();
         if (!assetRes.ok) {
-          const err = await assetRes.json();
-          throw new Error(err.error || "Failed to register asset");
+          throw new Error(urlData.error || "Failed to register asset");
+        }
+
+        // Auto-tag to project if uploading from project context
+        if (projectId && urlData.asset?.id) {
+          await fetch(`/api/assets/${urlData.asset.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ project_ids: [projectId] }),
+          }).catch(() => {});
         }
       } else if (item.file) {
         // File-based upload — presign + upload to R2 + register
@@ -175,9 +198,18 @@ export default function CapturePage() {
           }),
         });
 
+        const fileData = await assetRes.json();
         if (!assetRes.ok) {
-          const err = await assetRes.json();
-          throw new Error(err.error || "Failed to register asset");
+          throw new Error(fileData.error || "Failed to register asset");
+        }
+
+        // Auto-tag to project if uploading from project context
+        if (projectId && fileData.asset?.id) {
+          await fetch(`/api/assets/${fileData.asset.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ project_ids: [projectId] }),
+          }).catch(() => {});
         }
       }
 
@@ -219,6 +251,15 @@ export default function CapturePage() {
       />
       <h1 className="mb-1 text-lg font-semibold">Capture</h1>
       <p className="mb-6 text-sm text-muted">Upload photos and videos to your media library</p>
+
+      {projectId && (
+        <div className="mb-4 flex items-center justify-between rounded bg-accent/10 px-4 py-2">
+          <p className="text-sm text-accent">
+            Uploading to <strong>{projectName || "project"}</strong> — assets will be auto-tagged
+          </p>
+          <a href="/dashboard/capture" className="text-xs text-muted hover:text-foreground">Clear</a>
+        </div>
+      )}
 
       {/* Capture buttons */}
       <div className="mb-6 grid grid-cols-4 gap-2">

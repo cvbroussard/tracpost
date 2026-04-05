@@ -21,6 +21,7 @@ export async function ensureWebFormat(
 
   try {
     const converted = await sharp(buffer)
+      .keepMetadata()
       .jpeg({ quality: 90 })
       .toBuffer();
     return { data: converted, mimeType: "image/jpeg" };
@@ -99,29 +100,39 @@ export async function extractExif(url: string): Promise<ExifData> {
 
     const exif = exifReader(metadata.exif) as unknown as Record<string, Record<string, unknown>>;
 
-    // Date taken
-    const dateOriginal = exif.exif?.DateTimeOriginal as Date | undefined;
-    const dateDigitized = exif.exif?.DateTimeDigitized as Date | undefined;
-    const dateTime = exif.image?.DateTime as Date | undefined;
-    const date = dateOriginal || dateDigitized || dateTime;
-    if (date && date instanceof Date && date.getFullYear() >= 2000 && date <= new Date()) {
-      result.dateTaken = date.toISOString();
+    // Date taken — exif-reader uses capitalized keys: Image, Photo, GPSInfo
+    const photo = exif.Photo || exif.exif || {};
+    const image = exif.Image || exif.image || {};
+    const dateOriginal = photo.DateTimeOriginal as Date | string | undefined;
+    const dateDigitized = photo.DateTimeDigitized as Date | string | undefined;
+    const dateTime = image.DateTime as Date | string | undefined;
+    const rawDate = dateOriginal || dateDigitized || dateTime;
+    if (rawDate) {
+      const date = rawDate instanceof Date ? rawDate : new Date(rawDate);
+      if (!isNaN(date.getTime()) && date.getFullYear() >= 2000 && date <= new Date()) {
+        result.dateTaken = date.toISOString();
+      }
     }
 
-    // GPS coordinates
-    const gps = exif.gps as Record<string, unknown> | undefined;
-    if (gps?.GPSLatitude && gps?.GPSLongitude) {
-      const lat = gps.GPSLatitude as number;
-      const lng = gps.GPSLongitude as number;
+    // GPS coordinates — exif-reader uses GPSInfo key, lat/lng as DMS arrays [degrees, minutes, seconds]
+    const gps = (exif.GPSInfo || exif.gps || {}) as Record<string, unknown>;
+    if (gps.GPSLatitude && gps.GPSLongitude) {
+      const latDms = gps.GPSLatitude as number[];
+      const lngDms = gps.GPSLongitude as number[];
       const latRef = (gps.GPSLatitudeRef as string) || "N";
       const lngRef = (gps.GPSLongitudeRef as string) || "E";
+
+      // Convert DMS array to decimal, or use directly if already decimal
+      const lat = Array.isArray(latDms) ? latDms[0] + latDms[1] / 60 + (latDms[2] || 0) / 3600 : latDms as unknown as number;
+      const lng = Array.isArray(lngDms) ? lngDms[0] + lngDms[1] / 60 + (lngDms[2] || 0) / 3600 : lngDms as unknown as number;
+
       result.lat = latRef === "S" ? -lat : lat;
       result.lng = lngRef === "W" ? -lng : lng;
     }
 
     // Camera
-    const make = (exif.image?.Make as string) || "";
-    const model = (exif.image?.Model as string) || "";
+    const make = (image.Make as string) || "";
+    const model = (image.Model as string) || "";
     if (make || model) {
       result.camera = [make, model].filter(Boolean).join(" ").trim();
     }

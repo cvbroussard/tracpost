@@ -48,39 +48,59 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   const [activeCount, setActiveCount] = useState(0);
   const [doneCount, setDoneCount] = useState(0);
   const [errorCount, setErrorCount] = useState(0);
-  const portRef = useRef<MessagePort | null>(null);
+  const swReady = useRef(false);
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof SharedWorker === "undefined") return;
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
-    const worker = new SharedWorker("/upload-worker.js", { name: "tracpost-upload" });
-    const port = worker.port;
-    portRef.current = port;
+    // Register the upload service worker
+    navigator.serviceWorker.register("/upload-sw.js", { scope: "/" }).then((reg) => {
+      swReady.current = true;
 
-    port.onmessage = (e) => {
-      const msg = e.data;
-      if (msg.type === "progress") {
+      // Request status once active
+      const sw = reg.active || reg.installing || reg.waiting;
+      if (sw?.state === "activated") {
+        sw.postMessage({ type: "upload-status" });
+      } else {
+        sw?.addEventListener("statechange", function handler() {
+          if (sw.state === "activated") {
+            sw.postMessage({ type: "upload-status" });
+            sw.removeEventListener("statechange", handler);
+          }
+        });
+      }
+    }).catch((err) => {
+      console.warn("Upload service worker registration failed:", err);
+    });
+
+    // Listen for messages from the service worker
+    function handleMessage(event: MessageEvent) {
+      const msg = event.data;
+      if (msg.type === "upload-progress") {
         setItems(msg.items);
         setActiveCount(msg.activeCount);
         setDoneCount(msg.doneCount);
         setErrorCount(msg.errorCount);
       }
-    };
+    }
 
-    port.start();
+    navigator.serviceWorker.addEventListener("message", handleMessage);
 
-    // Request current status (reconnect after navigation/refresh)
-    port.postMessage({ type: "status" });
+    // Request status on mount (reconnect after navigation)
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: "upload-status" });
+    }
 
     return () => {
-      port.onmessage = null;
+      navigator.serviceWorker.removeEventListener("message", handleMessage);
     };
   }, []);
 
   const enqueue = useCallback(async (newItems: Omit<UploadItem, "id" | "status">[]) => {
-    if (!portRef.current) return;
+    const sw = navigator.serviceWorker?.controller;
+    if (!sw) return;
 
-    // Convert File objects to ArrayBuffers (can't transfer File to SharedWorker)
+    // Convert File objects to ArrayBuffers
     const prepared = await Promise.all(
       newItems.map(async (item) => {
         const id = crypto.randomUUID();
@@ -107,19 +127,18 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       })
     );
 
-    // Transfer ArrayBuffers for zero-copy performance
     const transferables = prepared
-      .filter((p) => p.fileData)
-      .map((p) => p.fileData as ArrayBuffer);
+      .filter((p): p is typeof p & { fileData: ArrayBuffer } => !!(p as Record<string, unknown>).fileData)
+      .map((p) => p.fileData);
 
-    portRef.current.postMessage(
-      { type: "enqueue", items: prepared },
+    sw.postMessage(
+      { type: "upload-enqueue", items: prepared },
       transferables
     );
   }, []);
 
   const clear = useCallback(() => {
-    portRef.current?.postMessage({ type: "clear" });
+    navigator.serviceWorker?.controller?.postMessage({ type: "upload-clear" });
   }, []);
 
   return (

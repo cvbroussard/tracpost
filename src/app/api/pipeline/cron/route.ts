@@ -159,13 +159,20 @@ export async function GET(req: NextRequest) {
         // ── Triage ──
         await triageAsset(assetId);
 
-        // ── Face detection + matching ──
+        // ── Face detection — gated by persona_label + has_faces ──
         if (mediaType?.startsWith("image") && !meta.faces) {
-          try {
-            const { processFaces } = await import("@/lib/face-detect");
-            await processFaces(assetId, siteId, currentUrl);
-          } catch (err) {
-            console.error(`Face detection failed for ${assetId}:`, err instanceof Error ? err.message : err);
+          const [siteConfig] = await sql`SELECT persona_label FROM sites WHERE id = ${siteId}`;
+          if (siteConfig?.persona_label) {
+            const [triaged] = await sql`SELECT ai_analysis FROM media_assets WHERE id = ${assetId}`;
+            const analysis = (triaged?.ai_analysis || {}) as Record<string, unknown>;
+            if (analysis.has_faces) {
+              try {
+                const { processFaces } = await import("@/lib/face-detect");
+                await processFaces(assetId, siteId, currentUrl);
+              } catch (err) {
+                console.error(`Face detection failed for ${assetId}:`, err instanceof Error ? err.message : err);
+              }
+            }
           }
         }
 

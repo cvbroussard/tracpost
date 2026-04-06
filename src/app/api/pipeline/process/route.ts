@@ -142,15 +142,26 @@ export async function POST(req: NextRequest) {
       // Triage
       await triageAsset(assetId);
 
-      // Face detection + matching (images only, after conversion)
+      // Face detection — only if:
+      // 1. Persona label is configured on the site (tenant opted in)
+      // 2. Triage detected faces in this image (has_faces = true)
+      // 3. Face data hasn't been processed yet
       if (mediaType?.startsWith("image") && !meta.faces) {
-        try {
-          console.log(`Face detection starting for ${assetId}`);
-          const { processFaces } = await import("@/lib/face-detect");
-          const faceResult = await processFaces(assetId, siteId, currentUrl);
-          console.log(`Face detection complete for ${assetId}: ${faceResult.matched} matched, ${faceResult.unmatched} unmatched`);
-        } catch (err) {
-          console.error(`Face detection failed for ${assetId}:`, err instanceof Error ? err.stack || err.message : err);
+        const [siteConfig] = await sql`SELECT persona_label FROM sites WHERE id = ${siteId}`;
+        if (siteConfig?.persona_label) {
+          // Re-read asset to get fresh triage results
+          const [triaged] = await sql`SELECT ai_analysis FROM media_assets WHERE id = ${assetId}`;
+          const analysis = (triaged?.ai_analysis || {}) as Record<string, unknown>;
+          if (analysis.has_faces) {
+            try {
+              console.log(`Face detection starting for ${assetId} (has_faces=true)`);
+              const { processFaces } = await import("@/lib/face-detect");
+              const faceResult = await processFaces(assetId, siteId, currentUrl);
+              console.log(`Face detection complete for ${assetId}: ${faceResult.matched} matched, ${faceResult.unmatched} unmatched`);
+            } catch (err) {
+              console.error(`Face detection failed for ${assetId}:`, err instanceof Error ? err.stack || err.message : err);
+            }
+          }
         }
       }
 

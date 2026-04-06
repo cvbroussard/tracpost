@@ -1,69 +1,54 @@
 /**
- * Face detection and embedding service using @vladmandic/face-api.
+ * Face detection and recognition via AWS Rekognition.
  *
- * Optimized for Vercel serverless — uses sharp for image decoding
- * and the WASM/JS TensorFlow backend (no native bindings).
+ * Uses a per-site Rekognition Collection to store and match face embeddings.
+ * No local models, no TensorFlow — just API calls.
+ *
+ * Env: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
  */
+import { RekognitionClient, DetectFacesCommand, IndexFacesCommand, SearchFacesByImageCommand, CreateCollectionCommand, ListCollectionsCommand } from "@aws-sdk/client-rekognition";
 import { sql } from "@/lib/db";
 
-// Polyfill for serverless environments where TextEncoder isn't on `this`
-if (typeof globalThis !== "undefined" && !globalThis.TextEncoder) {
-  const { TextEncoder, TextDecoder } = require("util");
-  globalThis.TextEncoder = TextEncoder;
-  globalThis.TextDecoder = TextDecoder;
+let client: RekognitionClient | null = null;
+
+function getClient(): RekognitionClient {
+  if (!client) {
+    client = new RekognitionClient({
+      region: process.env.AWS_REGION || "us-east-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+      },
+    });
+  }
+  return client;
 }
 
-let faceapi: typeof import("@vladmandic/face-api") | null = null;
-let tf: typeof import("@tensorflow/tfjs") | null = null;
-let modelsLoaded = false;
-
 /**
- * Lazy-load face-api and TensorFlow to avoid import errors on Edge runtime.
+ * Get or create a Rekognition collection for a site.
+ * Collection name: tracpost-{siteId}
  */
-async function ensureLoaded() {
-  if (modelsLoaded) return faceapi!;
+async function ensureCollection(siteId: string): Promise<string> {
+  const collectionId = `tracpost-${siteId.slice(0, 20)}`;
+  const rek = getClient();
 
   try {
-    // Import pure JS TensorFlow (no native bindings)
-    tf = await import("@tensorflow/tfjs");
+    const list = await rek.send(new ListCollectionsCommand({}));
+    if (list.CollectionIds?.includes(collectionId)) return collectionId;
+  } catch { /* ignore */ }
 
-    // Import face-api
-    faceapi = await import("@vladmandic/face-api");
+  try {
+    await rek.send(new CreateCollectionCommand({ CollectionId: collectionId }));
+  } catch { /* already exists */ }
 
-    // Load models — try disk first (local dev), fall back to manual HTTP fetch (Vercel)
-    let loaded = false;
-    try {
-      const path = await import("path");
-      const modelPath = path.join(process.cwd(), "node_modules/@vladmandic/face-api/model");
-      await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
-      await faceapi.nets.faceLandmark68Net.loadFromDisk(modelPath);
-      await faceapi.nets.faceRecognitionNet.loadFromDisk(modelPath);
-      loaded = true;
-    } catch (diskErr) {
-      console.log("Disk model load failed, trying HTTP:", diskErr instanceof Error ? diskErr.message : diskErr);
-    }
-
-    if (!loaded) {
-      // HTTP loading — loadFromUri with TextEncoder polyfill should work now
-      const modelUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://tracpost.com") + "/face-models";
-      console.log("Loading face models from URL:", modelUrl);
-      await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
-      await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
-      await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
-    }
-
-    modelsLoaded = true;
-    return faceapi;
-  } catch (err) {
-    console.warn("Face detection unavailable:", err instanceof Error ? err.stack || err.message : err);
-    throw new Error("Face detection models could not be loaded");
-  }
+  return collectionId;
 }
 
 export interface DetectedFace {
-  embedding: number[];
   box: { x: number; y: number; width: number; height: number };
   score: number;
+  faceId?: string;
+  embedding: number[]; // Empty for Rekognition — matching is server-side
 }
 
 export interface FaceMatch {
@@ -73,171 +58,195 @@ export interface FaceMatch {
 }
 
 /**
- * Detect faces in an image and return embeddings.
- * Uses sharp for image decoding (works on Vercel, no canvas needed).
+ * Detect faces in an image. Returns bounding boxes and confidence scores.
+ * Box coordinates are percentages (0-1) of image dimensions.
  */
-export async function detectFaces(imageUrl: string): Promise<{ faces: DetectedFace[]; detectionWidth: number; detectionHeight: number }> {
-  const api = await ensureLoaded();
+export async function detectFaces(imageUrl: string): Promise<{ faces: DetectedFace[]; imageWidth: number; imageHeight: number }> {
+  const rek = getClient();
 
   try {
-    // Fetch image
     const res = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) return { faces: [], detectionWidth: 0, detectionHeight: 0 };
+    if (!res.ok) return { faces: [], imageWidth: 0, imageHeight: 0 };
     const buffer = Buffer.from(await res.arrayBuffer());
 
-    // Decode with sharp to get raw RGBA pixel data
+    // Get image dimensions
     const sharp = (await import("sharp")).default;
-    const { data, info } = await sharp(buffer)
-      .resize({ width: 800, withoutEnlargement: true })
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+    const meta = await sharp(buffer).metadata();
+    const imgW = meta.width || 1;
+    const imgH = meta.height || 1;
 
-    console.log(`Face detect: image ${info.width}x${info.height}, ${data.length} bytes`);
+    const cmd = new DetectFacesCommand({
+      Image: { Bytes: buffer },
+      Attributes: ["DEFAULT"],
+    });
 
-    // Create a tensor3d from RGBA data (4 channels → 3 channels)
-    const rgbaData = new Uint8ClampedArray(data);
-    const rgbData = new Uint8Array(info.width * info.height * 3);
-    for (let i = 0, j = 0; i < rgbaData.length; i += 4, j += 3) {
-      rgbData[j] = rgbaData[i];
-      rgbData[j + 1] = rgbaData[i + 1];
-      rgbData[j + 2] = rgbaData[i + 2];
-    }
+    const result = await rek.send(cmd);
 
-    const tensor = tf!.tensor3d(rgbData, [info.height, info.width, 3]);
-
-    // Detect faces with lower threshold for pure JS backend
-    const options = new api.SsdMobilenetv1Options({ minConfidence: 0.3 });
-    const detections = await api
-      .detectAllFaces(tensor as unknown as HTMLCanvasElement, options)
-      .withFaceLandmarks()
-      .withFaceDescriptors();
-
-    console.log(`Face detect: found ${detections.length} faces`);
-    tensor.dispose();
-
-    return {
-      faces: detections.map((d) => ({
-        embedding: Array.from(d.descriptor),
+    const faces: DetectedFace[] = (result.FaceDetails || []).map((face) => {
+      const box = face.BoundingBox!;
+      return {
+        // Convert percentage-based box to pixel coordinates
         box: {
-          x: Math.round(d.detection.box.x),
-          y: Math.round(d.detection.box.y),
-          width: Math.round(d.detection.box.width),
-          height: Math.round(d.detection.box.height),
+          x: Math.round((box.Left || 0) * imgW),
+          y: Math.round((box.Top || 0) * imgH),
+          width: Math.round((box.Width || 0) * imgW),
+          height: Math.round((box.Height || 0) * imgH),
         },
-        score: d.detection.score,
-      })),
-      detectionWidth: info.width,
-      detectionHeight: info.height,
-    };
+        score: face.Confidence ? face.Confidence / 100 : 0,
+        embedding: [], // Rekognition handles matching server-side
+      };
+    });
+
+    return { faces, imageWidth: imgW, imageHeight: imgH };
   } catch (err) {
-    console.error("Face detection error:", err instanceof Error ? err.message : err);
-    return { faces: [], detectionWidth: 0, detectionHeight: 0 };
+    console.error("Rekognition DetectFaces error:", err instanceof Error ? err.message : err);
+    return { faces: [], imageWidth: 0, imageHeight: 0 };
   }
 }
 
 /**
- * Euclidean distance between two embeddings.
+ * Index a face into the site's Rekognition collection.
+ * Called when a tenant names a face — stores the face for future matching.
+ * Returns the Rekognition FaceId.
  */
-function euclideanDistance(a: number[], b: number[]): number {
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) {
-    sum += (a[i] - b[i]) ** 2;
-  }
-  return Math.sqrt(sum);
-}
-
-const MATCH_THRESHOLD = 0.6;
-
-/**
- * Match detected faces against known personas for a site.
- */
-export async function matchFaces(
+export async function indexFace(
   siteId: string,
-  detectedFaces: DetectedFace[]
-): Promise<{
-  matched: Array<{ face: DetectedFace; persona: FaceMatch }>;
-  unmatched: DetectedFace[];
-}> {
-  if (detectedFaces.length === 0) return { matched: [], unmatched: [] };
+  imageUrl: string,
+  box: { x: number; y: number; width: number; height: number },
+  personaId: string
+): Promise<string | null> {
+  const rek = getClient();
+  const collectionId = await ensureCollection(siteId);
 
-  const personas = await sql`
-    SELECT id, name, metadata
-    FROM personas
-    WHERE site_id = ${siteId}
-      AND metadata->>'face_embedding' IS NOT NULL
-  `;
+  try {
+    const res = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
 
-  const knownFaces = personas.map((p) => ({
-    id: p.id as string,
-    name: p.name as string,
-    embedding: JSON.parse((p.metadata as Record<string, unknown>).face_embedding as string) as number[],
-  }));
+    const cmd = new IndexFacesCommand({
+      CollectionId: collectionId,
+      Image: { Bytes: buffer },
+      ExternalImageId: personaId,
+      MaxFaces: 1,
+      QualityFilter: "AUTO",
+    });
 
-  const matched: Array<{ face: DetectedFace; persona: FaceMatch }> = [];
-  const unmatched: DetectedFace[] = [];
-
-  for (const face of detectedFaces) {
-    let bestMatch: FaceMatch | null = null;
-    let bestDistance = Infinity;
-
-    for (const known of knownFaces) {
-      const distance = euclideanDistance(face.embedding, known.embedding);
-      if (distance < MATCH_THRESHOLD && distance < bestDistance) {
-        bestDistance = distance;
-        bestMatch = {
-          personaId: known.id,
-          personaName: known.name,
-          distance,
-        };
-      }
-    }
-
-    if (bestMatch) {
-      matched.push({ face, persona: bestMatch });
-    } else {
-      unmatched.push(face);
-    }
+    const result = await rek.send(cmd);
+    const indexed = result.FaceRecords?.[0]?.Face;
+    return indexed?.FaceId || null;
+  } catch (err) {
+    console.error("Rekognition IndexFaces error:", err instanceof Error ? err.message : err);
+    return null;
   }
-
-  return { matched, unmatched };
 }
 
 /**
- * Process faces for an asset: detect, match, auto-tag, store data.
+ * Search for matching faces in the site's collection.
+ * Returns matched persona IDs for each face found.
+ */
+export async function searchFaces(
+  siteId: string,
+  imageUrl: string
+): Promise<Array<{ box: { x: number; y: number; width: number; height: number }; personaId: string; personaName: string; similarity: number }>> {
+  const rek = getClient();
+  const collectionId = await ensureCollection(siteId);
+
+  try {
+    const res = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return [];
+    const buffer = Buffer.from(await res.arrayBuffer());
+
+    // Get image dimensions
+    const sharp = (await import("sharp")).default;
+    const meta = await sharp(buffer).metadata();
+    const imgW = meta.width || 1;
+    const imgH = meta.height || 1;
+
+    const cmd = new SearchFacesByImageCommand({
+      CollectionId: collectionId,
+      Image: { Bytes: buffer },
+      MaxFaces: 10,
+      FaceMatchThreshold: 80,
+    });
+
+    const result = await rek.send(cmd);
+
+    if (!result.FaceMatches?.length) return [];
+
+    // Look up persona names from ExternalImageId (which we set to personaId)
+    const matches: Array<{ box: { x: number; y: number; width: number; height: number }; personaId: string; personaName: string; similarity: number }> = [];
+
+    const searchBox = result.SearchedFaceBoundingBox;
+
+    for (const match of result.FaceMatches) {
+      const personaId = match.Face?.ExternalImageId;
+      if (!personaId) continue;
+
+      const [persona] = await sql`SELECT name FROM personas WHERE id = ${personaId}`;
+      matches.push({
+        box: searchBox ? {
+          x: Math.round((searchBox.Left || 0) * imgW),
+          y: Math.round((searchBox.Top || 0) * imgH),
+          width: Math.round((searchBox.Width || 0) * imgW),
+          height: Math.round((searchBox.Height || 0) * imgH),
+        } : { x: 0, y: 0, width: 0, height: 0 },
+        personaId,
+        personaName: (persona?.name as string) || "Unknown",
+        similarity: match.Similarity || 0,
+      });
+    }
+
+    return matches;
+  } catch (err) {
+    // Collection might be empty — that's fine
+    if (err instanceof Error && err.message.includes("no faces in the collection")) return [];
+    console.error("Rekognition SearchFaces error:", err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
+/**
+ * Process faces for an asset: detect, search for matches, auto-tag, store data.
+ * Called during the processing pipeline.
  */
 export async function processFaces(
   assetId: string,
   siteId: string,
   imageUrl: string
 ): Promise<{ matched: number; unmatched: number }> {
-  const result = await detectFaces(imageUrl);
-  if (result.faces.length === 0) return { matched: 0, unmatched: 0 };
+  // Step 1: Detect all faces
+  const { faces, imageWidth, imageHeight } = await detectFaces(imageUrl);
+  if (faces.length === 0) return { matched: 0, unmatched: 0 };
 
-  const { matched, unmatched } = await matchFaces(siteId, result.faces);
+  // Step 2: Search for known faces
+  const matches = await searchFaces(siteId, imageUrl);
+  const matchedPersonaIds = new Set(matches.map((m) => m.personaId));
 
   // Auto-tag matched personas
-  for (const m of matched) {
+  for (const match of matches) {
     await sql`
       INSERT INTO asset_personas (asset_id, persona_id)
-      VALUES (${assetId}, ${m.persona.personaId})
+      VALUES (${assetId}, ${match.personaId})
       ON CONFLICT DO NOTHING
     `;
   }
 
-  // Store face data on the asset — include detection dimensions for UI scaling
+  // Step 3: Store face data on the asset
   const faceData = {
-    detectionWidth: result.detectionWidth,
-    detectionHeight: result.detectionHeight,
-    faces: result.faces.map((f, i) => {
-      const match = matched.find((m) => m.face === f);
+    detectionWidth: imageWidth,
+    detectionHeight: imageHeight,
+    faces: faces.map((f, i) => {
+      const match = matches.find((m) =>
+        Math.abs(m.box.x - f.box.x) < imageWidth * 0.1 &&
+        Math.abs(m.box.y - f.box.y) < imageHeight * 0.1
+      );
       return {
         box: f.box,
         score: f.score,
-        personaId: match?.persona.personaId || null,
-        personaName: match?.persona.personaName || null,
-        distance: match?.persona.distance || null,
-        embedding: f.embedding,
+        personaId: match?.personaId || null,
+        personaName: match?.personaName || null,
+        distance: match ? (1 - match.similarity / 100) : null,
+        embedding: [], // Rekognition manages embeddings server-side
         index: i,
       };
     }),
@@ -250,19 +259,30 @@ export async function processFaces(
     WHERE id = ${assetId}
   `;
 
-  return { matched: matched.length, unmatched: unmatched.length };
+  return {
+    matched: matchedPersonaIds.size,
+    unmatched: faces.length - matchedPersonaIds.size,
+  };
 }
 
 /**
- * Store a face embedding on a persona record.
+ * Store a face in the Rekognition collection for a persona.
+ * Called when a tenant names an unknown face.
  */
 export async function setPersonaEmbedding(
   personaId: string,
-  embedding: number[]
+  _embedding: number[], // Unused with Rekognition — kept for API compat
+  siteId?: string,
+  imageUrl?: string
 ): Promise<void> {
-  await sql`
-    UPDATE personas
-    SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ face_embedding: JSON.stringify(embedding) })}::jsonb
-    WHERE id = ${personaId}
-  `;
+  if (siteId && imageUrl) {
+    const faceId = await indexFace(siteId, imageUrl, { x: 0, y: 0, width: 0, height: 0 }, personaId);
+    if (faceId) {
+      await sql`
+        UPDATE personas
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ rekognition_face_id: faceId })}::jsonb
+        WHERE id = ${personaId}
+      `;
+    }
+  }
 }

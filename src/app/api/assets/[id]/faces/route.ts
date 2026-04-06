@@ -68,6 +68,10 @@ export async function POST(
   const siteId = asset.site_id as string;
   let targetPersonaId = personaId;
 
+  // Get asset storage URL for Rekognition indexing
+  const [assetFull] = await sql`SELECT storage_url FROM media_assets WHERE id = ${id}`;
+  const imageUrl = assetFull?.storage_url as string;
+
   // Create new persona if needed
   if (!targetPersonaId && newPersonaName) {
     const slug = newPersonaName
@@ -77,18 +81,27 @@ export async function POST(
       .slice(0, 40);
 
     const [newPersona] = await sql`
-      INSERT INTO personas (site_id, name, slug, type, consent_given, metadata)
-      VALUES (${siteId}, ${newPersonaName.trim()}, ${slug}, ${personaType || "person"}, false,
-              ${JSON.stringify({ face_embedding: JSON.stringify(embedding) })}::jsonb)
+      INSERT INTO personas (site_id, name, slug, type, consent_given)
+      VALUES (${siteId}, ${newPersonaName.trim()}, ${slug}, ${personaType || "person"}, false)
       ON CONFLICT (site_id, slug) WHERE slug IS NOT NULL
-      DO UPDATE SET metadata = personas.metadata || ${JSON.stringify({ face_embedding: JSON.stringify(embedding) })}::jsonb
+      DO NOTHING
       RETURNING id, name, slug, type
     `;
-    targetPersonaId = newPersona.id;
-  } else if (targetPersonaId) {
-    // Store embedding on existing persona
-    const { setPersonaEmbedding } = await import("@/lib/face-detect");
-    await setPersonaEmbedding(targetPersonaId, embedding);
+    targetPersonaId = newPersona?.id || (await sql`SELECT id FROM personas WHERE site_id = ${siteId} AND slug = ${slug}`)[0]?.id;
+
+    // Index face in Rekognition
+    if (targetPersonaId && imageUrl) {
+      const { indexFace } = await import("@/lib/face-detect");
+      await indexFace(siteId, imageUrl, face.box as { x: number; y: number; width: number; height: number }, targetPersonaId as string).catch((err: unknown) =>
+        console.error("Rekognition index failed:", err instanceof Error ? err.message : err)
+      );
+    }
+  } else if (targetPersonaId && imageUrl) {
+    // Index face for existing persona
+    const { indexFace } = await import("@/lib/face-detect");
+    await indexFace(siteId, imageUrl, face.box as { x: number; y: number; width: number; height: number }, targetPersonaId).catch((err: unknown) =>
+      console.error("Rekognition index failed:", err instanceof Error ? err.message : err)
+    );
   }
 
   if (!targetPersonaId) {

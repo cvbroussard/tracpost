@@ -60,10 +60,6 @@ export async function POST(
   }
 
   const face = faceData.faces[faceIndex];
-  const embedding = face.embedding as number[];
-  if (!embedding || embedding.length === 0) {
-    return NextResponse.json({ error: "No embedding for this face" }, { status: 400 });
-  }
 
   const siteId = asset.site_id as string;
   let targetPersonaId = personaId;

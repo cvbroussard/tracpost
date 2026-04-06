@@ -108,12 +108,18 @@ export function AssetEditModal({
   // Reset state when navigating to a different asset
   useEffect(() => {
     setFaceData(initialFaces);
-    setNote(initialNote);
+    // If there's a pending AI draft for this asset, pre-fill as unsaved
+    if (pendingDraft && pendingDraft.assetId === assetId && !initialNote) {
+      setNote(pendingDraft.caption);
+    } else {
+      setNote(initialNote);
+    }
     setPillar(initialPillar);
     setTags(initialTags || []);
     setBrandIds(initialBrandIds);
     setProjectIds(initialProjectIds);
     setPersonaIds(initialPersonaIds);
+    setPendingDraft(null);
   }, [assetId]);
   const [localBrands, setLocalBrands] = useState(brands);
   const [localProjects, setLocalProjects] = useState(projects);
@@ -270,7 +276,10 @@ export function AssetEditModal({
     setCreatingProject(false);
   }
 
-  async function doSave(): Promise<boolean> {
+  // Pending AI draft caption for the next asset (from supervised mode)
+  const [pendingDraft, setPendingDraft] = useState<{ assetId: string; caption: string } | null>(null);
+
+  async function doSave(): Promise<{ ok: boolean; nextDraft?: { assetId: string; caption: string } }> {
     const body: Record<string, unknown> = {};
     if (note !== initialNote) body.context_note = note;
     if (pillar !== initialPillar) body.pillar = pillar;
@@ -279,7 +288,7 @@ export function AssetEditModal({
     if (JSON.stringify(projectIds.sort()) !== JSON.stringify(initialProjectIds.sort())) body.project_ids = projectIds;
     if (JSON.stringify(personaIds.sort()) !== JSON.stringify(initialPersonaIds.sort())) body.persona_ids = personaIds;
 
-    if (Object.keys(body).length === 0) return true;
+    if (Object.keys(body).length === 0) return { ok: true };
 
     const res = await fetch(`/api/assets/${assetId}`, {
       method: "PATCH",
@@ -287,17 +296,18 @@ export function AssetEditModal({
       body: JSON.stringify(body),
     });
 
-    if (!res.ok) return false;
+    if (!res.ok) return { ok: false };
 
+    const data = await res.json();
     onSaved(note, pillar, tags, brandIds, projectIds, personaIds);
-    return true;
+    return { ok: true, nextDraft: data.nextDraft };
   }
 
   async function handleSave() {
     setSaving(true);
     try {
-      const ok = await doSave();
-      if (ok) onClose();
+      const result = await doSave();
+      if (result.ok) onClose();
       else alert("Failed to save changes");
     } catch {
       alert("Failed to save changes");
@@ -310,7 +320,10 @@ export function AssetEditModal({
     if (!onNext) return;
     setSaving(true);
     try {
-      await doSave();
+      const result = await doSave();
+      if (result.nextDraft) {
+        setPendingDraft(result.nextDraft);
+      }
       onNext();
     } catch {
       alert("Failed to save changes");

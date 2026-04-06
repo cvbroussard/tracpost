@@ -128,7 +128,7 @@ export async function onCaptionSaved(
   projectId: string,
   isAiGenerated: boolean,
   previousCaption: string | null
-): Promise<{ modeChanged: boolean; newMode: string }> {
+): Promise<{ modeChanged: boolean; newMode: string; nextDraft?: { assetId: string; caption: string } }> {
   // Get current project state
   const [project] = await sql`
     SELECT caption_mode, manual_caption_count FROM projects WHERE id = ${projectId}
@@ -154,10 +154,10 @@ export async function onCaptionSaved(
       // Build initial snapshot
       await buildProjectSnapshot(projectId);
 
-      // Generate first AI caption
-      await generateNextCaption(projectId);
+      // Generate first AI draft
+      const nextDraft = await generateNextCaption(projectId);
 
-      return { modeChanged: true, newMode: "supervised" };
+      return { modeChanged: true, newMode: "supervised", nextDraft: nextDraft || undefined };
     }
 
     await sql`
@@ -166,19 +166,27 @@ export async function onCaptionSaved(
     `;
   }
 
-  // In supervised mode, every save (manual or AI approval) triggers next generation
-  if (mode === "supervised" || mode === "autopilot") {
+  // In supervised mode, every save triggers next draft generation
+  if (mode === "supervised") {
     await buildProjectSnapshot(projectId);
-    await generateNextCaption(projectId);
+    const nextDraft = await generateNextCaption(projectId);
+    return { modeChanged: false, newMode: mode, nextDraft: nextDraft || undefined };
+  }
+
+  // In autopilot mode, rebuild snapshot (captions write directly in generateAllCaptions)
+  if (mode === "autopilot") {
+    await buildProjectSnapshot(projectId);
   }
 
   return { modeChanged: false, newMode: mode };
 }
 
 /**
- * Generate a caption for the next uncaptioned asset in a project.
+ * Generate a draft caption for the next uncaptioned asset in a project.
+ * Returns the caption text and asset ID WITHOUT writing to DB.
+ * The caption is held as an unsaved draft until the user saves.
  */
-export async function generateNextCaption(projectId: string): Promise<string | null> {
+export async function generateNextCaption(projectId: string): Promise<{ assetId: string; caption: string } | null> {
   const [project] = await sql`
     SELECT caption_mode, context_snapshot FROM projects WHERE id = ${projectId}
   `;
@@ -203,20 +211,10 @@ export async function generateNextCaption(projectId: string): Promise<string | n
 
   if (!nextAsset) return null;
 
-  // Build the prompt
   const caption = await generateCaptionForAsset(nextAsset, snapshot);
+  if (!caption) return null;
 
-  if (caption) {
-    // Store as AI-generated caption
-    await sql`
-      UPDATE media_assets
-      SET context_note = ${caption},
-          metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ caption_source: "ai", ai_caption: caption })}::jsonb
-      WHERE id = ${nextAsset.id}
-    `;
-  }
-
-  return caption;
+  return { assetId: nextAsset.id as string, caption };
 }
 
 /**

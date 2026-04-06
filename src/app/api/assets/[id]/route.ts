@@ -109,45 +109,44 @@ export async function PATCH(
     `;
 
     // Trigger progressive caption pipeline if this asset belongs to a project
+    let nextDraft: { assetId: string; caption: string } | undefined;
     if (context_note !== undefined && typeof context_note === "string" && context_note.trim()) {
-      (async () => {
-        try {
-          // Find project(s) for this asset
-          const projectLinks = await sql`
-            SELECT project_id FROM asset_projects WHERE asset_id = ${id}
-          `;
-          for (const link of projectLinks) {
-            const meta = (asset.metadata || {}) as Record<string, unknown>;
-            const wasAiGenerated = meta.caption_source === "ai";
-            const previousCaption = meta.ai_caption as string | null;
+      try {
+        const projectLinks = await sql`
+          SELECT project_id FROM asset_projects WHERE asset_id = ${id}
+        `;
+        for (const link of projectLinks) {
+          const meta = (asset.metadata || {}) as Record<string, unknown>;
+          const wasAiGenerated = meta.caption_source === "ai";
+          const previousCaption = meta.ai_caption as string | null;
 
-            // Mark caption source
-            if (wasAiGenerated && context_note !== previousCaption) {
-              // User corrected an AI caption
-              await sql`
-                UPDATE media_assets
-                SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ caption_source: "corrected" })}::jsonb
-                WHERE id = ${id}
-              `;
-            } else if (!wasAiGenerated) {
-              // Manual caption
-              await sql`
-                UPDATE media_assets
-                SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ caption_source: "manual" })}::jsonb
-                WHERE id = ${id}
-              `;
-            }
-
-            const { onCaptionSaved } = await import("@/lib/pipeline/project-captions");
-            await onCaptionSaved(id, link.project_id as string, wasAiGenerated, previousCaption || null);
+          // Mark caption source
+          if (wasAiGenerated && context_note !== previousCaption) {
+            await sql`
+              UPDATE media_assets
+              SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ caption_source: "corrected" })}::jsonb
+              WHERE id = ${id}
+            `;
+          } else if (!wasAiGenerated) {
+            await sql`
+              UPDATE media_assets
+              SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ caption_source: "manual" })}::jsonb
+              WHERE id = ${id}
+            `;
           }
-        } catch (err) {
-          console.error("Project caption pipeline error:", err instanceof Error ? err.message : err);
+
+          const { onCaptionSaved } = await import("@/lib/pipeline/project-captions");
+          const result = await onCaptionSaved(id, link.project_id as string, wasAiGenerated, previousCaption || null);
+          if (result.nextDraft) {
+            nextDraft = result.nextDraft;
+          }
         }
-      })();
+      } catch (err) {
+        console.error("Project caption pipeline error:", err instanceof Error ? err.message : err);
+      }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, nextDraft });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

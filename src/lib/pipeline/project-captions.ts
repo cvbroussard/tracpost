@@ -128,8 +128,7 @@ export async function onCaptionSaved(
   projectId: string,
   isAiGenerated: boolean,
   previousCaption: string | null
-): Promise<{ modeChanged: boolean; newMode: string; nextDraft?: { assetId: string; caption: string } }> {
-  // Get current project state
+): Promise<{ modeChanged: boolean; newMode: string }> {
   const [project] = await sql`
     SELECT caption_mode, manual_caption_count FROM projects WHERE id = ${projectId}
   `;
@@ -140,24 +139,17 @@ export async function onCaptionSaved(
   let count = (project.manual_caption_count as number) || 0;
 
   if (!isAiGenerated) {
-    // Manual caption or correction
     count++;
 
-    // Check if we should advance from seeding → supervised
+    // Advance from seeding → supervised at threshold
     if (mode === "seeding" && count >= SEED_THRESHOLD) {
       mode = "supervised";
       await sql`
         UPDATE projects SET caption_mode = 'supervised', manual_caption_count = ${count}
         WHERE id = ${projectId}
       `;
-
-      // Build initial snapshot
       await buildProjectSnapshot(projectId);
-
-      // Generate first AI draft
-      const nextDraft = await generateNextCaption(projectId);
-
-      return { modeChanged: true, newMode: "supervised", nextDraft: nextDraft || undefined };
+      return { modeChanged: true, newMode: "supervised" };
     }
 
     await sql`
@@ -166,17 +158,8 @@ export async function onCaptionSaved(
     `;
   }
 
-  // In supervised mode, every save triggers next draft generation
-  if (mode === "supervised") {
-    await buildProjectSnapshot(projectId);
-    const nextDraft = await generateNextCaption(projectId);
-    return { modeChanged: false, newMode: mode, nextDraft: nextDraft || undefined };
-  }
-
-  // In autopilot mode, rebuild snapshot (captions write directly in generateAllCaptions)
-  if (mode === "autopilot") {
-    await buildProjectSnapshot(projectId);
-  }
+  // Rebuild snapshot on every save (improves future AI generations)
+  await buildProjectSnapshot(projectId);
 
   return { modeChanged: false, newMode: mode };
 }
@@ -268,7 +251,7 @@ export async function generateAllCaptions(projectId: string): Promise<number> {
 /**
  * Generate a caption for a single asset using the project snapshot.
  */
-async function generateCaptionForAsset(
+export async function generateCaptionForAsset(
   asset: Record<string, unknown>,
   snapshot: ProjectSnapshot
 ): Promise<string | null> {

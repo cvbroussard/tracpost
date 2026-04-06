@@ -108,8 +108,7 @@ export async function PATCH(
       })})
     `;
 
-    // Trigger progressive caption pipeline if this asset belongs to a project
-    let nextDraft: { assetId: string; caption: string } | undefined;
+    // Update caption source and project snapshot if this is a project asset
     if (context_note !== undefined && typeof context_note === "string" && context_note.trim()) {
       try {
         const projectLinks = await sql`
@@ -135,18 +134,16 @@ export async function PATCH(
             `;
           }
 
+          // Update project snapshot (improves future AI generations)
           const { onCaptionSaved } = await import("@/lib/pipeline/project-captions");
-          const result = await onCaptionSaved(id, link.project_id as string, wasAiGenerated, previousCaption || null);
-          if (result.nextDraft) {
-            nextDraft = result.nextDraft;
-          }
+          await onCaptionSaved(id, link.project_id as string, wasAiGenerated, previousCaption || null);
         }
       } catch (err) {
         console.error("Project caption pipeline error:", err instanceof Error ? err.message : err);
       }
     }
 
-    return NextResponse.json({ success: true, nextDraft });
+    return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

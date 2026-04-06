@@ -108,18 +108,12 @@ export function AssetEditModal({
   // Reset state when navigating to a different asset
   useEffect(() => {
     setFaceData(initialFaces);
-    // If there's a pending AI draft for this asset, pre-fill as unsaved
-    if (pendingDraft && pendingDraft.assetId === assetId && !initialNote) {
-      setNote(pendingDraft.caption);
-    } else {
-      setNote(initialNote);
-    }
+    setNote(initialNote);
     setPillar(initialPillar);
     setTags(initialTags || []);
     setBrandIds(initialBrandIds);
     setProjectIds(initialProjectIds);
     setPersonaIds(initialPersonaIds);
-    setPendingDraft(null);
   }, [assetId]);
   const [localBrands, setLocalBrands] = useState(brands);
   const [localProjects, setLocalProjects] = useState(projects);
@@ -128,6 +122,7 @@ export function AssetEditModal({
   const [creatingBrand, setCreatingBrand] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<boolean | "force">(false);
   const [deleting, setDeleting] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
@@ -276,10 +271,7 @@ export function AssetEditModal({
     setCreatingProject(false);
   }
 
-  // Pending AI draft caption for the next asset (from supervised mode)
-  const [pendingDraft, setPendingDraft] = useState<{ assetId: string; caption: string } | null>(null);
-
-  async function doSave(): Promise<{ ok: boolean; nextDraft?: { assetId: string; caption: string } }> {
+  async function doSave(): Promise<boolean> {
     const body: Record<string, unknown> = {};
     if (note !== initialNote) body.context_note = note;
     if (pillar !== initialPillar) body.pillar = pillar;
@@ -288,7 +280,7 @@ export function AssetEditModal({
     if (JSON.stringify(projectIds.sort()) !== JSON.stringify(initialProjectIds.sort())) body.project_ids = projectIds;
     if (JSON.stringify(personaIds.sort()) !== JSON.stringify(initialPersonaIds.sort())) body.persona_ids = personaIds;
 
-    if (Object.keys(body).length === 0) return { ok: true };
+    if (Object.keys(body).length === 0) return true;
 
     const res = await fetch(`/api/assets/${assetId}`, {
       method: "PATCH",
@@ -296,18 +288,17 @@ export function AssetEditModal({
       body: JSON.stringify(body),
     });
 
-    if (!res.ok) return { ok: false };
+    if (!res.ok) return false;
 
-    const data = await res.json();
     onSaved(note, pillar, tags, brandIds, projectIds, personaIds);
-    return { ok: true, nextDraft: data.nextDraft };
+    return true;
   }
 
   async function handleSave() {
     setSaving(true);
     try {
-      const result = await doSave();
-      if (result.ok) onClose();
+      const ok = await doSave();
+      if (ok) onClose();
       else alert("Failed to save changes");
     } catch {
       alert("Failed to save changes");
@@ -320,10 +311,7 @@ export function AssetEditModal({
     if (!onNext) return;
     setSaving(true);
     try {
-      const result = await doSave();
-      if (result.nextDraft) {
-        setPendingDraft(result.nextDraft);
-      }
+      await doSave();
       onNext();
     } catch {
       alert("Failed to save changes");
@@ -422,7 +410,31 @@ export function AssetEditModal({
               )}
             </div>
 
-            <label className="mb-1 block text-xs text-muted">Context Note</label>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-xs text-muted">Context Note</label>
+              {projectIds.length > 0 && (
+                <button
+                  onClick={async () => {
+                    setGenerating(true);
+                    try {
+                      const res = await fetch(`/api/assets/${assetId}/generate-caption`, { method: "POST" });
+                      if (res.ok) {
+                        const data = await res.json();
+                        if (data.caption) setNote(data.caption);
+                      } else {
+                        const data = await res.json();
+                        if (data.error) alert(data.error);
+                      }
+                    } catch { /* ignore */ }
+                    setGenerating(false);
+                  }}
+                  disabled={generating}
+                  className="text-[10px] text-accent hover:underline disabled:opacity-50"
+                >
+                  {generating ? "Generating..." : "Generate caption"}
+                </button>
+              )}
+            </div>
             <div className="relative flex-1">
               <textarea
                 ref={textareaRef}

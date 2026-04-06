@@ -38,6 +38,8 @@ interface AssetEditModalProps {
   onClose: () => void;
   onSaved: (note: string, pillar: string, tags: string[]) => void;
   onDeleted?: () => void;
+  onBrandCreated?: (brand: Brand) => void;
+  onProjectCreated?: (project: Project) => void;
 }
 
 export function AssetEditModal({
@@ -61,6 +63,8 @@ export function AssetEditModal({
   onClose,
   onSaved,
   onDeleted,
+  onBrandCreated,
+  onProjectCreated,
 }: AssetEditModalProps) {
   const [note, setNote] = useState(initialNote);
   const [pillar, setPillar] = useState(initialPillar);
@@ -196,6 +200,7 @@ export function AssetEditModal({
         setLocalBrands((prev) => [...prev, data.brand].sort((a: Brand, b: Brand) => a.name.localeCompare(b.name)));
         setBrandIds((prev) => [...prev, data.brand.id]);
         setNewBrandName("");
+        onBrandCreated?.(data.brand);
       }
     } catch { /* ignore */ }
     setCreatingBrand(false);
@@ -215,6 +220,7 @@ export function AssetEditModal({
         setLocalProjects((prev) => [...prev, data.project].sort((a: Project, b: Project) => a.name.localeCompare(b.name)));
         setProjectIds((prev) => [...prev, data.project.id]);
         setNewProjectName("");
+        onProjectCreated?.(data.project);
       }
     } catch { /* ignore */ }
     setCreatingProject(false);

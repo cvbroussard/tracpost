@@ -69,6 +69,8 @@ export function MediaGrid({
 }) {
   const [assets, setAssets] = useState(initialAssets);
   const [editing, setEditing] = useState<Asset | null>(null);
+  const [liveBrands, setLiveBrands] = useState(brands);
+  const [liveProjects, setLiveProjects] = useState(projects);
 
   function handleSaved(note: string, pillar: string, tags: string[]) {
     if (!editing) return;
@@ -170,12 +172,14 @@ export function MediaGrid({
           initialPillar={editing.content_pillar || ""}
           initialTags={editing.content_tags || editing.content_pillars || []}
           pillarConfig={pillarConfig}
-          brands={brands}
-          projects={projects}
+          brands={liveBrands}
+          projects={liveProjects}
           brandLabel={brandLabel}
           projectLabel={projectLabel}
           initialBrandIds={assetBrandMap[editing.id] || []}
           initialProjectIds={assetProjectMap[editing.id] || []}
+          onBrandCreated={(brand) => setLiveBrands((prev) => [...prev, brand].sort((a, b) => a.name.localeCompare(b.name)))}
+          onProjectCreated={(project) => setLiveProjects((prev) => [...prev, project].sort((a, b) => a.name.localeCompare(b.name)))}
           source={editing.source}
           qualityScore={Number(editing.quality_score) || null}
           sceneType={(editing.ai_analysis as Record<string, unknown>)?.scene_type as string || null}

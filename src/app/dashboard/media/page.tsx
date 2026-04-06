@@ -52,9 +52,11 @@ export default async function MediaPage({ searchParams }: Props) {
   // Fetch all assets for the site, apply server-side sort
   const orderClause = sortOrder === "quality" ? "quality_score DESC"
     : sortOrder === "least_used" ? "COALESCE((metadata->>'used_count')::int, 0) ASC, created_at DESC"
+    : sortOrder === "oldest" ? "COALESCE(date_taken, created_at) ASC"
     : "COALESCE(date_taken, created_at) DESC";
 
   // Single query — filter in JS for reliability with Neon tagged templates
+  // Note: SQL ORDER BY is always DESC here; JS re-sorts per orderClause
   const allAssets = await sql`
     SELECT id, storage_url, media_type, context_note, triage_status,
            quality_score, content_pillar, content_pillars, content_tags,
@@ -92,7 +94,13 @@ export default async function MediaPage({ searchParams }: Props) {
   }
 
   // Apply sort
-  if (sortOrder === "quality") {
+  if (sortOrder === "oldest") {
+    filtered.sort((a, b) => {
+      const aDate = (a.date_taken || a.created_at) as string;
+      const bDate = (b.date_taken || b.created_at) as string;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    });
+  } else if (sortOrder === "quality") {
     filtered.sort((a, b) => ((b.quality_score as number) || 0) - ((a.quality_score as number) || 0));
   } else if (sortOrder === "least_used") {
     filtered.sort((a, b) => {

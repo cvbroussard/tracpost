@@ -28,7 +28,28 @@ export function MediaFilters({
 }) {
   const router = useRouter();
 
+  // On mount: if no explicit sort param, redirect to persisted preference
+  if (typeof window !== "undefined" && sortOrder === "newest") {
+    try {
+      const persisted = localStorage.getItem("tp_media_sort");
+      if (persisted && persisted !== "newest" && persisted !== sortOrder) {
+        // Check URL doesn't already have sort param
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has("sort")) {
+          url.searchParams.set("sort", persisted);
+          window.location.href = url.toString();
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Persist sort preference
+  function persistSort(sort: string) {
+    try { localStorage.setItem("tp_media_sort", sort); } catch { /* ignore */ }
+  }
+
   function updateParams(updates: Record<string, string>) {
+    if (updates.sort) persistSort(updates.sort);
     const params = new URLSearchParams();
     const merged = {
       source: sourceFilter,
@@ -123,7 +144,8 @@ export function MediaFilters({
         onChange={(e) => updateParams({ sort: e.target.value })}
         className="bg-surface-hover px-2 py-1 text-[10px] text-muted"
       >
-        <option value="newest">Newest</option>
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
         <option value="quality">Quality</option>
         <option value="least_used">Least used</option>
       </select>

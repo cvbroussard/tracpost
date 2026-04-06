@@ -6,6 +6,13 @@
  */
 import { sql } from "@/lib/db";
 
+// Polyfill for serverless environments where TextEncoder isn't on `this`
+if (typeof globalThis !== "undefined" && !globalThis.TextEncoder) {
+  const { TextEncoder, TextDecoder } = require("util");
+  globalThis.TextEncoder = TextEncoder;
+  globalThis.TextDecoder = TextDecoder;
+}
+
 let faceapi: typeof import("@vladmandic/face-api") | null = null;
 let tf: typeof import("@tensorflow/tfjs") | null = null;
 let modelsLoaded = false;
@@ -23,16 +30,23 @@ async function ensureLoaded() {
     // Import face-api
     faceapi = await import("@vladmandic/face-api");
 
-    // Load models — try disk first (local dev), fall back to URL (Vercel)
-    const modelUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://tracpost.com") + "/face-models";
+    // Load models — try disk first (local dev), fall back to manual HTTP fetch (Vercel)
+    let loaded = false;
     try {
       const path = await import("path");
       const modelPath = path.join(process.cwd(), "node_modules/@vladmandic/face-api/model");
       await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
       await faceapi.nets.faceLandmark68Net.loadFromDisk(modelPath);
       await faceapi.nets.faceRecognitionNet.loadFromDisk(modelPath);
-    } catch {
-      // Disk load failed (Vercel) — load via HTTP from public/face-models
+      loaded = true;
+    } catch (diskErr) {
+      console.log("Disk model load failed, trying HTTP:", diskErr instanceof Error ? diskErr.message : diskErr);
+    }
+
+    if (!loaded) {
+      // HTTP loading — loadFromUri with TextEncoder polyfill should work now
+      const modelUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://tracpost.com") + "/face-models";
+      console.log("Loading face models from URL:", modelUrl);
       await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
       await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
       await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
@@ -41,7 +55,7 @@ async function ensureLoaded() {
     modelsLoaded = true;
     return faceapi;
   } catch (err) {
-    console.warn("Face detection unavailable:", err instanceof Error ? err.message : err);
+    console.warn("Face detection unavailable:", err instanceof Error ? err.stack || err.message : err);
     throw new Error("Face detection models could not be loaded");
   }
 }

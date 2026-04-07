@@ -1,17 +1,17 @@
 /**
- * Progressive project caption pipeline.
+ * Project caption system.
  *
- * Phase 1 (seeding): User writes manual captions. No AI generation.
- * Phase 2 (supervised): AI generates one caption at a time, waits for user action.
- * Phase 3 (autopilot): AI captions all uncaptioned assets freely.
+ * Simple model:
+ * - User captions assets manually, hitting "Generate" when they want AI help
+ * - Each save rebuilds the project context snapshot (improves future generations)
+ * - "Auto-caption all" bulk generates for remaining uncaptioned assets
  *
- * The context snapshot accumulates with each caption, improving quality over time.
+ * No modes, no thresholds. The AI gets better with every caption.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 
 const anthropic = new Anthropic();
-const SEED_THRESHOLD = 3;
 
 interface ProjectSnapshot {
   description: string;
@@ -33,7 +33,6 @@ export async function buildProjectSnapshot(projectId: string): Promise<ProjectSn
 
   if (!project) throw new Error("Project not found");
 
-  // Get brands associated with this project's assets
   const brandRows = await sql`
     SELECT DISTINCT b.name, b.url
     FROM brands b
@@ -42,7 +41,6 @@ export async function buildProjectSnapshot(projectId: string): Promise<ProjectSn
     WHERE ap.project_id = ${projectId}
   `;
 
-  // Get all captioned assets in this project, ordered by date
   const captioned = await sql`
     SELECT ma.context_note, ma.date_taken, ma.created_at, ma.metadata
     FROM media_assets ma
@@ -62,7 +60,6 @@ export async function buildProjectSnapshot(projectId: string): Promise<ProjectSn
     };
   });
 
-  // Extract corrections (where AI caption was replaced)
   const corrections: Array<{ ai: string; human: string }> = [];
   for (const a of captioned) {
     const meta = (a.metadata || {}) as Record<string, unknown>;
@@ -74,12 +71,10 @@ export async function buildProjectSnapshot(projectId: string): Promise<ProjectSn
     }
   }
 
-  // Extract unique vocabulary from manual/corrected captions
   const manualCaptions = sampleCaptions
     .filter((c) => c.source === "manual" || c.source === "corrected")
     .map((c) => c.note);
 
-  // Find domain-specific terms (words that appear in manual captions but are uncommon)
   const wordFreq = new Map<string, number>();
   for (const caption of manualCaptions) {
     const words = caption.toLowerCase().match(/[a-z][a-z'-]+/g) || [];
@@ -103,13 +98,12 @@ export async function buildProjectSnapshot(projectId: string): Promise<ProjectSn
         : null,
     ].filter(Boolean).join(" — "),
     brands: brandRows.map((b) => b.name as string),
-    sampleCaptions: sampleCaptions.slice(-10), // Keep last 10 for context window
+    sampleCaptions: sampleCaptions.slice(-10),
     corrections,
     vocabulary,
     updatedAt: new Date().toISOString(),
   };
 
-  // Store snapshot on the project
   await sql`
     UPDATE projects
     SET context_snapshot = ${JSON.stringify(snapshot)}::jsonb
@@ -120,97 +114,114 @@ export async function buildProjectSnapshot(projectId: string): Promise<ProjectSn
 }
 
 /**
- * Record a manual caption save — updates snapshot and advances caption mode.
- * Called from the asset PATCH API when a project asset's caption changes.
+ * Called when a caption is saved on a project asset.
+ * Rebuilds the snapshot so future generations improve.
  */
 export async function onCaptionSaved(
   assetId: string,
   projectId: string,
   isAiGenerated: boolean,
   previousCaption: string | null
-): Promise<{ modeChanged: boolean; newMode: string }> {
-  const [project] = await sql`
-    SELECT caption_mode, manual_caption_count FROM projects WHERE id = ${projectId}
-  `;
+): Promise<void> {
+  await buildProjectSnapshot(projectId);
+}
 
-  if (!project) return { modeChanged: false, newMode: "seeding" };
+/**
+ * Generate a caption for a single asset using its project's snapshot.
+ * Returns draft text — does NOT write to DB.
+ */
+export async function generateCaptionForAsset(
+  asset: Record<string, unknown>,
+  snapshot: ProjectSnapshot
+): Promise<string | null> {
+  const storageUrl = asset.storage_url as string;
+  const meta = (asset.metadata || {}) as Record<string, unknown>;
+  const dateTaken = asset.date_taken
+    ? new Date(asset.date_taken as string).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : null;
+  const camera = meta.camera as string | undefined;
+  const aiAnalysis = meta.ai_analysis as Record<string, unknown> | undefined;
+  const sceneType = aiAnalysis?.scene_type as string | undefined;
 
-  let mode = project.caption_mode as string;
-  let count = (project.manual_caption_count as number) || 0;
+  const examples = snapshot.sampleCaptions
+    .filter((c) => c.source === "manual" || c.source === "corrected")
+    .slice(-5)
+    .map((c) => `[${c.date || "undated"}] ${c.note}`)
+    .join("\n");
 
-  if (!isAiGenerated) {
-    count++;
+  const correctionGuide = snapshot.corrections.length > 0
+    ? `\n\nIMPORTANT — Previous corrections by the user:\n${snapshot.corrections.map((c) => `- AI wrote: "${c.ai}"\n  User corrected to: "${c.human}"`).join("\n")}\nLearn from these corrections. Use the user's terminology, not generic descriptions.`
+    : "";
 
-    // Advance from seeding → supervised at threshold
-    if (mode === "seeding" && count >= SEED_THRESHOLD) {
-      mode = "supervised";
-      await sql`
-        UPDATE projects SET caption_mode = 'supervised', manual_caption_count = ${count}
-        WHERE id = ${projectId}
-      `;
-      await buildProjectSnapshot(projectId);
-      return { modeChanged: true, newMode: "supervised" };
+  const prompt = `You are writing a context note for a media asset in a project documentation system.
+
+Project: ${snapshot.description}
+${snapshot.brands.length > 0 ? `Brands/materials on this project: ${snapshot.brands.join(", ")}` : ""}
+${dateTaken ? `Photo date: ${dateTaken}` : ""}
+${sceneType ? `Scene type: ${sceneType}` : ""}
+${camera ? `Camera: ${camera}` : ""}
+${snapshot.vocabulary.length > 0 ? `Domain vocabulary from this project: ${snapshot.vocabulary.join(", ")}` : ""}
+
+${examples ? `Here are example captions written by the project owner for other photos in this same project:\n${examples}` : "No example captions available yet — write a descriptive, specific caption."}
+${correctionGuide}
+
+Write a context note for this photo in the SAME style, tone, and level of detail as the examples above.
+- Be specific about what you see — materials, techniques, conditions
+- Use the project's domain vocabulary, not generic terms
+- Keep it concise — one or two sentences, like the examples
+- Do NOT use marketing language or adjectives like "beautiful" or "stunning"
+- If you're not sure what something is, describe what you see without guessing
+
+Respond with ONLY the caption text, nothing else.`;
+
+  try {
+    const imgRes = await fetch(storageUrl, { signal: AbortSignal.timeout(10000) });
+    if (!imgRes.ok) return null;
+    let imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+
+    // Downscale if over 4MB (Claude API limit is 5MB)
+    if (imgBuffer.length > 4 * 1024 * 1024) {
+      const sharp = (await import("sharp")).default;
+      imgBuffer = Buffer.from(await sharp(imgBuffer)
+        .resize({ width: 1600, withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer());
     }
 
-    await sql`
-      UPDATE projects SET manual_caption_count = ${count}
-      WHERE id = ${projectId}
-    `;
+    const base64 = imgBuffer.toString("base64");
+    const isPng = imgBuffer[0] === 0x89 && imgBuffer[1] === 0x50;
+    const mediaType = isPng ? "image/png" : "image/jpeg";
+
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      messages: [{
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: { type: "base64", media_type: mediaType, data: base64 },
+          },
+          { type: "text", text: prompt },
+        ],
+      }],
+    });
+
+    const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : null;
+    return text || null;
+  } catch (err) {
+    console.error("Caption generation error:", err instanceof Error ? err.message : err);
+    return null;
   }
-
-  // Rebuild snapshot on every save (improves future AI generations)
-  await buildProjectSnapshot(projectId);
-
-  return { modeChanged: false, newMode: mode };
 }
 
 /**
- * Generate a draft caption for the next uncaptioned asset in a project.
- * Returns the caption text and asset ID WITHOUT writing to DB.
- * The caption is held as an unsaved draft until the user saves.
- */
-export async function generateNextCaption(projectId: string): Promise<{ assetId: string; caption: string } | null> {
-  const [project] = await sql`
-    SELECT caption_mode, context_snapshot FROM projects WHERE id = ${projectId}
-  `;
-
-  if (!project) return null;
-  const mode = project.caption_mode as string;
-  if (mode === "seeding") return null;
-
-  const snapshot = (project.context_snapshot || {}) as ProjectSnapshot;
-
-  // Find the next uncaptioned asset in this project
-  const [nextAsset] = await sql`
-    SELECT ma.id, ma.storage_url, ma.media_type, ma.date_taken, ma.created_at, ma.metadata
-    FROM media_assets ma
-    JOIN asset_projects ap ON ap.asset_id = ma.id
-    WHERE ap.project_id = ${projectId}
-      AND (ma.context_note IS NULL OR ma.context_note = '')
-      AND ma.triage_status = 'triaged'
-    ORDER BY COALESCE(ma.date_taken, ma.created_at) ASC
-    LIMIT 1
-  `;
-
-  if (!nextAsset) return null;
-
-  const caption = await generateCaptionForAsset(nextAsset, snapshot);
-  if (!caption) return null;
-
-  return { assetId: nextAsset.id as string, caption };
-}
-
-/**
- * Generate captions for ALL uncaptioned assets in a project (autopilot mode).
+ * Bulk generate captions for all uncaptioned assets in a project.
+ * Writes directly to DB. Called from the project captions API.
  */
 export async function generateAllCaptions(projectId: string): Promise<number> {
-  const [project] = await sql`
-    SELECT caption_mode, context_snapshot FROM projects WHERE id = ${projectId}
-  `;
-
-  if (!project || project.caption_mode !== "autopilot") return 0;
-
-  const snapshot = (project.context_snapshot || {}) as ProjectSnapshot;
+  // Build fresh snapshot
+  const snapshot = await buildProjectSnapshot(projectId);
 
   const uncaptioned = await sql`
     SELECT ma.id, ma.storage_url, ma.media_type, ma.date_taken, ma.created_at, ma.metadata
@@ -246,98 +257,4 @@ export async function generateAllCaptions(projectId: string): Promise<number> {
   }
 
   return generated;
-}
-
-/**
- * Generate a caption for a single asset using the project snapshot.
- */
-export async function generateCaptionForAsset(
-  asset: Record<string, unknown>,
-  snapshot: ProjectSnapshot
-): Promise<string | null> {
-  const storageUrl = asset.storage_url as string;
-  const meta = (asset.metadata || {}) as Record<string, unknown>;
-  const dateTaken = asset.date_taken
-    ? new Date(asset.date_taken as string).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
-    : null;
-  const camera = meta.camera as string | undefined;
-  const aiAnalysis = meta.ai_analysis as Record<string, unknown> | undefined;
-  const sceneType = aiAnalysis?.scene_type as string | undefined;
-
-  // Build few-shot examples from manual/corrected captions
-  const examples = snapshot.sampleCaptions
-    .filter((c) => c.source === "manual" || c.source === "corrected")
-    .slice(-5)
-    .map((c) => `[${c.date || "undated"}] ${c.note}`)
-    .join("\n");
-
-  // Build correction guidance
-  const correctionGuide = snapshot.corrections.length > 0
-    ? `\n\nIMPORTANT — Previous corrections by the user:\n${snapshot.corrections.map((c) => `- AI wrote: "${c.ai}"\n  User corrected to: "${c.human}"`).join("\n")}\nLearn from these corrections. Use the user's terminology, not generic descriptions.`
-    : "";
-
-  // Build the prompt
-  const prompt = `You are writing a context note for a media asset in a construction/renovation project documentation system.
-
-Project: ${snapshot.description}
-${snapshot.brands.length > 0 ? `Brands/materials on this project: ${snapshot.brands.join(", ")}` : ""}
-${dateTaken ? `Photo date: ${dateTaken}` : ""}
-${sceneType ? `Scene type: ${sceneType}` : ""}
-${camera ? `Camera: ${camera}` : ""}
-${snapshot.vocabulary.length > 0 ? `Domain vocabulary from this project: ${snapshot.vocabulary.join(", ")}` : ""}
-
-Here are example captions written by the project owner for other photos in this same project:
-${examples}
-${correctionGuide}
-
-Write a context note for this photo in the SAME style, tone, and level of detail as the examples above.
-- Be specific about what you see — materials, techniques, conditions
-- Use the project's domain vocabulary, not generic terms
-- Keep it concise — one or two sentences, like the examples
-- Do NOT use marketing language or adjectives like "beautiful" or "stunning"
-- If you're not sure what something is, describe what you see without guessing
-
-Respond with ONLY the caption text, nothing else.`;
-
-  try {
-    // Fetch image for vision
-    const imgRes = await fetch(storageUrl, { signal: AbortSignal.timeout(10000) });
-    if (!imgRes.ok) return null;
-    let imgBuffer = Buffer.from(await imgRes.arrayBuffer());
-
-    // Downscale if over 4MB (Claude API limit is 5MB)
-    if (imgBuffer.length > 4 * 1024 * 1024) {
-      const sharp = (await import("sharp")).default;
-      imgBuffer = Buffer.from(await sharp(imgBuffer)
-        .resize({ width: 1600, withoutEnlargement: true })
-        .jpeg({ quality: 85 })
-        .toBuffer());
-    }
-
-    const base64 = imgBuffer.toString("base64");
-    // Detect content type from buffer magic bytes
-    const isPng = imgBuffer[0] === 0x89 && imgBuffer[1] === 0x50;
-    const mediaType = isPng ? "image/png" : "image/jpeg";
-
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 200,
-      messages: [{
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: mediaType, data: base64 },
-          },
-          { type: "text", text: prompt },
-        ],
-      }],
-    });
-
-    const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : null;
-    return text || null;
-  } catch (err) {
-    console.error("Caption generation error:", err instanceof Error ? err.message : err);
-    return null;
-  }
 }

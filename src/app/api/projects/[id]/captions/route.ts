@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * GET /api/projects/:id/captions — Caption pipeline status.
+ * GET /api/projects/:id/captions — Caption status for a project.
  */
 export async function GET(
   req: NextRequest,
@@ -15,13 +15,6 @@ export async function GET(
   const authResult = await authenticateRequest(req);
   if (authResult instanceof NextResponse) return authResult;
   const { id } = await params;
-
-  const [project] = await sql`
-    SELECT caption_mode, manual_caption_count FROM projects WHERE id = ${id}
-  `;
-  if (!project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
-  }
 
   const [counts] = await sql`
     SELECT
@@ -34,9 +27,6 @@ export async function GET(
   `;
 
   return NextResponse.json({
-    caption_mode: project.caption_mode,
-    manual_caption_count: project.manual_caption_count,
-    seed_threshold: 3,
     total_assets: counts?.total || 0,
     captioned: counts?.captioned || 0,
     uncaptioned: counts?.uncaptioned || 0,
@@ -44,8 +34,7 @@ export async function GET(
 }
 
 /**
- * POST /api/projects/:id/captions — Set caption mode or trigger generation.
- * Body: { mode: "autopilot" }
+ * POST /api/projects/:id/captions — Bulk auto-caption all uncaptioned assets.
  */
 export async function POST(
   req: NextRequest,
@@ -57,7 +46,7 @@ export async function POST(
   const { id } = await params;
 
   const [project] = await sql`
-    SELECT p.id, p.caption_mode FROM projects p
+    SELECT p.id FROM projects p
     JOIN sites s ON p.site_id = s.id
     WHERE p.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
   `;
@@ -65,22 +54,8 @@ export async function POST(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const body = await req.json();
+  const { generateAllCaptions } = await import("@/lib/pipeline/project-captions");
+  const generated = await generateAllCaptions(id);
 
-  if (body.mode === "autopilot") {
-    await sql`UPDATE projects SET caption_mode = 'autopilot' WHERE id = ${id}`;
-
-    const { generateAllCaptions, buildProjectSnapshot } = await import("@/lib/pipeline/project-captions");
-    await buildProjectSnapshot(id);
-    const generated = await generateAllCaptions(id);
-
-    return NextResponse.json({ mode: "autopilot", generated });
-  }
-
-  if (body.mode === "supervised") {
-    await sql`UPDATE projects SET caption_mode = 'supervised' WHERE id = ${id}`;
-    return NextResponse.json({ mode: "supervised" });
-  }
-
-  return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
+  return NextResponse.json({ generated });
 }

@@ -19,14 +19,9 @@ interface Project {
   end_date: string | null;
   address: string | null;
   description: string | null;
-  caption_mode?: string;
-  manual_caption_count?: number;
 }
 
 interface CaptionStatus {
-  caption_mode: string;
-  manual_caption_count: number;
-  seed_threshold: number;
   total_assets: number;
   captioned: number;
   uncaptioned: number;
@@ -92,7 +87,7 @@ export function EntitiesManager({
 
   // Caption status per project
   const [captionStatuses, setCaptionStatuses] = useState<Record<string, CaptionStatus>>({});
-  const [togglingAutopilot, setTogglingAutopilot] = useState<string | null>(null);
+  const [autoCaptioning, setAutoCaptioning] = useState<string | null>(null);
 
   // Fetch caption statuses for all projects on mount
   useState(() => {
@@ -106,23 +101,23 @@ export function EntitiesManager({
     }
   });
 
-  async function toggleAutopilot(projectId: string) {
-    setTogglingAutopilot(projectId);
+  async function autoCaptionAll(projectId: string) {
+    setAutoCaptioning(projectId);
     try {
-      const res = await fetch(`/api/projects/${projectId}/captions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "autopilot" }),
-      });
+      const res = await fetch(`/api/projects/${projectId}/captions`, { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         setCaptionStatuses((prev) => ({
           ...prev,
-          [projectId]: { ...prev[projectId], caption_mode: "autopilot", uncaptioned: (prev[projectId]?.uncaptioned || 0) - (data.generated || 0), captioned: (prev[projectId]?.captioned || 0) + (data.generated || 0) },
+          [projectId]: {
+            ...prev[projectId],
+            uncaptioned: (prev[projectId]?.uncaptioned || 0) - (data.generated || 0),
+            captioned: (prev[projectId]?.captioned || 0) + (data.generated || 0),
+          },
         }));
       }
     } catch { /* ignore */ }
-    setTogglingAutopilot(null);
+    setAutoCaptioning(null);
   }
 
   // Config state
@@ -662,22 +657,13 @@ export function EntitiesManager({
                         <span className="text-[10px] text-dim">
                           {cs.captioned}/{cs.total_assets} captioned
                         </span>
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                          cs.caption_mode === "autopilot" ? "bg-success/20 text-success"
-                            : cs.caption_mode === "supervised" ? "bg-accent/20 text-accent"
-                            : "bg-muted/20 text-muted"
-                        }`}>
-                          {cs.caption_mode === "autopilot" ? "autopilot"
-                            : cs.caption_mode === "supervised" ? "supervised"
-                            : `seeding ${cs.manual_caption_count}/${cs.seed_threshold}`}
-                        </span>
-                        {cs.caption_mode === "supervised" && cs.uncaptioned > 0 && (
+                        {cs.uncaptioned > 0 && (
                           <button
-                            onClick={() => toggleAutopilot(project.id)}
-                            disabled={togglingAutopilot === project.id}
+                            onClick={() => autoCaptionAll(project.id)}
+                            disabled={autoCaptioning === project.id}
                             className="text-[10px] text-accent hover:underline disabled:opacity-50"
                           >
-                            {togglingAutopilot === project.id ? "generating..." : "switch to autopilot"}
+                            {autoCaptioning === project.id ? "generating..." : `Auto-caption ${cs.uncaptioned} remaining`}
                           </button>
                         )}
                       </div>

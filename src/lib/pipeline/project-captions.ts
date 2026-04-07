@@ -305,7 +305,12 @@ Respond with ONLY the caption text, nothing else.`;
     if (!imgRes.ok) return null;
     const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
     const base64 = imgBuffer.toString("base64");
-    const mediaType = storageUrl.endsWith(".png") ? "image/png" : "image/jpeg";
+    // Detect actual content type — don't trust URL extension (HEIC→PNG conversion keeps .jpg name)
+    const contentType = imgRes.headers.get("content-type") || "";
+    const mediaType = contentType.includes("png") ? "image/png"
+      : contentType.includes("webp") ? "image/webp"
+      : contentType.includes("gif") ? "image/gif"
+      : "image/jpeg";
 
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",

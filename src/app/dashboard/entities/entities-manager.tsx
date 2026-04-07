@@ -672,6 +672,12 @@ export function EntitiesManager({
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <a
+                    href={`/dashboard/project-preview/${project.slug}`}
+                    className="text-xs text-accent hover:underline"
+                  >
+                    Preview
+                  </a>
+                  <a
                     href={`/dashboard/capture?project=${project.id}&projectName=${encodeURIComponent(project.name)}`}
                     className="text-xs text-accent hover:underline"
                   >

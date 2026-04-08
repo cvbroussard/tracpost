@@ -1,35 +1,49 @@
 /**
- * SMS service via Twilio.
+ * SMS service via AWS SNS (transactional).
  *
- * Env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
+ * No A2P 10DLC campaign registration required for transactional messages.
+ * Uses the same AWS credentials as Rekognition.
+ *
+ * Env: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
  */
+import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 
-const SID = process.env.TWILIO_ACCOUNT_SID;
-const AUTH = process.env.TWILIO_AUTH_TOKEN;
-const FROM = process.env.TWILIO_PHONE_NUMBER;
+let client: SNSClient | null = null;
+
+function getClient(): SNSClient {
+  if (!client) {
+    client = new SNSClient({
+      region: process.env.AWS_REGION || "us-east-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+      },
+    });
+  }
+  return client;
+}
 
 export async function sendSms(to: string, body: string): Promise<boolean> {
-  if (!SID || !AUTH || !FROM) {
+  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
     console.log(`[SMS] To: ${to} | Body: ${body}`);
     return true;
   }
 
   try {
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Basic ${Buffer.from(`${SID}:${AUTH}`).toString("base64")}`,
+    const sns = getClient();
+    await sns.send(new PublishCommand({
+      PhoneNumber: to,
+      Message: body,
+      MessageAttributes: {
+        "AWS.SNS.SMS.SMSType": {
+          DataType: "String",
+          StringValue: "Transactional",
+        },
       },
-      body: new URLSearchParams({ To: to, From: FROM, Body: body }).toString(),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error("Twilio error:", res.status, err);
-    }
-    return res.ok;
+    }));
+    return true;
   } catch (err) {
-    console.error("SMS send failed:", err instanceof Error ? err.message : err);
+    console.error("SNS SMS error:", err instanceof Error ? err.message : err);
     return false;
   }
 }

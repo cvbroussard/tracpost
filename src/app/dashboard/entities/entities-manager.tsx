@@ -684,7 +684,16 @@ export function EntitiesManager({
                       try {
                         const res = await fetch(`/api/projects/${project.id}/generate-article`, { method: "POST" });
                         const data = await res.json();
-                        if (res.ok) {
+                        if (res.ok && data.status === "prompts_generated") {
+                          // First click generated prompts — auto-retry to write article
+                          const res2 = await fetch(`/api/projects/${project.id}/generate-article`, { method: "POST" });
+                          const data2 = await res2.json();
+                          if (res2.ok && data2.article) {
+                            alert(`Article created: "${data2.article.title}" — check the Blog page`);
+                          } else {
+                            alert(data2.error || "Generation failed");
+                          }
+                        } else if (res.ok && data.article) {
                           alert(`Article created: "${data.article.title}" — check the Blog page`);
                         } else {
                           alert(data.error || "Generation failed");

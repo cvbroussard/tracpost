@@ -72,10 +72,15 @@ export async function POST(
     let prompts = meta.article_prompts as Array<{ title: string; angle: string; assetHint: string }> | undefined;
     const usedPrompts = (meta.used_prompt_indices as number[]) || [];
 
-    // Generate prompts if they don't exist yet
+    // Generate prompts if they don't exist yet — return early so next click can use them
     if (!prompts || prompts.length === 0) {
       const { generateArticlePrompts } = await import("@/lib/pipeline/project-blog-generator");
       prompts = await generateArticlePrompts(id);
+      return NextResponse.json({
+        status: "prompts_generated",
+        promptCount: prompts.length,
+        message: `Generated ${prompts.length} article angles. Click again to write the first article.`,
+      });
     }
 
     let article;

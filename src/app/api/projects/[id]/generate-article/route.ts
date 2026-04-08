@@ -57,7 +57,7 @@ export async function POST(
       ${article.body},
       ${article.excerpt},
       'draft',
-      ${article.assets[0]?.id || null},
+      ${article.featuredAssetId || null},
       ${JSON.stringify({
         type: "project",
         project_id: id,

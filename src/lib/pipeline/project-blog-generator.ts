@@ -21,9 +21,10 @@ interface ProjectAsset {
 
 interface ProjectBlogResult {
   title: string;
-  body: string; // Markdown with image placeholders
+  body: string;
   excerpt: string;
-  assets: ProjectAsset[]; // Assets referenced in the article
+  assets: ProjectAsset[];
+  featuredAssetId: string;
 }
 
 /**
@@ -161,11 +162,23 @@ Format:
       finalBody = finalBody.replace(new RegExp(`\\{?\\{?${bare}\\}?\\}?`, "g"), imageMarkdown);
     }
 
+    // Strip any AI-hallucinated image URLs that aren't our placeholders
+    const allowedUrls = new Set(selectedAssets.map((a) => a.storage_url));
+    finalBody = finalBody.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
+      if (allowedUrls.has(url)) return match;
+      // Remove hallucinated image
+      return "";
+    });
+
+    // Pick featured image: middle of timeline (most likely to show work in progress)
+    const featuredIndex = Math.floor(selectedAssets.length / 2);
+
     return {
       title,
       body: finalBody,
       excerpt,
       assets: selectedAssets,
+      featuredAssetId: selectedAssets[featuredIndex]?.id || selectedAssets[0]?.id,
     };
   } catch (err) {
     console.error("Project blog generation error:", err instanceof Error ? err.message : err);

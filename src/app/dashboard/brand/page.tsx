@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { BrandPlaybookView } from "./brand-playbook-view";
+import { GeneratePlaybookButton } from "./generate-playbook-button";
 
 export const dynamic = "force-dynamic";
 
@@ -39,12 +40,7 @@ export default async function BrandPage() {
       )}
 
       {!hasPlaybook && !isProvisioning && (
-        <div className="py-16 text-center">
-          <h1>Brand Intelligence</h1>
-          <p className="mt-2 text-muted">
-            Your brand playbook will appear here once provisioning begins.
-          </p>
-        </div>
+        <GeneratePlaybookButton siteId={siteId} />
       )}
 
       {hasPlaybook ? (

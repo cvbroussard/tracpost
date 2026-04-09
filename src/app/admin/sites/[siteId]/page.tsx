@@ -60,6 +60,11 @@ export default async function SiteControlPanel({ params }: Props) {
     ORDER BY sa.platform
   `;
 
+  // Projects for article generation
+  const projects = await sql`
+    SELECT id, name, slug FROM projects WHERE site_id = ${siteId} ORDER BY name
+  `;
+
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-4 flex items-center gap-1.5 text-xs text-muted">
@@ -110,6 +115,7 @@ export default async function SiteControlPanel({ params }: Props) {
         }}
         platforms={platforms as Array<{ platform: string; account_name: string; status: string }>}
         rewardPrompts={rewardPrompts as Array<{ category: string; scene: string; prompt: string; visual: string }>}
+        projects={projects as Array<{ id: string; name: string; slug: string }>}
       />
     </div>
   );

@@ -91,18 +91,26 @@ function ReadOnly({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+interface ProjectInfo {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export function SiteControls({
   siteId,
   site,
   counts,
   platforms,
   rewardPrompts = [],
+  projects = [],
 }: {
   siteId: string;
   site: SiteData;
   counts: Counts;
   platforms: Platform[];
   rewardPrompts?: Array<{ category: string; scene: string; prompt: string; visual: string }>;
+  projects?: ProjectInfo[];
 }) {
   const [contentVibe, setContentVibe] = useState(site.contentVibe);
   const [imageStyle, setImageStyle] = useState(site.imageStyle);
@@ -112,6 +120,10 @@ export function SiteControls({
   const [inlineUploadCount, setInlineUploadCount] = useState(site.inlineUploadCount ?? 1);
   const [inlineAiCount, setInlineAiCount] = useState(site.inlineAiCount ?? 3);
   const [saving, setSaving] = useState<string | null>(null);
+  const [generatingEditorial, setGeneratingEditorial] = useState(false);
+  const [generatingProject, setGeneratingProject] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(projects[0]?.id || "");
+  const [articleRatio, setArticleRatio] = useState("3:1"); // editorial:project
   const [showPrompts, setShowPrompts] = useState(false);
   const [promptFilter, setPromptFilter] = useState("all");
   const [saved, setSaved] = useState<string | null>(null);
@@ -377,6 +389,24 @@ export function SiteControls({
             </div>
           </Field>
 
+          <Field label="Article Mix — editorial to project ratio">
+            <div className="flex items-center gap-2">
+              <select
+                value={articleRatio}
+                onChange={(e) => setArticleRatio(e.target.value)}
+                className="bg-surface-hover px-2 py-1 text-xs text-muted"
+              >
+                <option value="1:0">Editorial only</option>
+                <option value="3:1">3 editorial : 1 project</option>
+                <option value="2:1">2 editorial : 1 project</option>
+                <option value="1:1">Balanced</option>
+                <option value="1:2">1 editorial : 2 project</option>
+                <option value="0:1">Project only</option>
+              </select>
+              <SaveButton section="articleRatio" data={{ articleRatio }} />
+            </div>
+          </Field>
+
           {Object.keys(site.cadenceConfig).length > 0 && (
             <div className="mt-2 border-t border-border pt-2">
               <p className="mb-1 text-[10px] text-muted">Cadence</p>
@@ -409,6 +439,88 @@ export function SiteControls({
           <ReadOnly label="Image Corrections" value={`${counts.corrections} entity corrections`} />
           <ReadOnly label="URL Validation" value="Active — strips 404s before storing" />
           <ReadOnly label="Vendor Detection" value={`${counts.vendors} vendors in recognition dictionary`} />
+        </div>
+      </Section>
+
+      <Section title="Generate Content" tier={0}>
+        <div className="rounded border border-border bg-background p-3 space-y-4">
+          {/* Editorial Article */}
+          <div>
+            <p className="mb-2 text-xs font-medium">Editorial Article</p>
+            <p className="mb-2 text-[10px] text-muted">
+              Generate a general authority article from reward prompts ({counts.rewardPrompts} available).
+            </p>
+            <button
+              onClick={async () => {
+                setGeneratingEditorial(true);
+                try {
+                  const res = await fetch(`/api/blog?site_id=${siteId}&action=generate`, { method: "POST" });
+                  const data = await res.json();
+                  if (res.ok) {
+                    alert(`Article created: "${data.title || "New article"}" — check the Blog page`);
+                  } else {
+                    alert(data.error || "Generation failed");
+                  }
+                } catch { alert("Request failed"); }
+                setGeneratingEditorial(false);
+              }}
+              disabled={generatingEditorial || counts.rewardPrompts === 0}
+              className="bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+            >
+              {generatingEditorial ? "Writing..." : "Write Editorial Article"}
+            </button>
+          </div>
+
+          {/* Project Article */}
+          <div className="border-t border-border pt-4">
+            <p className="mb-2 text-xs font-medium">Project Article</p>
+            <p className="mb-2 text-[10px] text-muted">
+              Generate an article from a project&apos;s captioned assets ({counts.projects} projects).
+            </p>
+            {projects.length > 0 ? (
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedProject}
+                  onChange={(e) => setSelectedProject(e.target.value)}
+                  className="bg-surface-hover px-2 py-1 text-xs text-muted"
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={async () => {
+                    if (!selectedProject) return;
+                    setGeneratingProject(true);
+                    try {
+                      const res = await fetch(`/api/projects/${selectedProject}/generate-article`, { method: "POST" });
+                      const data = await res.json();
+                      if (res.ok && data.status === "prompts_generated") {
+                        const res2 = await fetch(`/api/projects/${selectedProject}/generate-article`, { method: "POST" });
+                        const data2 = await res2.json();
+                        if (res2.ok && data2.article) {
+                          alert(`Article created: "${data2.article.title}" — check the Blog page`);
+                        } else {
+                          alert(data2.error || "Generation failed");
+                        }
+                      } else if (res.ok && data.article) {
+                        alert(`Article created: "${data.article.title}" — check the Blog page`);
+                      } else {
+                        alert(data.error || "Generation failed");
+                      }
+                    } catch { alert("Request failed"); }
+                    setGeneratingProject(false);
+                  }}
+                  disabled={generatingProject}
+                  className="bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                >
+                  {generatingProject ? "Writing..." : "Write Project Article"}
+                </button>
+              </div>
+            ) : (
+              <p className="text-[10px] text-dim">No projects configured for this site.</p>
+            )}
+          </div>
         </div>
       </Section>
     </div>

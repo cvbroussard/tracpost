@@ -19,6 +19,8 @@ interface SiteData {
   videoRatio: string;
   inlineUploadCount: number;
   inlineAiCount: number;
+  blogCadence: number;
+  articleMix: string;
 }
 
 interface Counts {
@@ -124,7 +126,8 @@ export function SiteControls({
   const [generatingEditorial, setGeneratingEditorial] = useState(false);
   const [generatingProject, setGeneratingProject] = useState(false);
   const [selectedProject, setSelectedProject] = useState(projects[0]?.id || "");
-  const [articleRatio, setArticleRatio] = useState("3:1"); // editorial:project
+  const [blogCadence, setBlogCadence] = useState(site.blogCadence || 0);
+  const [articleRatio, setArticleRatio] = useState(site.articleMix || "3:1");
   const [projectPrompts, setProjectPrompts] = useState<Array<{ title: string; angle: string; assetHint: string }> | null>(null);
   const [loadingProjectPrompts, setLoadingProjectPrompts] = useState(false);
   const [showPrompts, setShowPrompts] = useState(false);
@@ -392,6 +395,24 @@ export function SiteControls({
                 <option value="0:1">No video</option>
               </select>
               <SaveButton section="video" data={{ videoRatio }} />
+            </div>
+          </Field>
+
+          <Field label="Blog Cadence — articles per week">
+            <div className="flex items-center gap-2">
+              <select
+                value={blogCadence}
+                onChange={(e) => setBlogCadence(Number(e.target.value))}
+                className="bg-surface-hover px-2 py-1 text-xs text-muted"
+              >
+                <option value={0}>Off</option>
+                <option value={1}>1/week</option>
+                <option value={2}>2/week</option>
+                <option value={3}>3/week</option>
+                <option value={5}>5/week (daily weekdays)</option>
+                <option value={7}>7/week (daily)</option>
+              </select>
+              <SaveButton section="blogCadence" data={{ blogCadence }} />
             </div>
           </Field>
 

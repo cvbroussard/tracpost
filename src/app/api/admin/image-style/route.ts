@@ -3,14 +3,18 @@ import { sql } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { siteId, style, variations, processingMode, contentVibe, videoRatio, inlineUploadCount, inlineAiCount } = body;
+  const { siteId, style, variations, processingMode, contentVibe, videoRatio, inlineUploadCount, inlineAiCount, blogCadence, articleRatio } = body;
 
   if (!siteId) {
     return NextResponse.json({ error: "siteId required" }, { status: 400 });
   }
 
   // Build dynamic update — only update fields that are provided
-  if (videoRatio !== undefined && Object.keys(body).length === 2) {
+  if (blogCadence !== undefined && Object.keys(body).length === 2) {
+    await sql`UPDATE sites SET blog_cadence = ${blogCadence} WHERE id = ${siteId}`;
+  } else if (articleRatio !== undefined && Object.keys(body).length === 2) {
+    await sql`UPDATE sites SET article_mix = ${articleRatio} WHERE id = ${siteId}`;
+  } else if (videoRatio !== undefined && Object.keys(body).length === 2) {
     await sql`UPDATE sites SET video_ratio = ${videoRatio} WHERE id = ${siteId}`;
   } else if (inlineUploadCount !== undefined && inlineAiCount !== undefined && Object.keys(body).length === 3) {
     await sql`UPDATE sites SET inline_upload_count = ${inlineUploadCount}, inline_ai_count = ${inlineAiCount} WHERE id = ${siteId}`;

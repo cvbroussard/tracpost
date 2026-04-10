@@ -430,7 +430,7 @@ export function SiteControls({
           <Field label="Nav Links">
             <div className="space-y-1.5">
               {navLinks.map((link, i) => (
-                <div key={i} className="flex items-center gap-1.5">
+                <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-center gap-1.5">
                   <input
                     type="text"
                     value={link.label}
@@ -439,7 +439,7 @@ export function SiteControls({
                       updated[i] = { ...updated[i], label: e.target.value };
                       setNavLinks(updated);
                     }}
-                    className="bg-surface-hover px-2 py-1 text-xs text-foreground w-20"
+                    className="bg-surface-hover px-2 py-1 text-xs text-foreground w-full"
                     placeholder="Label"
                   />
                   <input
@@ -450,7 +450,7 @@ export function SiteControls({
                       updated[i] = { ...updated[i], href: e.target.value };
                       setNavLinks(updated);
                     }}
-                    className="bg-surface-hover px-2 py-1 text-xs text-foreground flex-1"
+                    className="bg-surface-hover px-2 py-1 text-xs text-foreground w-full"
                     placeholder="https://..."
                   />
                   <button

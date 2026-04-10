@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 interface Settings {
   blog_enabled: boolean;
   subdomain: string | null;
@@ -10,118 +8,93 @@ interface Settings {
   blog_description: string | null;
 }
 
+interface BlogStatusProps {
+  siteId: string;
+  initialSettings: Settings;
+  publishedCount: number;
+  totalCount: number;
+  nextArticleDate: string | null;
+}
+
 export function BlogSettings({
   siteId,
   initialSettings,
-}: {
-  siteId: string;
-  initialSettings: Settings;
-}) {
-  const [settings, setSettings] = useState(initialSettings);
-  const [saving, setSaving] = useState(false);
-  const [isOpen, setIsOpen] = useState(!settings.blog_enabled);
-  const [title, setTitle] = useState(settings.blog_title || "");
-  const [description, setDescription] = useState(settings.blog_description || "");
-  const [subdomain, setSubdomain] = useState(settings.subdomain || "");
+  publishedCount = 0,
+  totalCount = 0,
+  nextArticleDate,
+}: BlogStatusProps) {
+  const { blog_enabled, subdomain, custom_domain } = initialSettings;
 
-  async function saveSettings(enabled?: boolean) {
-    setSaving(true);
-    try {
-      await fetch("/api/blog", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "settings",
-          site_id: siteId,
-          blog_enabled: enabled ?? settings.blog_enabled,
-          blog_title: title || null,
-          blog_description: description || null,
-          subdomain: subdomain || null,
-        }),
-      });
-      setSettings((s) => ({
-        ...s,
-        blog_enabled: enabled ?? s.blog_enabled,
-        blog_title: title || null,
-        blog_description: description || null,
-        subdomain: subdomain || null,
-      }));
-    } catch {
-      alert("Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
+  // Determine public URL
+  const publicUrl = custom_domain
+    ? `https://${custom_domain}`
+    : subdomain
+      ? `https://tracpost.com/blog/${subdomain}`
+      : null;
+
+  if (!blog_enabled) {
+    return (
+      <div className="rounded-lg border border-border bg-surface p-5">
+        <p className="text-sm text-muted">
+          Your blog is being set up. You&apos;ll be notified when it&apos;s live.
+        </p>
+      </div>
+    );
   }
 
   return (
-    <div className="mb-8">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">Blog Settings</span>
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium ${
-              settings.blog_enabled
-                ? "bg-success/20 text-success"
-                : "bg-surface-hover text-muted"
-            }`}
-          >
-            {settings.blog_enabled ? "Enabled" : "Disabled"}
+    <div className="rounded-lg border border-border bg-surface p-5">
+      <div className="mb-4 flex items-center gap-3">
+        <span className="rounded-full bg-success/20 px-2.5 py-0.5 text-[10px] font-medium text-success">
+          Live
+        </span>
+        {custom_domain && (
+          <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-medium text-accent">
+            Custom Domain
           </span>
-        </div>
-        <span className="text-xs text-muted">{isOpen ? "▾" : "▸"}</span>
-      </button>
+        )}
+      </div>
 
-      {isOpen && (
-        <div className="mt-2 rounded-lg border border-border bg-surface p-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs text-muted">Blog Title</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full text-sm"
-                placeholder="My Blog"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted">Subdomain</label>
-              <input
-                value={subdomain}
-                onChange={(e) => setSubdomain(e.target.value)}
-                className="w-full text-sm"
-                placeholder="blog.yourdomain.com"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs text-muted">Description</label>
-              <input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full text-sm"
-                placeholder="Latest updates and insights"
-              />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-3">
-            <button
-              onClick={() => saveSettings()}
-              disabled={saving}
-              className="bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between border-b border-border py-2">
+          <span className="text-sm text-muted">Public URL</span>
+          {publicUrl ? (
+            <a
+              href={publicUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-accent hover:underline"
             >
-              {saving ? "Saving..." : "Save Settings"}
-            </button>
-            <button
-              onClick={() => saveSettings(!settings.blog_enabled)}
-              className="px-4 py-2 text-xs text-muted hover:text-foreground"
-            >
-              {settings.blog_enabled ? "Disable Blog" : "Enable Blog"}
-            </button>
-          </div>
+              {publicUrl.replace("https://", "")}
+            </a>
+          ) : (
+            <span className="text-sm text-muted">—</span>
+          )}
         </div>
-      )}
+
+        <div className="flex items-baseline justify-between border-b border-border py-2">
+          <span className="text-sm text-muted">Published Articles</span>
+          <span className="text-sm font-medium">{publishedCount}</span>
+        </div>
+
+        <div className="flex items-baseline justify-between border-b border-border py-2">
+          <span className="text-sm text-muted">Total Articles</span>
+          <span className="text-sm font-medium">{totalCount}</span>
+        </div>
+
+        {nextArticleDate && (
+          <div className="flex items-baseline justify-between border-b border-border py-2">
+            <span className="text-sm text-muted">Next Scheduled</span>
+            <span className="text-sm font-medium">{nextArticleDate}</span>
+          </div>
+        )}
+
+        {!custom_domain && (
+          <p className="pt-2 text-xs text-muted">
+            Want your blog on your own domain? Contact us to set it up.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

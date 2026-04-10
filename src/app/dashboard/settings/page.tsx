@@ -21,11 +21,11 @@ export default async function SettingsPage() {
 
   const siteId = session.activeSiteId;
 
-  const [[site], blogSettingsRows] = await Promise.all([
+  const [[site], blogSettingsRows, [blogCounts], [lastArticle]] = await Promise.all([
     sql`
       SELECT s.name, s.url, s.brand_voice, s.autopilot_enabled, s.cadence_config,
              s.content_pillars, s.pillar_config, s.autopilot_config, s.created_at,
-             s.is_active,
+             s.is_active, s.blog_cadence,
              s.provisioning_status, s.metadata AS site_metadata
       FROM sites s
       WHERE s.id = ${siteId}
@@ -33,6 +33,17 @@ export default async function SettingsPage() {
     sql`
       SELECT blog_enabled, subdomain, custom_domain, blog_title, blog_description
       FROM blog_settings WHERE site_id = ${siteId}
+    `,
+    sql`
+      SELECT
+        COUNT(*)::int FILTER (WHERE status = 'published') AS published,
+        COUNT(*)::int AS total
+      FROM blog_posts WHERE site_id = ${siteId}
+    `,
+    sql`
+      SELECT created_at FROM blog_posts
+      WHERE site_id = ${siteId}
+      ORDER BY created_at DESC LIMIT 1
     `,
   ]);
 
@@ -138,7 +149,7 @@ export default async function SettingsPage() {
 
       {/* Blog */}
       <section className="mb-8">
-        <h2 className="mb-4">Blog</h2>
+        <h2 className="mb-4">Your Blog</h2>
         <BlogSettings
           siteId={siteId}
           initialSettings={blogSettings as {
@@ -148,6 +159,16 @@ export default async function SettingsPage() {
             blog_title: string | null;
             blog_description: string | null;
           }}
+          publishedCount={(blogCounts?.published as number) || 0}
+          totalCount={(blogCounts?.total as number) || 0}
+          nextArticleDate={(() => {
+            const cadence = (site?.blog_cadence as number) || 0;
+            if (!cadence || !lastArticle?.created_at) return null;
+            const intervalDays = 7 / cadence;
+            const next = new Date(lastArticle.created_at as string);
+            next.setDate(next.getDate() + intervalDays);
+            return next.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+          })()}
         />
       </section>
 

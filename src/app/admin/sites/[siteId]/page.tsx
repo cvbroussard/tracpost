@@ -21,7 +21,7 @@ export default async function SiteControlPanel({ params }: Props) {
            s.inline_upload_count, s.inline_ai_count, s.blog_cadence, s.article_mix,
            u.name AS subscriber_name, sub.plan,
            bs.blog_enabled, bs.subdomain, bs.custom_domain,
-           bs.blog_title, bs.blog_description
+           bs.blog_title, bs.blog_description, bs.nav_links
     FROM sites s
     JOIN subscriptions sub ON sub.id = s.subscription_id
     JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
@@ -126,6 +126,7 @@ export default async function SiteControlPanel({ params }: Props) {
         platforms={platforms as Array<{ platform: string; account_name: string; status: string }>}
         rewardPrompts={rewardPrompts as Array<{ category: string; scene: string; prompt: string; visual: string }>}
         projects={projects as Array<{ id: string; name: string; slug: string }>}
+        navLinks={(site.nav_links as Array<{ label: string; href: string }>) || []}
       />
     </div>
   );

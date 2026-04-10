@@ -3,7 +3,7 @@ import { sql } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { siteId, style, variations, processingMode, contentVibe, videoRatio, inlineUploadCount, inlineAiCount, blogCadence, articleRatio, autopilotEnabled, blogSlug } = body;
+  const { siteId, style, variations, processingMode, contentVibe, videoRatio, inlineUploadCount, inlineAiCount, blogCadence, articleRatio, autopilotEnabled, blogSlug, navLinks } = body;
 
   if (!siteId) {
     return NextResponse.json({ error: "siteId required" }, { status: 400 });
@@ -30,6 +30,14 @@ export async function POST(req: NextRequest) {
         WHERE id = ${siteId}
       `;
     }
+  } else if (navLinks !== undefined && Object.keys(body).length === 2) {
+    // Filter out empty links
+    const filtered = (navLinks as Array<{ label: string; href: string }>)
+      .filter((l) => l.label.trim() && l.href.trim());
+    await sql`
+      UPDATE blog_settings SET nav_links = ${JSON.stringify(filtered)}::jsonb, updated_at = NOW()
+      WHERE site_id = ${siteId}
+    `;
   } else if (blogSlug !== undefined && Object.keys(body).length === 2) {
     // Update both blog_settings.subdomain and sites.blog_slug
     const slug = blogSlug.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40);

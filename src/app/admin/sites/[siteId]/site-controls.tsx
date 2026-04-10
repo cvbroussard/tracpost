@@ -100,6 +100,11 @@ interface ProjectInfo {
   slug: string;
 }
 
+interface NavLink {
+  label: string;
+  href: string;
+}
+
 export function SiteControls({
   siteId,
   site,
@@ -107,6 +112,7 @@ export function SiteControls({
   platforms,
   rewardPrompts = [],
   projects = [],
+  navLinks: initialNavLinks = [],
 }: {
   siteId: string;
   site: SiteData;
@@ -114,6 +120,7 @@ export function SiteControls({
   platforms: Platform[];
   rewardPrompts?: Array<{ category: string; scene: string; prompt: string; visual: string }>;
   projects?: ProjectInfo[];
+  navLinks?: NavLink[];
 }) {
   const [contentVibe, setContentVibe] = useState(site.contentVibe);
   const [imageStyle, setImageStyle] = useState(site.imageStyle);
@@ -134,6 +141,7 @@ export function SiteControls({
   const [promptFilter, setPromptFilter] = useState("all");
   const [autopilotEnabled, setAutopilotEnabled] = useState(site.autopilotEnabled);
   const [blogSlug, setBlogSlug] = useState(site.subdomain || "");
+  const [navLinks, setNavLinks] = useState<NavLink[]>(initialNavLinks);
   const [saved, setSaved] = useState<string | null>(null);
 
   async function saveSection(section: string, data: Record<string, unknown>) {
@@ -416,6 +424,52 @@ export function SiteControls({
                   Open
                 </a>
               )}
+            </div>
+          </Field>
+
+          <Field label="Nav Links">
+            <div className="space-y-1.5">
+              {navLinks.map((link, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={link.label}
+                    onChange={(e) => {
+                      const updated = [...navLinks];
+                      updated[i] = { ...updated[i], label: e.target.value };
+                      setNavLinks(updated);
+                    }}
+                    className="bg-surface-hover px-2 py-1 text-xs text-foreground w-20"
+                    placeholder="Label"
+                  />
+                  <input
+                    type="text"
+                    value={link.href}
+                    onChange={(e) => {
+                      const updated = [...navLinks];
+                      updated[i] = { ...updated[i], href: e.target.value };
+                      setNavLinks(updated);
+                    }}
+                    className="bg-surface-hover px-2 py-1 text-xs text-foreground flex-1"
+                    placeholder="https://..."
+                  />
+                  <button
+                    onClick={() => setNavLinks(navLinks.filter((_, j) => j !== i))}
+                    className="text-[10px] text-muted hover:text-foreground px-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={() => setNavLinks([...navLinks, { label: "", href: "" }])}
+                  className="text-[10px] text-accent hover:underline"
+                >
+                  + Add link
+                </button>
+                <SaveButton section="navLinks" data={{ navLinks }} />
+              </div>
             </div>
           </Field>
 

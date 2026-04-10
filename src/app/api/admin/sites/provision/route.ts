@@ -105,6 +105,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 4. Auto-seed nav links from tenant's website
+    if (site.url) {
+      try {
+        const { discoverNavLinks } = await import("@/lib/blog-nav-discover");
+        const links = await discoverNavLinks(siteId, site.url as string, site.name as string);
+        automationResults.push(`nav_links_seeded (${links.length} links)`);
+      } catch (err) {
+        automationResults.push(`nav_failed: ${err instanceof Error ? err.message : "unknown"}`);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       siteId,

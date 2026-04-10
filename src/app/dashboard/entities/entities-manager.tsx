@@ -654,8 +654,10 @@ export function EntitiesManager({
                     if (cs.total_assets === 0) return null;
                     return (
                       <div className="mt-1 flex items-center gap-2">
-                        <span className="text-[10px] text-dim">
-                          {cs.captioned}/{cs.total_assets} captioned
+                        <span className={`text-[10px] ${cs.captioned < 3 ? "text-warning" : "text-dim"}`}>
+                          {cs.captioned < 3
+                            ? `${cs.captioned}/3 captions needed to activate content generation`
+                            : `${cs.captioned}/${cs.total_assets} captioned`}
                         </span>
                         {cs.uncaptioned > 0 && (
                           <button

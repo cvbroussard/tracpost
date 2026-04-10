@@ -239,6 +239,13 @@ export async function rateHooksAndFinalize(
     console.error("Content strategy generation failed:", err);
   });
 
+  // Auto-generate article prompts for any qualifying projects
+  import("@/lib/pipeline/project-captions").then(({ onPlaybookSharpened }) =>
+    onPlaybookSharpened(siteId)
+  ).catch((err) => {
+    console.error("Auto-prompt on playbook sharpen failed:", err);
+  });
+
   return { playbook };
 }
 

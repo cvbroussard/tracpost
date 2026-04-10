@@ -162,6 +162,14 @@ Requirements:
   // Content topics and pillar config are NOT generated from the baseline.
   // They are generated after the subscriber sharpens the playbook in refinePlaybook().
 
+  // Auto-generate article prompts for any qualifying projects
+  try {
+    const { onPlaybookSharpened } = await import("@/lib/pipeline/project-captions");
+    await onPlaybookSharpened(siteId);
+  } catch (err) {
+    console.error("Auto-prompt on playbook failed:", err instanceof Error ? err.message : err);
+  }
+
   return playbook;
 }
 
@@ -306,6 +314,14 @@ Respond with ONLY valid JSON (no markdown fencing).`,
     await seedBlogContent(siteId);
   } catch (err) {
     console.error("Blog seed after sharpen failed:", err instanceof Error ? err.message : err);
+  }
+
+  // Auto-generate article prompts for any qualifying projects
+  try {
+    const { onPlaybookSharpened } = await import("@/lib/pipeline/project-captions");
+    await onPlaybookSharpened(siteId);
+  } catch (err) {
+    console.error("Auto-prompt on playbook refine failed:", err instanceof Error ? err.message : err);
   }
 
   return playbook;

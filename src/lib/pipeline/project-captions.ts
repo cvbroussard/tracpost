@@ -195,6 +195,7 @@ export async function buildSiteSnapshot(siteId: string): Promise<ProjectSnapshot
 /**
  * Called when a caption is saved on a project asset.
  * Rebuilds the snapshot so future generations improve.
+ * Auto-generates article prompts when conditions are met.
  */
 export async function onCaptionSaved(
   assetId: string,
@@ -203,6 +204,64 @@ export async function onCaptionSaved(
   previousCaption: string | null
 ): Promise<void> {
   await buildProjectSnapshot(projectId);
+  await maybeGenerateArticlePrompts(projectId);
+}
+
+/**
+ * Check if a project is ready for article prompt generation.
+ * Conditions: playbook exists + 3+ captioned assets + no prompts yet.
+ * Called from onCaptionSaved and onPlaybookSharpened.
+ */
+export async function maybeGenerateArticlePrompts(projectId: string): Promise<boolean> {
+  const [project] = await sql`
+    SELECT p.id, p.site_id, p.metadata
+    FROM projects p
+    WHERE p.id = ${projectId}
+  `;
+  if (!project) return false;
+
+  const meta = (project.metadata || {}) as Record<string, unknown>;
+  if (meta.article_prompts && (meta.article_prompts as unknown[]).length > 0) return false;
+
+  // Check playbook exists
+  const [site] = await sql`
+    SELECT brand_playbook IS NOT NULL AS has_playbook
+    FROM sites WHERE id = ${project.site_id}
+  `;
+  if (!site?.has_playbook) return false;
+
+  // Check 3+ captioned assets
+  const [count] = await sql`
+    SELECT COUNT(*)::int AS c
+    FROM media_assets ma
+    JOIN asset_projects ap ON ap.asset_id = ma.id
+    WHERE ap.project_id = ${projectId}
+      AND ma.context_note IS NOT NULL AND ma.context_note != ''
+      AND ma.triage_status = 'triaged'
+  `;
+  if ((count?.c || 0) < 3) return false;
+
+  // All conditions met — generate prompts
+  try {
+    const { generateArticlePrompts } = await import("./project-blog-generator");
+    await generateArticlePrompts(projectId);
+    console.log(`Auto-generated article prompts for project ${projectId}`);
+    return true;
+  } catch (err) {
+    console.error("Auto-prompt generation failed:", err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
+/**
+ * Called when a playbook is sharpened/generated on a site.
+ * Checks all projects and generates article prompts for any that qualify.
+ */
+export async function onPlaybookSharpened(siteId: string): Promise<void> {
+  const projects = await sql`SELECT id FROM projects WHERE site_id = ${siteId}`;
+  for (const p of projects) {
+    await maybeGenerateArticlePrompts(p.id as string);
+  }
 }
 
 /**

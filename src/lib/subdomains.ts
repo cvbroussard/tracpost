@@ -22,10 +22,10 @@ export function classifyHost(hostname: string): SubdomainType {
 
   if (host === "studio.tracpost.com") return "studio";
   if (host === "platform.tracpost.com") return "platform";
+  if (host === "blog.tracpost.com") return "blog";
 
-  // Custom blog domains or blog.tracpost.com pattern
-  // Custom domains are resolved at the route level via blog_settings lookup
-  if (host === "blog.tracpost.com" || host.startsWith("blog.")) return "blog";
+  // Custom blog domains (e.g., blog.b2construct.com)
+  if (host.startsWith("blog.")) return "blog";
 
   // Everything else: root domain, www, localhost
   return "marketing";

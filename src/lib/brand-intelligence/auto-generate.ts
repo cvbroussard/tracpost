@@ -170,6 +170,14 @@ Requirements:
     console.error("Auto-prompt on playbook failed:", err instanceof Error ? err.message : err);
   }
 
+  // Check if autopilot conditions are now met
+  try {
+    const { checkAndActivateAutopilot } = await import("@/lib/pipeline/autopilot-check");
+    await checkAndActivateAutopilot(siteId);
+  } catch (err) {
+    console.error("Autopilot check failed:", err instanceof Error ? err.message : err);
+  }
+
   return playbook;
 }
 
@@ -322,6 +330,14 @@ Respond with ONLY valid JSON (no markdown fencing).`,
     await onPlaybookSharpened(siteId);
   } catch (err) {
     console.error("Auto-prompt on playbook refine failed:", err instanceof Error ? err.message : err);
+  }
+
+  // Check if autopilot conditions are now met
+  try {
+    const { checkAndActivateAutopilot } = await import("@/lib/pipeline/autopilot-check");
+    await checkAndActivateAutopilot(siteId);
+  } catch (err) {
+    console.error("Autopilot check failed:", err instanceof Error ? err.message : err);
   }
 
   return playbook;

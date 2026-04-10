@@ -132,6 +132,8 @@ export function SiteControls({
   const [loadingProjectPrompts, setLoadingProjectPrompts] = useState(false);
   const [showPrompts, setShowPrompts] = useState(false);
   const [promptFilter, setPromptFilter] = useState("all");
+  const [autopilotEnabled, setAutopilotEnabled] = useState(site.autopilotEnabled);
+  const [blogSlug, setBlogSlug] = useState(site.subdomain || "");
   const [saved, setSaved] = useState<string | null>(null);
 
   async function saveSection(section: string, data: Record<string, unknown>) {
@@ -375,10 +377,47 @@ export function SiteControls({
       {/* Tier 4: Publishing */}
       <Section title="Publishing" tier={4}>
         <div className="rounded border border-border bg-background p-3">
-          <ReadOnly label="Autopilot" value={site.autopilotEnabled ? "Active" : "Off"} />
+          <Field label="Autopilot">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const next = !autopilotEnabled;
+                  setAutopilotEnabled(next);
+                  saveSection("autopilot", { autopilotEnabled: next });
+                }}
+                className={`px-3 py-1 text-[10px] font-medium ${autopilotEnabled ? "bg-success text-white" : "bg-surface-hover text-muted"}`}
+              >
+                {autopilotEnabled ? "Active" : "Off"}
+              </button>
+              {saving === "autopilot" && <span className="text-[10px] text-muted">Saving...</span>}
+              {saved === "autopilot" && <span className="text-[10px] text-success">Saved</span>}
+            </div>
+          </Field>
           <ReadOnly label="Blog" value={site.blogEnabled ? "Enabled" : "Disabled"} />
           <ReadOnly label="Blog Title" value={site.blogTitle} />
-          <ReadOnly label="Subdomain" value={site.subdomain} />
+          <Field label="Blog Slug">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted">tracpost.com/blog/</span>
+              <input
+                type="text"
+                value={blogSlug}
+                onChange={(e) => setBlogSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                className="bg-surface-hover px-2 py-1 text-xs text-foreground w-32"
+                placeholder="siteslug"
+              />
+              <SaveButton section="blogSlug" data={{ blogSlug }} />
+              {blogSlug && (
+                <a
+                  href={`https://tracpost.com/blog/${blogSlug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-accent hover:underline"
+                >
+                  Open
+                </a>
+              )}
+            </div>
+          </Field>
 
           <Field label="Video Ratio — 1 video post per N posts">
             <div className="flex items-center gap-2">

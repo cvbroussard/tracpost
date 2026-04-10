@@ -187,6 +187,19 @@ export async function GET(req: NextRequest) {
       if (pending.length > 5) await new Promise((r) => setTimeout(r, 500));
     }
 
+    // ── 1b. Check autopilot activation for processed sites ──
+    if (processed > 0) {
+      const processedSiteIds = [...new Set(pending.map((a) => a.site_id as string))];
+      for (const sid of processedSiteIds) {
+        try {
+          const { checkAndActivateAutopilot } = await import("@/lib/pipeline/autopilot-check");
+          await checkAndActivateAutopilot(sid);
+        } catch (err) {
+          console.error(`Autopilot check failed for ${sid}:`, err instanceof Error ? err.message : err);
+        }
+      }
+    }
+
     // ── 2. Refresh expiring tokens ──
     const tokenResult = await refreshExpiringTokens();
 

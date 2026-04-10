@@ -2,12 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { classifyHost } from "@/lib/subdomains";
 
 /**
+ * Custom domain → siteSlug map.
+ * When a tenant provisions a custom blog domain (e.g., blog.b2construct.com),
+ * add it here so middleware can rewrite to /blog/[siteSlug]/[path].
+ * Env var: CUSTOM_DOMAIN_MAP={"blog.b2construct.com":"b2construct"}
+ */
+const customDomainMap: Record<string, string> = (() => {
+  try {
+    return JSON.parse(process.env.CUSTOM_DOMAIN_MAP || "{}");
+  } catch {
+    return {};
+  }
+})();
+
+/**
  * Subdomain-based routing middleware.
  *
  * Production:
- *   studio.tracpost.com/calendar   → rewrites to /dashboard/calendar
+ *   studio.tracpost.com/calendar     → rewrites to /dashboard/calendar
  *   platform.tracpost.com/subscribers → rewrites to /admin/subscribers
- *   tracpost.com/*                  → serves public pages, blocks /dashboard and /admin
+ *   tracpost.com/blog/[site]/[slug]  → public blog (no rewrite needed)
+ *   blog.b2construct.com/my-article  → rewrites to /blog/b2construct/my-article
  *
  * Development (localhost):
  *   No rewriting — access /dashboard/* and /admin/* directly.
@@ -37,25 +52,45 @@ export function middleware(req: NextRequest) {
   }
 
   if (subdomain === "blog") {
-    // Blog subdomain — block admin/dashboard, rewrite to /blog/*
+    // Blog domain — block admin/dashboard
     if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
       return new NextResponse("Not Found", { status: 404 });
     }
 
-    // Set x-blog-host as a request header so server components can read it
+    const host = hostname.split(":")[0];
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set("x-blog-host", hostname);
 
-    // Already on /blog path — pass through with host header
-    if (pathname.startsWith("/blog")) {
-      return NextResponse.next({ request: { headers: requestHeaders } });
+    // Custom domain (e.g., blog.b2construct.com) — map to siteSlug, rewrite paths
+    const siteSlug = customDomainMap[host];
+    if (siteSlug) {
+      // Already on /blog path — pass through
+      if (pathname.startsWith("/blog")) {
+        return NextResponse.next({ request: { headers: requestHeaders } });
+      }
+      // / → /blog/b2construct, /my-article → /blog/b2construct/my-article
+      const rewritePath = pathname === "/" ? `/blog/${siteSlug}` : `/blog/${siteSlug}${pathname}`;
+      const url = req.nextUrl.clone();
+      url.pathname = rewritePath;
+      return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
     }
-    // Rewrite: / → /blog, /empire-music → /blog/empire-music,
-    // /empire-music/my-post → /blog/empire-music/my-post
-    const rewritePath = pathname === "/" ? "/blog" : `/blog${pathname}`;
+
+    // blog.tracpost.com — discovery hub
+    if (host === "blog.tracpost.com") {
+      if (pathname.startsWith("/blog")) {
+        return NextResponse.next({ request: { headers: requestHeaders } });
+      }
+      const rewritePath = pathname === "/" ? "/blog" : `/blog${pathname}`;
+      const url = req.nextUrl.clone();
+      url.pathname = rewritePath;
+      return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+    }
+
+    // Unrecognized blog domain — unauthorized hotlink or misconfigured CNAME
     const url = req.nextUrl.clone();
-    url.pathname = rewritePath;
-    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+    url.hostname = "tracpost.com";
+    url.pathname = "/unauthorized";
+    return NextResponse.redirect(url, 302);
   }
 
   if (subdomain === "studio") {

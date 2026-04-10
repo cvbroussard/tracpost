@@ -61,32 +61,14 @@ export async function checkDepartureRedirect(
 
 /**
  * Resolve a blog site from hostname.
- * Custom domain → subdomain → blog.tracpost.com fallback (first enabled site).
+ * Used by blog.tracpost.com (discovery hub) and the blog layout.
+ * Custom domains are resolved by middleware via CUSTOM_DOMAIN_MAP
+ * and rewritten to /blog/[siteSlug] before reaching this code.
  */
 export async function resolveBlogSite(hostname: string): Promise<BlogSite | null> {
   const host = hostname.split(":")[0];
 
-  // Try custom domain first
-  const [byDomain] = await sql`
-    SELECT bs.site_id, s.name AS site_name, s.blog_slug,
-           bs.blog_title, bs.blog_description, bs.theme
-    FROM blog_settings bs
-    JOIN sites s ON s.id = bs.site_id
-    WHERE bs.custom_domain = ${host} AND bs.blog_enabled = true
-  `;
-  if (byDomain) return toBlogSite(byDomain);
-
-  // Try subdomain pattern (e.g., blog.hektork9.com)
-  const [bySubdomain] = await sql`
-    SELECT bs.site_id, s.name AS site_name, s.blog_slug,
-           bs.blog_title, bs.blog_description, bs.theme
-    FROM blog_settings bs
-    JOIN sites s ON s.id = bs.site_id
-    WHERE bs.subdomain = ${host} AND bs.blog_enabled = true
-  `;
-  if (bySubdomain) return toBlogSite(bySubdomain);
-
-  // Fallback: blog.tracpost.com serves the first blog-enabled site
+  // blog.tracpost.com — serves the first blog-enabled site (single-site fallback)
   if (host === "blog.tracpost.com") {
     const [first] = await sql`
       SELECT bs.site_id, s.name AS site_name, s.blog_slug,
@@ -104,7 +86,20 @@ export async function resolveBlogSite(hostname: string): Promise<BlogSite | null
 }
 
 /**
- * Resolve a blog site by its slug (for hub pages on blog.tracpost.com).
+ * Get custom domain for a site (if configured).
+ * Used for canonical URL generation — custom domain gets SEO credit.
+ */
+export async function getCustomDomain(siteId: string): Promise<string | null> {
+  const [row] = await sql`
+    SELECT custom_domain FROM blog_settings
+    WHERE site_id = ${siteId} AND custom_domain IS NOT NULL
+  `;
+  return row ? (row.custom_domain as string) : null;
+}
+
+/**
+ * Resolve a blog site by its slug or subdomain (for hub pages and tenant subdomains).
+ * Checks sites.blog_slug first, then blog_settings.subdomain as fallback.
  */
 export async function resolveBlogSiteBySlug(siteSlug: string): Promise<BlogSite | null> {
   const [row] = await sql`
@@ -112,7 +107,8 @@ export async function resolveBlogSiteBySlug(siteSlug: string): Promise<BlogSite 
            bs.blog_title, bs.blog_description, bs.theme
     FROM sites s
     JOIN blog_settings bs ON bs.site_id = s.id
-    WHERE s.blog_slug = ${siteSlug} AND bs.blog_enabled = true AND s.is_active = true
+    WHERE (s.blog_slug = ${siteSlug} OR bs.subdomain = ${siteSlug})
+      AND bs.blog_enabled = true AND s.is_active = true
   `;
   return row ? toBlogSite(row) : null;
 }

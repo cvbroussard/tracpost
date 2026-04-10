@@ -167,5 +167,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Check autopilot activation once after processing the batch
+  if (processed > 0) {
+    try {
+      const { checkAndActivateAutopilot } = await import("@/lib/pipeline/autopilot-check");
+      await checkAndActivateAutopilot(siteId);
+    } catch (err) {
+      console.error(`Autopilot check failed for ${siteId}:`, err instanceof Error ? err.message : err);
+    }
+  }
+
   return NextResponse.json({ processed, errors, total: pending.length });
 }

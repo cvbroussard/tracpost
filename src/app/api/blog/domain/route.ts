@@ -53,12 +53,19 @@ export async function POST(req: NextRequest) {
       WHERE site_id = ${site_id}
     `;
 
+    // Get the site's blog slug for the CUSTOM_DOMAIN_MAP env var
+    const [blogSettings] = await sql`
+      SELECT bs.subdomain FROM blog_settings bs WHERE bs.site_id = ${site_id}
+    `;
+    const siteSlug = (blogSettings?.subdomain as string) || site_id;
+
     return NextResponse.json({
       domain: fullDomain,
+      siteSlug,
       added: result.success,
       error: result.error,
       cname_target: "cname.vercel-dns.com",
-      instructions: `Add a CNAME record: ${subdomain.includes(".") ? subdomain.split(".")[0] : subdomain} → cname.vercel-dns.com`,
+      instructions: `1. Add CNAME record: ${subdomain.includes(".") ? subdomain.split(".")[0] : subdomain} → cname.vercel-dns.com\n2. Add to CUSTOM_DOMAIN_MAP env var in Vercel: {"${fullDomain}":"${siteSlug}"}`,
     });
   }
 

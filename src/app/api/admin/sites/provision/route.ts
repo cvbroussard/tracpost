@@ -57,22 +57,51 @@ export async function POST(req: NextRequest) {
     `;
     if (!blogSettings?.blog_enabled) {
       try {
+        // Generate subdomain from site name: "B2 Construction" → "b2-construction"
+        const baseSubdomain = (site.name as string)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 40);
+
+        // Ensure uniqueness — append a suffix if taken
+        let subdomain = baseSubdomain;
+        const [existing] = await sql`
+          SELECT 1 FROM blog_settings WHERE subdomain = ${subdomain}
+        `;
+        if (existing) {
+          subdomain = `${baseSubdomain}-${Date.now().toString(36).slice(-4)}`;
+        }
+
         await sql`
-          INSERT INTO blog_settings (site_id, blog_enabled, blog_title, blog_description)
+          INSERT INTO blog_settings (site_id, blog_enabled, subdomain, blog_title, blog_description)
           VALUES (
             ${siteId},
             true,
+            ${subdomain},
             ${site.name + " Blog"},
             ${`Latest updates from ${site.name}`}
           )
           ON CONFLICT (site_id) DO UPDATE SET
             blog_enabled = true,
+            subdomain = COALESCE(blog_settings.subdomain, ${subdomain}),
             blog_title = COALESCE(blog_settings.blog_title, ${site.name + " Blog"}),
             updated_at = NOW()
         `;
-        automationResults.push("blog_enabled");
+        automationResults.push(`blog_enabled (subdomain: ${subdomain})`);
       } catch (err) {
         automationResults.push(`blog_failed: ${err instanceof Error ? err.message : "unknown"}`);
+      }
+    }
+
+    // 3. Derive blog theme from tenant's website
+    if (site.url) {
+      try {
+        const { deriveBlogTheme } = await import("@/lib/blog-theme-derive");
+        await deriveBlogTheme(siteId, site.url as string);
+        automationResults.push("blog_theme_derived");
+      } catch (err) {
+        automationResults.push(`theme_failed: ${err instanceof Error ? err.message : "unknown"}`);
       }
     }
 

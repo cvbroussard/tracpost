@@ -313,9 +313,13 @@ function DomainProvisioning({
             ))}
           </tbody>
         </table>
-        <p className="mt-2 text-[9px] text-muted">
-          Forward these records to the tenant or their DNS provider.
-        </p>
+        <div className="mt-2 space-y-1 text-[9px] text-muted">
+          <p>Forward these records to the tenant or their DNS provider.</p>
+          <p>If tenant uses Cloudflare: CNAME records must be set to <strong>DNS only</strong> (grey cloud, not proxied).</p>
+          {(dnsRecords || defaultRecords()).some(r => r.type === "TXT") && (
+            <p>TXT ownership records can be deleted after verification completes.</p>
+          )}
+        </div>
       </div>
     </div>
   );

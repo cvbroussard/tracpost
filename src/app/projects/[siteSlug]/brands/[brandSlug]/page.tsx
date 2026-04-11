@@ -166,6 +166,44 @@ export default async function BrandDetailPage({ params }: Props) {
       location={siteLocation}
       websiteUrl={websiteUrl}
     >
+      {/* JSON-LD Schema — Brand/Product with local business context */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: String(brand.name),
+          description: brandDescription || `${String(brand.name)} used by ${site.siteName}`,
+          ...(brand.url ? { url: String(brand.url) } : {}),
+          ...(heroUrl ? { image: heroUrl } : {}),
+          brand: {
+            "@type": "Brand",
+            name: String(brand.name),
+            ...(brand.url ? { url: String(brand.url) } : {}),
+          },
+          provider: {
+            "@type": "LocalBusiness",
+            name: site.siteName,
+            ...(websiteUrl ? { url: websiteUrl } : {}),
+            ...(siteLocation ? { address: { "@type": "PostalAddress", addressLocality: siteLocation } } : {}),
+          },
+          ...(projects.length > 0 ? {
+            subjectOf: projects.map((p: Record<string, unknown>) => ({
+              "@type": "CreativeWork",
+              name: String(p.name),
+              url: `${projectsBase}/${String(p.slug)}`,
+            })),
+          } : {}),
+          ...(articles.length > 0 ? {
+            mentions: articles.map((a: Record<string, unknown>) => ({
+              "@type": "Article",
+              name: String(a.title),
+              url: `${blogBase}/${String(a.slug)}`,
+            })),
+          } : {}),
+        }) }}
+      />
+
       {/* Hero */}
       {heroUrl && (
         <img src={heroUrl} alt={String(brand.name)} className="br-hero" />

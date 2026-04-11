@@ -363,6 +363,56 @@ function DomainProvisioning({
   }
 }
 
+function WebsiteSpinner({ siteId }: { siteId: string }) {
+  const [spinning, setSpinning] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; url?: string; pages?: number; error?: string } | null>(null);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={async () => {
+            setSpinning(true);
+            setResult(null);
+            try {
+              const res = await fetch("/api/admin/website", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ site_id: siteId, action: "generate" }),
+              });
+              const data = await res.json();
+              setResult(data);
+            } catch {
+              setResult({ success: false, error: "Request failed" });
+            } finally {
+              setSpinning(false);
+            }
+          }}
+          disabled={spinning}
+          className="bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+        >
+          {spinning ? "Generating..." : "Generate & Deploy"}
+        </button>
+        {spinning && <span className="text-[10px] text-muted">This may take 30-60 seconds...</span>}
+      </div>
+      {result && (
+        <div className={`mt-2 rounded p-2 text-[10px] ${result.success ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>
+          {result.success ? (
+            <div>
+              <span className="font-medium">Deployed {result.pages} pages</span>
+              {result.url && (
+                <span> — <a href={result.url} target="_blank" rel="noopener noreferrer" className="underline">{result.url}</a></span>
+              )}
+            </div>
+          ) : (
+            <span>{result.error}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ProjectInfo {
   id: string;
   name: string;
@@ -977,6 +1027,18 @@ export function SiteControls({
               <p className="text-[10px] text-dim">No projects configured for this site.</p>
             )}
           </div>
+        </div>
+      </Section>
+
+      {/* Website Spinner */}
+      <Section title="Website" tier={0}>
+        <div className="rounded border border-border bg-background p-3">
+          <p className="mb-2 text-xs font-medium">Generate Website</p>
+          <p className="mb-3 text-[10px] text-muted">
+            Generate a complete static website from the brand playbook, assets, and entities.
+            Deploys as a separate Vercel project.
+          </p>
+          <WebsiteSpinner siteId={siteId} />
         </div>
       </Section>
     </div>

@@ -95,6 +95,228 @@ function ReadOnly({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+interface DnsRecord {
+  type: string;
+  name: string;
+  value: string;
+  purpose: string;
+}
+
+function DomainProvisioning({
+  siteId,
+  customDomain: initialDomain,
+  onProvisioned,
+}: {
+  siteId: string;
+  customDomain: string;
+  onProvisioned: (blogDomain: string, slug: string, records: DnsRecord[]) => void;
+}) {
+  const [domainInput, setDomainInput] = useState("");
+  const [provisioning, setProvisioning] = useState(false);
+  const [blogDomain, setBlogDomain] = useState(initialDomain || "");
+  const [projectsDomain, setProjectsDomain] = useState(
+    initialDomain ? initialDomain.replace("blog.", "projects.") : ""
+  );
+  const [dnsRecords, setDnsRecords] = useState<DnsRecord[] | null>(null);
+  const [blogStatus, setBlogStatus] = useState<"unknown" | "pending" | "active">("unknown");
+  const [projectsStatus, setProjectsStatus] = useState<"unknown" | "pending" | "active">("unknown");
+  const [verifying, setVerifying] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const isProvisioned = !!blogDomain;
+
+  async function provision() {
+    if (!domainInput) return;
+    setProvisioning(true);
+    try {
+      const res = await fetch("/api/blog/domain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "provision", site_id: siteId, domain: domainInput }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBlogDomain(data.blogDomain);
+        setProjectsDomain(data.projectsDomain);
+        setDnsRecords(data.dnsRecords);
+        setBlogStatus("pending");
+        setProjectsStatus("pending");
+        onProvisioned(data.blogDomain, data.siteSlug, data.dnsRecords);
+      } else {
+        alert(data.error || data.message || "Provisioning failed");
+      }
+    } catch {
+      alert("Provisioning request failed");
+    } finally {
+      setProvisioning(false);
+    }
+  }
+
+  async function verify() {
+    setVerifying(true);
+    try {
+      const res = await fetch("/api/blog/domain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify", site_id: siteId }),
+      });
+      const data = await res.json();
+      setBlogStatus(data.verified && data.configured ? "active" : "pending");
+      // TODO: separate verify for projects domain when API supports it
+      setProjectsStatus(data.verified && data.configured ? "active" : "pending");
+    } catch {
+      alert("Verification request failed");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  function copyToClipboard(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(label);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  function statusBadge(status: "unknown" | "pending" | "active") {
+    if (status === "active") return <span className="rounded-full bg-success/20 px-2 py-0.5 text-[9px] font-medium text-success">Active</span>;
+    if (status === "pending") return <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[9px] font-medium text-warning">Pending DNS</span>;
+    return <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[9px] font-medium text-muted">Unverified</span>;
+  }
+
+  // Unprovisioned — show input
+  if (!isProvisioned) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={domainInput}
+            onChange={(e) => setDomainInput(e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, ""))}
+            className="bg-surface-hover px-2 py-1 text-xs text-foreground flex-1"
+            placeholder="b2construct.com"
+          />
+          <button
+            onClick={provision}
+            disabled={provisioning || !domainInput}
+            className="bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+          >
+            {provisioning ? "Provisioning..." : "Provision"}
+          </button>
+        </div>
+        <p className="text-[10px] text-muted">
+          Enter the tenant&apos;s root domain. This will register blog.* and projects.* subdomains.
+        </p>
+      </div>
+    );
+  }
+
+  // Provisioned — show domains, records, status
+  return (
+    <div className="space-y-3">
+      {/* Domain status rows */}
+      <div className="rounded border border-border bg-background">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono">{blogDomain}</span>
+            {statusBadge(blogStatus)}
+          </div>
+          <a
+            href={`https://${blogDomain}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-accent hover:underline"
+          >
+            Open
+          </a>
+        </div>
+        <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono">{projectsDomain}</span>
+            {statusBadge(projectsStatus)}
+          </div>
+          <a
+            href={`https://${projectsDomain}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-accent hover:underline"
+          >
+            Open
+          </a>
+        </div>
+      </div>
+
+      {/* Verify button */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={verify}
+          disabled={verifying}
+          className="bg-surface-hover px-3 py-1 text-[10px] font-medium text-foreground hover:bg-accent hover:text-white disabled:opacity-50"
+        >
+          {verifying ? "Checking..." : "Verify DNS"}
+        </button>
+        {blogStatus === "active" && projectsStatus === "active" && (
+          <span className="text-[10px] text-success">All domains verified</span>
+        )}
+      </div>
+
+      {/* DNS records — always visible when provisioned */}
+      <div className="rounded border border-border bg-background p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-medium">DNS Records for Tenant</span>
+          <button
+            onClick={() => {
+              const text = (dnsRecords || defaultRecords()).map(r =>
+                `${r.type}\t${r.name}\t${r.value}`
+              ).join("\n");
+              copyToClipboard(text, "all");
+            }}
+            className="text-[10px] text-accent hover:underline"
+          >
+            {copied === "all" ? "Copied!" : "Copy all"}
+          </button>
+        </div>
+        <table className="w-full text-[10px]">
+          <thead>
+            <tr className="text-muted border-b border-border">
+              <th className="text-left py-1 pr-2 w-12">Type</th>
+              <th className="text-left py-1 pr-2">Name</th>
+              <th className="text-left py-1 pr-2">Value</th>
+              <th className="text-left py-1 w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {(dnsRecords || defaultRecords()).map((r, i) => (
+              <tr key={i} className="border-b border-border last:border-0">
+                <td className="py-1.5 pr-2 font-mono font-medium">{r.type}</td>
+                <td className="py-1.5 pr-2 font-mono">{r.name}</td>
+                <td className="py-1.5 pr-2 font-mono break-all text-muted">{r.value}</td>
+                <td className="py-1.5">
+                  <button
+                    onClick={() => copyToClipboard(r.value, `row-${i}`)}
+                    className="text-[9px] text-muted hover:text-accent"
+                  >
+                    {copied === `row-${i}` ? "!" : "copy"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-2 text-[9px] text-muted">
+          Forward these records to the tenant or their DNS provider.
+        </p>
+      </div>
+    </div>
+  );
+
+  function defaultRecords(): DnsRecord[] {
+    return [
+      { type: "CNAME", name: "blog", value: "cname.vercel-dns.com", purpose: "Blog subdomain" },
+      { type: "CNAME", name: "projects", value: "cname.vercel-dns.com", purpose: "Projects subdomain" },
+    ];
+  }
+}
+
 interface ProjectInfo {
   id: string;
   name: string;
@@ -144,10 +366,7 @@ export function SiteControls({
   const [blogSlug, setBlogSlug] = useState(site.subdomain || "");
   const [navLinks, setNavLinks] = useState<NavLink[]>(initialNavLinks);
   const [customDomain, setCustomDomain] = useState(site.customDomain || "");
-  const [domainInput, setDomainInput] = useState("");
-  const [domainProvisioning, setDomainProvisioning] = useState(false);
-  const [dnsRecords, setDnsRecords] = useState<Array<{ type: string; name: string; value: string; purpose: string }> | null>(null);
-  const [domainStatus, setDomainStatus] = useState<{ verified: boolean; configured: boolean } | null>(null);
+  const [dnsRecords, setDnsRecords] = useState<DnsRecord[] | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
   async function saveSection(section: string, data: Record<string, unknown>) {
@@ -479,107 +698,16 @@ export function SiteControls({
             </div>
           </Field>
 
-          <Field label="Custom Domain">
-            {customDomain ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <a
-                    href={`https://${customDomain}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-accent hover:underline"
-                  >
-                    {customDomain}
-                  </a>
-                  <button
-                    onClick={async () => {
-                      const res = await fetch("/api/blog/domain", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ action: "verify", site_id: siteId }),
-                      });
-                      const data = await res.json();
-                      setDomainStatus({ verified: data.verified, configured: data.configured });
-                    }}
-                    className="text-[10px] text-muted hover:text-foreground"
-                  >
-                    Check DNS
-                  </button>
-                  {domainStatus && (
-                    <span className={`text-[10px] ${domainStatus.verified && domainStatus.configured ? "text-success" : "text-warning"}`}>
-                      {domainStatus.verified && domainStatus.configured ? "Active" : "Pending DNS"}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={domainInput}
-                    onChange={(e) => setDomainInput(e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, ""))}
-                    className="bg-surface-hover px-2 py-1 text-xs text-foreground flex-1"
-                    placeholder="b2construct.com"
-                  />
-                  <button
-                    onClick={async () => {
-                      if (!domainInput) return;
-                      setDomainProvisioning(true);
-                      setDnsRecords(null);
-                      try {
-                        const res = await fetch("/api/blog/domain", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ action: "provision", site_id: siteId, domain: domainInput }),
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                          setCustomDomain(data.blogDomain);
-                          setBlogSlug(data.siteSlug);
-                          setDnsRecords(data.dnsRecords);
-                        } else {
-                          alert(data.error || data.message || "Provisioning failed");
-                        }
-                      } catch {
-                        alert("Provisioning request failed");
-                      } finally {
-                        setDomainProvisioning(false);
-                      }
-                    }}
-                    disabled={domainProvisioning || !domainInput}
-                    className="bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-                  >
-                    {domainProvisioning ? "Provisioning..." : "Provision"}
-                  </button>
-                </div>
-                {dnsRecords && (
-                  <div className="rounded border border-border bg-background p-2 text-[10px]">
-                    <div className="mb-1 font-medium">Send these DNS records to the tenant:</div>
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-muted">
-                          <th className="text-left py-0.5 pr-2">Type</th>
-                          <th className="text-left py-0.5 pr-2">Name</th>
-                          <th className="text-left py-0.5 pr-2">Value</th>
-                          <th className="text-left py-0.5">Purpose</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dnsRecords.map((r, i) => (
-                          <tr key={i}>
-                            <td className="py-0.5 pr-2 font-mono">{r.type}</td>
-                            <td className="py-0.5 pr-2 font-mono">{r.name}</td>
-                            <td className="py-0.5 pr-2 font-mono break-all">{r.value}</td>
-                            <td className="py-0.5 text-muted">{r.purpose}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+          <Field label="Custom Domains">
+            <DomainProvisioning
+              siteId={siteId}
+              customDomain={customDomain}
+              onProvisioned={(blogDomain, slug, records) => {
+                setCustomDomain(blogDomain);
+                setBlogSlug(slug);
+                setDnsRecords(records);
+              }}
+            />
           </Field>
 
           <Field label="Video Ratio — 1 video post per N posts">

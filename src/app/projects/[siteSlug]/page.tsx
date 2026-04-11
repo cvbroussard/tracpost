@@ -19,8 +19,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = `Projects — ${site.siteName}`;
   const description = `View our completed projects and ongoing work at ${site.siteName}`;
   const customDomain = await getCustomDomain(site.siteId);
-  const canonicalUrl = customDomain
-    ? `https://${customDomain}/projects`
+  const projectsDomain = customDomain ? customDomain.replace("blog.", "projects.") : null;
+  const canonicalUrl = projectsDomain
+    ? `https://${projectsDomain}`
     : `https://tracpost.com/projects/${siteSlug}`;
 
   return {
@@ -72,12 +73,16 @@ export default async function ProjectsIndexPage({ params }: Props) {
   const theme: BlogTheme = { ...rawTheme, logoUrl: logoUrl || rawTheme.logoUrl };
 
   const storedNavLinks = (settings.nav_links as NavLink[]) || [];
-  const navLinks: NavLink[] = storedNavLinks.length > 0
+  const baseLinks: NavLink[] = storedNavLinks.length > 0
     ? storedNavLinks
     : [
         ...(websiteUrl ? [{ label: "Home", href: websiteUrl }] : []),
-        { label: "Projects", href: `/projects/${siteSlug}` },
       ];
+  // Ensure Projects link is present
+  const hasProjectsLink = baseLinks.some((l) => l.label.toLowerCase() === "projects");
+  const navLinks: NavLink[] = hasProjectsLink
+    ? baseLinks
+    : [...baseLinks, { label: "Projects", href: `/projects/${siteSlug}` }];
 
   const playbook = siteInfo.brand_playbook as Record<string, unknown> | null;
   const angles = (playbook?.brandPositioning as Record<string, unknown>)?.selectedAngles;

@@ -105,6 +105,7 @@ export async function removeDomain(domain: string): Promise<{ success: boolean; 
 
 /**
  * Check if a domain's DNS is configured correctly.
+ * Uses both the project domain endpoint (ownership) and config endpoint (DNS).
  */
 export async function verifyDomain(domain: string): Promise<{
   verified: boolean;
@@ -115,18 +116,32 @@ export async function verifyDomain(domain: string): Promise<{
     return { verified: false, configured: false, error: "Vercel API not configured" };
   }
 
-  const res = await fetch(
+  // Check ownership verification
+  const domainRes = await fetch(
     `${API_BASE}/v9/projects/${process.env.VERCEL_PROJECT_ID}/domains/${domain}${teamQuery()}`,
     { headers: headers() }
   );
 
-  if (!res.ok) {
+  if (!domainRes.ok) {
     return { verified: false, configured: false, error: "Domain not found on project" };
   }
 
-  const data = await res.json();
+  const domainData = await domainRes.json();
+
+  // Check DNS configuration
+  const configRes = await fetch(
+    `${API_BASE}/v6/domains/${domain}/config${teamQuery()}`,
+    { headers: headers() }
+  );
+
+  let configured = false;
+  if (configRes.ok) {
+    const configData = await configRes.json();
+    configured = configData.misconfigured === false;
+  }
+
   return {
-    verified: data.verified === true,
-    configured: data.configured === true,
+    verified: domainData.verified === true,
+    configured,
   };
 }

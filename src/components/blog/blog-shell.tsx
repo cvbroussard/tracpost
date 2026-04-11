@@ -21,22 +21,63 @@ export interface NavLink {
 interface BlogShellProps {
   siteName: string;
   description?: string;
+  tagline?: string;
   navLinks: NavLink[];
   theme: BlogTheme;
+  location?: string | null;
+  phone?: string | null;
+  websiteUrl?: string | null;
+  socialLinks?: Array<{ platform: string; url: string }>;
   aside?: React.ReactNode;
-  footer?: React.ReactNode;
   children: React.ReactNode;
+}
+
+/**
+ * Extract Google Font family names from a CSS font-family string.
+ * "'Poppins', sans-serif" → ["Poppins"]
+ * "'Playfair Display', Georgia, serif" → ["Playfair Display"]
+ */
+function extractGoogleFonts(fontFamily: string): string[] {
+  const systemFonts = new Set([
+    "system-ui", "sans-serif", "serif", "monospace", "cursive",
+    "segoe ui", "helvetica neue", "helvetica", "arial", "georgia",
+    "times new roman", "courier new", "monaco", "menlo",
+  ]);
+
+  return fontFamily
+    .split(",")
+    .map((f) => f.trim().replace(/^['"]|['"]$/g, ""))
+    .filter((f) => !systemFonts.has(f.toLowerCase()));
+}
+
+/**
+ * Build a Google Fonts URL from font family names.
+ */
+function googleFontsUrl(fonts: string[]): string | null {
+  if (fonts.length === 0) return null;
+  const families = fonts.map((f) => `family=${f.replace(/ /g, "+")}:wght@400;500;600;700`);
+  return `https://fonts.googleapis.com/css2?${families.join("&")}&display=swap`;
 }
 
 export default function BlogShell({
   siteName,
   description,
+  tagline,
   navLinks,
   theme,
+  location,
+  phone,
+  websiteUrl,
+  socialLinks,
   aside,
-  footer,
   children,
 }: BlogShellProps) {
+  // Collect Google Fonts to load
+  const fontsToLoad = new Set<string>();
+  if (theme.fontFamily) extractGoogleFonts(theme.fontFamily).forEach((f) => fontsToLoad.add(f));
+  if (theme.headingFontFamily) extractGoogleFonts(theme.headingFontFamily).forEach((f) => fontsToLoad.add(f));
+  const fontsUrl = googleFontsUrl([...fontsToLoad]);
+
   return (
     <div className="blog-site" style={{
       "--bs-primary": theme.primaryColor || "#1a1a1a",
@@ -49,15 +90,24 @@ export default function BlogShell({
       "--bs-heading-font": theme.headingFontFamily || theme.fontFamily || "system-ui, sans-serif",
       "--bs-radius": theme.borderRadius || "6px",
     } as React.CSSProperties}>
+      {/* Google Fonts */}
+      {fontsUrl && (
+        <>
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link rel="stylesheet" href={fontsUrl} />
+        </>
+      )}
+
       {/* Site Header */}
       <header className="bs-header">
         <div className="bs-header-inner">
-          <div className="bs-brand">
+          <a href={navLinks[0]?.href || "/"} className="bs-brand">
             {theme.logoUrl && (
               <img src={theme.logoUrl} alt={siteName} className="bs-logo" />
             )}
             <span className="bs-site-name">{siteName}</span>
-          </div>
+          </a>
           <nav className="bs-nav">
             {navLinks.map((link) => (
               <a
@@ -87,24 +137,37 @@ export default function BlogShell({
       {/* Footer */}
       <footer className="bs-footer">
         <div className="bs-footer-inner">
-          {footer || (
-            <>
-              <div className="bs-footer-brand">
-                <span className="bs-footer-name">{siteName}</span>
-                {description && <p className="bs-footer-desc">{description}</p>}
+          <div className="bs-footer-brand">
+            <span className="bs-footer-name">{siteName}</span>
+            {tagline && <p className="bs-footer-tagline">{tagline}</p>}
+            {(location || phone) && (
+              <p className="bs-footer-contact">
+                {location}{location && phone && " · "}{phone}
+              </p>
+            )}
+          </div>
+          <div className="bs-footer-right">
+            {socialLinks && socialLinks.length > 0 && (
+              <div className="bs-footer-social">
+                {socialLinks.map((s) => (
+                  <a key={s.platform} href={s.url} target="_blank" rel="noopener noreferrer" className="bs-social-link">
+                    {s.platform}
+                  </a>
+                ))}
               </div>
-              <div className="bs-footer-meta">
-                <a
-                  href="https://tracpost.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bs-powered"
-                >
-                  Powered by TracPost
-                </a>
-              </div>
-            </>
-          )}
+            )}
+            <div className="bs-footer-meta">
+              <span className="bs-copyright">&copy; {new Date().getFullYear()} {siteName}</span>
+              <a
+                href="https://tracpost.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bs-powered"
+              >
+                Powered by TracPost
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
 
@@ -127,6 +190,8 @@ const shellStyles = `
   .bs-header {
     border-bottom: 1px solid var(--bs-border);
     background: var(--bs-bg);
+    backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--bs-bg) 92%, transparent);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -135,7 +200,8 @@ const shellStyles = `
   .bs-header-inner {
     max-width: 1100px;
     margin: 0 auto;
-    padding: 16px 24px;
+    padding: 0 24px;
+    height: 64px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -145,6 +211,7 @@ const shellStyles = `
     display: flex;
     align-items: center;
     gap: 12px;
+    text-decoration: none;
   }
 
   .bs-logo {
@@ -159,19 +226,22 @@ const shellStyles = `
     font-size: 18px;
     font-weight: 600;
     color: var(--bs-primary);
+    letter-spacing: -0.01em;
   }
 
   .bs-nav {
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: 28px;
   }
 
   .bs-nav-link {
     font-size: 14px;
+    font-weight: 500;
     color: var(--bs-muted);
     text-decoration: none;
     transition: color 0.15s;
+    letter-spacing: 0.01em;
   }
 
   .bs-nav-link:hover {
@@ -181,11 +251,12 @@ const shellStyles = `
   /* Body — two-column */
   .bs-body {
     max-width: 1100px;
+    width: 100%;
     margin: 0 auto;
     padding: 48px 24px;
     display: grid;
-    grid-template-columns: 1fr 300px;
-    gap: 48px;
+    grid-template-columns: 1fr 280px;
+    gap: 56px;
     flex: 1;
   }
 
@@ -197,47 +268,148 @@ const shellStyles = `
     font-size: 14px;
   }
 
+  /* Article cards */
+  .bs-article-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    padding: 28px 0;
+    border-bottom: 1px solid var(--bs-border);
+    transition: opacity 0.15s;
+  }
+
+  .bs-article-card:first-child {
+    padding-top: 0;
+  }
+
+  .bs-article-card:hover {
+    opacity: 0.85;
+  }
+
+  .bs-article-thumb {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: var(--bs-radius);
+    margin-bottom: 16px;
+  }
+
+  .bs-article-title {
+    font-family: var(--bs-heading-font);
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--bs-primary);
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .bs-article-excerpt {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--bs-muted);
+    margin: 0 0 10px;
+  }
+
+  .bs-article-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--bs-muted);
+  }
+
+  .bs-article-pillar {
+    color: var(--bs-accent);
+    font-weight: 500;
+  }
+
   /* Footer */
   .bs-footer {
     border-top: 1px solid var(--bs-border);
     margin-top: auto;
+    background: color-mix(in srgb, var(--bs-primary) 4%, var(--bs-bg));
   }
 
   .bs-footer-inner {
     max-width: 1100px;
     margin: 0 auto;
-    padding: 32px 24px;
+    padding: 40px 24px;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
+    gap: 40px;
+  }
+
+  .bs-footer-brand {
+    max-width: 400px;
   }
 
   .bs-footer-name {
     font-family: var(--bs-heading-font);
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--bs-primary);
   }
 
-  .bs-footer-desc {
+  .bs-footer-tagline {
+    font-size: 14px;
+    color: var(--bs-muted);
+    margin-top: 6px;
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  .bs-footer-contact {
     font-size: 13px;
     color: var(--bs-muted);
-    margin-top: 4px;
-    max-width: 400px;
+    margin-top: 8px;
+  }
+
+  .bs-footer-right {
+    text-align: right;
+  }
+
+  .bs-footer-social {
+    display: flex;
+    gap: 16px;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+  }
+
+  .bs-social-link {
+    font-size: 13px;
+    color: var(--bs-muted);
+    text-decoration: none;
+    text-transform: capitalize;
+  }
+
+  .bs-social-link:hover {
+    color: var(--bs-accent);
   }
 
   .bs-footer-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
     font-size: 12px;
+  }
+
+  .bs-copyright {
+    color: var(--bs-muted);
+    opacity: 0.7;
   }
 
   .bs-powered {
     color: var(--bs-muted);
     text-decoration: none;
-    opacity: 0.7;
+    opacity: 0.5;
+    font-size: 11px;
   }
 
   .bs-powered:hover {
-    opacity: 1;
+    opacity: 0.8;
   }
 
   /* Aside components */
@@ -247,12 +419,14 @@ const shellStyles = `
 
   .bs-aside-title {
     font-family: var(--bs-heading-font);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--bs-primary);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
     margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--bs-accent);
   }
 
   .bs-aside-list {
@@ -262,7 +436,7 @@ const shellStyles = `
   }
 
   .bs-aside-list li {
-    padding: 8px 0;
+    padding: 10px 0;
     border-bottom: 1px solid var(--bs-border);
   }
 
@@ -275,6 +449,7 @@ const shellStyles = `
     text-decoration: none;
     font-size: 14px;
     line-height: 1.4;
+    font-weight: 500;
   }
 
   .bs-aside-list a:hover {
@@ -284,7 +459,7 @@ const shellStyles = `
   .bs-aside-date {
     font-size: 12px;
     color: var(--bs-muted);
-    margin-top: 2px;
+    margin-top: 3px;
   }
 
   /* Responsive — collapse to single column */
@@ -296,7 +471,8 @@ const shellStyles = `
     }
 
     .bs-header-inner {
-      padding: 12px 16px;
+      padding: 0 16px;
+      height: 56px;
     }
 
     .bs-nav {
@@ -305,7 +481,23 @@ const shellStyles = `
 
     .bs-footer-inner {
       flex-direction: column;
-      gap: 16px;
+      gap: 24px;
+    }
+
+    .bs-footer-right {
+      text-align: left;
+    }
+
+    .bs-footer-social {
+      justify-content: flex-start;
+    }
+
+    .bs-footer-meta {
+      align-items: flex-start;
+    }
+
+    .bs-article-title {
+      font-size: 19px;
     }
   }
 `;

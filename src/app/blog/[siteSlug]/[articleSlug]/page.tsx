@@ -90,7 +90,7 @@ export default async function ArticlePage({ params }: Props) {
   // Fetch shell data
   const [blogSettings, siteRow, logoAsset, allPosts] = await Promise.all([
     sql`SELECT nav_links, theme FROM blog_settings WHERE site_id = ${site.siteId}`,
-    sql`SELECT url, brand_playbook FROM sites WHERE id = ${site.siteId}`,
+    sql`SELECT url, location, brand_playbook FROM sites WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
       WHERE site_id = ${site.siteId}
@@ -151,12 +151,17 @@ export default async function ArticlePage({ params }: Props) {
     siteName: site.siteName,
   });
 
+  const siteLocation = (siteInfo.location as string) || null;
+
   return (
     <BlogShell
       siteName={site.siteName}
       description={aboutText}
+      tagline={tagline}
       navLinks={navLinks}
       theme={theme}
+      location={siteLocation}
+      websiteUrl={websiteUrl}
       aside={
         <BlogAside
           siteSlug={siteSlug}
@@ -172,42 +177,8 @@ export default async function ArticlePage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
       />
 
-      <article>
-        <header style={{ marginBottom: 32 }}>
-          <h1 style={{
-            fontFamily: "var(--bs-heading-font)",
-            fontSize: 32,
-            fontWeight: 600,
-            lineHeight: 1.2,
-            letterSpacing: "-0.02em",
-            color: "var(--bs-primary)",
-            marginBottom: 12,
-          }}>
-            {title}
-          </h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 14 }}>
-            <span style={{ color: "var(--bs-muted)" }}>By {site.siteName}</span>
-            {publishedAt && (
-              <>
-                <span style={{ color: "var(--bs-muted)" }}>·</span>
-                <time style={{ color: "var(--bs-muted)" }}>
-                  {new Date(publishedAt).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </time>
-              </>
-            )}
-            {pillar && (
-              <>
-                <span style={{ color: "var(--bs-muted)" }}>·</span>
-                <span style={{ color: "var(--bs-accent)" }}>{pillar}</span>
-              </>
-            )}
-          </div>
-        </header>
-
+      <article className="bs-article">
+        {/* Hero image — full width above article content */}
         {videoUrl ? (
           <video
             src={videoUrl}
@@ -216,24 +187,33 @@ export default async function ArticlePage({ params }: Props) {
             muted
             loop
             playsInline
-            style={{
-              width: "100%",
-              maxWidth: 560,
-              borderRadius: "var(--bs-radius)",
-              marginBottom: 32,
-            }}
+            className="bs-hero-media"
           />
         ) : ogImage ? (
-          <img
-            src={ogImage}
-            alt={title}
-            style={{
-              width: "100%",
-              borderRadius: "var(--bs-radius)",
-              marginBottom: 32,
-            }}
-          />
+          <img src={ogImage} alt={title} className="bs-hero-media" />
         ) : null}
+
+        <header className="bs-article-header">
+          {pillar && (
+            <span className="bs-article-pillar-tag">{pillar}</span>
+          )}
+          <h1 className="bs-article-page-title">{title}</h1>
+          <div className="bs-article-meta">
+            <span>{site.siteName}</span>
+            {publishedAt && (
+              <>
+                <span>·</span>
+                <time>
+                  {new Date(publishedAt).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </time>
+              </>
+            )}
+          </div>
+        </header>
 
         {/* Blog body */}
         <div
@@ -250,27 +230,9 @@ export default async function ArticlePage({ params }: Props) {
 
         {/* Tags */}
         {tags.length > 0 && (
-          <div style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            marginTop: 48,
-            paddingTop: 24,
-            borderTop: "1px solid var(--bs-border)",
-          }}>
+          <div className="bs-tags">
             {tags.map((tag) => (
-              <Link
-                key={tag}
-                href={`/blog/${siteSlug}?tag=${encodeURIComponent(tag)}`}
-                style={{
-                  fontSize: 13,
-                  padding: "4px 12px",
-                  borderRadius: "var(--bs-radius)",
-                  border: "1px solid var(--bs-border)",
-                  color: "var(--bs-muted)",
-                  textDecoration: "none",
-                }}
-              >
+              <Link key={tag} href={`/blog/${siteSlug}?tag=${encodeURIComponent(tag)}`} className="bs-tag">
                 {tag}
               </Link>
             ))}
@@ -285,6 +247,48 @@ export default async function ArticlePage({ params }: Props) {
 }
 
 const proseStyles = `
+  /* Article page layout */
+  .bs-hero-media {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: var(--bs-radius);
+    margin-bottom: 32px;
+  }
+
+  .bs-article-header {
+    margin-bottom: 36px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--bs-border);
+  }
+
+  .bs-article-pillar-tag {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--bs-accent);
+    margin-bottom: 12px;
+  }
+
+  .bs-article-page-title {
+    font-family: var(--bs-heading-font);
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--bs-primary);
+    margin: 0 0 16px;
+  }
+
+  @media (max-width: 768px) {
+    .bs-article-page-title {
+      font-size: 28px;
+    }
+  }
+
+  /* Prose body */
   .bs-prose {
     font-size: 17px;
     line-height: 1.7;
@@ -370,5 +374,30 @@ const proseStyles = `
   .bs-prose pre code {
     background: none;
     padding: 0;
+  }
+
+  /* Tags */
+  .bs-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--bs-border);
+  }
+
+  .bs-tag {
+    font-size: 13px;
+    padding: 5px 14px;
+    border-radius: var(--bs-radius);
+    border: 1px solid var(--bs-border);
+    color: var(--bs-muted);
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+
+  .bs-tag:hover {
+    border-color: var(--bs-accent);
+    color: var(--bs-accent);
   }
 `;

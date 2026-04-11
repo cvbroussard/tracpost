@@ -51,7 +51,7 @@ export default async function HubPage({ params }: Props) {
   const [posts, blogSettings, siteRow, logoAsset] = await Promise.all([
     getBlogPosts(site.siteId, 20),
     sql`SELECT nav_links, theme FROM blog_settings WHERE site_id = ${site.siteId}`,
-    sql`SELECT url, brand_playbook FROM sites WHERE id = ${site.siteId}`,
+    sql`SELECT url, location, brand_playbook FROM sites WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
       WHERE site_id = ${site.siteId}
@@ -108,12 +108,18 @@ export default async function HubPage({ params }: Props) {
     published_at: String(p.published_at),
   }));
 
+  // Location from site data
+  const siteLocation = (siteInfo.location as string) || null;
+
   return (
     <BlogShell
       siteName={site.siteName}
       description={aboutText}
+      tagline={tagline}
       navLinks={navLinks}
       theme={theme}
+      location={siteLocation}
+      websiteUrl={websiteUrl}
       aside={
         <BlogAside
           siteSlug={siteSlug}
@@ -143,46 +149,27 @@ export default async function HubPage({ params }: Props) {
             const pillar = post.content_pillar ? String(post.content_pillar) : null;
 
             return (
-              <article
+              <Link
                 key={String(post.id)}
-                style={{ borderBottom: "1px solid var(--bs-border)", padding: "24px 0" }}
+                href={`/blog/${siteSlug}/${String(post.slug)}`}
+                className="bs-article-card"
               >
-                <Link
-                  href={`/blog/${siteSlug}/${String(post.slug)}`}
-                  style={{ textDecoration: "none", color: "inherit" }}
-                >
-                  {ogImage && (
-                    <img
-                      src={ogImage}
-                      alt={String(post.title)}
-                      style={{
-                        width: "100%",
-                        height: 200,
-                        objectFit: "cover",
-                        borderRadius: "var(--bs-radius)",
-                        marginBottom: 12,
-                      }}
-                    />
-                  )}
-                  <h2 style={{
-                    fontFamily: "var(--bs-heading-font)",
-                    fontSize: 20,
-                    fontWeight: 600,
-                    marginTop: 0,
-                    marginBottom: 6,
-                    color: "var(--bs-primary)",
-                  }}>
-                    {String(post.title)}
-                  </h2>
-                  {excerpt && (
-                    <p style={{ fontSize: 15, color: "var(--bs-muted)", marginBottom: 8 }}>
-                      {excerpt}
-                    </p>
-                  )}
-                </Link>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                {ogImage && (
+                  <img
+                    src={ogImage}
+                    alt={String(post.title)}
+                    className="bs-article-thumb"
+                  />
+                )}
+                <h2 className="bs-article-title">
+                  {String(post.title)}
+                </h2>
+                {excerpt && (
+                  <p className="bs-article-excerpt">{excerpt}</p>
+                )}
+                <div className="bs-article-meta">
                   {publishedAt && (
-                    <time style={{ color: "var(--bs-muted)" }}>
+                    <time>
                       {new Date(publishedAt).toLocaleDateString("en-US", {
                         year: "numeric",
                         month: "long",
@@ -191,12 +178,10 @@ export default async function HubPage({ params }: Props) {
                     </time>
                   )}
                   {pillar && (
-                    <span style={{ color: "var(--bs-accent)" }}>
-                      · {pillar}
-                    </span>
+                    <span className="bs-article-pillar">· {pillar}</span>
                   )}
                 </div>
-              </article>
+              </Link>
             );
           })}
         </div>

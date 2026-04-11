@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { resolveBlogSiteBySlug, getCustomDomain } from "@/lib/blog";
 import { sql } from "@/lib/db";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
@@ -245,9 +244,9 @@ export default async function ProjectPage({ params }: Props) {
 
       {/* Overview bar */}
       <div className="pj-overview">
-        <Link href={`/projects/${siteSlug}`} className="pj-back">
+        <a href={projectsBase} className="pj-back">
           &larr; All Projects
-        </Link>
+        </a>
         <div className="pj-overview-stats">
           {startDate && (
             <div className="pj-stat">

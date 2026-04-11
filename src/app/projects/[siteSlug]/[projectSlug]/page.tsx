@@ -4,6 +4,7 @@ import Link from "next/link";
 import { resolveBlogSiteBySlug, getCustomDomain } from "@/lib/blog";
 import { sql } from "@/lib/db";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
+import { ProjectDetailAside } from "@/components/blog/project-aside";
 
 export const dynamic = "force-dynamic";
 
@@ -139,15 +140,43 @@ export default async function ProjectPage({ params }: Props) {
   const heroUrl = sortedByQuality[0]?.storage_url ? String(sortedByQuality[0].storage_url) : null;
 
   // Group assets by month
-  const timeline = new Map<string, Array<Record<string, unknown>>>();
+  const timeline = new Map<string, { id: string; assets: Array<Record<string, unknown>> }>();
   for (const asset of assets) {
     const date = asset.date_taken || asset.created_at;
     const month = date
       ? new Date(date as string).toLocaleDateString("en-US", { year: "numeric", month: "long" })
       : "Undated";
-    if (!timeline.has(month)) timeline.set(month, []);
-    timeline.get(month)!.push(asset);
+    if (!timeline.has(month)) {
+      const id = month.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      timeline.set(month, { id, assets: [] });
+    }
+    timeline.get(month)!.assets.push(asset);
   }
+
+  // Build aside data
+  const locationStr = location
+    ? [location.city, location.state].filter(Boolean).join(", ")
+    : null;
+
+  const monthNav = Array.from(timeline.entries()).map(([label, { id, assets: a }]) => ({
+    id,
+    label,
+    count: a.length,
+  }));
+
+  const asideBrands = brands.map((b: Record<string, unknown>) => ({
+    id: String(b.id),
+    name: String(b.name),
+    url: b.url ? String(b.url) : null,
+  }));
+
+  const asidePersonas = personas
+    .filter((p: Record<string, unknown>) => p.consent_given)
+    .map((p: Record<string, unknown>) => ({
+      id: String(p.id),
+      name: String(p.name),
+      type: String(p.type),
+    }));
 
   return (
     <BlogShell
@@ -157,6 +186,20 @@ export default async function ProjectPage({ params }: Props) {
       theme={theme}
       location={siteLocation}
       websiteUrl={websiteUrl}
+      aside={
+        <ProjectDetailAside
+          meta={{
+            startDate,
+            endDate,
+            location: locationStr,
+            photoCount: assets.length,
+            status: String(project.status || "active"),
+          }}
+          months={monthNav}
+          brands={asideBrands}
+          personas={asidePersonas}
+        />
+      }
     >
       {/* Hero with overlay */}
       {heroUrl && (
@@ -207,12 +250,12 @@ export default async function ProjectPage({ params }: Props) {
       </div>
 
       {/* Timeline sections */}
-      {Array.from(timeline.entries()).map(([month, monthAssets]) => {
+      {Array.from(timeline.entries()).map(([month, { id, assets: monthAssets }]) => {
         const captioned = monthAssets.filter((a) => a.context_note);
         const uncaptioned = monthAssets.filter((a) => !a.context_note);
 
         return (
-          <section key={month} className="pj-month">
+          <section key={month} id={id} className="pj-month">
             <h2 className="pj-month-title">{month}</h2>
 
             {/* Featured moments — captioned assets in two-column layout */}
@@ -257,41 +300,6 @@ export default async function ProjectPage({ params }: Props) {
           </section>
         );
       })}
-
-      {/* Materials & Equipment */}
-      {brands.length > 0 && (
-        <section className="pj-entities">
-          <h2 className="pj-entities-title">Materials &amp; Equipment</h2>
-          <div className="pj-entity-grid">
-            {brands.map((b: Record<string, unknown>) => (
-              <div key={String(b.id)} className="pj-entity-card">
-                {b.url ? (
-                  <a href={String(b.url)} target="_blank" rel="noopener noreferrer">
-                    {String(b.name)}
-                  </a>
-                ) : String(b.name)}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Team */}
-      {personas.filter((p: Record<string, unknown>) => p.consent_given).length > 0 && (
-        <section className="pj-entities">
-          <h2 className="pj-entities-title">Team</h2>
-          <div className="pj-entity-grid">
-            {personas
-              .filter((p: Record<string, unknown>) => p.consent_given)
-              .map((p: Record<string, unknown>) => (
-                <div key={String(p.id)} className="pj-entity-card">
-                  <span className="pj-entity-name">{String(p.name)}</span>
-                  <span className="pj-entity-role">{String(p.type)}</span>
-                </div>
-              ))}
-          </div>
-        </section>
-      )}
 
       <style dangerouslySetInnerHTML={{ __html: projectStyles }} />
     </BlogShell>
@@ -523,39 +531,4 @@ const projectStyles = `
     border-bottom: 2px solid var(--bs-accent);
   }
 
-  .pj-entity-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .pj-entity-card {
-    font-size: 14px;
-    padding: 8px 16px;
-    border-radius: var(--bs-radius);
-    border: 1px solid var(--bs-border);
-    color: var(--bs-text);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .pj-entity-card a {
-    color: var(--bs-accent);
-    text-decoration: none;
-  }
-
-  .pj-entity-card a:hover {
-    text-decoration: underline;
-  }
-
-  .pj-entity-name {
-    font-weight: 500;
-  }
-
-  .pj-entity-role {
-    font-size: 11px;
-    color: var(--bs-muted);
-    text-transform: capitalize;
-  }
 `;

@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import Link from "next/link";
-import { resolveBlogSiteBySlug, getCustomDomain } from "@/lib/blog";
+import { resolveBlogSiteBySlug, getCustomDomain, getBlogPosts } from "@/lib/blog";
 import { sql } from "@/lib/db";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
+import { ProjectHubAside } from "@/components/blog/project-aside";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ export default async function ProjectsIndexPage({ params }: Props) {
   if (!site) notFound();
 
   // Fetch shell data + projects
-  const [blogSettings, siteRow, logoAsset, projects] = await Promise.all([
+  const [blogSettings, siteRow, logoAsset, projects, recentPosts] = await Promise.all([
     sql`SELECT nav_links, theme FROM blog_settings WHERE site_id = ${site.siteId}`,
     sql`SELECT url, location, brand_playbook FROM sites WHERE id = ${site.siteId}`,
     sql`
@@ -61,6 +61,7 @@ export default async function ProjectsIndexPage({ params }: Props) {
         AND (SELECT COUNT(*) FROM asset_projects ap WHERE ap.project_id = p.id) >= 3
       ORDER BY p.start_date DESC NULLS LAST
     `,
+    getBlogPosts(site.siteId, 5),
   ]);
 
   const settings = blogSettings[0] || {};
@@ -89,6 +90,30 @@ export default async function ProjectsIndexPage({ params }: Props) {
   const tagline = Array.isArray(angles) && angles[0]
     ? String((angles[0] as Record<string, unknown>).tagline || "")
     : "";
+  const aboutText = site.blogDescription || tagline || "";
+
+  // Custom domain base URLs
+  const customDomainVal = await getCustomDomain(site.siteId);
+  const projectsBaseUrl = customDomainVal
+    ? `https://${customDomainVal.replace("blog.", "projects.")}`
+    : null;
+  const blogBaseUrl = customDomainVal
+    ? `https://${customDomainVal}`
+    : null;
+
+  // Aside data
+  const projectNavItems = projects.map((p: Record<string, unknown>) => ({
+    slug: String(p.slug),
+    name: String(p.name),
+    coverImage: p.cover_image ? String(p.cover_image) : null,
+    assetCount: Number(p.asset_count) || 0,
+  }));
+
+  const blogNavItems = recentPosts.map((p: Record<string, unknown>) => ({
+    slug: String(p.slug),
+    title: String(p.title),
+    published_at: String(p.published_at),
+  }));
 
   return (
     <BlogShell
@@ -98,6 +123,16 @@ export default async function ProjectsIndexPage({ params }: Props) {
       theme={theme}
       location={siteLocation}
       websiteUrl={websiteUrl}
+      aside={
+        <ProjectHubAside
+          siteSlug={siteSlug}
+          projects={projectNavItems}
+          recentPosts={blogNavItems}
+          aboutText={aboutText}
+          projectsBaseUrl={projectsBaseUrl}
+          blogBaseUrl={blogBaseUrl}
+        />
+      }
     >
       <h1 className="bs-article-page-title" style={{ marginBottom: 32 }}>Our Work</h1>
 
@@ -112,11 +147,14 @@ export default async function ProjectsIndexPage({ params }: Props) {
             const startDate = project.start_date
               ? new Date(String(project.start_date)).toLocaleDateString("en-US", { year: "numeric", month: "short" })
               : null;
+            const projectHref = projectsBaseUrl
+              ? `${projectsBaseUrl}/${String(project.slug)}`
+              : `/projects/${siteSlug}/${String(project.slug)}`;
 
             return (
-              <Link
+              <a
                 key={String(project.id)}
-                href={`/projects/${siteSlug}/${String(project.slug)}`}
+                href={projectHref}
                 className="bs-project-card"
               >
                 {coverImage ? (
@@ -134,7 +172,7 @@ export default async function ProjectsIndexPage({ params }: Props) {
                     <span>{project.asset_count} photos</span>
                   </div>
                 </div>
-              </Link>
+              </a>
             );
           })}
         </div>

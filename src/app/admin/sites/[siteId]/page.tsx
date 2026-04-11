@@ -100,7 +100,7 @@ export default async function SiteControlPanel({ params }: Props) {
           });
           if (!res.ok) return "cname.vercel-dns.com";
           const data = await res.json();
-          const target = data.recommendedCNAME?.[0]?.value || data.cnames?.[0] || "cname.vercel-dns.com";
+          const target = data.cnames?.[0] || data.recommendedCNAME?.[0]?.value || "cname.vercel-dns.com";
           return String(target).replace(/\.$/, "");
         } catch { return "cname.vercel-dns.com"; }
       };

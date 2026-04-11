@@ -73,9 +73,9 @@ export async function addDomain(domain: string): Promise<{
   const config = configRes.ok ? await configRes.json() : null;
 
   // Use the recommended CNAME if available, fall back to current cnames, then generic
-  const recommendedCname = config?.recommendedCNAME?.[0]?.value;
   const currentCname = config?.cnames?.[0];
-  const cnameTarget = recommendedCname || currentCname || "cname.vercel-dns.com";
+  const recommendedCname = config?.recommendedCNAME?.[0]?.value;
+  const cnameTarget = currentCname || recommendedCname || "cname.vercel-dns.com";
 
   return {
     success: true,

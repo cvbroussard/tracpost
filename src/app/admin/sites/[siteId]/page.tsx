@@ -92,27 +92,50 @@ export default async function SiteControlPanel({ params }: Props) {
       ]);
 
       // Fetch CNAME targets from Vercel config
-      const fetchCname = async (domain: string) => {
+      const teamQuery = process.env.VERCEL_TEAM_ID ? `?teamId=${process.env.VERCEL_TEAM_ID}` : "";
+      const projectId = process.env.VERCEL_PROJECT_ID;
+      const authHeaders = { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` };
+
+      // Fetch CNAME target + verification records for a domain
+      const fetchDomainInfo = async (domain: string) => {
         try {
-          const teamQuery = process.env.VERCEL_TEAM_ID ? `?teamId=${process.env.VERCEL_TEAM_ID}` : "";
-          const res = await fetch(`https://api.vercel.com/v6/domains/${domain}/config${teamQuery}`, {
-            headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
-          });
-          if (!res.ok) return "cname.vercel-dns.com";
-          const data = await res.json();
-          const target = data.cnames?.[0] || data.recommendedCNAME?.[0]?.value || "cname.vercel-dns.com";
-          return String(target).replace(/\.$/, "");
-        } catch { return "cname.vercel-dns.com"; }
+          const [configRes, domainRes] = await Promise.all([
+            fetch(`https://api.vercel.com/v6/domains/${domain}/config${teamQuery}`, { headers: authHeaders }),
+            fetch(`https://api.vercel.com/v9/projects/${projectId}/domains/${domain}${teamQuery}`, { headers: authHeaders }),
+          ]);
+          const config = configRes.ok ? await configRes.json() : null;
+          const domainData = domainRes.ok ? await domainRes.json() : null;
+          const target = config?.cnames?.[0] || config?.recommendedCNAME?.[0]?.value || "cname.vercel-dns.com";
+          return {
+            cnameTarget: String(target).replace(/\.$/, ""),
+            verification: (domainData?.verification || []) as Array<{ type: string; domain: string; value: string }>,
+          };
+        } catch {
+          return { cnameTarget: "cname.vercel-dns.com", verification: [] };
+        }
       };
 
-      const [blogCname, projectsCname] = await Promise.all([
-        fetchCname(customDomain),
-        fetchCname(projectsDomain),
+      const [blogInfo, projectsInfo] = await Promise.all([
+        fetchDomainInfo(customDomain),
+        fetchDomainInfo(projectsDomain),
       ]);
 
       const dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }> = [];
-      dnsRecords.push({ type: "CNAME", name: "blog", value: blogCname, purpose: "Blog subdomain" });
-      dnsRecords.push({ type: "CNAME", name: "projects", value: projectsCname, purpose: "Projects subdomain" });
+
+      // Verification TXT records
+      for (const v of blogInfo.verification) {
+        dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${customDomain}` });
+      }
+      for (const v of projectsInfo.verification) {
+        dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${projectsDomain}` });
+      }
+
+      // CNAME records
+      dnsRecords.push({ type: "CNAME", name: "blog", value: blogInfo.cnameTarget, purpose: "Blog subdomain" });
+      dnsRecords.push({ type: "CNAME", name: "projects", value: projectsInfo.cnameTarget, purpose: "Projects subdomain" });
+
+      const blogCname = blogInfo.cnameTarget;
+      const projectsCname = projectsInfo.cnameTarget;
 
       domainInfo = {
         blogStatus: blogVerify.verified && blogVerify.configured ? "active" : "pending",

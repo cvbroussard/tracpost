@@ -395,18 +395,16 @@ function WebsiteSpinner({ siteId, siteUrl }: { siteId: string; siteUrl: string |
     })
       .then((r) => r.json())
       .then((data) => {
-        if (data.domain) {
-          // Domain exists on Vercel — show status
+        if (data.domain && !data.error) {
           setDomainResult({
             success: true,
             domain: data.domain,
             verified: data.verified && data.configured,
-            dnsRecords: [
+            dnsRecords: data.dnsRecords || [
               { type: "A", name: "@", value: "76.76.21.21", purpose: "Root domain to Vercel" },
             ],
           });
         }
-        // If domain not found, leave domainResult null → shows input
       })
       .catch(() => { /* silently fail — show input */ });
   }, [loaded, siteId, siteUrl]);

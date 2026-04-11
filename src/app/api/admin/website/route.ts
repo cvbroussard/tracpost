@@ -145,10 +145,34 @@ export async function POST(req: NextRequest) {
     );
     const configData = configRes.ok ? await configRes.json() : null;
 
+    // Build DNS records
+    const dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }> = [];
+
+    // Pending verification TXT records
+    if (domainData.verification) {
+      for (const v of domainData.verification) {
+        dnsRecords.push({
+          type: (v.type as string).toUpperCase(),
+          name: v.domain as string,
+          value: v.value as string,
+          purpose: "Domain ownership verification",
+        });
+      }
+    }
+
+    // A record for root domain
+    dnsRecords.push({
+      type: "A",
+      name: "@",
+      value: "76.76.21.21",
+      purpose: "Root domain to Vercel",
+    });
+
     return NextResponse.json({
       domain,
       verified: domainData.verified === true,
       configured: configData?.misconfigured === false,
+      dnsRecords,
     });
   }
 

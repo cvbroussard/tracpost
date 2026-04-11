@@ -2,18 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { classifyHost } from "@/lib/subdomains";
 
 /**
- * Custom domain → siteSlug map.
- * When a tenant provisions a custom blog domain (e.g., blog.b2construct.com),
- * add it here so middleware can rewrite to /blog/[siteSlug]/[path].
- * Env var: CUSTOM_DOMAIN_MAP={"blog.b2construct.com":"b2construct"}
+ * Extract siteSlug from a custom blog domain.
+ * blog.b2construct.com → "b2construct"
+ * blog.epicurious-kitchens.com → "epicurious-kitchens"
+ *
+ * Convention: siteSlug always matches the tenant's domain name (minus TLD).
+ * Platform admin ensures this during provisioning.
  */
-const customDomainMap: Record<string, string> = (() => {
-  try {
-    return JSON.parse(process.env.CUSTOM_DOMAIN_MAP || "{}");
-  } catch {
-    return {};
-  }
-})();
+function extractSlugFromHost(hostname: string): string | null {
+  const host = hostname.split(":")[0];
+  // Must start with "blog." and not be blog.tracpost.com
+  if (!host.startsWith("blog.")) return null;
+  if (host === "blog.tracpost.com") return null;
+  // Strip "blog." prefix and TLD suffix
+  const rest = host.slice(5); // remove "blog."
+  const lastDot = rest.lastIndexOf(".");
+  if (lastDot === -1) return null;
+  return rest.slice(0, lastDot); // "b2construct.com" → "b2construct"
+}
 
 /**
  * Subdomain-based routing middleware.
@@ -39,25 +45,6 @@ export function middleware(req: NextRequest) {
     return gateAdmin(req, pathname);
   }
 
-  // Custom blog domain proxied via Cloudflare Worker (x-custom-blog-host header)
-  const customBlogHost = req.headers.get("x-custom-blog-host");
-  if (customBlogHost) {
-    const host = customBlogHost.split(":")[0];
-    const siteSlug = customDomainMap[host];
-    if (siteSlug) {
-      const requestHeaders = new Headers(req.headers);
-      requestHeaders.set("x-blog-host", customBlogHost);
-      const rewritePath = pathname === "/" ? `/blog/${siteSlug}` : `/blog/${siteSlug}${pathname}`;
-      const url = req.nextUrl.clone();
-      url.pathname = rewritePath;
-      return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
-    }
-    // Unknown custom domain — redirect to unauthorized
-    const url = req.nextUrl.clone();
-    url.pathname = "/unauthorized";
-    return NextResponse.redirect(url, 302);
-  }
-
   // API routes — shared across all subdomains, pass through
   if (pathname.startsWith("/api/") || pathname.startsWith("/api")) {
     return NextResponse.next();
@@ -80,8 +67,8 @@ export function middleware(req: NextRequest) {
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set("x-blog-host", hostname);
 
-    // Custom domain (e.g., blog.b2construct.com) — map to siteSlug, rewrite paths
-    const siteSlug = customDomainMap[host];
+    // Custom domain (e.g., blog.b2construct.com) — parse siteSlug from hostname
+    const siteSlug = extractSlugFromHost(host);
     if (siteSlug) {
       // Already on /blog path — pass through
       if (pathname.startsWith("/blog")) {

@@ -2,8 +2,8 @@ name = "tracpost-blog-proxy"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 
-# Route: all requests hitting blogs.tracpost.com and custom domains
-# pointing to it via Cloudflare Custom Hostnames
+# Routes — Worker intercepts on both blogs.tracpost.com and custom hostnames
 routes = [
-  { pattern = "blogs.tracpost.com/*", zone_name = "tracpost.com" }
+  { pattern = "blogs.tracpost.com/*", zone_name = "tracpost.com" },
+  { pattern = "blog.b2construct.com/*", zone_name = "tracpost.com" }
 ]

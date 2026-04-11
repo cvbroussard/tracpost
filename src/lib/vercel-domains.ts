@@ -31,7 +31,6 @@ export async function addDomain(domain: string): Promise<{
   success: boolean;
   error?: string;
   verification?: Array<{ type: string; domain: string; value: string }>;
-  cnameTarget?: string;
   verified?: boolean;
 }> {
   if (!process.env.VERCEL_TOKEN || !process.env.VERCEL_PROJECT_ID) {
@@ -65,22 +64,9 @@ export async function addDomain(domain: string): Promise<{
   );
   const domainData = domainRes.ok ? await domainRes.json() : null;
 
-  // Fetch domain config to get the actual CNAME target Vercel expects
-  const configRes = await fetch(
-    `${API_BASE}/v6/domains/${domain}/config${teamQuery()}`,
-    { headers: headers() }
-  );
-  const config = configRes.ok ? await configRes.json() : null;
-
-  // Use the recommended CNAME if available, fall back to current cnames, then generic
-  const currentCname = config?.cnames?.[0];
-  const recommendedCname = config?.recommendedCNAME?.[0]?.value;
-  const cnameTarget = currentCname || recommendedCname || "cname.vercel-dns.com";
-
   return {
     success: true,
     verification: domainData?.verification || [],
-    cnameTarget: cnameTarget.replace(/\.$/, ""), // strip trailing dot
     verified: domainData?.verified === true,
   };
 }

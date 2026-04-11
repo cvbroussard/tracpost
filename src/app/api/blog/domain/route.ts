@@ -76,44 +76,21 @@ export async function POST(req: NextRequest) {
       }, { status: 502 });
     }
 
-    // 4. Build DNS records from actual Vercel response
+    // 4. Build DNS records
+    const CNAME_TARGET = "cname.vercel-dns.com";
     const dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }> = [];
 
-    // Blog verification + CNAME
-    if (blogResult.verification && blogResult.verification.length > 0) {
-      for (const v of blogResult.verification) {
-        dnsRecords.push({
-          type: v.type.toUpperCase(),
-          name: v.domain,
-          value: v.value,
-          purpose: `Verify ${blogDomain}`,
-        });
-      }
+    // TXT verification records (only when Vercel requires ownership proof)
+    for (const v of (blogResult.verification || [])) {
+      dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${blogDomain}` });
     }
-    dnsRecords.push({
-      type: "CNAME",
-      name: "blog",
-      value: blogResult.cnameTarget || "cname.vercel-dns.com",
-      purpose: "Blog subdomain",
-    });
+    for (const v of (projectsResult.verification || [])) {
+      dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${projectsDomain}` });
+    }
 
-    // Projects verification + CNAME
-    if (projectsResult.verification && projectsResult.verification.length > 0) {
-      for (const v of projectsResult.verification) {
-        dnsRecords.push({
-          type: v.type.toUpperCase(),
-          name: v.domain,
-          value: v.value,
-          purpose: `Verify ${projectsDomain}`,
-        });
-      }
-    }
-    dnsRecords.push({
-      type: "CNAME",
-      name: "projects",
-      value: projectsResult.cnameTarget || "cname.vercel-dns.com",
-      purpose: "Projects subdomain",
-    });
+    // CNAME records — always cname.vercel-dns.com
+    dnsRecords.push({ type: "CNAME", name: "blog", value: CNAME_TARGET, purpose: "Blog subdomain" });
+    dnsRecords.push({ type: "CNAME", name: "projects", value: CNAME_TARGET, purpose: "Projects subdomain" });
 
     return NextResponse.json({
       success: true,

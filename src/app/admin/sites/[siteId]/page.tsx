@@ -85,75 +85,65 @@ export default async function SiteControlPanel({ params }: Props) {
 
   if (customDomain) {
     const projectsDomain = customDomain.replace("blog.", "projects.");
+    const CNAME_TARGET = "cname.vercel-dns.com";
+
     try {
       const [blogVerify, projectsVerify] = await Promise.all([
         verifyDomain(customDomain),
         verifyDomain(projectsDomain).catch(() => ({ verified: false, configured: false })),
       ]);
 
-      // Fetch CNAME targets from Vercel config
+      // Fetch pending verification TXT records from Vercel
       const teamQuery = process.env.VERCEL_TEAM_ID ? `?teamId=${process.env.VERCEL_TEAM_ID}` : "";
       const projectId = process.env.VERCEL_PROJECT_ID;
       const authHeaders = { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` };
 
-      // Fetch CNAME target + verification records for a domain
-      const fetchDomainInfo = async (domain: string) => {
+      const fetchVerification = async (domain: string) => {
         try {
-          const [configRes, domainRes] = await Promise.all([
-            fetch(`https://api.vercel.com/v6/domains/${domain}/config${teamQuery}`, { headers: authHeaders }),
-            fetch(`https://api.vercel.com/v9/projects/${projectId}/domains/${domain}${teamQuery}`, { headers: authHeaders }),
-          ]);
-          const config = configRes.ok ? await configRes.json() : null;
-          const domainData = domainRes.ok ? await domainRes.json() : null;
-          const target = config?.cnames?.[0] || config?.recommendedCNAME?.[0]?.value || "cname.vercel-dns.com";
-          return {
-            cnameTarget: String(target).replace(/\.$/, ""),
-            verification: (domainData?.verification || []) as Array<{ type: string; domain: string; value: string }>,
-          };
-        } catch {
-          return { cnameTarget: "cname.vercel-dns.com", verification: [] };
-        }
+          const res = await fetch(
+            `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}${teamQuery}`,
+            { headers: authHeaders }
+          );
+          const data = res.ok ? await res.json() : null;
+          return (data?.verification || []) as Array<{ type: string; domain: string; value: string }>;
+        } catch { return []; }
       };
 
-      const [blogInfo, projectsInfo] = await Promise.all([
-        fetchDomainInfo(customDomain),
-        fetchDomainInfo(projectsDomain),
+      const [blogTxt, projectsTxt] = await Promise.all([
+        fetchVerification(customDomain),
+        fetchVerification(projectsDomain),
       ]);
 
       const dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }> = [];
 
-      // Verification TXT records
-      for (const v of blogInfo.verification) {
+      // TXT verification records (only present when ownership unverified)
+      for (const v of blogTxt) {
         dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${customDomain}` });
       }
-      for (const v of projectsInfo.verification) {
+      for (const v of projectsTxt) {
         dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${projectsDomain}` });
       }
 
-      // CNAME records
-      dnsRecords.push({ type: "CNAME", name: "blog", value: blogInfo.cnameTarget, purpose: "Blog subdomain" });
-      dnsRecords.push({ type: "CNAME", name: "projects", value: projectsInfo.cnameTarget, purpose: "Projects subdomain" });
-
-      const blogCname = blogInfo.cnameTarget;
-      const projectsCname = projectsInfo.cnameTarget;
+      // CNAME records — always cname.vercel-dns.com
+      dnsRecords.push({ type: "CNAME", name: "blog", value: CNAME_TARGET, purpose: "Blog subdomain" });
+      dnsRecords.push({ type: "CNAME", name: "projects", value: CNAME_TARGET, purpose: "Projects subdomain" });
 
       domainInfo = {
         blogStatus: blogVerify.verified && blogVerify.configured ? "active" : "pending",
         projectsStatus: projectsVerify.verified && projectsVerify.configured ? "active" : "pending",
-        blogCnameTarget: blogCname,
-        projectsCnameTarget: projectsCname,
+        blogCnameTarget: CNAME_TARGET,
+        projectsCnameTarget: CNAME_TARGET,
         dnsRecords,
       };
     } catch {
-      // Vercel API unavailable — show unknown
       domainInfo = {
         blogStatus: "unknown",
         projectsStatus: "unknown",
-        blogCnameTarget: "cname.vercel-dns.com",
-        projectsCnameTarget: "cname.vercel-dns.com",
+        blogCnameTarget: CNAME_TARGET,
+        projectsCnameTarget: CNAME_TARGET,
         dnsRecords: [
-          { type: "CNAME", name: "blog", value: "cname.vercel-dns.com", purpose: "Blog subdomain" },
-          { type: "CNAME", name: "projects", value: "cname.vercel-dns.com", purpose: "Projects subdomain" },
+          { type: "CNAME", name: "blog", value: CNAME_TARGET, purpose: "Blog subdomain" },
+          { type: "CNAME", name: "projects", value: CNAME_TARGET, purpose: "Projects subdomain" },
         ],
       };
     }

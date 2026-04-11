@@ -152,12 +152,18 @@ async function generateProjectArticle(projectId: string, siteId: string): Promis
     const article = await generateProjectArticleFromPrompt(projectId, siteId, articlePrompt);
     if (!article) return null;
 
-    // Save as draft
+    // Save as draft — resolve featured asset URL for og_image
     const slug = article.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+    let ogImageUrl: string | null = null;
+    if (article.featuredAssetId) {
+      const [asset] = await sql`SELECT storage_url FROM media_assets WHERE id = ${article.featuredAssetId}`;
+      ogImageUrl = (asset?.storage_url as string) || null;
+    }
     await sql`
-      INSERT INTO blog_posts (site_id, title, slug, body, excerpt, status, source_asset_id, metadata)
+      INSERT INTO blog_posts (site_id, title, slug, body, excerpt, status, source_asset_id, og_image_url, metadata)
       VALUES (${siteId}, ${article.title}, ${slug}, ${article.body}, ${article.excerpt}, 'draft',
               ${article.featuredAssetId || null},
+              ${ogImageUrl},
               ${JSON.stringify({ type: "project", project_id: projectId, prompt_index: selectedIndex })}
       )
     `;

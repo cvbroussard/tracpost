@@ -1,7 +1,7 @@
 /**
  * Render website pages to static HTML strings using React renderToString.
+ * Note: renderToString is imported dynamically to avoid Turbopack bundling issues.
  */
-import { renderToString } from "react-dom/server";
 import React from "react";
 import Layout, { type SiteTheme, type SiteNav } from "./templates/layout";
 import HomePage, { type HomePageData } from "./templates/home";
@@ -37,6 +37,7 @@ interface RenderedPage {
 }
 
 function renderPage(
+  renderToString: (element: React.ReactElement) => string,
   ctx: RenderContext,
   activePage: string,
   title: string,
@@ -80,7 +81,8 @@ function renderPage(
   return { file: fileName, html: `<!DOCTYPE html>${html}`, title, description };
 }
 
-export function renderWebsite(ctx: RenderContext): RenderedPage[] {
+export async function renderWebsite(ctx: RenderContext): Promise<RenderedPage[]> {
+  const { renderToString } = await import("react-dom/server");
   const pages: RenderedPage[] = [];
 
   // Home
@@ -103,7 +105,7 @@ export function renderWebsite(ctx: RenderContext): RenderedPage[] {
     contactHref: "/contact.html",
   };
   pages.push(renderPage(
-    ctx, "home",
+    renderToString, ctx, "home",
     ctx.copy.meta.homeTitle, ctx.copy.meta.homeDescription,
     "index.html",
     React.createElement(HomePage, { data: homeData })
@@ -125,7 +127,7 @@ export function renderWebsite(ctx: RenderContext): RenderedPage[] {
     brandsUrl: ctx.brandsUrl,
   };
   pages.push(renderPage(
-    ctx, "about",
+    renderToString, ctx, "about",
     ctx.copy.meta.aboutTitle, ctx.copy.meta.aboutDescription,
     "about.html",
     React.createElement(AboutPage, { data: aboutData })
@@ -153,7 +155,7 @@ export function renderWebsite(ctx: RenderContext): RenderedPage[] {
     })),
   };
   pages.push(renderPage(
-    ctx, "work",
+    renderToString, ctx, "work",
     ctx.copy.meta.workTitle, ctx.copy.meta.workDescription,
     "work.html",
     React.createElement(WorkPage, { data: workData })
@@ -167,7 +169,7 @@ export function renderWebsite(ctx: RenderContext): RenderedPage[] {
     phone: ctx.phone,
   };
   pages.push(renderPage(
-    ctx, "contact",
+    renderToString, ctx, "contact",
     ctx.copy.meta.contactTitle, ctx.copy.meta.contactDescription,
     "contact.html",
     React.createElement(ContactPage, { data: contactData })

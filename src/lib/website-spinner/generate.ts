@@ -127,7 +127,7 @@ export async function spinWebsite(siteId: string): Promise<SpinResult> {
 
   // 4. Render HTML
   console.log(`[Spinner] Rendering pages...`);
-  const pages = renderWebsite({
+  const pages = await renderWebsite({
     siteName,
     tagline,
     location,

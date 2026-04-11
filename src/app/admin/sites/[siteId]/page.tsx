@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { SiteControls } from "./site-controls";
+import { verifyDomain } from "@/lib/vercel-domains";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,69 @@ export default async function SiteControlPanel({ params }: Props) {
     SELECT id, name, slug FROM projects WHERE site_id = ${siteId} ORDER BY name
   `;
 
+  // Domain status — fetch from Vercel if custom domain is set
+  const customDomain = (site.custom_domain as string) || null;
+  let domainInfo: {
+    blogStatus: "unknown" | "pending" | "active";
+    projectsStatus: "unknown" | "pending" | "active";
+    blogCnameTarget: string;
+    projectsCnameTarget: string;
+    dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }>;
+  } | null = null;
+
+  if (customDomain) {
+    const projectsDomain = customDomain.replace("blog.", "projects.");
+    try {
+      const [blogVerify, projectsVerify] = await Promise.all([
+        verifyDomain(customDomain),
+        verifyDomain(projectsDomain).catch(() => ({ verified: false, configured: false })),
+      ]);
+
+      // Fetch CNAME targets from Vercel config
+      const fetchCname = async (domain: string) => {
+        try {
+          const teamQuery = process.env.VERCEL_TEAM_ID ? `?teamId=${process.env.VERCEL_TEAM_ID}` : "";
+          const res = await fetch(`https://api.vercel.com/v6/domains/${domain}/config${teamQuery}`, {
+            headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
+          });
+          if (!res.ok) return "cname.vercel-dns.com";
+          const data = await res.json();
+          const target = data.recommendedCNAME?.[0]?.value || data.cnames?.[0] || "cname.vercel-dns.com";
+          return String(target).replace(/\.$/, "");
+        } catch { return "cname.vercel-dns.com"; }
+      };
+
+      const [blogCname, projectsCname] = await Promise.all([
+        fetchCname(customDomain),
+        fetchCname(projectsDomain),
+      ]);
+
+      const dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }> = [];
+      dnsRecords.push({ type: "CNAME", name: "blog", value: blogCname, purpose: "Blog subdomain" });
+      dnsRecords.push({ type: "CNAME", name: "projects", value: projectsCname, purpose: "Projects subdomain" });
+
+      domainInfo = {
+        blogStatus: blogVerify.verified && blogVerify.configured ? "active" : "pending",
+        projectsStatus: projectsVerify.verified && projectsVerify.configured ? "active" : "pending",
+        blogCnameTarget: blogCname,
+        projectsCnameTarget: projectsCname,
+        dnsRecords,
+      };
+    } catch {
+      // Vercel API unavailable — show unknown
+      domainInfo = {
+        blogStatus: "unknown",
+        projectsStatus: "unknown",
+        blogCnameTarget: "cname.vercel-dns.com",
+        projectsCnameTarget: "cname.vercel-dns.com",
+        dnsRecords: [
+          { type: "CNAME", name: "blog", value: "cname.vercel-dns.com", purpose: "Blog subdomain" },
+          { type: "CNAME", name: "projects", value: "cname.vercel-dns.com", purpose: "Projects subdomain" },
+        ],
+      };
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-4 flex items-center gap-1.5 text-xs text-muted">
@@ -128,6 +192,7 @@ export default async function SiteControlPanel({ params }: Props) {
         rewardPrompts={rewardPrompts as Array<{ category: string; scene: string; prompt: string; visual: string }>}
         projects={projects as Array<{ id: string; name: string; slug: string }>}
         navLinks={(site.nav_links as Array<{ label: string; href: string }>) || []}
+        domainInfo={domainInfo}
       />
     </div>
   );

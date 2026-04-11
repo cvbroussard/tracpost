@@ -105,10 +105,12 @@ interface DnsRecord {
 function DomainProvisioning({
   siteId,
   customDomain: initialDomain,
+  initialDomainInfo,
   onProvisioned,
 }: {
   siteId: string;
   customDomain: string;
+  initialDomainInfo?: DomainInfoProps;
   onProvisioned: (blogDomain: string, slug: string, records: DnsRecord[]) => void;
 }) {
   const [domainInput, setDomainInput] = useState("");
@@ -117,9 +119,15 @@ function DomainProvisioning({
   const [projectsDomain, setProjectsDomain] = useState(
     initialDomain ? initialDomain.replace("blog.", "projects.") : ""
   );
-  const [dnsRecords, setDnsRecords] = useState<DnsRecord[] | null>(null);
-  const [blogStatus, setBlogStatus] = useState<"unknown" | "pending" | "active">("unknown");
-  const [projectsStatus, setProjectsStatus] = useState<"unknown" | "pending" | "active">("unknown");
+  const [dnsRecords, setDnsRecords] = useState<DnsRecord[] | null>(
+    initialDomainInfo?.dnsRecords || null
+  );
+  const [blogStatus, setBlogStatus] = useState<"unknown" | "pending" | "active">(
+    initialDomainInfo?.blogStatus || "unknown"
+  );
+  const [projectsStatus, setProjectsStatus] = useState<"unknown" | "pending" | "active">(
+    initialDomainInfo?.projectsStatus || "unknown"
+  );
   const [verifying, setVerifying] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -331,6 +339,14 @@ interface NavLink {
   href: string;
 }
 
+interface DomainInfoProps {
+  blogStatus: "unknown" | "pending" | "active";
+  projectsStatus: "unknown" | "pending" | "active";
+  blogCnameTarget: string;
+  projectsCnameTarget: string;
+  dnsRecords: DnsRecord[];
+}
+
 export function SiteControls({
   siteId,
   site,
@@ -339,6 +355,7 @@ export function SiteControls({
   rewardPrompts = [],
   projects = [],
   navLinks: initialNavLinks = [],
+  domainInfo,
 }: {
   siteId: string;
   site: SiteData;
@@ -347,6 +364,7 @@ export function SiteControls({
   rewardPrompts?: Array<{ category: string; scene: string; prompt: string; visual: string }>;
   projects?: ProjectInfo[];
   navLinks?: NavLink[];
+  domainInfo?: DomainInfoProps | null;
 }) {
   const [contentVibe, setContentVibe] = useState(site.contentVibe);
   const [imageStyle, setImageStyle] = useState(site.imageStyle);
@@ -705,6 +723,7 @@ export function SiteControls({
             <DomainProvisioning
               siteId={siteId}
               customDomain={customDomain}
+              initialDomainInfo={domainInfo || undefined}
               onProvisioned={(blogDomain, slug, records) => {
                 setCustomDomain(blogDomain);
                 setBlogSlug(slug);

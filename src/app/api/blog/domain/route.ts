@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
     const lastDot = domainClean.lastIndexOf(".");
     const siteSlug = lastDot > 0 ? domainClean.slice(0, lastDot).replace(/[^a-z0-9-]/g, "") : domainClean;
     const blogDomain = `blog.${domainClean}`;
+    const projectsDomain = `projects.${domainClean}`;
 
     // 2. Update blog_settings — set slug + custom_domain
     await sql`
@@ -59,46 +60,58 @@ export async function POST(req: NextRequest) {
       WHERE id = ${site_id}
     `;
 
-    // 3. Add blog.[domain] to Vercel
-    const result = await addDomain(blogDomain);
+    // 3. Add blog.[domain] and projects.[domain] to Vercel
+    const blogResult = await addDomain(blogDomain);
+    const projectsResult = await addDomain(projectsDomain);
+    const result = blogResult;
 
-    if (!result.success) {
+    if (!blogResult.success && !projectsResult.success) {
       return NextResponse.json({
         step: "vercel",
-        error: result.error,
+        error: blogResult.error || projectsResult.error,
         siteSlug,
         blogDomain,
-        message: "Slug updated in DB but Vercel domain add failed. Add manually in Vercel dashboard.",
+        projectsDomain,
+        message: "Slug updated in DB but Vercel domain adds failed. Add manually in Vercel dashboard.",
       }, { status: 502 });
     }
 
     // 4. Return DNS records for tenant
     const dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }> = [];
 
-    // Verification TXT record (if required)
-    if (result.verification && result.verification.length > 0) {
-      for (const v of result.verification) {
-        dnsRecords.push({
-          type: v.type.toUpperCase(),
-          name: v.domain,
-          value: v.value,
-          purpose: "Domain ownership verification",
-        });
+    // Verification TXT records (if required)
+    for (const res of [blogResult, projectsResult]) {
+      if (res.verification && res.verification.length > 0) {
+        for (const v of res.verification) {
+          dnsRecords.push({
+            type: v.type.toUpperCase(),
+            name: v.domain,
+            value: v.value,
+            purpose: "Domain ownership verification",
+          });
+        }
       }
     }
 
-    // CNAME record for the blog subdomain
+    // CNAME records for both subdomains
     dnsRecords.push({
       type: "CNAME",
       name: "blog",
       value: "cname.vercel-dns.com",
       purpose: "Points blog subdomain to TracPost",
     });
+    dnsRecords.push({
+      type: "CNAME",
+      name: "projects",
+      value: "cname.vercel-dns.com",
+      purpose: "Points projects subdomain to TracPost",
+    });
 
     return NextResponse.json({
       success: true,
       siteSlug,
       blogDomain,
+      projectsDomain,
       dnsRecords,
       message: `Blog domain provisioned. Send these DNS records to the tenant.`,
     });

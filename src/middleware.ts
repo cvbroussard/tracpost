@@ -2,23 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { classifyHost } from "@/lib/subdomains";
 
 /**
- * Extract siteSlug from a custom blog domain.
+ * Extract siteSlug from a custom subdomain.
  * blog.b2construct.com → "b2construct"
- * blog.epicurious-kitchens.com → "epicurious-kitchens"
+ * projects.b2construct.com → "b2construct"
  *
  * Convention: siteSlug always matches the tenant's domain name (minus TLD).
  * Platform admin ensures this during provisioning.
  */
-function extractSlugFromHost(hostname: string): string | null {
+function extractSlugFromHost(hostname: string, prefix: string): string | null {
   const host = hostname.split(":")[0];
-  // Must start with "blog." and not be blog.tracpost.com
-  if (!host.startsWith("blog.")) return null;
-  if (host === "blog.tracpost.com") return null;
-  // Strip "blog." prefix and TLD suffix
-  const rest = host.slice(5); // remove "blog."
+  const prefixDot = prefix + ".";
+  if (!host.startsWith(prefixDot)) return null;
+  if (host === `${prefix}.tracpost.com`) return null;
+  // Strip prefix and TLD
+  const rest = host.slice(prefixDot.length);
   const lastDot = rest.lastIndexOf(".");
   if (lastDot === -1) return null;
-  return rest.slice(0, lastDot); // "b2construct.com" → "b2construct"
+  return rest.slice(0, lastDot);
 }
 
 /**
@@ -68,12 +68,8 @@ export function middleware(req: NextRequest) {
     requestHeaders.set("x-blog-host", hostname);
 
     // Custom domain (e.g., blog.b2construct.com) — parse siteSlug from hostname
-    const siteSlug = extractSlugFromHost(host);
+    const siteSlug = extractSlugFromHost(host, "blog");
     if (siteSlug) {
-      // Already on /blog path — pass through
-      if (pathname.startsWith("/blog")) {
-        return NextResponse.next({ request: { headers: requestHeaders } });
-      }
       // / → /blog/b2construct, /my-article → /blog/b2construct/my-article
       const rewritePath = pathname === "/" ? `/blog/${siteSlug}` : `/blog/${siteSlug}${pathname}`;
       const url = req.nextUrl.clone();
@@ -93,6 +89,31 @@ export function middleware(req: NextRequest) {
     }
 
     // Unrecognized blog domain — unauthorized hotlink or misconfigured CNAME
+    const url = req.nextUrl.clone();
+    url.hostname = "tracpost.com";
+    url.pathname = "/unauthorized";
+    return NextResponse.redirect(url, 302);
+  }
+
+  if (subdomain === "projects") {
+    // Projects domain — block admin/dashboard
+    if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+
+    const host = hostname.split(":")[0];
+
+    // Custom domain (e.g., projects.b2construct.com) — parse siteSlug
+    const siteSlug = extractSlugFromHost(host, "projects");
+    if (siteSlug) {
+      // / → /projects/b2construct, /kitchen-reno → /projects/b2construct/kitchen-reno
+      const rewritePath = pathname === "/" ? `/projects/${siteSlug}` : `/projects/${siteSlug}${pathname}`;
+      const url = req.nextUrl.clone();
+      url.pathname = rewritePath;
+      return NextResponse.rewrite(url);
+    }
+
+    // Unrecognized projects domain
     const url = req.nextUrl.clone();
     url.hostname = "tracpost.com";
     url.pathname = "/unauthorized";

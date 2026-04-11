@@ -10,7 +10,7 @@
  * without subdomain rewriting.
  */
 
-export type SubdomainType = "marketing" | "studio" | "platform" | "blog";
+export type SubdomainType = "marketing" | "studio" | "platform" | "blog" | "projects";
 
 /**
  * Classify a hostname into a subdomain type.
@@ -26,6 +26,9 @@ export function classifyHost(hostname: string): SubdomainType {
 
   // Custom blog domains (e.g., blog.b2construct.com)
   if (host.startsWith("blog.")) return "blog";
+
+  // Custom project domains (e.g., projects.b2construct.com)
+  if (host.startsWith("projects.")) return "projects";
 
   // Everything else: root domain, www, localhost
   return "marketing";

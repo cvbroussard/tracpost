@@ -36,7 +36,7 @@ export default async function SettingsPage() {
     `,
     sql`
       SELECT
-        COUNT(*)::int FILTER (WHERE status = 'published') AS published,
+        (COUNT(*) FILTER (WHERE status = 'published'))::int AS published,
         COUNT(*)::int AS total
       FROM blog_posts WHERE site_id = ${siteId}
     `,

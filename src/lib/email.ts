@@ -15,19 +15,29 @@ export async function sendEmail({
   to,
   subject,
   html,
+  replyTo,
+  from,
 }: {
   to: string;
   subject: string;
   html: string;
+  replyTo?: string;
+  from?: string;
 }): Promise<boolean> {
   if (!resend) {
-    console.log(`[EMAIL] To: ${to} | Subject: ${subject}`);
+    console.log(`[EMAIL] To: ${to} | Subject: ${subject} | Reply-To: ${replyTo || "(none)"}`);
     console.log(`[EMAIL] Body: ${html.slice(0, 200)}...`);
     return true;
   }
 
   try {
-    await resend.emails.send({ from: FROM, to, subject, html });
+    await resend.emails.send({
+      from: from || FROM,
+      to,
+      subject,
+      html,
+      ...(replyTo ? { replyTo } : {}),
+    });
     return true;
   } catch (err) {
     console.error("Email send failed:", err instanceof Error ? err.message : err);

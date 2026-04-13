@@ -76,6 +76,11 @@ export default function ContactPage({ data }: { data: ContactPageData }) {
                   <label className="ws-form-label">Message</label>
                   <textarea name="message" rows={5} required className="ws-form-input ws-form-textarea" placeholder="Tell us about your project" />
                 </div>
+                {/* Honeypot — hidden from real users, bots fill it in */}
+                <div style={{ position: "absolute", left: "-9999px", top: "-9999px" }} aria-hidden="true">
+                  <label>Website</label>
+                  <input type="text" name="website" tabIndex={-1} autoComplete="off" />
+                </div>
                 <button type="submit" className="ws-btn ws-btn-primary" style={{ width: "100%" }}>
                   Send Message
                 </button>
@@ -254,6 +259,7 @@ const contactFormScript = `
           email: data.get('email'),
           phone: data.get('phone'),
           message: data.get('message'),
+          website: data.get('website'),
         }),
       });
       var result = await res.json();

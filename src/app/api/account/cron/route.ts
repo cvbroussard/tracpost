@@ -19,7 +19,7 @@ export async function POST() {
 
   // 1. Suspend: cancelled_at > 30 days ago AND still active
   const toSuspend = await sql`
-    SELECT id FROM subscribers
+    SELECT id FROM subscriptions
     WHERE cancelled_at IS NOT NULL
       AND cancelled_at < NOW() - INTERVAL '30 days'
       AND is_active = true
@@ -27,20 +27,20 @@ export async function POST() {
 
   for (const sub of toSuspend) {
     await sql`
-      UPDATE subscribers SET is_active = false, updated_at = NOW()
+      UPDATE subscriptions SET is_active = false, updated_at = NOW()
       WHERE id = ${sub.id}
     `;
     // Disable all sites
     await sql`
       UPDATE sites SET autopilot_enabled = false
-      WHERE subscriber_id = ${sub.id}
+      WHERE subscription_id = ${sub.id}
     `;
     results.suspended++;
   }
 
   // 2. Hard delete: cancelled_at > 120 days ago AND inactive
   const toPurge = await sql`
-    SELECT id FROM subscribers
+    SELECT id FROM subscriptions
     WHERE cancelled_at IS NOT NULL
       AND cancelled_at < NOW() - INTERVAL '120 days'
       AND is_active = false
@@ -48,7 +48,7 @@ export async function POST() {
 
   for (const sub of toPurge) {
     // CASCADE will handle sites, blog_posts, social_posts, etc.
-    await sql`DELETE FROM subscribers WHERE id = ${sub.id}`;
+    await sql`DELETE FROM subscriptions WHERE id = ${sub.id}`;
     results.purged++;
     // Note: R2 assets should be purged separately via a cleanup job
     // that lists objects by sites/{siteId}/ prefix. The site IDs are

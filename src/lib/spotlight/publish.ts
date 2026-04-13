@@ -133,13 +133,13 @@ export async function publishSpotlight(sessionId: string): Promise<{
     }
   }
 
-  // Push notification to subscriber
+  // Push notification to subscription owner
   if (result.published > 0) {
     const customerLabel = session.customer_name || "A customer";
     const ratingLabel = session.star_rating ? ` (${session.star_rating}★)` : "";
 
     await sendPushNotification(
-      session.subscriber_id,
+      session.subscription_id,
       "New Spotlight!",
       `${customerLabel} was Spotlighted${ratingLabel} — posted to ${result.published} account${result.published > 1 ? "s" : ""}`,
       { type: "spotlight", sessionId, siteId: session.site_id }

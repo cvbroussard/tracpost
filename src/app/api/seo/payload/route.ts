@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
     .join("");
 
   const subRows = await sql`
-    SELECT s.id AS subscriber_id
-    FROM subscribers s
+    SELECT s.id AS subscription_id
+    FROM subscriptions s
     WHERE s.api_key_hash = ${apiKeyHash} AND s.is_active = true
   `;
 
@@ -61,13 +61,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
-  const subscriberId = subRows[0].subscriber_id;
+  const subscriptionId = subRows[0].subscription_id;
 
-  // Verify site belongs to subscriber
+  // Verify site belongs to subscription
   const siteRows = await sql`
     SELECT id, name, url, metadata
     FROM sites
-    WHERE id = ${siteId} AND subscriber_id = ${subscriberId}
+    WHERE id = ${siteId} AND subscription_id = ${subscriptionId}
   `;
 
   if (siteRows.length === 0) {

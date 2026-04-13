@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const sites = await sql`
       SELECT s.id, s.url, s.name, sub.is_active
       FROM sites s
-      JOIN subscribers sub ON sub.id = s.subscriber_id
+      JOIN subscriptions sub ON sub.id = s.subscription_id
       WHERE s.url IS NOT NULL
         AND s.url != ''
         AND sub.is_active = true

@@ -6,7 +6,7 @@ export default async function SocialAccountsPage() {
   const accounts = await sql`
     SELECT sa.id, sa.platform, sa.account_name, sa.account_id, sa.status,
            sa.token_expires_at, sa.created_at,
-           sub.name AS subscriber_name,
+           COALESCE(owner.name, owner.email, '—') AS subscriber_name,
            (SELECT COUNT(*)::int FROM social_posts sp WHERE sp.account_id = sa.id AND sp.status = 'published') AS published_count,
            (SELECT COUNT(*)::int FROM social_posts sp WHERE sp.account_id = sa.id AND sp.status = 'scheduled') AS scheduled_count,
            (
@@ -16,7 +16,8 @@ export default async function SocialAccountsPage() {
              WHERE ssl.social_account_id = sa.id
            ) AS linked_sites
     FROM social_accounts sa
-    JOIN subscribers sub ON sa.subscriber_id = sub.id
+    JOIN subscriptions sub ON sa.subscription_id = sub.id
+    LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
     ORDER BY sa.created_at DESC
   `;
 

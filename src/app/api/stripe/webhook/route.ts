@@ -67,15 +67,18 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
     return;
   }
 
-  // Check if subscriber already exists (re-subscribe)
+  // Check if subscription already exists (re-subscribe) by owner email
   const [existing] = await sql`
-    SELECT id FROM subscribers WHERE email = ${email}
+    SELECT s.id
+    FROM subscriptions s
+    JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
+    WHERE u.email = ${email}
   `;
 
   if (existing) {
-    // Reactivate existing subscriber
+    // Reactivate existing subscription
     await sql`
-      UPDATE subscribers
+      UPDATE subscriptions
       SET is_active = true,
           cancelled_at = NULL,
           cancel_reason = NULL,
@@ -93,7 +96,7 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
       const sub = await stripe.subscriptions.retrieve(subscriptionId);
       const priceId = sub.items.data[0]?.price.id;
       const plan = PRICE_TO_PLAN[priceId] || "starter";
-      await sql`UPDATE subscribers SET plan = ${plan} WHERE id = ${existing.id}`;
+      await sql`UPDATE subscriptions SET plan = ${plan} WHERE id = ${existing.id}`;
     }
 
     // Generate magic link for returning subscriber
@@ -121,12 +124,10 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
   const apiKeyRaw = `tp_${randomBytes(24).toString("hex")}`;
   const apiKeyHash = createHash("sha256").update(apiKeyRaw).digest("hex");
 
-  // Create subscriber
-  const [subscriber] = await sql`
-    INSERT INTO subscribers (name, email, api_key_hash, plan, is_active, metadata)
+  // Create subscription (billing entity)
+  const [subscription] = await sql`
+    INSERT INTO subscriptions (api_key_hash, plan, is_active, metadata)
     VALUES (
-      ${email.split("@")[0]},
-      ${email},
       ${apiKeyHash},
       ${plan},
       true,
@@ -139,21 +140,34 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
     RETURNING id
   `;
 
+  // Create owner user attached to the subscription
+  const [owner] = await sql`
+    INSERT INTO users (subscription_id, name, email, role, is_active)
+    VALUES (
+      ${subscription.id},
+      ${email.split("@")[0]},
+      ${email},
+      'owner',
+      true
+    )
+    RETURNING id
+  `;
+
   // Generate magic link
-  const token = await generateMagicToken(subscriber.id);
+  const token = await generateMagicToken(owner.id);
   const magicUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://tracpost.com"}/auth/magic?token=${token}`;
   await sendWelcomeEmail(email, magicUrl, true);
 
   // Log
   await sql`
-    INSERT INTO usage_log (subscriber_id, action, metadata)
-    VALUES (${subscriber.id}, 'stripe_checkout', ${JSON.stringify({
+    INSERT INTO usage_log (subscription_id, action, metadata)
+    VALUES (${subscription.id}, 'stripe_checkout', ${JSON.stringify({
       plan,
       customer_id: customerId,
     })})
   `;
 
-  console.log(`Stripe: provisioned new subscriber ${subscriber.id} (${email}, ${plan})`);
+  console.log(`Stripe: provisioned new subscription ${subscription.id} (${email}, ${plan})`);
 }
 
 /**
@@ -170,24 +184,23 @@ async function handleSubscriptionUpdated(subscription: Record<string, unknown>) 
   const plan = PRICE_TO_PLAN[priceId] || "starter";
 
   await sql`
-    UPDATE subscribers
+    UPDATE subscriptions
     SET plan = ${plan}, updated_at = NOW()
-    WHERE metadata->>'stripe'->>'customer_id' = ${customerId}
-       OR metadata @> ${JSON.stringify({ stripe: { customer_id: customerId } })}::jsonb
+    WHERE metadata @> ${JSON.stringify({ stripe: { customer_id: customerId } })}::jsonb
   `;
 
   console.log(`Stripe: updated plan to ${plan} for customer ${customerId}`);
 }
 
 /**
- * Subscription deleted → cancel subscriber.
+ * Subscription deleted → cancel subscription.
  */
 async function handleSubscriptionDeleted(subscription: Record<string, unknown>) {
   const customerId = subscription.customer as string;
   if (!customerId) return;
 
   await sql`
-    UPDATE subscribers
+    UPDATE subscriptions
     SET cancelled_at = NOW(), updated_at = NOW()
     WHERE metadata @> ${JSON.stringify({ stripe: { customer_id: customerId } })}::jsonb
   `;

@@ -6,18 +6,20 @@ export const dynamic = "force-dynamic";
 export default async function SubscribersPage() {
   const subscribers = await sql`
     SELECT
-      sub.id, sub.name, sub.plan, sub.is_active, sub.created_at,
-      (SELECT COUNT(*)::int FROM sites WHERE subscriber_id = sub.id) AS site_count,
+      sub.id, sub.plan, sub.is_active, sub.created_at,
+      COALESCE(owner.name, owner.email, '—') AS name,
+      (SELECT COUNT(*)::int FROM sites WHERE subscription_id = sub.id) AS site_count,
       (
         SELECT COUNT(*)::int FROM social_accounts sa
-        WHERE sa.subscriber_id = sub.id AND sa.status = 'active'
+        WHERE sa.subscription_id = sub.id AND sa.status = 'active'
       ) AS account_count,
       (
         SELECT COUNT(*)::int FROM social_posts sp
         JOIN social_accounts sa ON sp.account_id = sa.id
-        WHERE sa.subscriber_id = sub.id AND sp.status = 'published'
+        WHERE sa.subscription_id = sub.id AND sp.status = 'published'
       ) AS published_count
-    FROM subscribers sub
+    FROM subscriptions sub
+    LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
     ORDER BY sub.created_at DESC
   `;
 

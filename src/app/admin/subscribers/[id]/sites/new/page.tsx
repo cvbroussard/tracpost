@@ -8,7 +8,7 @@ export default function NewSitePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id: subscriberId } = use(params);
+  const { id: subscriptionId } = use(params);
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [blogUrl, setBlogUrl] = useState("");
@@ -25,7 +25,7 @@ export default function NewSitePage({
       const res = await fetch("/api/admin/sites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscriber_id: subscriberId, name, domain, blog_url: blogUrl }),
+        body: JSON.stringify({ subscription_id: subscriptionId, name, domain, blog_url: blogUrl }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -43,7 +43,7 @@ export default function NewSitePage({
   if (result) {
     return (
       <div className="mx-auto max-w-lg">
-        <Link href={`/admin/subscribers/${subscriberId}`} className="text-xs text-muted hover:text-accent">
+        <Link href={`/admin/subscribers/${subscriptionId}`} className="text-xs text-muted hover:text-accent">
           &larr; Back to subscriber
         </Link>
         <h1 className="mt-2 mb-6 text-lg font-semibold">Site Created</h1>
@@ -56,7 +56,7 @@ export default function NewSitePage({
             </div>
           </div>
           <Link
-            href={`/admin/subscribers/${subscriberId}`}
+            href={`/admin/subscribers/${subscriptionId}`}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
           >
             View Subscriber
@@ -68,7 +68,7 @@ export default function NewSitePage({
 
   return (
     <div className="mx-auto max-w-lg">
-      <Link href={`/admin/subscribers/${subscriberId}`} className="text-xs text-muted hover:text-accent">
+      <Link href={`/admin/subscribers/${subscriptionId}`} className="text-xs text-muted hover:text-accent">
         &larr; Back to subscriber
       </Link>
       <h1 className="mt-2 mb-6 text-lg font-semibold">Add Site</h1>

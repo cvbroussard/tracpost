@@ -5,13 +5,14 @@ export const dynamic = "force-dynamic";
 export default async function UsagePage() {
   const [bySubscriber, byAction, recent] = await Promise.all([
     sql`
-      SELECT sub.name, sub.plan,
+      SELECT COALESCE(owner.name, owner.email, '—') AS name, sub.plan,
              COUNT(ul.id)::int AS total_actions,
              MAX(ul.created_at) AS last_action
-      FROM subscribers sub
-      LEFT JOIN usage_log ul ON ul.subscriber_id = sub.id
+      FROM subscriptions sub
+      LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
+      LEFT JOIN usage_log ul ON ul.subscription_id = sub.id
       WHERE sub.is_active = true
-      GROUP BY sub.id, sub.name, sub.plan
+      GROUP BY sub.id, owner.name, owner.email, sub.plan
       ORDER BY total_actions DESC
     `,
     sql`
@@ -23,9 +24,11 @@ export default async function UsagePage() {
     `,
     sql`
       SELECT ul.action, ul.metadata, ul.created_at,
-             sub.name AS subscriber_name, s.name AS site_name
+             COALESCE(owner.name, owner.email, '—') AS subscriber_name,
+             s.name AS site_name
       FROM usage_log ul
-      JOIN subscribers sub ON ul.subscriber_id = sub.id
+      JOIN subscriptions sub ON ul.subscription_id = sub.id
+      LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
       LEFT JOIN sites s ON ul.site_id = s.id
       ORDER BY ul.created_at DESC
       LIMIT 30

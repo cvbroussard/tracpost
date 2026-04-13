@@ -15,20 +15,23 @@ export default async function PipelinePage() {
     `,
     sql`
       SELECT sp.id, sp.caption, sp.error_message, sp.updated_at,
-             sa.account_name, sa.platform, sub.name AS subscriber_name
+             sa.account_name, sa.platform,
+             COALESCE(owner.name, owner.email, '—') AS subscriber_name
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      JOIN subscribers sub ON sa.subscriber_id = sub.id
+      JOIN subscriptions sub ON sa.subscription_id = sub.id
+      LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
       WHERE sp.status = 'failed'
       ORDER BY sp.updated_at DESC
       LIMIT 10
     `,
     sql`
       SELECT sa.account_name, sa.platform, sa.status, sa.token_expires_at,
-             sub.name AS subscriber_name,
+             COALESCE(owner.name, owner.email, '—') AS subscriber_name,
              (SELECT array_agg(s.name) FROM site_social_links ssl JOIN sites s ON ssl.site_id = s.id WHERE ssl.social_account_id = sa.id) AS linked_sites
       FROM social_accounts sa
-      JOIN subscribers sub ON sa.subscriber_id = sub.id
+      JOIN subscriptions sub ON sa.subscription_id = sub.id
+      LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
       WHERE sa.token_expires_at IS NOT NULL
       ORDER BY sa.token_expires_at ASC
     `,

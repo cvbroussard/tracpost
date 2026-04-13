@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/blog/",
       disallow: ["/dashboard/", "/admin/", "/api/"],
     },
-    sitemap: "https://blog.tracpost.com/sitemap.xml",
+    sitemap: "https://tracpost.com/blog/sitemap.xml",
   };
 }

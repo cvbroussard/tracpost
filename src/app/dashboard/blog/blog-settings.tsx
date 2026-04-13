@@ -25,11 +25,11 @@ export function BlogSettings({
 }: BlogStatusProps) {
   const { blog_enabled, subdomain, custom_domain } = initialSettings;
 
-  // Determine public URL
+  // Determine public URL — custom domain wins, otherwise show staging path
   const publicUrl = custom_domain
     ? `https://${custom_domain}`
     : subdomain
-      ? `https://tracpost.com/blog/${subdomain}`
+      ? `https://staging.tracpost.com/${subdomain}/blog`
       : null;
 
   if (!blog_enabled) {

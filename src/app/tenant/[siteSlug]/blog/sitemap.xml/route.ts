@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { resolveBlogSiteBySlug, getBlogPosts } from "@/lib/blog";
+import { resolveBlogSiteBySlug, getBlogPosts, getCustomDomain } from "@/lib/blog";
+import { publicBlogUrl, publicBlogArticleUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,12 @@ export async function GET(_req: Request, { params }: RouteParams) {
   }
 
   const posts = await getBlogPosts(site.siteId, 500);
-  const baseUrl = `https://blog.tracpost.com/${siteSlug}`;
+  const customDomain = await getCustomDomain(site.siteId);
+  const baseUrl = publicBlogUrl(siteSlug, customDomain);
 
   const postUrls = posts.map((post) => `
     <url>
-      <loc>${baseUrl}/${post.slug}</loc>
+      <loc>${publicBlogArticleUrl(siteSlug, String(post.slug), customDomain)}</loc>
       <lastmod>${new Date(post.published_at as string).toISOString()}</lastmod>
       <changefreq>monthly</changefreq>
       <priority>0.6</priority>

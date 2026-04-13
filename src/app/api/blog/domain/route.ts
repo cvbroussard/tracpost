@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { addDomain, removeDomain, verifyDomain } from "@/lib/vercel-domains";
+import { isReservedSlug } from "@/lib/urls";
 
 /**
  * POST /api/blog/domain — Custom domain provisioning for blogs.
@@ -44,6 +45,13 @@ export async function POST(req: NextRequest) {
     const siteSlug = lastDot > 0 ? domainClean.slice(0, lastDot).replace(/[^a-z0-9-]/g, "") : domainClean;
     const blogDomain = `blog.${domainClean}`;
     const projectsDomain = `projects.${domainClean}`;
+
+    // Block reserved slugs (admin, blog, projects, tracpost, etc.)
+    if (isReservedSlug(siteSlug)) {
+      return NextResponse.json({
+        error: `Slug "${siteSlug}" is reserved and cannot be assigned to a tenant. Use a different domain.`,
+      }, { status: 400 });
+    }
 
     // 2. Update blog_settings — set slug + custom_domain
     await sql`

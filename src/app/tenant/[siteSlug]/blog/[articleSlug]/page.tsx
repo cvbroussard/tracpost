@@ -9,6 +9,7 @@ import { autoLinkEntities } from "@/lib/blog/auto-linker";
 import { markdownToHtml } from "@/lib/blog/markdown";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
 import BlogAside from "@/components/blog/blog-aside";
+import { blogHubUrl, publicBlogArticleUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -47,9 +48,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Canonical: custom domain if configured, otherwise tracpost.com
   const customDomain = await getCustomDomain(site.siteId);
   const favicon = await getFavicon(site.siteId);
-  const canonicalUrl = customDomain
-    ? `https://${customDomain}/${articleSlug}`
-    : `https://tracpost.com/blog/${siteSlug}/${articleSlug}`;
+  const canonicalUrl = publicBlogArticleUrl(siteSlug, articleSlug, customDomain);
 
   return {
     title: articleTitle,
@@ -117,13 +116,15 @@ export default async function ArticlePage({ params }: Props) {
     logoUrl: businessLogo || logoUrl || rawTheme.logoUrl,
   };
 
+  const customDomain = await getCustomDomain(site.siteId);
+
   // Nav links
   const storedNavLinks = (settings.nav_links as NavLink[]) || [];
   const navLinks: NavLink[] = storedNavLinks.length > 0
     ? storedNavLinks
     : [
         ...(websiteUrl ? [{ label: "Home", href: websiteUrl }] : []),
-        { label: "Blog", href: `/blog/${siteSlug}` },
+        { label: "Blog", href: blogHubUrl(siteSlug, customDomain) },
       ];
 
   // Aside data
@@ -133,7 +134,6 @@ export default async function ArticlePage({ params }: Props) {
     ? String((angles[0] as Record<string, unknown>).tagline || "")
     : "";
   const aboutText = site.blogDescription || tagline || "";
-  const customDomain = await getCustomDomain(site.siteId);
   const pillars = [...new Set(allPosts.map((p) => p.content_pillar as string).filter(Boolean))];
   const recentPosts = allPosts
     .filter((p) => String(p.slug) !== articleSlug)
@@ -153,6 +153,7 @@ export default async function ArticlePage({ params }: Props) {
     tags,
     siteSlug,
     articleSlug,
+    customDomain,
     siteName: site.siteName,
   });
 
@@ -173,6 +174,7 @@ export default async function ArticlePage({ params }: Props) {
       aside={
         <BlogAside
           siteSlug={siteSlug}
+          customDomain={customDomain}
           recentPosts={recentPosts}
           pillars={pillars}
           aboutText={aboutText}
@@ -231,7 +233,8 @@ export default async function ArticlePage({ params }: Props) {
               markdownToHtml(body),
               site.siteId,
               siteSlug,
-              articleSlug
+              articleSlug,
+              customDomain
             ),
           }}
         />
@@ -240,7 +243,7 @@ export default async function ArticlePage({ params }: Props) {
         {tags.length > 0 && (
           <div className="bs-tags">
             {tags.map((tag) => (
-              <Link key={tag} href={`/blog/${siteSlug}?tag=${encodeURIComponent(tag)}`} className="bs-tag">
+              <Link key={tag} href={`${blogHubUrl(siteSlug, customDomain)}?tag=${encodeURIComponent(tag)}`} className="bs-tag">
                 {tag}
               </Link>
             ))}

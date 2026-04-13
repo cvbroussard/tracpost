@@ -27,8 +27,9 @@ function extractSlugFromHost(hostname: string, prefix: string): string | null {
  * Production:
  *   studio.tracpost.com/calendar     → rewrites to /dashboard/calendar
  *   platform.tracpost.com/subscribers → rewrites to /admin/subscribers
- *   tracpost.com/blog/[site]/[slug]  → public blog (no rewrite needed)
- *   blog.b2construct.com/my-article  → rewrites to /blog/b2construct/my-article
+ *   tracpost.com/blog                → /tenant/tracpost/blog (next.config rewrite)
+ *   blog.b2construct.com/my-article  → /tenant/b2construct/blog/my-article
+ *   staging.tracpost.com/[slug]/...  → /tenant/[slug]/...
  *
  * Development (localhost):
  *   No rewriting — access /dashboard/* and /admin/* directly.
@@ -70,19 +71,12 @@ export function middleware(req: NextRequest) {
     // Custom domain (e.g., blog.b2construct.com) — parse siteSlug from hostname
     const siteSlug = extractSlugFromHost(host, "blog");
     if (siteSlug) {
-      // / → /blog/b2construct, /my-article → /blog/b2construct/my-article
-      const rewritePath = pathname === "/" ? `/blog/${siteSlug}` : `/blog/${siteSlug}${pathname}`;
-      const url = req.nextUrl.clone();
-      url.pathname = rewritePath;
-      return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
-    }
-
-    // blog.tracpost.com — discovery hub
-    if (host === "blog.tracpost.com") {
-      if (pathname.startsWith("/blog")) {
-        return NextResponse.next({ request: { headers: requestHeaders } });
-      }
-      const rewritePath = pathname === "/" ? "/blog" : `/blog${pathname}`;
+      // / → /tenant/b2construct/blog
+      // /my-article → /tenant/b2construct/blog/my-article
+      const rewritePath =
+        pathname === "/"
+          ? `/tenant/${siteSlug}/blog`
+          : `/tenant/${siteSlug}/blog${pathname}`;
       const url = req.nextUrl.clone();
       url.pathname = rewritePath;
       return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
@@ -106,8 +100,12 @@ export function middleware(req: NextRequest) {
     // Custom domain (e.g., projects.b2construct.com) — parse siteSlug
     const siteSlug = extractSlugFromHost(host, "projects");
     if (siteSlug) {
-      // / → /projects/b2construct, /kitchen-reno → /projects/b2construct/kitchen-reno
-      const rewritePath = pathname === "/" ? `/projects/${siteSlug}` : `/projects/${siteSlug}${pathname}`;
+      // / → /tenant/b2construct/projects
+      // /kitchen-reno → /tenant/b2construct/projects/kitchen-reno
+      const rewritePath =
+        pathname === "/"
+          ? `/tenant/${siteSlug}/projects`
+          : `/tenant/${siteSlug}/projects${pathname}`;
       const url = req.nextUrl.clone();
       url.pathname = rewritePath;
       return NextResponse.rewrite(url);
@@ -118,6 +116,31 @@ export function middleware(req: NextRequest) {
     url.hostname = "tracpost.com";
     url.pathname = "/unauthorized";
     return NextResponse.redirect(url, 302);
+  }
+
+  if (subdomain === "staging") {
+    // Staging — preview tenant content before they have a custom domain.
+    // staging.tracpost.com/b2construct/blog/my-article
+    //   → /tenant/b2construct/blog/my-article
+    if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+
+    // Strip leading slash, take first segment as slug
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length === 0) {
+      // Bare staging.tracpost.com — bounce to marketing root
+      const url = req.nextUrl.clone();
+      url.hostname = "tracpost.com";
+      url.pathname = "/";
+      return NextResponse.redirect(url, 302);
+    }
+
+    const slug = segments[0];
+    const rest = segments.slice(1).join("/");
+    const url = req.nextUrl.clone();
+    url.pathname = rest ? `/tenant/${slug}/${rest}` : `/tenant/${slug}`;
+    return NextResponse.rewrite(url);
   }
 
   if (subdomain === "studio") {

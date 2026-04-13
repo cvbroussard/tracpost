@@ -10,6 +10,7 @@ import { selectAssets } from "./asset-picker";
 import { renderWebsite } from "./renderer";
 import { deployWebsite } from "./deploy";
 import type { SiteTheme } from "./templates/layout";
+import { publicBlogUrl, publicProjectsUrl, publicBrandHubUrl } from "@/lib/urls";
 
 interface SpinResult {
   success: boolean;
@@ -86,13 +87,9 @@ export async function spinWebsite(siteId: string): Promise<SpinResult> {
   const customDomain = (settings.custom_domain as string) || null;
 
   // URLs for cross-linking
-  const blogUrl = customDomain
-    ? `https://${customDomain}`
-    : `https://tracpost.com/blog/${siteSlug}`;
-  const projectsUrl = customDomain
-    ? `https://${customDomain.replace("blog.", "projects.")}`
-    : `https://tracpost.com/projects/${siteSlug}`;
-  const brandsUrl = `${projectsUrl}/brands`;
+  const blogUrl = publicBlogUrl(siteSlug, customDomain);
+  const projectsUrl = publicProjectsUrl(siteSlug, customDomain);
+  const brandsUrl = publicBrandHubUrl(siteSlug, customDomain);
 
   // Theme
   const rawTheme = (settings.theme as Record<string, string>) || {};

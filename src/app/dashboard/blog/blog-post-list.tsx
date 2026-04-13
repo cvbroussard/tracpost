@@ -777,7 +777,7 @@ export function BlogPostList({
             <div className="border-t border-border px-6 py-4">
               <p className="mb-2 text-[10px] font-medium text-muted">SEO Preview</p>
               <p className="text-sm text-accent">{previewing.title}</p>
-              <p className="text-xs text-success">{`blog.tracpost.com/.../` + previewing.slug}</p>
+              <p className="text-xs text-success">{`.../blog/` + previewing.slug}</p>
               <p className="mt-0.5 text-xs text-muted">{previewing.excerpt?.slice(0, 155)}</p>
             </div>
 

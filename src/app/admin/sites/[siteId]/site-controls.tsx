@@ -931,7 +931,7 @@ export function SiteControls({
           <ReadOnly label="Blog Title" value={site.blogTitle} />
           <Field label="Blog Slug">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted">tracpost.com/blog/</span>
+              <span className="text-[10px] text-muted">staging.tracpost.com/</span>
               <input
                 type="text"
                 value={blogSlug}
@@ -939,10 +939,11 @@ export function SiteControls({
                 className="bg-surface-hover px-2 py-1 text-xs text-foreground w-32"
                 placeholder="siteslug"
               />
+              <span className="text-[10px] text-muted">/blog</span>
               <SaveButton section="blogSlug" data={{ blogSlug }} />
               {blogSlug && (
                 <a
-                  href={`https://tracpost.com/blog/${blogSlug}`}
+                  href={`https://staging.tracpost.com/${blogSlug}/blog`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[10px] text-accent hover:underline"

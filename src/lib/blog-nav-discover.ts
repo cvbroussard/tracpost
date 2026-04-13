@@ -5,6 +5,7 @@
  * header patterns, and stores them in blog_settings.nav_links.
  */
 import { sql } from "@/lib/db";
+import { blogHubUrl } from "@/lib/urls";
 
 interface NavLink {
   label: string;
@@ -63,9 +64,16 @@ export async function discoverNavLinks(
     // Scraping failed — use defaults
   }
 
-  // Get the blog subdomain for the Blog link
-  const [bs] = await sql`SELECT subdomain FROM blog_settings WHERE site_id = ${siteId}`;
-  const blogPath = bs?.subdomain ? `/blog/${bs.subdomain}` : "/blog";
+  // Get the blog slug + custom domain for the Blog link
+  const [bs] = await sql`
+    SELECT bs.subdomain, bs.custom_domain, s.blog_slug
+    FROM blog_settings bs
+    JOIN sites s ON s.id = bs.site_id
+    WHERE bs.site_id = ${siteId}
+  `;
+  const slug = (bs?.blog_slug as string) || (bs?.subdomain as string) || "";
+  const customDomain = (bs?.custom_domain as string) || null;
+  const blogPath = slug ? blogHubUrl(slug, customDomain) : "/blog";
 
   // Build final nav: always include Home + Blog, merge discovered
   const navLinks: NavLink[] = [

@@ -4,6 +4,7 @@ import { resolveBlogSiteBySlug, getCustomDomain, getFavicon } from "@/lib/blog";
 import { sql } from "@/lib/db";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
 import { ProjectDetailAside } from "@/components/blog/project-aside";
+import { projectsHubUrl, projectUrl, brandHubUrl, publicProjectUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description = (project.description as string) || `${project.name} by ${site.siteName}`;
   const customDomain = await getCustomDomain(site.siteId);
   const favicon = await getFavicon(site.siteId);
-  const projectsDomain = customDomain ? customDomain.replace("blog.", "projects.") : null;
-  const canonicalUrl = projectsDomain
-    ? `https://${projectsDomain}/${projectSlug}`
-    : `https://tracpost.com/projects/${siteSlug}/${projectSlug}`;
+  const canonicalUrl = publicProjectUrl(siteSlug, projectSlug, customDomain);
 
   return {
     title,
@@ -203,9 +201,8 @@ export default async function ProjectPage({ params }: Props) {
   const nextProject = currentIndex < projectList.length - 1 ? projectList[currentIndex + 1] : null;
 
   // Build sibling hrefs using custom domain if available
-  const projectsBase = customDomain
-    ? `https://${customDomain.replace("blog.", "projects.")}`
-    : `/projects/${siteSlug}`;
+  const projectsBase = projectsHubUrl(siteSlug, customDomain);
+  const brandsBase = brandHubUrl(siteSlug, customDomain);
 
   return (
     <BlogShell
@@ -229,10 +226,10 @@ export default async function ProjectPage({ params }: Props) {
           }}
           months={monthNav}
           brands={asideBrands}
-          brandsBaseUrl={`${projectsBase}/brands`}
+          brandsBaseUrl={brandsBase}
           personas={asidePersonas}
-          prev={prevProject ? { ...prevProject, slug: `${projectsBase}/${prevProject.slug}` } : null}
-          next={nextProject ? { ...nextProject, slug: `${projectsBase}/${nextProject.slug}` } : null}
+          prev={prevProject ? { ...prevProject, slug: projectUrl(siteSlug, prevProject.slug, customDomain) } : null}
+          next={nextProject ? { ...nextProject, slug: projectUrl(siteSlug, nextProject.slug, customDomain) } : null}
         />
       }
     >

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { projectUrl, blogArticleUrl } from "@/lib/urls";
 
 interface ProjectNavItem {
   slug: string;
@@ -78,7 +78,7 @@ export function ProjectHubAside({
             {projects.map((p) => {
               const href = projectsBaseUrl
                 ? `${projectsBaseUrl}/${p.slug}`
-                : `/projects/${siteSlug}/${p.slug}`;
+                : projectUrl(siteSlug, p.slug);
               return (
                 <a key={p.slug} href={href} className="pj-aside-nav-item">
                   {p.coverImage && (
@@ -102,7 +102,7 @@ export function ProjectHubAside({
             {recentPosts.map((post) => {
               const href = blogBaseUrl
                 ? `${blogBaseUrl}/${post.slug}`
-                : `/blog/${siteSlug}/${post.slug}`;
+                : blogArticleUrl(siteSlug, post.slug);
               return (
                 <li key={post.slug}>
                   <a href={href}>{post.title}</a>

@@ -8,6 +8,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 import { buildProjectSnapshot } from "./project-captions";
+import { projectUrl as buildProjectUrl } from "@/lib/urls";
 
 const anthropic = new Anthropic();
 
@@ -52,9 +53,13 @@ export async function generateProjectArticle(
   const snapshot = await buildProjectSnapshot(projectId);
   console.log("Project snapshot built, brands:", snapshot.brands.length, "captions:", snapshot.sampleCaptions.length);
 
-  // Fetch site for brand voice
+  // Fetch site for brand voice + URL context
   const [site] = await sql`
-    SELECT name, brand_voice, content_vibe, url FROM sites WHERE id = ${siteId}
+    SELECT s.name, s.brand_voice, s.content_vibe, s.url, s.blog_slug,
+           bs.custom_domain
+    FROM sites s
+    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    WHERE s.id = ${siteId}
   `;
 
   // Fetch captioned assets chronologically
@@ -86,7 +91,11 @@ export async function generateProjectArticle(
   // Build the prompt
   const brandVoice = (site?.brand_voice || {}) as Record<string, unknown>;
   const contentVibe = (site?.content_vibe as string) || "";
-  const projectUrl = `/projects/${project.slug}`;
+  const projectUrl = buildProjectUrl(
+    String(site?.blog_slug || ""),
+    String(project.slug),
+    site?.custom_domain ? String(site.custom_domain) : null
+  );
 
   const startDate = project.start_date
     ? new Date(project.start_date as string).toLocaleDateString("en-US", { year: "numeric", month: "long" })
@@ -348,7 +357,11 @@ export async function generateProjectArticleFromPrompt(
   const snapshot = await buildProjectSnapshot(projectId);
 
   const [site] = await sql`
-    SELECT name, brand_voice, content_vibe, url FROM sites WHERE id = ${siteId}
+    SELECT s.name, s.brand_voice, s.content_vibe, s.url, s.blog_slug,
+           bs.custom_domain
+    FROM sites s
+    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    WHERE s.id = ${siteId}
   `;
 
   const allAssets = await sql`
@@ -379,7 +392,11 @@ export async function generateProjectArticleFromPrompt(
 
   const brandVoice = (site?.brand_voice || {}) as Record<string, unknown>;
   const contentVibe = (site?.content_vibe as string) || "";
-  const projectUrl = `/projects/${project.slug}`;
+  const projectUrl = buildProjectUrl(
+    String(site?.blog_slug || ""),
+    String(project.slug),
+    site?.custom_domain ? String(site.custom_domain) : null
+  );
 
   const genPrompt = `Write a blog article about a specific aspect of a real project.
 

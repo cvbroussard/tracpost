@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { isReservedSlug } from "@/lib/urls";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -43,6 +44,11 @@ export async function POST(req: NextRequest) {
     const slug = blogSlug.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40);
     if (!slug) {
       return NextResponse.json({ error: "Blog slug cannot be empty" }, { status: 400 });
+    }
+    if (isReservedSlug(slug)) {
+      return NextResponse.json({
+        error: `"${slug}" is reserved (collides with a platform route or subdomain). Pick a different slug.`,
+      }, { status: 400 });
     }
     // Check uniqueness
     const [existing] = await sql`

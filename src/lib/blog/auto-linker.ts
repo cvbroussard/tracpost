@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db";
+import { blogArticleUrl, brandUrl } from "@/lib/urls";
 
 interface LinkablePost {
   slug: string;
@@ -56,12 +57,13 @@ async function getSiteBrands(siteId: string): Promise<LinkableBrand[]> {
 function buildPhraseMap(
   posts: LinkablePost[],
   brands: LinkableBrand[],
-  siteSlug: string
+  siteSlug: string,
+  customDomain?: string | null
 ): Array<{ phrase: string; href: string; title: string }> {
   const entries: Array<{ phrase: string; href: string; title: string }> = [];
 
   for (const post of posts) {
-    const href = `/blog/${siteSlug}/${post.slug}`;
+    const href = blogArticleUrl(siteSlug, post.slug, customDomain);
     entries.push({ phrase: post.title, href, title: post.title });
     for (const tag of post.tags) {
       if (tag.length >= 4) {
@@ -73,7 +75,7 @@ function buildPhraseMap(
   // Brand names → brand detail pages
   for (const brand of brands) {
     if (brand.name.length >= 3) {
-      const href = `/projects/${siteSlug}/brands/${brand.slug}`;
+      const href = brandUrl(siteSlug, brand.slug, customDomain);
       entries.push({ phrase: brand.name, href, title: brand.name });
     }
   }
@@ -95,7 +97,8 @@ export async function autoLinkEntities(
   html: string,
   siteId: string,
   siteSlug: string,
-  currentSlug: string
+  currentSlug: string,
+  customDomain?: string | null
 ): Promise<string> {
   const [posts, brands] = await Promise.all([
     getRelatedPosts(siteId, currentSlug),
@@ -103,7 +106,7 @@ export async function autoLinkEntities(
   ]);
   if (posts.length === 0 && brands.length === 0) return html;
 
-  const phraseMap = buildPhraseMap(posts, brands, siteSlug);
+  const phraseMap = buildPhraseMap(posts, brands, siteSlug, customDomain);
   const linked = new Set<string>(); // track which hrefs we've already linked
   let result = html;
 

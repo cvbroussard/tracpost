@@ -20,6 +20,17 @@ const nextConfig: NextConfig = {
       "./node_modules/pdf-lib/**/*",
     ],
   },
+  // TracPost is a tenant of itself. Its public surface lives at clean
+  // root paths, but the routes themselves live under /tenant/tracpost/.
+  // Custom domains and staging URLs reach the same routes via middleware.
+  async rewrites() {
+    return [
+      { source: "/blog", destination: "/tenant/tracpost/blog" },
+      { source: "/blog/:path*", destination: "/tenant/tracpost/blog/:path*" },
+      { source: "/projects", destination: "/tenant/tracpost/projects" },
+      { source: "/projects/:path*", destination: "/tenant/tracpost/projects/:path*" },
+    ];
+  },
 };
 
 export default nextConfig;

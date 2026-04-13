@@ -143,7 +143,7 @@ export function generateProfileKit(opts: {
   const tone = angle?.tone || "";
   const themes = angle?.contentThemes || [];
   const desirePhrases = playbook.audienceResearch.languageMap.desirePhrases;
-  const hubPageUrl = `https://blog.tracpost.com/${blogSlug}`;
+  const hubPageUrl = `https://staging.tracpost.com/${blogSlug}/blog`;
   const websiteLink = siteUrl || hubPageUrl;
 
   // Generate handle suggestions

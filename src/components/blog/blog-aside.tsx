@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { blogHubUrl, blogArticleUrl } from "@/lib/urls";
 
 interface RecentPost {
   slug: string;
@@ -8,12 +9,20 @@ interface RecentPost {
 
 interface BlogAsideProps {
   siteSlug: string;
+  customDomain?: string | null;
   recentPosts: RecentPost[];
   pillars: string[];
   aboutText?: string;
 }
 
-export default function BlogAside({ siteSlug, recentPosts, pillars, aboutText }: BlogAsideProps) {
+export default function BlogAside({
+  siteSlug,
+  customDomain,
+  recentPosts,
+  pillars,
+  aboutText,
+}: BlogAsideProps) {
+  const hubBase = blogHubUrl(siteSlug, customDomain);
   return (
     <>
       {/* About */}
@@ -34,7 +43,7 @@ export default function BlogAside({ siteSlug, recentPosts, pillars, aboutText }:
             {pillars.map((pillar) => (
               <Link
                 key={pillar}
-                href={`/blog/${siteSlug}?pillar=${encodeURIComponent(pillar)}`}
+                href={`${hubBase}?pillar=${encodeURIComponent(pillar)}`}
                 style={{
                   fontSize: 12,
                   padding: "4px 10px",
@@ -58,7 +67,7 @@ export default function BlogAside({ siteSlug, recentPosts, pillars, aboutText }:
           <ul className="bs-aside-list">
             {recentPosts.slice(0, 5).map((post) => (
               <li key={post.slug}>
-                <Link href={`/blog/${siteSlug}/${post.slug}`}>
+                <Link href={blogArticleUrl(siteSlug, post.slug, customDomain)}>
                   {post.title}
                 </Link>
                 <div className="bs-aside-date">

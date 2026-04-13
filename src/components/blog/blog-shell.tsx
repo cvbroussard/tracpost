@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { blogHubUrl, projectsHubUrl } from "@/lib/urls";
 
 export interface BlogTheme {
   primaryColor?: string;
@@ -77,12 +77,8 @@ export default function BlogShell({
   children,
 }: BlogShellProps) {
   // Build final nav: tenant links (from DB) + platform links (Blog, Projects)
-  const blogUrl = customDomain
-    ? `https://${customDomain}`
-    : `/blog/${siteSlug}`;
-  const projectsUrl = customDomain
-    ? `https://${customDomain.replace("blog.", "projects.")}`
-    : `/projects/${siteSlug}`;
+  const blogUrl = blogHubUrl(siteSlug, customDomain);
+  const projectsUrl = projectsHubUrl(siteSlug, customDomain);
 
   // Filter out any tenant-stored Blog/Projects links (we generate those)
   const tenantLinks = navLinks.filter((l) => {

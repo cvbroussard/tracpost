@@ -12,6 +12,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { publicBlogArticleUrl } from "@/lib/urls";
 
 const anthropic = new Anthropic();
 
@@ -245,7 +246,7 @@ function buildBlogUrl(post: Record<string, unknown>): string {
   if (post.subdomain) {
     return `https://${post.subdomain}/${post.slug}`;
   }
-  return `https://blog.tracpost.com/blog/${post.blog_slug}/${post.slug}`;
+  return publicBlogArticleUrl(String(post.blog_slug), String(post.slug));
 }
 
 /**

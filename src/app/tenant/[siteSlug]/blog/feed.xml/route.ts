@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { resolveBlogSiteBySlug, getBlogPosts } from "@/lib/blog";
+import { resolveBlogSiteBySlug, getBlogPosts, getCustomDomain } from "@/lib/blog";
+import { publicBlogUrl, publicBlogArticleUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,9 @@ export async function GET(_req: Request, { params }: RouteParams) {
   }
 
   const posts = await getBlogPosts(site.siteId, 50);
-  const baseUrl = `https://blog.tracpost.com/${siteSlug}`;
+  const customDomain = await getCustomDomain(site.siteId);
+  const baseUrl = publicBlogUrl(siteSlug, customDomain);
+  const feedUrl = `${baseUrl}/feed.xml`;
   const title = site.blogTitle || site.siteName;
 
   const items = posts.map((post) => {
@@ -28,13 +31,14 @@ export async function GET(_req: Request, { params }: RouteParams) {
       ? `\n      <enclosure url="${post.og_image_url}" type="image/jpeg" />`
       : "";
 
+    const articleUrl = publicBlogArticleUrl(siteSlug, String(post.slug), customDomain);
     return `
     <item>
       <title><![CDATA[${post.title}]]></title>
-      <link>${baseUrl}/${post.slug}</link>
+      <link>${articleUrl}</link>
       <description><![CDATA[${post.excerpt || ""}]]></description>
       <pubDate>${new Date(post.published_at as string).toUTCString()}</pubDate>
-      <guid>${baseUrl}/${post.slug}</guid>${pillar}${tags}${enclosure}
+      <guid>${articleUrl}</guid>${pillar}${tags}${enclosure}
     </item>`;
   }).join("");
 
@@ -44,7 +48,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
     <title>${title}</title>
     <link>${baseUrl}</link>
     <description>${site.blogDescription || ""}</description>
-    <atom:link href="${baseUrl}/feed.xml" rel="self" type="application/rss+xml"/>
+    <atom:link href="${feedUrl}" rel="self" type="application/rss+xml"/>
     <language>en-us</language>${items}
   </channel>
 </rss>`;

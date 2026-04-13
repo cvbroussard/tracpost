@@ -4,6 +4,7 @@ import { resolveBlogSiteBySlug, getCustomDomain, getBlogPosts, getFavicon } from
 import { sql } from "@/lib/db";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
 import { ProjectHubAside } from "@/components/blog/project-aside";
+import { projectUrl, publicProjectsUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description = `View our completed projects and ongoing work at ${site.siteName}`;
   const customDomain = await getCustomDomain(site.siteId);
   const favicon = await getFavicon(site.siteId);
-  const projectsDomain = customDomain ? customDomain.replace("blog.", "projects.") : null;
-  const canonicalUrl = projectsDomain
-    ? `https://${projectsDomain}`
-    : `https://tracpost.com/projects/${siteSlug}`;
+  const canonicalUrl = publicProjectsUrl(siteSlug, customDomain);
 
   return {
     title,
@@ -149,9 +147,7 @@ export default async function ProjectsIndexPage({ params }: Props) {
             const startDate = project.start_date
               ? new Date(String(project.start_date)).toLocaleDateString("en-US", { year: "numeric", month: "short" })
               : null;
-            const projectHref = projectsBaseUrl
-              ? `${projectsBaseUrl}/${String(project.slug)}`
-              : `/projects/${siteSlug}/${String(project.slug)}`;
+            const projectHref = projectUrl(siteSlug, String(project.slug), customDomainVal);
 
             return (
               <a

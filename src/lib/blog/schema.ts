@@ -1,11 +1,13 @@
 import { sql } from "@/lib/db";
 import { getSocialProfileUrl } from "./social-urls";
+import { publicBlogUrl, publicBlogArticleUrl } from "@/lib/urls";
 
 interface HubSchemaInput {
   siteId: string;
   siteName: string;
   siteUrl?: string;
   blogSlug: string;
+  customDomain?: string | null;
   logoUrl?: string | null;
 }
 
@@ -18,6 +20,7 @@ interface ArticleSchemaInput {
   tags?: string[];
   siteSlug: string;
   articleSlug: string;
+  customDomain?: string | null;
   siteName: string;
 }
 
@@ -26,8 +29,8 @@ interface ArticleSchemaInput {
  * Aggregates social profiles, reviews, and GBP data.
  */
 export async function generateHubSchema(input: HubSchemaInput): Promise<Record<string, unknown>> {
-  const { siteId, siteName, siteUrl, blogSlug, logoUrl } = input;
-  const hubUrl = `https://blog.tracpost.com/blog/${blogSlug}`;
+  const { siteId, siteName, siteUrl, blogSlug, customDomain, logoUrl } = input;
+  const hubUrl = publicBlogUrl(blogSlug, customDomain);
 
   // Fetch social accounts for sameAs
   const socialAccounts = await sql`
@@ -149,7 +152,7 @@ export async function generateHubSchema(input: HubSchemaInput): Promise<Record<s
  * Generate Article JSON-LD schema for a blog post.
  */
 export function generateArticleSchema(input: ArticleSchemaInput): Record<string, unknown> {
-  const articleUrl = `https://blog.tracpost.com/blog/${input.siteSlug}/${input.articleSlug}`;
+  const articleUrl = publicBlogArticleUrl(input.siteSlug, input.articleSlug, input.customDomain);
 
   const schema: Record<string, unknown> = {
     "@context": "https://schema.org",
@@ -159,7 +162,7 @@ export function generateArticleSchema(input: ArticleSchemaInput): Record<string,
     author: {
       "@type": "Organization",
       name: input.siteName,
-      url: `https://blog.tracpost.com/blog/${input.siteSlug}`,
+      url: publicBlogUrl(input.siteSlug, input.customDomain),
     },
     publisher: {
       "@type": "Organization",

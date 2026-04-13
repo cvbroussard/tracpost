@@ -4,7 +4,6 @@ import { sql } from "./db";
  * Resolve a blog hostname to a site ID.
  *
  * Checks blog_settings for matching subdomain or custom_domain.
- * Falls back to blog.tracpost.com pattern (multi-tenant hub).
  */
 export interface BlogSite {
   siteId: string;
@@ -61,28 +60,23 @@ export async function checkDepartureRedirect(
 
 /**
  * Resolve a blog site from hostname.
- * Used by blog.tracpost.com (discovery hub) and the blog layout.
- * Custom domains are resolved by middleware via CUSTOM_DOMAIN_MAP
- * and rewritten to /blog/[siteSlug] before reaching this code.
+ * Custom domains are resolved by middleware via blog_settings.custom_domain
+ * and rewritten to /tenant/[siteSlug]/blog/* before reaching this code,
+ * so this function is rarely used now — kept as a fallback.
  */
 export async function resolveBlogSite(hostname: string): Promise<BlogSite | null> {
   const host = hostname.split(":")[0];
 
-  // blog.tracpost.com — serves the first blog-enabled site (single-site fallback)
-  if (host === "blog.tracpost.com") {
-    const [first] = await sql`
-      SELECT bs.site_id, s.name AS site_name, s.blog_slug,
-             bs.blog_title, bs.blog_description, bs.theme
-      FROM blog_settings bs
-      JOIN sites s ON s.id = bs.site_id
-      WHERE bs.blog_enabled = true
-      ORDER BY bs.created_at ASC
-      LIMIT 1
-    `;
-    if (first) return toBlogSite(first);
-  }
+  const [match] = await sql`
+    SELECT bs.site_id, s.name AS site_name, s.blog_slug,
+           bs.blog_title, bs.blog_description, bs.theme
+    FROM blog_settings bs
+    JOIN sites s ON s.id = bs.site_id
+    WHERE bs.custom_domain = ${host} AND bs.blog_enabled = true
+    LIMIT 1
+  `;
 
-  return null;
+  return match ? toBlogSite(match) : null;
 }
 
 /**

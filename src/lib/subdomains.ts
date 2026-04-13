@@ -10,7 +10,13 @@
  * without subdomain rewriting.
  */
 
-export type SubdomainType = "marketing" | "studio" | "platform" | "blog" | "projects";
+export type SubdomainType =
+  | "marketing"
+  | "studio"
+  | "platform"
+  | "blog"
+  | "projects"
+  | "staging";
 
 /**
  * Classify a hostname into a subdomain type.
@@ -22,13 +28,15 @@ export function classifyHost(hostname: string): SubdomainType {
 
   if (host === "studio.tracpost.com") return "studio";
   if (host === "platform.tracpost.com") return "platform";
-  if (host === "blog.tracpost.com") return "blog";
+  if (host === "staging.tracpost.com") return "staging";
 
-  // Custom blog domains (e.g., blog.b2construct.com)
-  if (host.startsWith("blog.")) return "blog";
+  // Custom blog domains (e.g., blog.b2construct.com).
+  // Note: blog.tracpost.com is reserved/dormant — falls through to marketing.
+  if (host.startsWith("blog.") && host !== "blog.tracpost.com") return "blog";
 
-  // Custom project domains (e.g., projects.b2construct.com)
-  if (host.startsWith("projects.")) return "projects";
+  // Custom project domains (e.g., projects.b2construct.com).
+  // projects.tracpost.com is reserved/dormant — falls through to marketing.
+  if (host.startsWith("projects.") && host !== "projects.tracpost.com") return "projects";
 
   // Everything else: root domain, www, localhost
   return "marketing";

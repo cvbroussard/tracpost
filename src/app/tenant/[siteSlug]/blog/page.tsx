@@ -6,6 +6,7 @@ import { sql } from "@/lib/db";
 import { generateHubSchema } from "@/lib/blog/schema";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
 import BlogAside from "@/components/blog/blog-aside";
+import { blogHubUrl, blogArticleUrl, blogFeedUrl, publicBlogUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const customDomain = await getCustomDomain(site.siteId);
   const favicon = await getFavicon(site.siteId);
-  const hubUrl = customDomain
-    ? `https://${customDomain}`
-    : `https://tracpost.com/blog/${siteSlug}`;
+  const hubUrl = publicBlogUrl(siteSlug, customDomain);
 
   return {
     title,
@@ -33,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     ...(favicon ? { icons: { icon: favicon } } : {}),
     alternates: {
       canonical: hubUrl,
-      types: { "application/rss+xml": `/blog/${siteSlug}/feed.xml` },
+      types: { "application/rss+xml": blogFeedUrl(siteSlug, customDomain) },
     },
     openGraph: {
       title,
@@ -77,13 +76,16 @@ export default async function HubPage({ params }: Props) {
     logoUrl: businessLogo || logoUrl || rawTheme.logoUrl,
   };
 
+  // Custom domain (used for nav + canonical + aside)
+  const customDomain = await getCustomDomain(site.siteId);
+
   // Nav links — from blog_settings or generate defaults
   const storedNavLinks = (settings.nav_links as NavLink[]) || [];
   const navLinks: NavLink[] = storedNavLinks.length > 0
     ? storedNavLinks
     : [
         ...(websiteUrl ? [{ label: "Home", href: websiteUrl }] : []),
-        { label: "Blog", href: `/blog/${siteSlug}` },
+        { label: "Blog", href: blogHubUrl(siteSlug, customDomain) },
       ];
 
   // Playbook tagline for about text
@@ -103,6 +105,7 @@ export default async function HubPage({ params }: Props) {
     siteName: site.siteName,
     siteUrl: websiteUrl || undefined,
     blogSlug: siteSlug,
+    customDomain,
     logoUrl,
   });
 
@@ -112,9 +115,8 @@ export default async function HubPage({ params }: Props) {
     published_at: String(p.published_at),
   }));
 
-  // Location + custom domain
+  // Location
   const siteLocation = (siteInfo.location as string) || null;
-  const customDomain = await getCustomDomain(site.siteId);
 
   return (
     <BlogShell
@@ -131,6 +133,7 @@ export default async function HubPage({ params }: Props) {
       aside={
         <BlogAside
           siteSlug={siteSlug}
+          customDomain={customDomain}
           recentPosts={recentPosts}
           pillars={pillars}
           aboutText={aboutText}
@@ -159,7 +162,7 @@ export default async function HubPage({ params }: Props) {
             return (
               <Link
                 key={String(post.id)}
-                href={`/blog/${siteSlug}/${String(post.slug)}`}
+                href={blogArticleUrl(siteSlug, String(post.slug), customDomain)}
                 className="bs-article-card"
               >
                 {ogImage && (

@@ -3,6 +3,15 @@ import type { Metadata } from "next";
 import { resolveBlogSiteBySlug, getCustomDomain, getFavicon } from "@/lib/blog";
 import { sql } from "@/lib/db";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
+import {
+  blogArticleUrl,
+  brandHubUrl,
+  brandUrl,
+  projectUrl,
+  publicBrandUrl,
+  publicProjectUrl,
+  publicBlogArticleUrl,
+} from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     || `See how ${site.siteName} uses ${brand.name} in their projects`;
   const customDomain = await getCustomDomain(site.siteId);
   const favicon = await getFavicon(site.siteId);
-  const projectsDomain = customDomain ? customDomain.replace("blog.", "projects.") : null;
-  const canonicalUrl = projectsDomain
-    ? `https://${projectsDomain}/brands/${brandSlug}`
-    : `https://tracpost.com/projects/${siteSlug}/brands/${brandSlug}`;
+  const canonicalUrl = publicBrandUrl(siteSlug, brandSlug, customDomain);
 
   return {
     title,
@@ -146,12 +152,6 @@ export default async function BrandDetailPage({ params }: Props) {
     : "";
 
   const customDomain = await getCustomDomain(site.siteId);
-  const projectsBase = customDomain
-    ? `https://${customDomain.replace("blog.", "projects.")}`
-    : `/projects/${siteSlug}`;
-  const blogBase = customDomain
-    ? `https://${customDomain}`
-    : `/blog/${siteSlug}`;
 
   // Generate description if missing
   const brandDescription = (brand.description as string) || null;
@@ -196,14 +196,14 @@ export default async function BrandDetailPage({ params }: Props) {
             subjectOf: projects.map((p: Record<string, unknown>) => ({
               "@type": "CreativeWork",
               name: String(p.name),
-              url: `${projectsBase}/${String(p.slug)}`,
+              url: publicProjectUrl(siteSlug, String(p.slug), customDomain),
             })),
           } : {}),
           ...(articles.length > 0 ? {
             mentions: articles.map((a: Record<string, unknown>) => ({
               "@type": "Article",
               name: String(a.title),
-              url: `${blogBase}/${String(a.slug)}`,
+              url: publicBlogArticleUrl(siteSlug, String(a.slug), customDomain),
             })),
           } : {}),
         }) }}
@@ -216,7 +216,7 @@ export default async function BrandDetailPage({ params }: Props) {
 
       {/* Header */}
       <header className="br-header">
-        <a href={`${projectsBase}/brands`} className="br-back">&larr; All Materials</a>
+        <a href={brandHubUrl(siteSlug, customDomain)} className="br-back">&larr; All Materials</a>
         <h1 className="bs-article-page-title">{String(brand.name)}</h1>
         {brandDescription && (
           <p className="br-desc">{brandDescription}</p>
@@ -243,7 +243,7 @@ export default async function BrandDetailPage({ params }: Props) {
               return (
                 <a
                   key={String(p.id)}
-                  href={`${projectsBase}/${String(p.slug)}`}
+                  href={projectUrl(siteSlug, String(p.slug), customDomain)}
                   className="br-project-item"
                 >
                   {cover && (
@@ -275,7 +275,7 @@ export default async function BrandDetailPage({ params }: Props) {
               return (
                 <a
                   key={String(a.id)}
-                  href={`${blogBase}/${String(a.slug)}`}
+                  href={blogArticleUrl(siteSlug, String(a.slug), customDomain)}
                   className="br-article-item"
                 >
                   {ogImg && (
@@ -326,7 +326,7 @@ export default async function BrandDetailPage({ params }: Props) {
             {otherBrands.map((b: Record<string, unknown>) => (
               <a
                 key={String(b.slug)}
-                href={`${projectsBase}/brands/${String(b.slug)}`}
+                href={brandUrl(siteSlug, String(b.slug), customDomain)}
                 className="br-other-chip"
               >
                 {String(b.name)}

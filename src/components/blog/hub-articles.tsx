@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { blogArticleUrl } from "@/lib/urls";
 
 interface BlogPost {
   slug: string;
@@ -12,9 +13,10 @@ interface BlogPost {
 interface HubArticlesProps {
   posts: BlogPost[];
   siteSlug: string;
+  customDomain?: string | null;
 }
 
-export default function HubArticles({ posts, siteSlug }: HubArticlesProps) {
+export default function HubArticles({ posts, siteSlug, customDomain }: HubArticlesProps) {
   if (posts.length === 0) return null;
 
   return (
@@ -27,7 +29,7 @@ export default function HubArticles({ posts, siteSlug }: HubArticlesProps) {
             style={{ borderBottom: "1px solid var(--blog-border)", padding: "20px 0" }}
           >
             <Link
-              href={`/blog/${siteSlug}/${post.slug}`}
+              href={blogArticleUrl(siteSlug, post.slug, customDomain)}
               style={{ textDecoration: "none", color: "inherit", display: "flex", gap: 16 }}
             >
               {post.og_image_url && (

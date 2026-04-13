@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { resolveBlogSiteBySlug, getCustomDomain, getFavicon } from "@/lib/blog";
 import { sql } from "@/lib/db";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
+import { brandUrl, publicBrandHubUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description = `Materials, equipment, and brands used by ${site.siteName}`;
   const customDomain = await getCustomDomain(site.siteId);
   const favicon = await getFavicon(site.siteId);
-  const projectsDomain = customDomain ? customDomain.replace("blog.", "projects.") : null;
-  const canonicalUrl = projectsDomain
-    ? `https://${projectsDomain}/brands`
-    : `https://tracpost.com/projects/${siteSlug}/brands`;
+  const canonicalUrl = publicBrandHubUrl(siteSlug, customDomain);
 
   return {
     title,
@@ -90,9 +88,6 @@ export default async function BrandsHubPage({ params }: Props) {
     : "";
 
   const customDomain = await getCustomDomain(site.siteId);
-  const projectsBase = customDomain
-    ? `https://${customDomain.replace("blog.", "projects.")}`
-    : `/projects/${siteSlug}`;
 
   return (
     <BlogShell
@@ -124,7 +119,7 @@ export default async function BrandsHubPage({ params }: Props) {
             return (
               <a
                 key={String(brand.id)}
-                href={`${projectsBase}/brands/${String(brand.slug)}`}
+                href={brandUrl(siteSlug, String(brand.slug), customDomain)}
                 className="br-card"
               >
                 {coverImage ? (

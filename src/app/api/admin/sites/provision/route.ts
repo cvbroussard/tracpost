@@ -23,10 +23,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "start") {
+    // Treat NULL provisioning_status as equivalent to 'requested' —
+    // legacy admin-created sites may not have the field set.
     const [site] = await sql`
       UPDATE sites
       SET provisioning_status = 'in_progress', updated_at = NOW()
-      WHERE id = ${siteId} AND provisioning_status IN ('requested', 'in_progress') AND is_active = true
+      WHERE id = ${siteId}
+        AND (provisioning_status IN ('requested', 'in_progress') OR provisioning_status IS NULL)
+        AND is_active = true
       RETURNING id, name, business_type, location, url, brand_playbook IS NOT NULL AS has_playbook
     `;
     if (!site) {

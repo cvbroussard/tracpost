@@ -10,6 +10,15 @@ export default function NewSubscriberPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [plan, setPlan] = useState("pro");
+  const [showPassword, setShowPassword] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function copyApiKey() {
+    if (!result?.api_key) return;
+    await navigator.clipboard.writeText(result.api_key);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ id: string; api_key: string } | null>(null);
   const [error, setError] = useState("");
@@ -58,8 +67,15 @@ export default function NewSubscriberPage() {
 
           <div className="mb-4">
             <label className="mb-1 block text-xs text-muted">API Key (for programmatic access — shown only once)</label>
-            <div className="rounded border border-border bg-background px-3 py-2 font-mono text-xs break-all">
+            <div className="relative rounded border border-border bg-background px-3 py-2 pr-16 font-mono text-xs break-all">
               {result.api_key}
+              <button
+                type="button"
+                onClick={copyApiKey}
+                className="absolute right-1 top-1 rounded border border-border bg-surface px-2 py-1 text-[10px] font-sans text-muted hover:text-foreground"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
             </div>
           </div>
 
@@ -116,13 +132,23 @@ export default function NewSubscriberPage() {
 
         <div className="mb-4">
           <label className="mb-1 block text-xs text-muted">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full rounded border border-border bg-background px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute inset-y-0 right-0 flex items-center px-3 text-xs text-muted hover:text-foreground"
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
         </div>
 
         <div className="mb-6">

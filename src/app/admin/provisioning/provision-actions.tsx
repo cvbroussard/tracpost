@@ -8,7 +8,9 @@ interface ProvisionActionsProps {
 }
 
 export function ProvisionActions({ siteId, status }: ProvisionActionsProps) {
-  const [currentStatus, setCurrentStatus] = useState(status);
+  // Treat null as 'requested' — matches the listing badge, which also
+  // collapses null + 'requested' into the same "Requested" state.
+  const [currentStatus, setCurrentStatus] = useState(status ?? "requested");
   const [loading, setLoading] = useState(false);
   const [automationLog, setAutomationLog] = useState<string[] | null>(null);
 

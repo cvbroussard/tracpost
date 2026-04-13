@@ -18,13 +18,14 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = await sql`
-      INSERT INTO sites (subscription_id, name, domain, blog_url, url)
+      INSERT INTO sites (subscription_id, name, domain, blog_url, url, provisioning_status)
       VALUES (
         ${subscription_id}, ${name},
         ${domain || null}, ${blog_url || null},
-        ${domain ? `https://${domain}` : null}
+        ${domain ? `https://${domain}` : null},
+        'requested'
       )
-      RETURNING id, subscription_id, name, domain, blog_url, url, created_at
+      RETURNING id, subscription_id, name, domain, blog_url, url, provisioning_status, created_at
     `;
 
     return NextResponse.json({ site: rows[0] }, { status: 201 });

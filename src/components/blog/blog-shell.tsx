@@ -225,7 +225,7 @@ const shellStyles = `
     max-width: 1100px;
     margin: 0 auto;
     padding: 0 24px;
-    height: 64px;
+    height: 72px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -239,16 +239,16 @@ const shellStyles = `
   }
 
   .bs-logo {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: var(--bs-radius);
     object-fit: cover;
   }
 
   .bs-site-name {
     font-family: var(--bs-heading-font);
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 20px;
+    font-weight: 700;
     color: var(--bs-primary);
     letter-spacing: -0.01em;
   }
@@ -256,11 +256,11 @@ const shellStyles = `
   .bs-nav {
     display: flex;
     align-items: center;
-    gap: 28px;
+    gap: 32px;
   }
 
   .bs-nav-link {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
     color: var(--bs-muted);
     text-decoration: none;
@@ -496,11 +496,15 @@ const shellStyles = `
 
     .bs-header-inner {
       padding: 0 16px;
-      height: 56px;
+      height: 60px;
     }
 
     .bs-nav {
-      gap: 16px;
+      gap: 20px;
+    }
+
+    .bs-nav-link {
+      font-size: 14px;
     }
 
     .bs-footer-inner {

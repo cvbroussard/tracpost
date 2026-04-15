@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { loadTenantContext, loadWorkPage, loadPageMetadata } from "@/lib/tenant-site";
+import { loadTenantContext, loadWorkPage, loadPageMetadata, slotByKey } from "@/lib/tenant-site";
 import { projectUrl, blogArticleUrl, blogHubUrl } from "@/lib/urls";
 import MarketingShell from "@/components/marketing/marketing-shell";
 
@@ -26,6 +26,7 @@ export default async function TenantWorkPage({ params }: Props) {
   const { siteSlug } = await params;
   const ctx = await loadTenantContext(siteSlug);
   if (!ctx) notFound();
+  if (!slotByKey(ctx.pageConfig, "work").enabled) notFound();
 
   const data = await loadWorkPage(ctx.siteId);
 

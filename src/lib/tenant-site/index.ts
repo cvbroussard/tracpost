@@ -11,6 +11,23 @@
 export { loadTenantContext } from "./context";
 export type { TenantContext, TenantTheme } from "./context";
 
+export {
+  defaultPageConfig,
+  normalizePageConfig,
+  slotByKey,
+} from "./page-config";
+export type {
+  PageConfig,
+  PageSlot,
+  SlotKey,
+  HomeVariant,
+  AboutVariant,
+  WorkVariant,
+  BlogVariant,
+  ProjectsVariant,
+  ContactVariant,
+} from "./page-config";
+
 export { loadHomePage } from "./home";
 export type { HomePageData } from "./home";
 

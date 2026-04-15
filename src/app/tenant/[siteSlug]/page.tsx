@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { loadTenantContext, loadHomePage, loadPageMetadata } from "@/lib/tenant-site";
+import { loadTenantContext, loadHomePage, loadPageMetadata, slotByKey } from "@/lib/tenant-site";
 import { detectHostMode } from "@/lib/urls";
 import MarketingShell from "@/components/marketing/marketing-shell";
 
@@ -26,6 +26,9 @@ export default async function TenantHomePage({ params }: Props) {
   const { siteSlug } = await params;
   const ctx = await loadTenantContext(siteSlug);
   if (!ctx) notFound();
+
+  const slot = slotByKey(ctx.pageConfig, "home");
+  if (!slot.enabled) notFound();
 
   const data = await loadHomePage(ctx.siteId);
   const hostMode = await detectHostMode();

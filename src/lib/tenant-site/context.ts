@@ -7,6 +7,7 @@
  */
 import "server-only";
 import { sql } from "@/lib/db";
+import { normalizePageConfig, type PageConfig } from "./page-config";
 
 export interface TenantTheme {
   primaryColor: string;
@@ -34,6 +35,7 @@ export interface TenantContext {
   websiteUrl: string | null;
   customDomain: string | null;
   theme: TenantTheme;
+  pageConfig: PageConfig;
 }
 
 const DEFAULT_THEME: TenantTheme = {
@@ -56,7 +58,7 @@ export async function loadTenantContext(siteSlug: string): Promise<TenantContext
   const [row] = await sql`
     SELECT s.id, s.name, s.blog_slug, s.business_type, s.location, s.url,
            s.business_phone, s.business_email, s.business_logo, s.business_favicon,
-           s.brand_playbook,
+           s.brand_playbook, s.page_config,
            bs.custom_domain, bs.theme
     FROM sites s
     LEFT JOIN blog_settings bs ON bs.site_id = s.id
@@ -85,11 +87,14 @@ export async function loadTenantContext(siteSlug: string): Promise<TenantContext
     borderRadius: rawTheme.borderRadius || DEFAULT_THEME.borderRadius,
   };
 
+  const businessType = (row.business_type as string) || null;
+  const pageConfig = normalizePageConfig(row.page_config, businessType);
+
   return {
     siteId: row.id as string,
     siteSlug: (row.blog_slug as string) || siteSlug,
     siteName: (row.name as string) || "",
-    businessType: (row.business_type as string) || null,
+    businessType,
     tagline,
     location: (row.location as string) || null,
     phone: (row.business_phone as string) || null,
@@ -99,5 +104,6 @@ export async function loadTenantContext(siteSlug: string): Promise<TenantContext
     websiteUrl: (row.url as string) || null,
     customDomain: (row.custom_domain as string) || null,
     theme,
+    pageConfig,
   };
 }

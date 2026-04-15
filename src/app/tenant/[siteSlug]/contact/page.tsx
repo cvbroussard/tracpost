@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { loadTenantContext, loadContactPage, loadPageMetadata } from "@/lib/tenant-site";
+import { loadTenantContext, loadContactPage, loadPageMetadata, slotByKey } from "@/lib/tenant-site";
 import MarketingShell from "@/components/marketing/marketing-shell";
 
 export const revalidate = 3600;
@@ -25,6 +25,7 @@ export default async function TenantContactPage({ params }: Props) {
   const { siteSlug } = await params;
   const ctx = await loadTenantContext(siteSlug);
   if (!ctx) notFound();
+  if (!slotByKey(ctx.pageConfig, "contact").enabled) notFound();
 
   const data = await loadContactPage(ctx.siteId);
 

@@ -1,4 +1,4 @@
-import type { TenantContext } from "@/lib/tenant-site";
+import type { TenantContext, SlotKey } from "@/lib/tenant-site";
 import {
   blogHubUrl,
   projectsHubUrl,
@@ -13,7 +13,7 @@ interface NavLink {
 
 interface MarketingShellProps {
   ctx: TenantContext;
-  activePage?: "home" | "about" | "work" | "contact";
+  activePage?: SlotKey;
   children: React.ReactNode;
 }
 
@@ -45,21 +45,28 @@ function googleFontsUrl(fonts: string[]): string | null {
  * for the home/about/work/contact pages.
  */
 export default async function MarketingShell({ ctx, activePage, children }: MarketingShellProps) {
-  const { siteName, theme, logoUrl, location, phone, email, tagline } = ctx;
+  const { siteName, theme, logoUrl, location, phone, email, tagline, pageConfig } = ctx;
   const hostMode = await detectHostMode();
 
-  // Nav paths adapt to host mode:
-  //   production → /, /about, /work, /contact, /blog, /projects
-  //   preview    → /[slug]/, /[slug]/about, ..., /[slug]/blog, /[slug]/projects
+  // Build nav from page_config — respect enabled flag and label overrides.
+  // Preview mode preserves /[slug] prefix so nav stays on preview.
   const prefix = hostMode === "preview" ? `/${ctx.siteSlug}` : "";
-  const nav: NavLink[] = [
-    { label: "Home", href: prefix || "/", active: activePage === "home" },
-    { label: "About", href: `${prefix}/about`, active: activePage === "about" },
-    { label: "Work", href: `${prefix}/work`, active: activePage === "work" },
-    { label: "Blog", href: blogHubUrl(ctx.siteSlug, ctx.customDomain, hostMode) },
-    { label: "Projects", href: projectsHubUrl(ctx.siteSlug, ctx.customDomain, hostMode) },
-    { label: "Contact", href: `${prefix}/contact`, active: activePage === "contact" },
-  ];
+
+  function hrefFor(slotKey: SlotKey): string {
+    if (slotKey === "blog") return blogHubUrl(ctx.siteSlug, ctx.customDomain, hostMode);
+    if (slotKey === "projects") return projectsHubUrl(ctx.siteSlug, ctx.customDomain, hostMode);
+    if (slotKey === "home") return prefix || "/";
+    // about/work/contact — hardcoded MVP paths, prefixed under preview
+    return `${prefix}/${slotKey}`;
+  }
+
+  const nav: NavLink[] = pageConfig
+    .filter((slot) => slot.enabled)
+    .map((slot) => ({
+      label: slot.label,
+      href: hrefFor(slot.key),
+      active: activePage === slot.key,
+    }));
 
   const fontsToLoad = new Set<string>();
   if (theme.fontFamily) extractGoogleFonts(theme.fontFamily).forEach((f) => fontsToLoad.add(f));

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { loadTenantContext, loadAboutPage, loadPageMetadata } from "@/lib/tenant-site";
+import { loadTenantContext, loadAboutPage, loadPageMetadata, slotByKey } from "@/lib/tenant-site";
 import { brandUrl } from "@/lib/urls";
 import MarketingShell from "@/components/marketing/marketing-shell";
 
@@ -26,6 +26,7 @@ export default async function TenantAboutPage({ params }: Props) {
   const { siteSlug } = await params;
   const ctx = await loadTenantContext(siteSlug);
   if (!ctx) notFound();
+  if (!slotByKey(ctx.pageConfig, "about").enabled) notFound();
 
   const data = await loadAboutPage(ctx.siteId);
 

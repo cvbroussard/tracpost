@@ -41,10 +41,10 @@ export async function POST(req: NextRequest) {
 
     // 1. Derive siteSlug from domain — strip TLD
     const domainClean = domain.replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
-    const lastDot = domainClean.lastIndexOf(".");
-    const siteSlug = lastDot > 0 ? domainClean.slice(0, lastDot).replace(/[^a-z0-9-]/g, "") : domainClean;
-    const blogDomain = `blog.${domainClean}`;
-    const projectsDomain = `projects.${domainClean}`;
+    const rootDomain = domainClean.replace(/^www\./, "");
+    const lastDot = rootDomain.lastIndexOf(".");
+    const siteSlug = lastDot > 0 ? rootDomain.slice(0, lastDot).replace(/[^a-z0-9-]/g, "") : rootDomain;
+    const wwwDomain = `www.${rootDomain}`;
 
     // Block reserved slugs (admin, blog, projects, tracpost, etc.)
     if (isReservedSlug(siteSlug)) {
@@ -53,11 +53,13 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // 2. Update blog_settings — set slug + custom_domain
+    // 2. Update blog_settings — set slug + custom_domain (root domain only;
+    // middleware resolves tenant content by looking up the root domain and
+    // rewriting /blog, /projects, /about, /work, /contact as tenant paths).
     await sql`
       UPDATE blog_settings
       SET subdomain = ${siteSlug},
-          custom_domain = ${blogDomain},
+          custom_domain = ${rootDomain},
           updated_at = NOW()
       WHERE site_id = ${site_id}
     `;
@@ -68,47 +70,45 @@ export async function POST(req: NextRequest) {
       WHERE id = ${site_id}
     `;
 
-    // 3. Add blog.[domain] and projects.[domain] to Vercel
-    const blogResult = await addDomain(blogDomain);
-    const projectsResult = await addDomain(projectsDomain);
-    const result = blogResult;
+    // 3. Add root + www to the main TracPost Vercel project.
+    //    No per-tenant project; tenant content is served via middleware.
+    const rootResult = await addDomain(rootDomain);
+    const wwwResult = await addDomain(wwwDomain);
 
-    if (!blogResult.success && !projectsResult.success) {
+    if (!rootResult.success && !wwwResult.success) {
       return NextResponse.json({
         step: "vercel",
-        error: blogResult.error || projectsResult.error,
+        error: rootResult.error || wwwResult.error,
         siteSlug,
-        blogDomain,
-        projectsDomain,
+        rootDomain,
+        wwwDomain,
         message: "Slug updated in DB but Vercel domain adds failed. Add manually in Vercel dashboard.",
       }, { status: 502 });
     }
 
     // 4. Build DNS records
-    const CNAME_TARGET = "cname.vercel-dns.com";
     const dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }> = [];
 
     // TXT verification records (only when Vercel requires ownership proof)
-    for (const v of (blogResult.verification || [])) {
-      dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${blogDomain}` });
+    for (const v of (rootResult.verification || [])) {
+      dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${rootDomain}` });
     }
-    for (const v of (projectsResult.verification || [])) {
-      dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${projectsDomain}` });
+    for (const v of (wwwResult.verification || [])) {
+      dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${wwwDomain}` });
     }
 
-    // CNAME records — always cname.vercel-dns.com
-    dnsRecords.push({ type: "CNAME", name: "blog", value: CNAME_TARGET, purpose: "Blog subdomain" });
-    dnsRecords.push({ type: "CNAME", name: "projects", value: CNAME_TARGET, purpose: "Projects subdomain" });
+    // Root A record (apex can't CNAME) + www CNAME
+    dnsRecords.push({ type: "A", name: "@", value: "76.76.21.21", purpose: "Root domain → Vercel" });
+    dnsRecords.push({ type: "CNAME", name: "www", value: "cname.vercel-dns.com", purpose: "www subdomain → Vercel" });
 
     return NextResponse.json({
       success: true,
       siteSlug,
-      blogDomain,
-      projectsDomain,
-      blogStatus: blogResult.verified ? "active" : "pending",
-      projectsStatus: projectsResult.verified ? "active" : "pending",
+      customDomain: rootDomain,
+      wwwDomain,
+      status: rootResult.verified ? "active" : "pending",
       dnsRecords,
-      message: "Domains provisioned. Send DNS records to the tenant.",
+      message: "Domain provisioned. Send DNS records to the tenant.",
     });
   }
 
@@ -116,23 +116,22 @@ export async function POST(req: NextRequest) {
     const [settings] = await sql`
       SELECT custom_domain FROM blog_settings WHERE site_id = ${site_id}
     `;
-    const blogDomain = settings?.custom_domain as string;
-    if (!blogDomain) {
+    const rootDomain = settings?.custom_domain as string;
+    if (!rootDomain) {
       return NextResponse.json({ error: "No custom domain configured" }, { status: 400 });
     }
 
-    const projectsDomain = blogDomain.replace("blog.", "projects.");
-
-    const [blogStatus, projectsStatus] = await Promise.all([
-      verifyDomain(blogDomain),
-      verifyDomain(projectsDomain),
+    const wwwDomain = `www.${rootDomain}`;
+    const [rootStatus, wwwStatus] = await Promise.all([
+      verifyDomain(rootDomain),
+      verifyDomain(wwwDomain),
     ]);
 
     return NextResponse.json({
-      blogDomain,
-      projectsDomain,
-      blog: blogStatus,
-      projects: projectsStatus,
+      customDomain: rootDomain,
+      wwwDomain,
+      root: rootStatus,
+      www: wwwStatus,
     });
   }
 
@@ -157,10 +156,9 @@ export async function POST(req: NextRequest) {
     const [siteRow] = await sql`SELECT name FROM sites WHERE id = ${site_id}`;
     const siteName = (siteRow?.name as string) || "Your site";
 
-    // Get the custom domain to derive the root domain for nav link instructions
+    // Custom domain is the root domain (post-2026-04 rewrite — no more blog.* subdomain pattern)
     const [blogSettings] = await sql`SELECT custom_domain FROM blog_settings WHERE site_id = ${site_id}`;
-    const customDomain = (blogSettings?.custom_domain as string) || "";
-    const rootDomain = customDomain.replace("blog.", "");
+    const rootDomain = (blogSettings?.custom_domain as string) || "";
 
     const { sendDnsInstructionsEmail } = await import("@/lib/email");
     const sent = await sendDnsInstructionsEmail({
@@ -178,18 +176,24 @@ export async function POST(req: NextRequest) {
     const [settings] = await sql`
       SELECT custom_domain FROM blog_settings WHERE site_id = ${site_id}
     `;
-    const domain = settings?.custom_domain as string;
-    if (!domain) {
+    const rootDomain = settings?.custom_domain as string;
+    if (!rootDomain) {
       return NextResponse.json({ error: "No custom domain to remove" }, { status: 400 });
     }
 
-    await removeDomain(domain);
+    // Remove both root and www from Vercel main project
+    const wwwDomain = `www.${rootDomain}`;
+    await Promise.all([
+      removeDomain(rootDomain).catch(() => undefined),
+      removeDomain(wwwDomain).catch(() => undefined),
+    ]);
+
     await sql`
       UPDATE blog_settings SET custom_domain = NULL, updated_at = NOW()
       WHERE site_id = ${site_id}
     `;
 
-    return NextResponse.json({ removed: true, domain });
+    return NextResponse.json({ removed: true, domain: rootDomain });
   }
 
   return NextResponse.json({ error: "Unknown action. Use 'provision', 'verify', or 'remove'" }, { status: 400 });

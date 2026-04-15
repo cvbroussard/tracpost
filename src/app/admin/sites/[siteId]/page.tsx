@@ -76,21 +76,18 @@ export default async function SiteControlPanel({ params }: Props) {
   // Domain status — fetch from Vercel if custom domain is set
   const customDomain = (site.custom_domain as string) || null;
   let domainInfo: {
-    blogStatus: "unknown" | "pending" | "active";
-    projectsStatus: "unknown" | "pending" | "active";
-    blogCnameTarget: string;
-    projectsCnameTarget: string;
+    status: "unknown" | "pending" | "active";
+    wwwStatus: "unknown" | "pending" | "active";
     dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }>;
   } | null = null;
 
   if (customDomain) {
-    const projectsDomain = customDomain.replace("blog.", "projects.");
-    const CNAME_TARGET = "cname.vercel-dns.com";
+    const wwwDomain = `www.${customDomain}`;
 
     try {
-      const [blogVerify, projectsVerify] = await Promise.all([
+      const [rootVerify, wwwVerify] = await Promise.all([
         verifyDomain(customDomain),
-        verifyDomain(projectsDomain).catch(() => ({ verified: false, configured: false })),
+        verifyDomain(wwwDomain).catch(() => ({ verified: false, configured: false })),
       ]);
 
       // Fetch pending verification TXT records from Vercel
@@ -109,41 +106,36 @@ export default async function SiteControlPanel({ params }: Props) {
         } catch { return []; }
       };
 
-      const [blogTxt, projectsTxt] = await Promise.all([
+      const [rootTxt, wwwTxt] = await Promise.all([
         fetchVerification(customDomain),
-        fetchVerification(projectsDomain),
+        fetchVerification(wwwDomain),
       ]);
 
       const dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }> = [];
 
-      // TXT verification records (only present when ownership unverified)
-      for (const v of blogTxt) {
+      for (const v of rootTxt) {
         dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${customDomain}` });
       }
-      for (const v of projectsTxt) {
-        dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${projectsDomain}` });
+      for (const v of wwwTxt) {
+        dnsRecords.push({ type: v.type.toUpperCase(), name: v.domain, value: v.value, purpose: `Verify ${wwwDomain}` });
       }
 
-      // CNAME records — always cname.vercel-dns.com
-      dnsRecords.push({ type: "CNAME", name: "blog", value: CNAME_TARGET, purpose: "Blog subdomain" });
-      dnsRecords.push({ type: "CNAME", name: "projects", value: CNAME_TARGET, purpose: "Projects subdomain" });
+      // Root A record (apex can't CNAME) + www CNAME
+      dnsRecords.push({ type: "A", name: "@", value: "76.76.21.21", purpose: "Root domain → Vercel" });
+      dnsRecords.push({ type: "CNAME", name: "www", value: "cname.vercel-dns.com", purpose: "www subdomain → Vercel" });
 
       domainInfo = {
-        blogStatus: blogVerify.verified && blogVerify.configured ? "active" : "pending",
-        projectsStatus: projectsVerify.verified && projectsVerify.configured ? "active" : "pending",
-        blogCnameTarget: CNAME_TARGET,
-        projectsCnameTarget: CNAME_TARGET,
+        status: rootVerify.verified && rootVerify.configured ? "active" : "pending",
+        wwwStatus: wwwVerify.verified && wwwVerify.configured ? "active" : "pending",
         dnsRecords,
       };
     } catch {
       domainInfo = {
-        blogStatus: "unknown",
-        projectsStatus: "unknown",
-        blogCnameTarget: CNAME_TARGET,
-        projectsCnameTarget: CNAME_TARGET,
+        status: "unknown",
+        wwwStatus: "unknown",
         dnsRecords: [
-          { type: "CNAME", name: "blog", value: CNAME_TARGET, purpose: "Blog subdomain" },
-          { type: "CNAME", name: "projects", value: CNAME_TARGET, purpose: "Projects subdomain" },
+          { type: "A", name: "@", value: "76.76.21.21", purpose: "Root domain → Vercel" },
+          { type: "CNAME", name: "www", value: "cname.vercel-dns.com", purpose: "www subdomain → Vercel" },
         ],
       };
     }

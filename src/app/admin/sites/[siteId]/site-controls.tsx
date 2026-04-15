@@ -111,29 +111,27 @@ function DomainProvisioning({
   siteId: string;
   customDomain: string;
   initialDomainInfo?: DomainInfoProps;
-  onProvisioned: (blogDomain: string, slug: string, records: DnsRecord[]) => void;
+  onProvisioned: (customDomain: string, slug: string, records: DnsRecord[]) => void;
 }) {
   const [domainInput, setDomainInput] = useState("");
   const [provisioning, setProvisioning] = useState(false);
-  const [blogDomain, setBlogDomain] = useState(initialDomain || "");
-  const [projectsDomain, setProjectsDomain] = useState(
-    initialDomain ? initialDomain.replace("blog.", "projects.") : ""
-  );
+  const [customDomain, setCustomDomain] = useState(initialDomain || "");
   const [dnsRecords, setDnsRecords] = useState<DnsRecord[] | null>(
     initialDomainInfo?.dnsRecords || null
   );
-  const [blogStatus, setBlogStatus] = useState<"unknown" | "pending" | "active">(
-    initialDomainInfo?.blogStatus || "unknown"
+  const [status, setStatus] = useState<"unknown" | "pending" | "active">(
+    initialDomainInfo?.status || "unknown"
   );
-  const [projectsStatus, setProjectsStatus] = useState<"unknown" | "pending" | "active">(
-    initialDomainInfo?.projectsStatus || "unknown"
+  const [wwwStatus, setWwwStatus] = useState<"unknown" | "pending" | "active">(
+    initialDomainInfo?.wwwStatus || "unknown"
   );
   const [verifying, setVerifying] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
-  const isProvisioned = !!blogDomain;
+  const isProvisioned = !!customDomain;
+  const wwwDomain = customDomain ? `www.${customDomain}` : "";
 
   async function provision() {
     if (!domainInput) return;
@@ -146,12 +144,11 @@ function DomainProvisioning({
       });
       const data = await res.json();
       if (data.success) {
-        setBlogDomain(data.blogDomain);
-        setProjectsDomain(data.projectsDomain);
+        setCustomDomain(data.customDomain);
         setDnsRecords(data.dnsRecords);
-        setBlogStatus(data.blogStatus === "active" ? "active" : "pending");
-        setProjectsStatus(data.projectsStatus === "active" ? "active" : "pending");
-        onProvisioned(data.blogDomain, data.siteSlug, data.dnsRecords);
+        setStatus(data.status === "active" ? "active" : "pending");
+        setWwwStatus("unknown");
+        onProvisioned(data.customDomain, data.siteSlug, data.dnsRecords);
       } else {
         alert(data.error || data.message || "Provisioning failed");
       }
@@ -171,11 +168,11 @@ function DomainProvisioning({
         body: JSON.stringify({ action: "verify", site_id: siteId }),
       });
       const data = await res.json();
-      setBlogStatus(
-        data.blog?.verified && data.blog?.configured ? "active" : "pending"
+      setStatus(
+        data.root?.verified && data.root?.configured ? "active" : "pending"
       );
-      setProjectsStatus(
-        data.projects?.verified && data.projects?.configured ? "active" : "pending"
+      setWwwStatus(
+        data.www?.verified && data.www?.configured ? "active" : "pending"
       );
     } catch {
       alert("Verification request failed");
@@ -217,24 +214,24 @@ function DomainProvisioning({
           </button>
         </div>
         <p className="text-[10px] text-muted">
-          Enter the tenant&apos;s root domain. This will register blog.* and projects.* subdomains.
+          Enter the tenant&apos;s root domain. TracPost hosts the full site (home, blog, projects, etc.) at this domain.
         </p>
       </div>
     );
   }
 
-  // Provisioned — show domains, records, status
+  // Provisioned — show root + www, records, status
   return (
     <div className="space-y-3">
       {/* Domain status rows */}
       <div className="rounded border border-border bg-background">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono">{blogDomain}</span>
-            {statusBadge(blogStatus)}
+            <span className="text-xs font-mono">{customDomain}</span>
+            {statusBadge(status)}
           </div>
           <a
-            href={`https://${blogDomain}`}
+            href={`https://${customDomain}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[10px] text-accent hover:underline"
@@ -244,11 +241,11 @@ function DomainProvisioning({
         </div>
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono">{projectsDomain}</span>
-            {statusBadge(projectsStatus)}
+            <span className="text-xs font-mono">{wwwDomain}</span>
+            {statusBadge(wwwStatus)}
           </div>
           <a
-            href={`https://${projectsDomain}`}
+            href={`https://${wwwDomain}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[10px] text-accent hover:underline"
@@ -296,7 +293,7 @@ function DomainProvisioning({
           {sending ? "Sending..." : "Send to Tenant"}
         </button>
         {sent && <span className="text-[10px] text-success">Email sent</span>}
-        {blogStatus === "active" && projectsStatus === "active" && (
+        {status === "active" && (
           <span className="text-[10px] text-success">All domains verified</span>
         )}
       </div>
@@ -620,10 +617,8 @@ interface NavLink {
 }
 
 interface DomainInfoProps {
-  blogStatus: "unknown" | "pending" | "active";
-  projectsStatus: "unknown" | "pending" | "active";
-  blogCnameTarget: string;
-  projectsCnameTarget: string;
+  status: "unknown" | "pending" | "active";
+  wwwStatus: "unknown" | "pending" | "active";
   dnsRecords: DnsRecord[];
 }
 
@@ -1005,8 +1000,8 @@ export function SiteControls({
               siteId={siteId}
               customDomain={customDomain}
               initialDomainInfo={domainInfo || undefined}
-              onProvisioned={(blogDomain, slug, records) => {
-                setCustomDomain(blogDomain);
+              onProvisioned={(rootDomain, slug, records) => {
+                setCustomDomain(rootDomain);
                 setBlogSlug(slug);
                 setDnsRecords(records);
               }}

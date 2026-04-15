@@ -134,12 +134,12 @@ export async function sendDnsInstructionsEmail({
           <p style="margin: 0;">Not sure how to do this? Forward this email to whoever manages your domain — they&apos;ll know what to do.</p>
         </div>
         <div style="margin-bottom: 24px; padding: 16px; background: #f9fafb; border-radius: 6px;">
-          <p style="font-size: 14px; font-weight: 600; color: #1a1a1a; margin: 0 0 8px;">Add these links to your website navigation:</p>
+          <p style="font-size: 14px; font-weight: 600; color: #1a1a1a; margin: 0 0 8px;">Once DNS is live, your site lives at:</p>
           <p style="font-size: 14px; color: #4b5563; margin: 0 0 4px;">
-            Blog &rarr; <a href="https://blog.${domain}" style="color: #3b82f6;">https://blog.${domain}</a>
+            <a href="https://${domain}" style="color: #3b82f6;">https://${domain}</a>
           </p>
-          <p style="font-size: 14px; color: #4b5563; margin: 0;">
-            Projects &rarr; <a href="https://projects.${domain}" style="color: #3b82f6;">https://projects.${domain}</a>
+          <p style="font-size: 12px; color: #9ca3af; margin: 8px 0 0;">
+            Home, blog, projects, and everything else served from one domain.
           </p>
         </div>
         <p style="font-size: 12px; color: #9ca3af;">

@@ -5,6 +5,7 @@ import { sql } from "@/lib/db";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
 import { ProjectHubAside } from "@/components/blog/project-aside";
 import { projectUrl, publicProjectsUrl } from "@/lib/urls";
+import { normalizePageConfig, slotByKey } from "@/lib/tenant-site";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export default async function ProjectsIndexPage({ params }: Props) {
   // Fetch shell data + projects
   const [blogSettings, siteRow, logoAsset, projects, recentPosts] = await Promise.all([
     sql`SELECT nav_links, theme FROM blog_settings WHERE site_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo FROM sites WHERE id = ${site.siteId}`,
+    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo, business_type, page_config FROM sites WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
       WHERE site_id = ${site.siteId}
@@ -66,6 +67,14 @@ export default async function ProjectsIndexPage({ params }: Props) {
 
   const settings = blogSettings[0] || {};
   const siteInfo = siteRow[0] || {};
+
+  // Respect page_config: 404 if slot is disabled
+  const pageConfig = normalizePageConfig(
+    siteInfo.page_config,
+    (siteInfo.business_type as string) || null,
+  );
+  const slot = slotByKey(pageConfig, "projects");
+  if (!slot.enabled) notFound();
   const websiteUrl = (siteInfo.url as string) || null;
   const logoUrl = (logoAsset[0]?.storage_url as string) || null;
   const siteLocation = (siteInfo.location as string) || null;
@@ -134,11 +143,11 @@ export default async function ProjectsIndexPage({ params }: Props) {
         />
       }
     >
-      <h1 className="bs-article-page-title" style={{ marginBottom: 32 }}>Our Work</h1>
+      <h1 className="bs-article-page-title" style={{ marginBottom: 32 }}>{slot.label}</h1>
 
       {projects.length === 0 ? (
         <p style={{ padding: "48px 0", textAlign: "center", color: "var(--bs-muted)" }}>
-          No projects published yet.
+          {slot.variant === "case_studies" ? "No case studies published yet." : "No projects published yet."}
         </p>
       ) : (
         <div className="bs-project-grid">

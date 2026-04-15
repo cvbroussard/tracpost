@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { PageConfig, PageSlot, SlotKey } from "@/lib/tenant-site";
+import type {
+  PageConfig,
+  PageSlot,
+  SlotKey,
+  WorkContent,
+  ServiceTile,
+  PricingTier,
+} from "@/lib/tenant-site";
 
 // ──────────────────────────────────────────────────────────────────
 // Page Layout editor — per-slot enabled / label / variant
@@ -255,6 +262,327 @@ export function RegenerateCopyButton({ siteId }: { siteId: string }) {
           <p className="text-[10px] text-muted">{result.heroSubtitle}…</p>
           <p className="text-[10px] text-muted">CTA: {result.ctaText}</p>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Work Content editor — variant-specific (services_tiles / pricing_tiers)
+// ──────────────────────────────────────────────────────────────────
+
+export function WorkContentEditor({
+  siteId,
+  activeVariant,
+  initial,
+}: {
+  siteId: string;
+  activeVariant: string;
+  initial: WorkContent;
+}) {
+  const [content, setContent] = useState<WorkContent>(initial);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      const res = await fetch(`/api/admin/sites/${siteId}/marketing-config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ work_content: content }),
+      });
+      if (res.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Save failed");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const isServicesTiles = activeVariant === "services_tiles";
+  const isPricingTiers = activeVariant === "pricing_tiers";
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[10px] text-muted">
+        Active variant: <span className="font-mono text-foreground">{activeVariant}</span> · change in Page Layout above.
+        Both variants&apos; content is preserved when switching.
+      </p>
+
+      {/* Shared headline + subheadline */}
+      <div className="grid grid-cols-1 gap-2">
+        <input
+          type="text"
+          value={content.headline || ""}
+          onChange={(e) => setContent({ ...content, headline: e.target.value })}
+          className="w-full bg-surface-hover px-2 py-1 text-xs"
+          placeholder="Headline (e.g., What We Do, Pricing, Services)"
+        />
+        <input
+          type="text"
+          value={content.subheadline || ""}
+          onChange={(e) => setContent({ ...content, subheadline: e.target.value })}
+          className="w-full bg-surface-hover px-2 py-1 text-xs"
+          placeholder="Subheadline (one-line intro)"
+        />
+      </div>
+
+      {isServicesTiles && (
+        <ServicesTilesEditor
+          tiles={content.services_tiles || []}
+          onChange={(tiles) => setContent({ ...content, services_tiles: tiles })}
+        />
+      )}
+
+      {isPricingTiers && (
+        <PricingTiersEditor
+          tiers={content.pricing_tiers || []}
+          onChange={(tiers) => setContent({ ...content, pricing_tiers: tiers })}
+        />
+      )}
+
+      {!isServicesTiles && !isPricingTiers && (
+        <p className="text-[10px] text-muted">
+          No editor for variant &quot;{activeVariant}&quot; yet.
+        </p>
+      )}
+
+      <div className="flex items-center gap-2 pt-2 border-t border-border">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+        >
+          {saving ? "Saving..." : "Save work content"}
+        </button>
+        {saved && <span className="text-[10px] text-success">Saved</span>}
+      </div>
+    </div>
+  );
+}
+
+function ServicesTilesEditor({
+  tiles,
+  onChange,
+}: {
+  tiles: ServiceTile[];
+  onChange: (next: ServiceTile[]) => void;
+}) {
+  function update(idx: number, patch: Partial<ServiceTile>) {
+    onChange(tiles.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
+  }
+  function add() {
+    onChange([...tiles, { title: "", description: "" }]);
+  }
+  function remove(idx: number) {
+    onChange(tiles.filter((_, i) => i !== idx));
+  }
+  function move(idx: number, dir: -1 | 1) {
+    const next = [...tiles];
+    const j = idx + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[idx], next[j]] = [next[j], next[idx]];
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <p className="text-[10px] font-medium">Service Tiles ({tiles.length})</p>
+        <button onClick={add} className="text-[10px] text-accent hover:underline">
+          + Add tile
+        </button>
+      </div>
+      {tiles.map((tile, i) => (
+        <div key={i} className="rounded border border-border p-2 space-y-1.5">
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={tile.title}
+              onChange={(e) => update(i, { title: e.target.value })}
+              className="flex-1 bg-surface-hover px-2 py-1 text-xs font-medium"
+              placeholder="Title"
+            />
+            <button onClick={() => move(i, -1)} disabled={i === 0} className="px-1 text-[10px] text-muted hover:text-foreground disabled:opacity-30">↑</button>
+            <button onClick={() => move(i, 1)} disabled={i === tiles.length - 1} className="px-1 text-[10px] text-muted hover:text-foreground disabled:opacity-30">↓</button>
+            <button onClick={() => remove(i)} className="px-1 text-[10px] text-danger hover:underline">×</button>
+          </div>
+          <textarea
+            value={tile.description}
+            onChange={(e) => update(i, { description: e.target.value })}
+            className="w-full bg-surface-hover px-2 py-1 text-xs"
+            rows={2}
+            placeholder="Description (1-2 sentences)"
+          />
+          <div className="grid grid-cols-2 gap-1">
+            <input
+              type="text"
+              value={tile.icon || ""}
+              onChange={(e) => update(i, { icon: e.target.value || undefined })}
+              className="bg-surface-hover px-2 py-1 text-xs"
+              placeholder="Icon (emoji or symbol, optional)"
+            />
+            <input
+              type="text"
+              value={tile.image || ""}
+              onChange={(e) => update(i, { image: e.target.value || undefined })}
+              className="bg-surface-hover px-2 py-1 text-xs"
+              placeholder="Image URL (optional)"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            <input
+              type="text"
+              value={tile.cta?.label || ""}
+              onChange={(e) => {
+                const label = e.target.value;
+                update(i, { cta: label ? { label, href: tile.cta?.href || "/contact" } : undefined });
+              }}
+              className="bg-surface-hover px-2 py-1 text-xs"
+              placeholder="CTA label (optional)"
+            />
+            <input
+              type="text"
+              value={tile.cta?.href || ""}
+              onChange={(e) => {
+                const href = e.target.value;
+                update(i, { cta: tile.cta?.label ? { label: tile.cta.label, href } : undefined });
+              }}
+              className="bg-surface-hover px-2 py-1 text-xs"
+              placeholder="CTA href (e.g., /contact)"
+            />
+          </div>
+        </div>
+      ))}
+      {tiles.length === 0 && (
+        <p className="text-[10px] text-muted">No tiles yet — click &quot;Add tile&quot; to start.</p>
+      )}
+    </div>
+  );
+}
+
+function PricingTiersEditor({
+  tiers,
+  onChange,
+}: {
+  tiers: PricingTier[];
+  onChange: (next: PricingTier[]) => void;
+}) {
+  function update(idx: number, patch: Partial<PricingTier>) {
+    onChange(tiers.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
+  }
+  function add() {
+    if (tiers.length >= 4) return; // sanity cap; 3 is the canonical pattern
+    onChange([
+      ...tiers,
+      { title: "", description: "", price: "", features: [], cta: { label: "Get Started", href: "/contact" } },
+    ]);
+  }
+  function remove(idx: number) {
+    onChange(tiers.filter((_, i) => i !== idx));
+  }
+  function move(idx: number, dir: -1 | 1) {
+    const next = [...tiers];
+    const j = idx + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[idx], next[j]] = [next[j], next[idx]];
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <p className="text-[10px] font-medium">Pricing Tiers ({tiers.length}/3 typical)</p>
+        <button onClick={add} disabled={tiers.length >= 4} className="text-[10px] text-accent hover:underline disabled:opacity-50">
+          + Add tier
+        </button>
+      </div>
+      {tiers.map((tier, i) => (
+        <div
+          key={i}
+          className={`rounded border p-2 space-y-1.5 ${tier.highlight ? "border-accent" : "border-border"}`}
+        >
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={tier.title}
+              onChange={(e) => update(i, { title: e.target.value })}
+              className="flex-1 bg-surface-hover px-2 py-1 text-xs font-medium"
+              placeholder="Tier name (Starter / Pro / Enterprise)"
+            />
+            <label className="flex items-center gap-1 text-[10px] text-muted">
+              <input
+                type="checkbox"
+                checked={!!tier.highlight}
+                onChange={(e) => update(i, { highlight: e.target.checked })}
+              />
+              Highlight
+            </label>
+            <button onClick={() => move(i, -1)} disabled={i === 0} className="px-1 text-[10px] text-muted hover:text-foreground disabled:opacity-30">↑</button>
+            <button onClick={() => move(i, 1)} disabled={i === tiers.length - 1} className="px-1 text-[10px] text-muted hover:text-foreground disabled:opacity-30">↓</button>
+            <button onClick={() => remove(i)} className="px-1 text-[10px] text-danger hover:underline">×</button>
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            <input
+              type="text"
+              value={tier.price}
+              onChange={(e) => update(i, { price: e.target.value })}
+              className="bg-surface-hover px-2 py-1 text-xs"
+              placeholder="Price ($99/mo, From $40k, Custom)"
+            />
+            <input
+              type="text"
+              value={tier.description}
+              onChange={(e) => update(i, { description: e.target.value })}
+              className="bg-surface-hover px-2 py-1 text-xs"
+              placeholder="Tagline (one phrase)"
+            />
+          </div>
+          <textarea
+            value={tier.features.join("\n")}
+            onChange={(e) =>
+              update(i, { features: e.target.value.split("\n").filter((s) => s.trim()) })
+            }
+            className="w-full bg-surface-hover px-2 py-1 text-xs font-mono"
+            rows={Math.max(3, tier.features.length + 1)}
+            placeholder="Feature lines (one per row)"
+          />
+          <div className="grid grid-cols-3 gap-1">
+            <input
+              type="text"
+              value={tier.cta.label}
+              onChange={(e) => update(i, { cta: { ...tier.cta, label: e.target.value } })}
+              className="bg-surface-hover px-2 py-1 text-xs"
+              placeholder="CTA label"
+            />
+            <input
+              type="text"
+              value={tier.cta.href}
+              onChange={(e) => update(i, { cta: { ...tier.cta, href: e.target.value } })}
+              className="bg-surface-hover px-2 py-1 text-xs"
+              placeholder="CTA href / Stripe URL"
+            />
+            <select
+              value={tier.cta.style || "primary"}
+              onChange={(e) =>
+                update(i, { cta: { ...tier.cta, style: e.target.value as "primary" | "outline" } })
+              }
+              className="bg-surface-hover px-2 py-1 text-xs"
+            >
+              <option value="primary">Primary button</option>
+              <option value="outline">Outline button</option>
+            </select>
+          </div>
+        </div>
+      ))}
+      {tiers.length === 0 && (
+        <p className="text-[10px] text-muted">No tiers yet — click &quot;Add tier&quot; to start. 3 is the typical pattern.</p>
       )}
     </div>
   );

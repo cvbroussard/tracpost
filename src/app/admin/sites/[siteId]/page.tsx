@@ -21,7 +21,7 @@ export default async function SiteControlPanel({ params }: Props) {
            s.autopilot_enabled, s.cadence_config, s.autopilot_config,
            s.provisioning_status, s.metadata, s.video_ratio,
            s.inline_upload_count, s.inline_ai_count, s.blog_cadence, s.article_mix,
-           s.page_config, s.hero_asset_id,
+           s.page_config, s.hero_asset_id, s.work_content,
            (s.website_copy IS NOT NULL) AS has_website_copy,
            u.name AS subscriber_name, sub.plan,
            bs.blog_enabled, bs.subdomain, bs.custom_domain,
@@ -222,6 +222,7 @@ export default async function SiteControlPanel({ params }: Props) {
         heroAssetCandidates={heroAssetCandidates as Array<{ id: string; storage_url: string; context_note: string | null; quality_score: number | null }>}
         currentHeroAssetId={(site.hero_asset_id as string) || null}
         hasWebsiteCopy={!!site.has_website_copy}
+        workContent={(site.work_content as Record<string, unknown> | null) || {}}
       />
     </div>
   );

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { PageConfig } from "@/lib/tenant-site";
+import type { PageConfig, WorkContent } from "@/lib/tenant-site";
 import {
   PageLayoutEditor,
   HeroOverridePicker,
   RegenerateCopyButton,
+  WorkContentEditor,
 } from "./website-pane";
 
 interface SiteData {
@@ -641,6 +642,7 @@ export function SiteControls({
   heroAssetCandidates = [],
   currentHeroAssetId = null,
   hasWebsiteCopy = false,
+  workContent,
 }: {
   siteId: string;
   site: SiteData;
@@ -654,6 +656,7 @@ export function SiteControls({
   heroAssetCandidates?: Array<{ id: string; storage_url: string; context_note: string | null; quality_score: number | null }>;
   currentHeroAssetId?: string | null;
   hasWebsiteCopy?: boolean;
+  workContent: WorkContent;
 }) {
   const [contentVibe, setContentVibe] = useState(site.contentVibe);
   const [imageStyle, setImageStyle] = useState(site.imageStyle);
@@ -1275,6 +1278,19 @@ export function SiteControls({
               Six-slot page model. Disable slots that don&apos;t apply, rename labels, and pick a content variant per slot.
             </p>
             <PageLayoutEditor siteId={siteId} initial={pageConfig} />
+          </div>
+
+          {/* Work Page Content */}
+          <div className="rounded border border-border bg-background p-3">
+            <p className="mb-2 text-xs font-medium">Work Page Content</p>
+            <p className="mb-3 text-[10px] text-muted">
+              Edit the content for the active work-page variant. Both variants&apos; data is preserved when you switch.
+            </p>
+            <WorkContentEditor
+              siteId={siteId}
+              activeVariant={pageConfig.find((s) => s.key === "work")?.variant || "services_tiles"}
+              initial={workContent}
+            />
           </div>
         </div>
       </Section>

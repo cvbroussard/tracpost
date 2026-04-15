@@ -28,6 +28,17 @@ export type {
   ContactVariant,
 } from "./page-config";
 
+export {
+  loadWorkContent,
+  defaultTilesFromCopy,
+  defaultPricingTiers,
+} from "./work-content";
+export type {
+  WorkContent,
+  ServiceTile,
+  PricingTier,
+} from "./work-content";
+
 export { loadHomePage } from "./home";
 export type { HomePageData } from "./home";
 

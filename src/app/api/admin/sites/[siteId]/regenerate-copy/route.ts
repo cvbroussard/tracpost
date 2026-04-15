@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { generateWebsiteCopy } from "@/lib/website-spinner/copy-generator";
+import { generateWebsiteCopy } from "@/lib/tenant-site/copy-generator";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

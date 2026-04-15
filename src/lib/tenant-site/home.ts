@@ -6,7 +6,7 @@
  */
 import "server-only";
 import { sql } from "@/lib/db";
-import type { WebsiteCopy } from "@/lib/website-spinner/copy-generator";
+import type { WebsiteCopy } from "@/lib/tenant-site/copy-generator";
 
 export interface HomePageData {
   heroImage: string | null;

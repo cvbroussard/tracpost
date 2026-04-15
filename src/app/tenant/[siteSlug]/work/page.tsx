@@ -14,7 +14,7 @@ import { sql } from "@/lib/db";
 import MarketingShell from "@/components/marketing/marketing-shell";
 import WorkServicesTiles from "@/components/marketing/variants/work-services-tiles";
 import WorkPricingTiers from "@/components/marketing/variants/work-pricing-tiers";
-import type { WebsiteCopy } from "@/lib/website-spinner/copy-generator";
+import type { WebsiteCopy } from "@/lib/tenant-site/copy-generator";
 
 export const revalidate = 3600;
 

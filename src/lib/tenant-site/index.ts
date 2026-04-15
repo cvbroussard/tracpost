@@ -53,3 +53,6 @@ export type { ContactPageData } from "./contact";
 
 export { loadPageMetadata } from "./metadata";
 export type { PageMetadata } from "./metadata";
+
+export { generateWebsiteCopy } from "./copy-generator";
+export type { WebsiteCopy } from "./copy-generator";

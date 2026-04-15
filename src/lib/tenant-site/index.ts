@@ -30,6 +30,7 @@ export type {
 
 export {
   loadWorkContent,
+  loadServiceTiles,
   defaultTilesFromCopy,
   defaultPricingTiers,
 } from "./work-content";

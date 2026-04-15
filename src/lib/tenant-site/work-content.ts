@@ -49,9 +49,36 @@ export async function loadWorkContent(siteId: string): Promise<WorkContent> {
 }
 
 /**
- * Default tiles synthesized from website_copy.home.services when admin
- * hasn't customized work_content yet. Lets the work page render
- * meaningful content from day one.
+ * Load service tiles from the `services` table — the primary source.
+ * Tiles follow display_order. Each tile's CTA deep-links to the
+ * service detail page (/services/[slug]). Returns empty when the
+ * tenant has no services yet (auto-gen hasn't run or failed).
+ */
+export async function loadServiceTiles(siteId: string, prefix = ""): Promise<ServiceTile[]> {
+  const rows = await sql`
+    SELECT s.slug, s.name, s.description, s.price_range,
+           ma.storage_url AS hero_url
+    FROM services s
+    LEFT JOIN media_assets ma ON ma.id = s.hero_asset_id
+    WHERE s.site_id = ${siteId}
+    ORDER BY s.display_order, s.created_at
+  `;
+  return rows.map((r) => {
+    const priceRange = r.price_range ? ` · ${String(r.price_range)}` : "";
+    return {
+      title: String(r.name),
+      description: String(r.description || "") + (priceRange || ""),
+      image: r.hero_url ? String(r.hero_url) : undefined,
+      cta: { label: "Learn more", href: `${prefix}/services/${String(r.slug)}` },
+    };
+  });
+}
+
+/**
+ * Legacy fallback — synthesize tiles from website_copy.home.services
+ * for tenants that haven't run service derivation yet. The primary
+ * source is now loadServiceTiles; this kicks in when services table
+ * is empty.
  */
 export function defaultTilesFromCopy(
   homeServices?: Array<{ title: string; description: string }> | undefined,

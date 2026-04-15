@@ -4,6 +4,7 @@ import {
   loadTenantContext,
   loadPageMetadata,
   loadWorkContent,
+  loadServiceTiles,
   slotByKey,
   defaultTilesFromCopy,
   defaultPricingTiers,
@@ -11,6 +12,7 @@ import {
   type PricingTier,
 } from "@/lib/tenant-site";
 import { sql } from "@/lib/db";
+import { detectHostMode } from "@/lib/urls";
 import MarketingShell from "@/components/marketing/marketing-shell";
 import WorkServicesTiles from "@/components/marketing/variants/work-services-tiles";
 import WorkPricingTiers from "@/components/marketing/variants/work-pricing-tiers";
@@ -47,11 +49,19 @@ export default async function TenantWorkPage({ params }: Props) {
   const [siteRow] = await sql`SELECT website_copy FROM sites WHERE id = ${ctx.siteId}`;
   const websiteCopy = (siteRow?.website_copy as WebsiteCopy | null) || null;
 
-  // Variant defaults — used when admin hasn't customized work_content yet
-  const tiles: ServiceTile[] =
+  const hostMode = await detectHostMode();
+  const prefix = hostMode === "preview" ? `/${ctx.siteSlug}` : "";
+
+  // Tile source priority: work_content override > services table > website_copy fallback.
+  // The override lets admin pin a custom tile arrangement without losing
+  // the services table as the canonical source for schema.org / blog prompts.
+  let tiles: ServiceTile[] =
     workContent.services_tiles && workContent.services_tiles.length > 0
       ? workContent.services_tiles
-      : defaultTilesFromCopy(websiteCopy?.home?.services);
+      : await loadServiceTiles(ctx.siteId, prefix);
+  if (tiles.length === 0) {
+    tiles = defaultTilesFromCopy(websiteCopy?.home?.services);
+  }
 
   const tiers: PricingTier[] =
     workContent.pricing_tiers && workContent.pricing_tiers.length > 0

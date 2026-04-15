@@ -65,13 +65,12 @@ const tilesStyles = `
     line-height: 1.6;
   }
 
+  /* Reflow grid — looks right at 3, 6, 8, 12 tiles without dead cells */
   .ws-tiles-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 24px;
   }
-  @media (max-width: 768px) { .ws-tiles-grid { grid-template-columns: 1fr; } }
-  @media (min-width: 768px) and (max-width: 1024px) { .ws-tiles-grid { grid-template-columns: repeat(2, 1fr); } }
 
   .ws-tile {
     border: 1px solid var(--ws-border);

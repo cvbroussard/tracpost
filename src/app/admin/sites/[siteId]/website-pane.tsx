@@ -268,6 +268,90 @@ export function RegenerateCopyButton({ siteId }: { siteId: string }) {
 }
 
 // ──────────────────────────────────────────────────────────────────
+// Services regenerate — GBP categorize + derive 6-8 service tiles
+// ──────────────────────────────────────────────────────────────────
+
+export function RegenerateServicesButton({ siteId }: { siteId: string }) {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{
+    categorization?: { primary: { name: string; reasoning: string }; additional_count: number };
+    services?: { created: number; skipped: boolean; reason?: string };
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function regenerate(step: "all" | "categorize" | "derive") {
+    setRunning(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/admin/sites/${siteId}/services/regenerate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setResult(data);
+      } else {
+        setError(data.error || "Regeneration failed");
+      }
+    } catch {
+      setError("Request failed");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => regenerate("all")}
+          disabled={running}
+          className="bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+        >
+          {running ? "Running (~30-60s)..." : "Categorize + derive services"}
+        </button>
+        <button
+          onClick={() => regenerate("categorize")}
+          disabled={running}
+          className="border border-border px-3 py-1 text-[10px] font-medium hover:bg-surface-hover disabled:opacity-50"
+        >
+          Categorize only
+        </button>
+        <button
+          onClick={() => regenerate("derive")}
+          disabled={running}
+          className="border border-border px-3 py-1 text-[10px] font-medium hover:bg-surface-hover disabled:opacity-50"
+        >
+          Derive services only
+        </button>
+      </div>
+      {error && <p className="text-[10px] text-danger">{error}</p>}
+      {result && (
+        <div className="rounded border border-success/30 bg-success/5 p-2 space-y-1">
+          {result.categorization && (
+            <>
+              <p className="text-[10px] text-muted">Primary GBP category:</p>
+              <p className="text-xs font-medium">{result.categorization.primary.name}</p>
+              <p className="text-[10px] italic text-muted">{result.categorization.primary.reasoning}</p>
+              <p className="text-[10px] text-muted">
+                + {result.categorization.additional_count} additional
+              </p>
+            </>
+          )}
+          {result.services && (
+            <p className="text-[10px] text-muted">
+              Services: {result.services.skipped ? `skipped (${result.services.reason})` : `${result.services.created} created`}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
 // Work Content editor — variant-specific (services_tiles / pricing_tiers)
 // ──────────────────────────────────────────────────────────────────
 

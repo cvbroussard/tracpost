@@ -6,6 +6,7 @@ import {
   PageLayoutEditor,
   HeroOverridePicker,
   RegenerateCopyButton,
+  RegenerateServicesButton,
   WorkContentEditor,
 } from "./website-pane";
 
@@ -1036,11 +1037,20 @@ export function SiteControls({
             <PageLayoutEditor siteId={siteId} initial={pageConfig} />
           </div>
 
-          {/* Work Page Content */}
+          {/* Services + GBP Categories */}
+          <div className="rounded border border-border bg-background p-3">
+            <p className="mb-2 text-xs font-medium">Services &amp; GBP Categories</p>
+            <p className="mb-3 text-[10px] text-muted">
+              Platform-derived: primary + additional GBP categories plus 6–8 service tiles. Each service anchors to a gcid for local SEO. Run after playbook sharpen; re-run when the offer changes.
+            </p>
+            <RegenerateServicesButton siteId={siteId} />
+          </div>
+
+          {/* Work Page Content (override) */}
           <div className="rounded border border-border bg-background p-3">
             <p className="mb-2 text-xs font-medium">Work Page Content</p>
             <p className="mb-3 text-[10px] text-muted">
-              Edit the content for the active work-page variant. Both variants&apos; data is preserved when you switch.
+              Override the auto-derived services with a custom tile arrangement, or edit the pricing_tiers variant. Both variants&apos; data is preserved when you switch.
             </p>
             <WorkContentEditor
               siteId={siteId}

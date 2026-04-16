@@ -4,7 +4,7 @@ import { sql } from "@/lib/db";
 import { triageAsset } from "@/lib/pipeline/triage";
 import { extractExif, fetchAndConvert } from "@/lib/image-utils";
 import { matchAssetToEntities } from "@/lib/geo-match";
-import { uploadBufferToR2 } from "@/lib/r2";
+import { uploadBufferToR2, deleteObjectFromR2, keyFromStorageUrl } from "@/lib/r2";
 import { seoFilename } from "@/lib/seo-filename";
 
 export const runtime = "nodejs";
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       const mediaType = asset.media_type as string;
       const storageUrl = asset.storage_url as string;
 
-      // HEIC conversion
+      // HEIC conversion — convert to JPEG, swap URL, delete original
       let currentUrl = storageUrl;
       if (meta.needs_conversion && (storageUrl.endsWith(".heic") || storageUrl.endsWith(".heif"))) {
         const { data, mimeType } = await fetchAndConvert(storageUrl);
@@ -82,6 +82,11 @@ export async function POST(req: NextRequest) {
               metadata = (COALESCE(metadata, '{}'::jsonb) - 'needs_conversion') || '{"converted": true}'::jsonb
           WHERE id = ${assetId}
         `;
+        const heicKey = keyFromStorageUrl(storageUrl);
+        if (heicKey) {
+          try { await deleteObjectFromR2(heicKey); }
+          catch (err) { console.error("HEIC cleanup failed (non-fatal):", err); }
+        }
       }
 
       // Filename date fallback for non-image assets (video, etc.)

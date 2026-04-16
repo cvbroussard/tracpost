@@ -52,7 +52,7 @@ export function MarketingFooter() {
               <span className="mp-brand-name">TRACPOST</span>
             </div>
             <p className="mp-footer-tagline">
-              The content team that works while you sleep.
+              We take care of marketing. You take care of business.
             </p>
             <p className="mp-footer-legal">
               TracPost is a product of Eppux LLC · Pittsburgh, PA

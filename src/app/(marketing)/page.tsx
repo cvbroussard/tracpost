@@ -80,9 +80,9 @@ export default async function MarketingHomePage() {
       {/* ── Section 2: Hero ── */}
       <section className="mp-hero">
         <div className="mp-container mp-hero-inner">
-          <h1 className="mp-hero-title">Meet the team that works while you sleep.</h1>
+          <h1 className="mp-hero-title">We take care of marketing. You take care of business.</h1>
           <p className="mp-hero-subtitle">
-            You snap photos of your work. We write the captions, build the blog posts, and
+            Snap photos of your work. We write the captions, build the blog posts, and
             publish across 8 platforms, your website, and Google — all automatically.
           </p>
           <div className="mp-hero-actions">

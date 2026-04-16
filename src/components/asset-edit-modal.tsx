@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { TagPicker, type PillarGroup } from "./tag-picker";
 import { FaceOverlay } from "./face-overlay";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 interface Brand {
   id: string;
@@ -114,6 +115,7 @@ export function AssetEditModal({
     setBrandIds(initialBrandIds);
     setProjectIds(initialProjectIds);
     setPersonaIds(initialPersonaIds);
+    speech.stop();
   }, [assetId]);
   const [localBrands, setLocalBrands] = useState(brands);
   const [localProjects, setLocalProjects] = useState(projects);
@@ -132,6 +134,31 @@ export function AssetEditModal({
   const [showFullPicker, setShowFullPicker] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Speech recognition — cursor-aware insertion into context note
+  const speech = useSpeechRecognition({
+    onFinal: useCallback((transcript: string) => {
+      const ta = textareaRef.current;
+      if (!ta) {
+        setNote((prev) => (prev ? prev + " " + transcript : transcript));
+        return;
+      }
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      setNote((prev) => {
+        const before = prev.slice(0, start);
+        const after = prev.slice(end);
+        const spaceBefore = before.length > 0 && !before.endsWith(" ") ? " " : "";
+        return before + spaceBefore + transcript + after;
+      });
+      requestAnimationFrame(() => {
+        const newPos = start + (start > 0 ? 1 : 0) + transcript.length;
+        ta.selectionStart = newPos;
+        ta.selectionEnd = newPos;
+        ta.focus();
+      });
+    }, []),
+  });
 
   // Vendor hashtag autocomplete state
   const [hashQuery, setHashQuery] = useState<string | null>(null);
@@ -414,8 +441,24 @@ export function AssetEditModal({
             </div>
 
             <div className="mb-1 flex items-center justify-between">
-              <label className="text-xs text-muted">Context Note</label>
-              <button
+              <label className="text-xs text-muted">
+                Context Note
+                {speech.listening && (
+                  <span className="ml-2 text-[10px] text-danger animate-pulse">● listening</span>
+                )}
+              </label>
+              <div className="flex items-center gap-3">
+                {speech.supported && (
+                  <button
+                    onClick={speech.toggle}
+                    type="button"
+                    className={`text-[10px] ${speech.listening ? "text-danger" : "text-muted hover:text-foreground"}`}
+                    title={speech.listening ? "Stop dictation" : "Start dictation"}
+                  >
+                    {speech.listening ? "■ Stop" : "🎤 Dictate"}
+                  </button>
+                )}
+                <button
                   onClick={async () => {
                     setGenerating(true);
                     try {
@@ -435,7 +478,11 @@ export function AssetEditModal({
                 >
                   {generating ? "Generating..." : "Generate caption"}
                 </button>
+              </div>
             </div>
+            {speech.interim && (
+              <p className="mb-1 text-[10px] italic text-muted">{speech.interim}</p>
+            )}
             <div className="relative flex-1">
               <textarea
                 ref={textareaRef}

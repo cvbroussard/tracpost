@@ -94,10 +94,15 @@ export async function POST(
     return NextResponse.json({ error: "file field required" }, { status: 400 });
   }
 
-  const newContentType = file.type || "application/octet-stream";
+  // Browsers send application/octet-stream for HEIC/HEIF from iPhone,
+  // and occasionally empty for other edge cases. Fall back to sniffing
+  // the filename extension before we reject as "other".
+  const reportedType = file.type || "";
+  const newContentType = resolveContentType(reportedType, file.name);
+
   if (mediaFamily(newContentType) !== existingFamily) {
     return NextResponse.json(
-      { error: `Cannot swap ${existingFamily} with ${mediaFamily(newContentType)}` },
+      { error: `Cannot swap ${existingFamily} with ${mediaFamily(newContentType)} (reported type: ${reportedType || "none"}, filename: ${file.name})` },
       { status: 400 },
     );
   }
@@ -118,4 +123,28 @@ function mediaFamily(mediaType: string): "image" | "video" | "other" {
   if (mediaType.startsWith("image")) return "image";
   if (mediaType.startsWith("video")) return "video";
   return "other";
+}
+
+const EXTENSION_TO_MIME: Record<string, string> = {
+  heic: "image/heic",
+  heif: "image/heif",
+  jpg:  "image/jpeg",
+  jpeg: "image/jpeg",
+  png:  "image/png",
+  webp: "image/webp",
+  gif:  "image/gif",
+  avif: "image/avif",
+  tif:  "image/tiff",
+  tiff: "image/tiff",
+  mp4:  "video/mp4",
+  mov:  "video/quicktime",
+  webm: "video/webm",
+  m4v:  "video/mp4",
+};
+
+function resolveContentType(reported: string, filename: string): string {
+  // Trust the browser when it gave us something specific
+  if (reported && reported !== "application/octet-stream") return reported;
+  const ext = filename.toLowerCase().split(".").pop() || "";
+  return EXTENSION_TO_MIME[ext] || reported || "application/octet-stream";
 }

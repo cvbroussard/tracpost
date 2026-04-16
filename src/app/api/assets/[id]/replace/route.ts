@@ -6,6 +6,7 @@ import {
   createPresignedReplaceUrl,
   keyFromStorageUrl,
 } from "@/lib/r2";
+import { ensureWebFormat } from "@/lib/image-utils";
 
 export const runtime = "nodejs";
 // Images pass through the server body (capped by Vercel at ~4.5MB).
@@ -107,16 +108,30 @@ export async function POST(
     );
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await uploadBufferToR2(key, buffer, newContentType);
+  const rawBuffer = Buffer.from(await file.arrayBuffer());
+
+  // Convert HEIC/HEIF/TIFF/BMP to JPEG so the URL serves something
+  // browsers can actually render. Mirrors the initial upload pipeline
+  // (pipeline/process/route.ts) — replacements must land as web-safe
+  // bytes, not the raw camera format.
+  const { data: webBuffer, mimeType: webMimeType } = await ensureWebFormat(
+    rawBuffer,
+    newContentType,
+  );
+
+  await uploadBufferToR2(key, webBuffer, webMimeType);
 
   await sql`
     UPDATE media_assets
-       SET media_type = ${newContentType}
+       SET media_type = ${webMimeType}
      WHERE id = ${id}
   `;
 
-  return NextResponse.json({ success: true, storage_url: asset.storage_url });
+  return NextResponse.json({
+    success: true,
+    storage_url: asset.storage_url,
+    converted: webMimeType !== newContentType,
+  });
 }
 
 function mediaFamily(mediaType: string): "image" | "video" | "other" {

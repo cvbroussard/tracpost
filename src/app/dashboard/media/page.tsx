@@ -32,45 +32,70 @@ export default async function MediaPage({ searchParams }: Props) {
   const projectFilter = params.project || "all";
 
   // Sort must happen in SQL so that the LIMIT picks from the correct
-  // end of the dataset. Branching on a fixed allow-list keeps each
-  // query static — no string interpolation into the SQL body.
+  // end of the dataset. The project filter must ALSO happen in SQL,
+  // before the LIMIT — otherwise a narrow project's photos can get
+  // sliced out when they don't fall in the newest/oldest 500 of the
+  // full library. Branching on fixed allow-lists keeps each query
+  // static — no string interpolation into the SQL body.
+  const projectId = projectFilter !== "all" ? projectFilter : null;
+
   const allAssets = sortOrder === "oldest"
     ? await sql`
-        SELECT id, storage_url, media_type, context_note, triage_status,
-               quality_score, content_pillar, content_pillars, content_tags,
-               source, ai_analysis, metadata, date_taken, sort_order,
-               platform_fit, flag_reason, shelve_reason, created_at
-        FROM media_assets WHERE site_id = ${siteId}
-        ORDER BY sort_order ASC NULLS LAST
+        SELECT ma.id, ma.storage_url, ma.media_type, ma.context_note, ma.triage_status,
+               ma.quality_score, ma.content_pillar, ma.content_pillars, ma.content_tags,
+               ma.source, ma.ai_analysis, ma.metadata, ma.date_taken, ma.sort_order,
+               ma.platform_fit, ma.flag_reason, ma.shelve_reason, ma.created_at
+        FROM media_assets ma
+        WHERE ma.site_id = ${siteId}
+          AND (${projectId}::uuid IS NULL OR EXISTS (
+            SELECT 1 FROM asset_projects ap
+            WHERE ap.asset_id = ma.id AND ap.project_id = ${projectId}::uuid
+          ))
+        ORDER BY ma.sort_order ASC NULLS LAST
         LIMIT 500
       `
     : sortOrder === "quality"
     ? await sql`
-        SELECT id, storage_url, media_type, context_note, triage_status,
-               quality_score, content_pillar, content_pillars, content_tags,
-               source, ai_analysis, metadata, date_taken, sort_order,
-               platform_fit, flag_reason, shelve_reason, created_at
-        FROM media_assets WHERE site_id = ${siteId}
-        ORDER BY quality_score DESC NULLS LAST
+        SELECT ma.id, ma.storage_url, ma.media_type, ma.context_note, ma.triage_status,
+               ma.quality_score, ma.content_pillar, ma.content_pillars, ma.content_tags,
+               ma.source, ma.ai_analysis, ma.metadata, ma.date_taken, ma.sort_order,
+               ma.platform_fit, ma.flag_reason, ma.shelve_reason, ma.created_at
+        FROM media_assets ma
+        WHERE ma.site_id = ${siteId}
+          AND (${projectId}::uuid IS NULL OR EXISTS (
+            SELECT 1 FROM asset_projects ap
+            WHERE ap.asset_id = ma.id AND ap.project_id = ${projectId}::uuid
+          ))
+        ORDER BY ma.quality_score DESC NULLS LAST
         LIMIT 500
       `
     : sortOrder === "least_used"
     ? await sql`
-        SELECT id, storage_url, media_type, context_note, triage_status,
-               quality_score, content_pillar, content_pillars, content_tags,
-               source, ai_analysis, metadata, date_taken, sort_order,
-               platform_fit, flag_reason, shelve_reason, created_at
-        FROM media_assets WHERE site_id = ${siteId}
-        ORDER BY COALESCE((metadata->>'used_count')::int, 0) ASC, sort_order DESC
+        SELECT ma.id, ma.storage_url, ma.media_type, ma.context_note, ma.triage_status,
+               ma.quality_score, ma.content_pillar, ma.content_pillars, ma.content_tags,
+               ma.source, ma.ai_analysis, ma.metadata, ma.date_taken, ma.sort_order,
+               ma.platform_fit, ma.flag_reason, ma.shelve_reason, ma.created_at
+        FROM media_assets ma
+        WHERE ma.site_id = ${siteId}
+          AND (${projectId}::uuid IS NULL OR EXISTS (
+            SELECT 1 FROM asset_projects ap
+            WHERE ap.asset_id = ma.id AND ap.project_id = ${projectId}::uuid
+          ))
+        ORDER BY COALESCE((ma.metadata->>'used_count')::int, 0) ASC, ma.sort_order DESC
         LIMIT 500
       `
     : await sql`
-        SELECT id, storage_url, media_type, context_note, triage_status,
-               quality_score, content_pillar, content_pillars, content_tags,
-               source, ai_analysis, metadata, date_taken, sort_order,
-               platform_fit, flag_reason, shelve_reason, created_at
-        FROM media_assets WHERE site_id = ${siteId}
-        ORDER BY sort_order DESC NULLS LAST
+        SELECT ma.id, ma.storage_url, ma.media_type, ma.context_note, ma.triage_status,
+               ma.quality_score, ma.content_pillar, ma.content_pillars, ma.content_tags,
+               ma.source, ma.ai_analysis, ma.metadata, ma.date_taken, ma.sort_order,
+               ma.platform_fit, ma.flag_reason, ma.shelve_reason, ma.created_at
+        FROM media_assets ma
+        WHERE ma.site_id = ${siteId}
+          AND (${projectId}::uuid IS NULL OR EXISTS (
+            SELECT 1 FROM asset_projects ap
+            WHERE ap.asset_id = ma.id AND ap.project_id = ${projectId}::uuid
+          ))
+        ORDER BY ma.sort_order DESC NULLS LAST
         LIMIT 500
       `;
 
@@ -171,15 +196,8 @@ export default async function MediaPage({ searchParams }: Props) {
   const projectLabel = (siteData[0]?.project_label as string) || null;
   const personaLabel = (siteData[0]?.persona_label as string) || null;
 
-  // Apply project filter (after project map is built)
-  if (projectFilter !== "all") {
-    const projectAssetIds = new Set(
-      assetProjectRows
-        .filter((r) => r.project_id === projectFilter)
-        .map((r) => r.asset_id as string)
-    );
-    filteredAssets = filteredAssets.filter(a => projectAssetIds.has(a.id as string));
-  }
+  // Project filter is applied in SQL above (pre-LIMIT) so the slice
+  // picks from project-matching rows, not from the library at large.
 
   return (
     <div className="mx-auto max-w-5xl">

@@ -27,6 +27,13 @@ const PLATFORMS = [
   "Pinterest", "LinkedIn", "Google Business",
 ];
 
+const CHANGELOG = [
+  { date: "Apr 16", title: "Speech-to-text dictation on asset captions", body: "Dictate context notes with your phone mic. Comma-separated descriptors, cursor-aware insertion." },
+  { date: "Apr 16", title: "Service entity + GBP category intelligence", body: "6–8 service tiles auto-derived from your brand playbook, anchored to Google Business Profile categories for local SEO." },
+  { date: "Apr 15", title: "Image replace-in-place", body: "Swap a referenced image without breaking blog posts or social links. HEIC auto-converts. CDN purges instantly." },
+  { date: "Apr 14", title: "Centralized marketing with 6-slot page model", body: "Every tenant site now runs on ISR with variant dispatch — home, about, work, blog, projects, contact." },
+];
+
 export default async function MarketingHomePage() {
   // Live network stats — dynamic ISR
   const [stats] = await sql`
@@ -36,6 +43,28 @@ export default async function MarketingHomePage() {
   `;
   const articlesPublished = (stats?.articles_published as number) || 0;
   const activeTenants = (stats?.active_tenants as number) || 0;
+
+  // Case studies — featured tenant articles with site name + metrics
+  const caseStudies = await sql`
+    SELECT bp.title, bp.slug, bp.excerpt, bp.og_image_url, bp.published_at,
+           s.name AS site_name, s.blog_slug, s.business_type
+    FROM blog_posts bp
+    JOIN sites s ON s.id = bp.site_id
+    WHERE bp.status = 'published'
+      AND bp.og_image_url IS NOT NULL
+    ORDER BY bp.published_at DESC NULLS LAST
+    LIMIT 6
+  `;
+
+  // Network activity — recent publications across all tenants
+  const recentPosts = await sql`
+    SELECT bp.title, bp.published_at, s.name AS site_name, s.blog_slug
+    FROM blog_posts bp
+    JOIN sites s ON s.id = bp.site_id
+    WHERE bp.status = 'published'
+    ORDER BY bp.published_at DESC NULLS LAST
+    LIMIT 8
+  `;
 
   return (
     <>
@@ -194,6 +223,88 @@ export default async function MarketingHomePage() {
           <Link href="/tools/gbp-diagnostic" className="mp-btn-primary mp-btn-lg">
             Run the free diagnostic
           </Link>
+        </div>
+      </section>
+
+      {/* ── Section 8: Case studies ── */}
+      {caseStudies.length > 0 && (
+        <section className="mp-section" id="customers">
+          <div className="mp-container">
+            <h2 className="mp-section-title mp-text-center">Published by TracPost</h2>
+            <p className="mp-section-subtitle mp-text-center" style={{ margin: "0 auto 48px" }}>
+              Real articles, real businesses, produced by the platform. Every one of these was
+              captured on a phone and published automatically.
+            </p>
+            <div className="mp-cases-grid">
+              {caseStudies.map((cs) => (
+                <a
+                  key={String(cs.slug)}
+                  href={`/blog/${String(cs.slug)}`}
+                  className="mp-case-card"
+                >
+                  {cs.og_image_url && (
+                    <img
+                      src={String(cs.og_image_url)}
+                      alt={String(cs.title)}
+                      className="mp-case-img"
+                    />
+                  )}
+                  <div className="mp-case-body">
+                    <span className="mp-case-source">{String(cs.site_name)}</span>
+                    <h3 className="mp-case-title">{String(cs.title)}</h3>
+                    {cs.excerpt && (
+                      <p className="mp-case-excerpt">{String(cs.excerpt).slice(0, 120)}</p>
+                    )}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Section 11: Network activity feed ── */}
+      {recentPosts.length > 0 && (
+        <section className="mp-section mp-section-alt" id="network">
+          <div className="mp-container">
+            <h2 className="mp-section-title mp-text-center">Live from the network</h2>
+            <p className="mp-section-subtitle mp-text-center" style={{ margin: "0 auto 40px" }}>
+              Content published by TracPost tenants — updated every hour.
+            </p>
+            <div className="mp-feed">
+              {recentPosts.map((post, i) => {
+                const date = post.published_at
+                  ? new Date(String(post.published_at)).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  : "";
+                return (
+                  <div key={i} className="mp-feed-item">
+                    <span className="mp-feed-date">{date}</span>
+                    <span className="mp-feed-title">{String(post.title)}</span>
+                    <span className="mp-feed-source">{String(post.site_name)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Section 12: Changelog ── */}
+      <section className="mp-section" id="changelog">
+        <div className="mp-container">
+          <div className="mp-changelog-header">
+            <h2 className="mp-section-title">What&apos;s new</h2>
+            <Link href="/changelog" className="mp-changelog-all">View all →</Link>
+          </div>
+          <div className="mp-changelog-list">
+            {CHANGELOG.map((entry) => (
+              <div key={entry.date} className="mp-changelog-entry">
+                <span className="mp-changelog-date">{entry.date}</span>
+                <h3 className="mp-changelog-title">{entry.title}</h3>
+                <p className="mp-changelog-body">{entry.body}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -403,4 +514,104 @@ const homeStyles = `
     letter-spacing: 0.05em;
     margin-top: 4px;
   }
+
+  /* Case studies */
+  .mp-cases-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  @media (max-width: 768px) { .mp-cases-grid { grid-template-columns: 1fr; } }
+  .mp-case-card {
+    display: block;
+    text-decoration: none;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .mp-case-card:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    transform: translateY(-2px);
+  }
+  .mp-case-img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+  .mp-case-body { padding: 20px; }
+  .mp-case-source {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #9ca3af;
+    margin-bottom: 8px;
+  }
+  .mp-case-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .mp-case-excerpt { font-size: 13px; color: #6b7280; line-height: 1.5; }
+
+  /* Network feed */
+  .mp-feed {
+    max-width: 720px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .mp-feed-item {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    gap: 12px;
+    align-items: baseline;
+    padding: 12px 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .mp-feed-item:last-child { border-bottom: none; }
+  .mp-feed-date { font-size: 12px; color: #9ca3af; }
+  .mp-feed-title { font-size: 14px; color: #1a1a1a; font-weight: 500; }
+  .mp-feed-source { font-size: 12px; color: #9ca3af; text-align: right; }
+
+  /* Changelog */
+  .mp-changelog-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+  .mp-changelog-all {
+    font-size: 13px;
+    color: #6b7280;
+    text-decoration: none;
+  }
+  .mp-changelog-all:hover { color: #1a1a1a; }
+  .mp-changelog-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+  @media (max-width: 768px) { .mp-changelog-list { grid-template-columns: 1fr; } }
+  .mp-changelog-entry {
+    padding: 20px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+  }
+  .mp-changelog-date {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #9ca3af;
+    margin-bottom: 8px;
+  }
+  .mp-changelog-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 6px;
+  }
+  .mp-changelog-body { font-size: 13px; color: #6b7280; line-height: 1.5; }
 `;

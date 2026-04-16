@@ -3,6 +3,7 @@ import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { parseContextNote } from "@/lib/context-note-parser";
 import { deleteObjectFromR2, keyFromStorageUrl } from "@/lib/r2";
+import { purgeCdnCache } from "@/lib/cdn";
 
 /**
  * PATCH /api/assets/:id — Update an asset's context note or pillar.
@@ -197,13 +198,17 @@ export async function DELETE(
   await sql`DELETE FROM asset_services  WHERE asset_id = ${id}`;
   await sql`DELETE FROM media_assets    WHERE id       = ${id}`;
 
-  const key = asset.storage_url ? keyFromStorageUrl(String(asset.storage_url)) : null;
+  const storageUrl = asset.storage_url ? String(asset.storage_url) : null;
+  const key = storageUrl ? keyFromStorageUrl(storageUrl) : null;
   if (key) {
     try {
       await deleteObjectFromR2(key);
     } catch (err) {
       console.error("R2 delete failed (DB delete succeeded):", err);
     }
+  }
+  if (storageUrl) {
+    await purgeCdnCache([storageUrl]);
   }
 
   return NextResponse.json({ success: true });

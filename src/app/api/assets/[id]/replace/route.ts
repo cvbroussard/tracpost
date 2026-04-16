@@ -7,6 +7,7 @@ import {
   keyFromStorageUrl,
 } from "@/lib/r2";
 import { ensureWebFormat } from "@/lib/image-utils";
+import { purgeCdnCache } from "@/lib/cdn";
 
 export const runtime = "nodejs";
 // Images pass through the server body (capped by Vercel at ~4.5MB).
@@ -127,10 +128,15 @@ export async function POST(
      WHERE id = ${id}
   `;
 
+  // Purge Cloudflare edge cache for this URL so the new bytes are
+  // visible to tenants immediately instead of serving stale for ~24h.
+  const purge = await purgeCdnCache([String(asset.storage_url)]);
+
   return NextResponse.json({
     success: true,
     storage_url: asset.storage_url,
     converted: webMimeType !== newContentType,
+    cache_purged: purge.success,
   });
 }
 

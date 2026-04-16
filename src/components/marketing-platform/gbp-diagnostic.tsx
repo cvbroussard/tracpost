@@ -123,6 +123,8 @@ const toolStyles = `
     width: 100%;
     padding: 12px 16px;
     font-size: 15px;
+    color: #1a1a1a;
+    background: #fff;
     border: 1px solid #d1d5db;
     border-radius: 8px;
     outline: none;

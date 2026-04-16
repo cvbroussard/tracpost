@@ -135,12 +135,21 @@ export function AssetEditModal({
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Speech recognition — cursor-aware insertion into context note
+  // Speech recognition — cursor-aware insertion into context note.
+  // Each spoken phrase becomes one descriptor separated by commas,
+  // matching the manual captioning format: "zellige backsplash,
+  // floating shelves, integrated refrigeration by #thermador"
   const speech = useSpeechRecognition({
     onFinal: useCallback((transcript: string) => {
+      const phrase = transcript.trim();
+      if (!phrase) return;
       const ta = textareaRef.current;
       if (!ta) {
-        setNote((prev) => (prev ? prev + " " + transcript : transcript));
+        setNote((prev) => {
+          if (!prev) return phrase;
+          const trimmed = prev.trimEnd().replace(/,\s*$/, "");
+          return trimmed + ", " + phrase;
+        });
         return;
       }
       const start = ta.selectionStart;
@@ -148,16 +157,19 @@ export function AssetEditModal({
       setNote((prev) => {
         const before = prev.slice(0, start);
         const after = prev.slice(end);
-        const spaceBefore = before.length > 0 && !before.endsWith(" ") ? " " : "";
-        return before + spaceBefore + transcript + after;
+        const trimBefore = before.trimEnd().replace(/,\s*$/, "");
+        const sep = trimBefore.length > 0 ? ", " : "";
+        return trimBefore + sep + phrase + after;
       });
       requestAnimationFrame(() => {
-        const newPos = start + (start > 0 ? 1 : 0) + transcript.length;
+        const before = note.slice(0, start).trimEnd().replace(/,\s*$/, "");
+        const sep = before.length > 0 ? 2 : 0;
+        const newPos = before.length + sep + phrase.length;
         ta.selectionStart = newPos;
         ta.selectionEnd = newPos;
         ta.focus();
       });
-    }, []),
+    }, [note]),
   });
 
   // Vendor hashtag autocomplete state

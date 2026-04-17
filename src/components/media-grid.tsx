@@ -18,6 +18,8 @@ interface Asset {
   ai_analysis: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
   flag_reason: string | null;
+  render_status: string | null;
+  variant_count: number;
   created_at: string;
 }
 
@@ -174,6 +176,11 @@ export function MediaGrid({
               {a.source === "ai_generated" && (
                 <span className="absolute right-1.5 top-1.5 rounded bg-accent/70 px-1.5 py-0.5 text-[10px] text-white">
                   AI
+                </span>
+              )}
+              {a.variant_count > 0 && (
+                <span className="absolute bottom-10 right-1.5 rounded bg-success/80 px-1.5 py-0.5 text-[9px] font-medium text-white" title={`${a.variant_count} platform variants rendered`}>
+                  {a.variant_count} variants
                 </span>
               )}
             </div>

@@ -131,9 +131,13 @@ async function planForPlatform(
       text: resolveTemplateVars(o.text, content, tenant),
     }));
 
-    // Add tier-gated overlays on top of template
+    // Add tier-gated overlays — skip Pinterest headline if template already has one
     const extraOverlays = resolveOverlays(platform, content, tenant);
-    textOverlays = [...textOverlays.filter((o) => o.text !== "__STAT_OVERLAY__"), ...extraOverlays];
+    const templateHasHeadline = textOverlays.some((o) => o.position === "bottom-center" && o.text);
+    const filtered = templateHasHeadline
+      ? extraOverlays.filter((o) => o.position !== "bottom-center")
+      : extraOverlays;
+    textOverlays = [...textOverlays.filter((o) => o.text !== "__STAT_OVERLAY__"), ...filtered];
 
     const watermark = template.watermark !== undefined
       ? Boolean(template.watermark) && (tenant.renderConfig.watermark_enabled !== false)
@@ -171,7 +175,7 @@ function resolveTemplateVars(
   tenant: TenantSignals,
 ): string {
   return text
-    .replace("{{scene_headline}}", content.sceneType ? formatSceneHeadline(content.sceneType) : "")
+    .replace("{{scene_headline}}", content.pinHeadline || (content.sceneType ? formatSceneHeadline(content.sceneType) : ""))
     .replace("{{location}}", tenant.businessType || "")
     .replace("{{stat_overlay}}", "__STAT_OVERLAY__");
 }

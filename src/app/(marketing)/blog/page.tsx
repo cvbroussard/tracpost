@@ -9,6 +9,31 @@ export const metadata: Metadata = {
   description: "Product updates, case studies, and insights from TracPost — the AI-powered content automation platform.",
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+  deep_dive: "Deep Dive",
+  authority_overview: "Insight",
+  project_story: "Case Study",
+  vendor_spotlight: "Partner Spotlight",
+  case_study: "Case Study",
+  blog_post: "Article",
+  product_update: "Product Update",
+};
+
+const PILLAR_LABELS: Record<string, string> = {
+  proof: "Case Study",
+  what: "How-To",
+  who: "People",
+  craft: "Craft",
+  authority: "Insight",
+};
+
+function resolveCategory(contentType: string | null, contentPillar: string | null): string {
+  if (contentType && CATEGORY_LABELS[contentType]) return CATEGORY_LABELS[contentType];
+  if (contentPillar && PILLAR_LABELS[contentPillar]) return PILLAR_LABELS[contentPillar];
+  if (contentType) return contentType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return "Article";
+}
+
 export default async function MarketingBlogPage() {
   const [site] = await sql`SELECT id FROM sites WHERE blog_slug = 'tracpost'`;
   if (!site) {
@@ -35,7 +60,10 @@ export default async function MarketingBlogPage() {
 
   const categories = new Set<string>();
   const articles = posts.map((p) => {
-    const cat = (p.content_type as string) || (p.content_pillar as string) || "Insight";
+    const cat = resolveCategory(
+      (p.content_type as string) || null,
+      (p.content_pillar as string) || null,
+    );
     categories.add(cat);
     return {
       slug: String(p.slug),

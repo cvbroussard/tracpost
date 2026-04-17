@@ -29,3 +29,11 @@ export {
   type GbpPostType,
   type GbpPostPayload,
 } from "./platform-specific";
+export {
+  createKenBurnsVideo,
+  createTimelapse,
+  reformatVideo,
+  addVideoTextOverlay,
+  burnSubtitles,
+  generateThumbnail,
+} from "./video";

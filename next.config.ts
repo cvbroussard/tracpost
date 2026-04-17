@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
     "pdf-to-img",
     "pdfjs-dist",
     "pdf-lib",
+    "ffmpeg-static",
+    "fluent-ffmpeg",
   ],
   // Force-include the linux canvas binary so Vercel deploys it.
   // Next.js's dependency tracer misses dynamic requires of platform-specific binaries.

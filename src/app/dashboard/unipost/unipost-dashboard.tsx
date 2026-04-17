@@ -10,7 +10,7 @@ interface PostItem {
   mediaUrl: string | null;
   platform: string;
   accountName: string;
-  status: "published" | "scheduled" | "failed";
+  status: "published" | "scheduled" | "failed" | "draft";
   publishedAt: string | null;
   platformPostUrl: string | null;
   errorMessage: string | null;
@@ -77,6 +77,7 @@ function statusBadge(status: string) {
     published: "bg-success/10 text-success",
     scheduled: "bg-accent/10 text-accent",
     failed: "bg-danger/10 text-danger",
+    draft: "bg-muted/10 text-muted",
   };
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${colors[status] || "bg-muted/10 text-muted"}`}>

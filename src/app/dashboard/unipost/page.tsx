@@ -53,9 +53,9 @@ export default async function UnipostPage() {
     JOIN site_social_links ssl ON ssl.social_account_id = sa.id
     LEFT JOIN media_assets ma ON ma.id = sp.source_asset_id
     WHERE ssl.site_id = ${siteId}
-      AND sp.status IN ('published', 'scheduled', 'failed')
-    ORDER BY COALESCE(sp.published_at, sp.scheduled_at) DESC NULLS LAST
-    LIMIT 50
+      AND sp.status IN ('published', 'scheduled', 'failed', 'draft')
+    ORDER BY COALESCE(sp.published_at, sp.scheduled_at, sp.created_at) DESC NULLS LAST
+    LIMIT 100
   `;
 
   // Connected platforms
@@ -110,7 +110,7 @@ export default async function UnipostPage() {
           mediaUrl: ((p.media_urls as string[]) || [])[0] || (p.source_image_url ? String(p.source_image_url) : null),
           platform: String(p.platform),
           accountName: String(p.account_name),
-          status: String(p.status) as "published" | "scheduled" | "failed",
+          status: String(p.status) as "published" | "scheduled" | "failed" | "draft",
           publishedAt: p.published_at ? String(p.published_at) : null,
           platformPostUrl: p.platform_post_url ? String(p.platform_post_url) : null,
           errorMessage: p.error_message ? String(p.error_message) : null,

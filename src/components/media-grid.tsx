@@ -250,6 +250,7 @@ export function MediaGrid({
           onBrandCreated={(brand) => setLiveBrands((prev) => [...prev, brand].sort((a, b) => a.name.localeCompare(b.name)))}
           onProjectCreated={(project) => setLiveProjects((prev) => [...prev, project].sort((a, b) => a.name.localeCompare(b.name)))}
           captionSource={((editing.metadata as Record<string, unknown>)?.caption_source as string) || null}
+          initialMetadata={editing.metadata as Record<string, unknown> | null}
           faces={(() => {
             const meta = (editing.metadata || {}) as Record<string, unknown>;
             const fd = meta.faces as { faces: Array<Record<string, unknown>>; detectionWidth?: number; detectionHeight?: number } | undefined;

@@ -285,21 +285,91 @@ export async function onPlaybookSharpened(siteId: string): Promise<void> {
 }
 
 /**
- * Generate a caption for a single asset using its project's snapshot.
- * Returns draft text — does NOT write to DB.
+ * Generated text outputs from a single vision+context API call.
+ * Saved to media_assets.metadata.generated_text. Generated once,
+ * consumed by downstream systems (render pipeline, publishing,
+ * project detail page, web rendering).
  */
-export async function generateCaptionForAsset(
+export interface GeneratedText {
+  context_note: string;
+  pin_headline: string;
+  display_caption: string;
+  alt_text: string;
+  social_hook: string;
+  generated_at: string;
+}
+
+/**
+ * Load enriched context: snapshot + playbook + services + GBP.
+ * This is the FULL context the generator needs for quality output.
+ */
+async function loadEnrichedContext(siteId: string): Promise<string> {
+  const [site] = await sql`
+    SELECT brand_playbook, location FROM sites WHERE id = ${siteId}
+  `;
+  const parts: string[] = [];
+
+  // Brand playbook (the sharpened angle, promise, positioning)
+  const playbook = (site?.brand_playbook || {}) as Record<string, unknown>;
+  const positioning = (playbook.brandPositioning || {}) as Record<string, unknown>;
+  const angles = (positioning.selectedAngles || []) as Array<Record<string, unknown>>;
+  const offerCore = (playbook.offerCore || {}) as Record<string, unknown>;
+
+  if (angles[0]?.tagline) parts.push(`Brand tagline: ${angles[0].tagline}`);
+  if (angles[0]?.tone) parts.push(`Brand tone: ${angles[0].tone}`);
+  if (offerCore.offerStatement) {
+    const stmt = offerCore.offerStatement as Record<string, unknown>;
+    if (stmt.finalStatement) parts.push(`Brand promise: ${stmt.finalStatement}`);
+  }
+
+  // Services
+  const services = await sql`
+    SELECT name, description FROM services WHERE site_id = ${siteId} ORDER BY display_order LIMIT 6
+  `;
+  if (services.length > 0) {
+    parts.push(`Services offered: ${services.map((s) => String(s.name)).join(", ")}`);
+  }
+
+  // GBP categories
+  const cats = await sql`
+    SELECT gc.name, sgc.is_primary
+    FROM site_gbp_categories sgc
+    JOIN gbp_categories gc ON gc.gcid = sgc.gcid
+    WHERE sgc.site_id = ${siteId}
+    ORDER BY sgc.is_primary DESC
+  `;
+  if (cats.length > 0) {
+    const primary = cats.find((c) => c.is_primary);
+    if (primary) parts.push(`Business category: ${primary.name}`);
+    const additional = cats.filter((c) => !c.is_primary).map((c) => String(c.name));
+    if (additional.length > 0) parts.push(`Also: ${additional.join(", ")}`);
+  }
+
+  if (site?.location) parts.push(`Location: ${site.location}`);
+
+  return parts.length > 0 ? parts.join("\n") : "";
+}
+
+/**
+ * Generate all text outputs for a single asset in ONE API call.
+ * Returns structured text: context_note + pin_headline +
+ * display_caption + alt_text + social_hook. Same image context,
+ * same cost as generating just the caption.
+ */
+export async function generateAssetText(
   asset: Record<string, unknown>,
-  snapshot: ProjectSnapshot
-): Promise<string | null> {
+  snapshot: ProjectSnapshot,
+): Promise<GeneratedText | null> {
   const storageUrl = asset.storage_url as string;
+  const siteId = asset.site_id as string;
   const meta = (asset.metadata || {}) as Record<string, unknown>;
   const dateTaken = asset.date_taken
     ? new Date(asset.date_taken as string).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
     : null;
   const camera = meta.camera as string | undefined;
-  const aiAnalysis = meta.ai_analysis as Record<string, unknown> | undefined;
+  const aiAnalysis = (asset.ai_analysis || meta.ai_analysis || {}) as Record<string, unknown>;
   const sceneType = aiAnalysis?.scene_type as string | undefined;
+  const existingNote = asset.context_note ? String(asset.context_note) : null;
 
   const examples = snapshot.sampleCaptions
     .filter((c) => c.source === "manual" || c.source === "corrected")
@@ -308,43 +378,53 @@ export async function generateCaptionForAsset(
     .join("\n");
 
   const correctionGuide = snapshot.corrections.length > 0
-    ? `\n\nIMPORTANT — Previous corrections by the user:\n${snapshot.corrections.map((c) => `- AI wrote: "${c.ai}"\n  User corrected to: "${c.human}"`).join("\n")}\nLearn from these corrections. Use the user's terminology, not generic descriptions.`
+    ? `\nIMPORTANT — Previous corrections by the user:\n${snapshot.corrections.map((c) => `- AI wrote: "${c.ai}"\n  User corrected to: "${c.human}"`).join("\n")}\nLearn from these corrections. Use the user's terminology, not generic descriptions.`
     : "";
 
-  const prompt = `You are writing a context note for a media asset in a project documentation system.
+  const enrichedContext = await loadEnrichedContext(siteId);
+
+  const prompt = `You are generating text for a media asset used by a local business for content marketing.
 
 Project: ${snapshot.description}
-${snapshot.brands.length > 0 ? `Brands/materials on this project: ${snapshot.brands.join(", ")}` : ""}
+${snapshot.brands.length > 0 ? `Brands/materials: ${snapshot.brands.join(", ")}` : ""}
 ${dateTaken ? `Photo date: ${dateTaken}` : ""}
 ${sceneType ? `Scene type: ${sceneType}` : ""}
 ${camera ? `Camera: ${camera}` : ""}
-${snapshot.vocabulary.length > 0 ? `Domain vocabulary from this project: ${snapshot.vocabulary.join(", ")}` : ""}
+${snapshot.vocabulary.length > 0 ? `Domain vocabulary: ${snapshot.vocabulary.join(", ")}` : ""}
+${enrichedContext ? `\nBusiness context:\n${enrichedContext}` : ""}
+${existingNote ? `\nTenant's own description: "${existingNote}"` : ""}
 
-${examples ? `Here are example captions written by the project owner for other photos in this same project:\n${examples}` : "No example captions available yet — write a descriptive, specific caption."}
+${examples ? `Example captions by the project owner:\n${examples}` : ""}
 ${correctionGuide}
 
-Write a context note for this photo in the SAME style, tone, and level of detail as the examples above.
-- Be specific about what you see — materials, techniques, conditions
-- Use the project's domain vocabulary, not generic terms
-- Keep it concise — one or two sentences, like the examples
-- Do NOT use marketing language or adjectives like "beautiful" or "stunning"
-- If you're not sure what something is, describe what you see without guessing
+Generate FIVE text outputs for this photo. Reply with ONLY a JSON object:
 
-Respond with ONLY the caption text, nothing else.`;
+{
+  "context_note": "Descriptive context note in the same style as the examples. 1-2 sentences, specific materials/techniques, domain vocabulary. No marketing language.",
+  "pin_headline": "6-8 word Pinterest headline. Must include one searchable keyword relevant to the business category. Title case.",
+  "display_caption": "1-2 sentence public-facing caption in the business's brand voice. Written for the business's website audience, not for the project owner.",
+  "alt_text": "Concise image description for screen readers. What is literally shown, no interpretation. Under 125 characters.",
+  "social_hook": "First-line hook for social media. Creates curiosity or highlights the most interesting element. Under 15 words. No hashtags."
+}
+
+Rules:
+- context_note: Match the style of the example captions. Be specific, not generic.
+- pin_headline: Must be searchable — include the type of work + a specific detail.
+- display_caption: Use the brand tone from the business context. This faces the public.
+- alt_text: Factual, descriptive, no brand language.
+- social_hook: Conversational, creates scroll-stopping curiosity.`;
 
   try {
     const imgRes = await fetch(storageUrl, { signal: AbortSignal.timeout(10000) });
     if (!imgRes.ok) return null;
     let imgBuffer = Buffer.from(await imgRes.arrayBuffer());
 
-    // Always convert to JPEG for API call — PNGs from HEIC conversion are too large
     const sharp = (await import("sharp")).default;
     imgBuffer = Buffer.from(await sharp(imgBuffer)
       .resize({ width: 1600, withoutEnlargement: true })
       .jpeg({ quality: 80 })
       .toBuffer());
 
-    // If still over 4MB, resize smaller
     if (imgBuffer.length > 4 * 1024 * 1024) {
       imgBuffer = Buffer.from(await sharp(imgBuffer)
         .resize({ width: 800 })
@@ -353,17 +433,16 @@ Respond with ONLY the caption text, nothing else.`;
     }
 
     const base64 = imgBuffer.toString("base64");
-    const mediaType = "image/jpeg";
 
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 200,
+      max_tokens: 600,
       messages: [{
         role: "user",
         content: [
           {
             type: "image",
-            source: { type: "base64", media_type: mediaType, data: base64 },
+            source: { type: "base64", media_type: "image/jpeg", data: base64 },
           },
           { type: "text", text: prompt },
         ],
@@ -371,11 +450,46 @@ Respond with ONLY the caption text, nothing else.`;
     });
 
     const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : null;
-    return text || null;
+    if (!text) return null;
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      // Fallback: treat the entire response as a context_note (legacy behavior)
+      return {
+        context_note: text,
+        pin_headline: "",
+        display_caption: text,
+        alt_text: "",
+        social_hook: "",
+        generated_at: new Date().toISOString(),
+      };
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as Partial<GeneratedText>;
+    return {
+      context_note: parsed.context_note || text,
+      pin_headline: parsed.pin_headline || "",
+      display_caption: parsed.display_caption || parsed.context_note || "",
+      alt_text: parsed.alt_text || "",
+      social_hook: parsed.social_hook || "",
+      generated_at: new Date().toISOString(),
+    };
   } catch (err) {
-    console.error("Caption generation error:", err instanceof Error ? err.message : err);
+    console.error("Text generation error:", err instanceof Error ? err.message : err);
     return null;
   }
+}
+
+/**
+ * Legacy wrapper — returns just the context_note string.
+ * Used by callers that only need the caption.
+ */
+export async function generateCaptionForAsset(
+  asset: Record<string, unknown>,
+  snapshot: ProjectSnapshot,
+): Promise<string | null> {
+  const result = await generateAssetText(asset, snapshot);
+  return result?.context_note || null;
 }
 
 /**

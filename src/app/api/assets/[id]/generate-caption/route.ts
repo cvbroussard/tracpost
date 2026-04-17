@@ -8,11 +8,15 @@ export const maxDuration = 30;
 /**
  * POST /api/assets/:id/generate-caption
  *
- * Generate an AI caption using the best available context:
- * - Project snapshot (if asset belongs to a project)
- * - Site-level snapshot (fallback for non-project assets)
+ * Generates 5 text outputs in ONE vision API call:
+ * context_note, pin_headline, display_caption, alt_text, social_hook.
  *
- * Returns draft text — does NOT write to DB.
+ * Saves all outputs to media_assets.metadata.generated_text.
+ * Returns the context_note for the edit modal + a flag indicating
+ * generation already happened (to discourage re-generation).
+ *
+ * Body (optional):
+ *   { force: true }  → regenerate even if already generated
  */
 export async function POST(
   req: NextRequest,
@@ -24,7 +28,9 @@ export async function POST(
   const { id } = await params;
 
   const [asset] = await sql`
-    SELECT ma.id, ma.site_id, ma.storage_url, ma.media_type, ma.date_taken, ma.created_at, ma.metadata
+    SELECT ma.id, ma.site_id, ma.storage_url, ma.media_type,
+           ma.date_taken, ma.created_at, ma.metadata, ma.context_note,
+           ma.ai_analysis
     FROM media_assets ma
     JOIN sites s ON ma.site_id = s.id
     WHERE ma.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
@@ -34,7 +40,21 @@ export async function POST(
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   }
 
-  const { generateCaptionForAsset, buildProjectSnapshot, buildSiteSnapshot } = await import("@/lib/pipeline/project-captions");
+  const meta = (asset.metadata || {}) as Record<string, unknown>;
+  const body = await req.json().catch(() => ({}));
+  const force = body.force === true;
+
+  // Check if already generated (skip unless forced)
+  const existingGenerated = meta.generated_text as Record<string, unknown> | undefined;
+  if (existingGenerated?.generated_at && !force) {
+    return NextResponse.json({
+      caption: existingGenerated.context_note,
+      already_generated: true,
+      generated_text: existingGenerated,
+    });
+  }
+
+  const { generateAssetText, buildProjectSnapshot, buildSiteSnapshot } = await import("@/lib/pipeline/project-captions");
 
   // Try project context first, fall back to site context
   const [projectLink] = await sql`
@@ -48,11 +68,29 @@ export async function POST(
     ? await buildProjectSnapshot(projectLink.id as string)
     : await buildSiteSnapshot(asset.site_id as string);
 
-  const caption = await generateCaptionForAsset(asset, snapshot);
+  const result = await generateAssetText(asset, snapshot);
 
-  if (!caption) {
-    return NextResponse.json({ error: "Caption generation failed" }, { status: 500 });
+  if (!result) {
+    return NextResponse.json({ error: "Text generation failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ caption });
+  // Save all generated text to metadata.generated_text
+  await sql`
+    UPDATE media_assets
+    SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ generated_text: result })}::jsonb
+    WHERE id = ${id}
+  `;
+
+  // Seed context_note ONLY if it's currently empty (don't overwrite tenant's edits)
+  if (!asset.context_note) {
+    await sql`
+      UPDATE media_assets SET context_note = ${result.context_note} WHERE id = ${id}
+    `;
+  }
+
+  return NextResponse.json({
+    caption: result.context_note,
+    generated_text: result,
+    already_generated: false,
+  });
 }

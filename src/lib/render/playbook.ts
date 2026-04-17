@@ -28,6 +28,7 @@ interface ContentSignals {
   projectId: string | null;
   isProjectHero: boolean;
   mediaType: string;
+  pinHeadline: string | null;
 }
 
 interface TenantSignals {
@@ -204,16 +205,20 @@ function resolveOverlays(
 ): TextOverlay[] {
   const overlays: TextOverlay[] = [];
 
-  // Pinterest always gets a headline overlay (algorithm preference)
-  if (platform === "pinterest" && content.sceneType) {
-    overlays.push({
-      text: formatSceneHeadline(content.sceneType),
-      position: "bottom-center",
-      fontSize: 36,
-      fontWeight: "bold",
-      color: "#ffffff",
-      backgroundColor: "rgba(0,0,0,0.6)",
-    });
+  // Pinterest gets a headline overlay (algorithm preference).
+  // Prefer pin_headline from generated_text; fall back to scene_type.
+  if (platform === "pinterest") {
+    const headline = content.pinHeadline || (content.sceneType ? formatSceneHeadline(content.sceneType) : null);
+    if (headline) {
+      overlays.push({
+        text: headline,
+        position: "bottom-center",
+        fontSize: 36,
+        fontWeight: "bold",
+        color: "#ffffff",
+        backgroundColor: "rgba(0,0,0,0.6)",
+      });
+    }
   }
 
   // CTA overlay for Instagram and Facebook (Authority+ only)
@@ -310,7 +315,8 @@ export async function loadTenantSignals(siteId: string): Promise<TenantSignals> 
 export async function loadContentSignals(assetId: string): Promise<ContentSignals> {
   const [asset] = await sql`
     SELECT quality_score, media_type,
-           ai_analysis->>'scene_type' AS scene_type
+           ai_analysis->>'scene_type' AS scene_type,
+           metadata->'generated_text'->>'pin_headline' AS pin_headline
     FROM media_assets WHERE id = ${assetId}
   `;
 
@@ -330,5 +336,6 @@ export async function loadContentSignals(assetId: string): Promise<ContentSignal
     projectId: projectLink?.project_id ? String(projectLink.project_id) : null,
     isProjectHero: !!heroCheck,
     mediaType: (asset?.media_type as string) || "image/jpeg",
+    pinHeadline: (asset?.pin_headline as string) || null,
   };
 }

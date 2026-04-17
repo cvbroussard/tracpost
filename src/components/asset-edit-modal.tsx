@@ -52,6 +52,7 @@ interface AssetEditModalProps {
   faceDetectionWidth?: number;
   faceDetectionHeight?: number;
   personas?: Array<{ id: string; name: string; type: string }>;
+  initialMetadata?: Record<string, unknown> | null;
   onClose: () => void;
   onSaved: (note: string, pillar: string, tags: string[], brandIds?: string[], projectIds?: string[], personaIds?: string[]) => void;
   onDeleted?: () => void;
@@ -91,6 +92,7 @@ export function AssetEditModal({
   onClose,
   onSaved,
   onDeleted,
+  initialMetadata,
   onBrandCreated,
   onProjectCreated,
   onNext,
@@ -100,6 +102,7 @@ export function AssetEditModal({
 }: AssetEditModalProps) {
   const [faceData, setFaceData] = useState(initialFaces);
   const [note, setNote] = useState(initialNote);
+  const hasGeneratedText = !!(initialMetadata?.generated_text as Record<string, unknown>)?.generated_at;
   const [pillar, setPillar] = useState(initialPillar);
   const [tags, setTags] = useState<string[]>(initialTags || []);
   const [brandIds, setBrandIds] = useState<string[]>(initialBrandIds);
@@ -472,14 +475,24 @@ export function AssetEditModal({
                 )}
                 <button
                   onClick={async () => {
+                    const existing = (initialMetadata?.generated_text || undefined) as Record<string, unknown> | undefined;
+                    const force = !!existing?.generated_at;
                     setGenerating(true);
                     try {
-                      const res = await fetch(`/api/assets/${assetId}/generate-caption`, { method: "POST" });
+                      const res = await fetch(`/api/assets/${assetId}/generate-caption`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ force }),
+                      });
                       if (res.ok) {
                         const data = await res.json();
-                        if (data.caption) setNote(data.caption);
+                        if (data.caption && !note) setNote(data.caption);
+                        else if (data.caption && force) setNote(data.caption);
+                        if (data.already_generated && !force) {
+                          setNote(data.caption || note);
+                        }
                       } else {
-                        const data = await res.json();
+                        const data = await res.json().catch(() => ({}));
                         if (data.error) alert(data.error);
                       }
                     } catch { /* ignore */ }
@@ -488,7 +501,7 @@ export function AssetEditModal({
                   disabled={generating}
                   className="text-[10px] text-accent hover:underline disabled:opacity-50"
                 >
-                  {generating ? "Generating..." : "Generate caption"}
+                  {generating ? "Generating..." : hasGeneratedText ? "Regenerate" : "Generate text"}
                 </button>
               </div>
             </div>

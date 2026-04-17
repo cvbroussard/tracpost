@@ -55,7 +55,9 @@ export default async function ProjectPage({ params }: Props) {
   const [assets, brands, personas, locationRows, blogSettings, siteRow, logoAsset, siblingProjects] = await Promise.all([
     sql`
       SELECT ma.id, ma.storage_url, ma.media_type, ma.context_note,
-             ma.date_taken, ma.created_at, ma.quality_score
+             ma.date_taken, ma.created_at, ma.quality_score,
+             ma.metadata->'generated_text'->>'display_caption' AS display_caption,
+             ma.metadata->'generated_text'->>'alt_text' AS alt_text
       FROM media_assets ma
       JOIN asset_projects ap ON ap.asset_id = ma.id
       WHERE ap.project_id = ${projectId}
@@ -293,7 +295,8 @@ export default async function ProjectPage({ params }: Props) {
             {/* Featured moments — captioned assets in two-column layout */}
             {captioned.map((asset) => {
               const isVideo = (asset.media_type as string) === "video";
-              const caption = String(asset.context_note);
+              const displayCaption = asset.display_caption ? String(asset.display_caption) : String(asset.context_note);
+              const altText = asset.alt_text ? String(asset.alt_text) : displayCaption;
               const dateTaken = asset.date_taken
                 ? new Date(asset.date_taken as string).toLocaleDateString("en-US", { month: "short", day: "numeric" })
                 : null;
@@ -304,11 +307,11 @@ export default async function ProjectPage({ params }: Props) {
                     {isVideo ? (
                       <video src={String(asset.storage_url)} controls preload="metadata" />
                     ) : (
-                      <img src={String(asset.storage_url)} alt={caption} loading="lazy" />
+                      <img src={String(asset.storage_url)} alt={altText} loading="lazy" />
                     )}
                   </div>
                   <div className="pj-featured-text">
-                    <p className="pj-featured-caption">{caption}</p>
+                    <p className="pj-featured-caption">{displayCaption}</p>
                     {dateTaken && <span className="pj-featured-date">{dateTaken}</span>}
                   </div>
                 </div>

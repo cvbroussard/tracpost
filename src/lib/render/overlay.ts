@@ -1,8 +1,10 @@
 /**
- * Text overlay compositing using sharp + inline SVG.
- * Renders headline, CTA, and watermark text/logo onto images.
+ * Text overlay compositing using @napi-rs/canvas for text rendering
+ * + sharp for image compositing. Replaces the SVG approach which
+ * couldn't resolve fonts in serverless environments.
  */
 import sharp from "sharp";
+import { createCanvas } from "@napi-rs/canvas";
 import { type TextOverlay, type OverlayPosition } from "./types";
 
 function positionToGravity(pos: OverlayPosition): string {
@@ -17,9 +19,13 @@ function positionToGravity(pos: OverlayPosition): string {
   return map[pos] || "south";
 }
 
-function textToSvg(
+/**
+ * Render text to a PNG buffer using @napi-rs/canvas.
+ * Produces a transparent PNG with a background pill + text.
+ */
+function renderTextToPng(
   text: string,
-  width: number,
+  canvasWidth: number,
   opts: {
     fontSize?: number;
     fontWeight?: string;
@@ -28,29 +34,70 @@ function textToSvg(
   } = {},
 ): Buffer {
   const fontSize = opts.fontSize || 32;
-  const fontWeight = opts.fontWeight || "bold";
+  const fontWeight = opts.fontWeight === "bold" ? "bold " : "";
   const color = opts.color || "#ffffff";
   const bgColor = opts.backgroundColor || "rgba(0,0,0,0.5)";
   const padding = 16;
-  const maxWidth = width - padding * 4;
+  const lineHeight = fontSize * 1.3;
+  const maxTextWidth = canvasWidth - padding * 4;
 
-  const svg = `
-    <svg width="${width}" height="${fontSize * 3 + padding * 2}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="${padding}" y="0" width="${maxWidth + padding * 2}" height="${fontSize * 3 + padding * 2}"
-            rx="8" fill="${bgColor}" />
-      <text x="${padding * 2}" y="${fontSize + padding}"
-            font-family="system-ui, sans-serif"
-            font-size="${fontSize}" font-weight="${fontWeight}"
-            fill="${color}">
-        ${escapeXml(text.slice(0, 60))}
-      </text>
-    </svg>
-  `;
-  return Buffer.from(svg);
-}
+  // Measure text to determine canvas height
+  const measureCanvas = createCanvas(canvasWidth, 100);
+  const measureCtx = measureCanvas.getContext("2d");
+  measureCtx.font = `${fontWeight}${fontSize}px sans-serif`;
 
-function escapeXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // Word wrap
+  const words = text.slice(0, 80).split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+  for (const word of words) {
+    const test = currentLine ? `${currentLine} ${word}` : word;
+    const metrics = measureCtx.measureText(test);
+    if (metrics.width > maxTextWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = test;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+
+  const textHeight = lines.length * lineHeight;
+  const canvasHeight = Math.ceil(textHeight + padding * 2 + 8);
+
+  // Render
+  const canvas = createCanvas(canvasWidth, canvasHeight);
+  const ctx = canvas.getContext("2d");
+
+  // Background pill
+  const pillX = padding;
+  const pillY = 0;
+  const pillW = canvasWidth - padding * 2;
+  const pillH = canvasHeight;
+  const radius = 8;
+  ctx.beginPath();
+  ctx.moveTo(pillX + radius, pillY);
+  ctx.lineTo(pillX + pillW - radius, pillY);
+  ctx.quadraticCurveTo(pillX + pillW, pillY, pillX + pillW, pillY + radius);
+  ctx.lineTo(pillX + pillW, pillY + pillH - radius);
+  ctx.quadraticCurveTo(pillX + pillW, pillY + pillH, pillX + pillW - radius, pillY + pillH);
+  ctx.lineTo(pillX + radius, pillY + pillH);
+  ctx.quadraticCurveTo(pillX, pillY + pillH, pillX, pillY + pillH - radius);
+  ctx.lineTo(pillX, pillY + radius);
+  ctx.quadraticCurveTo(pillX, pillY, pillX + radius, pillY);
+  ctx.closePath();
+  ctx.fillStyle = bgColor;
+  ctx.fill();
+
+  // Text
+  ctx.font = `${fontWeight}${fontSize}px sans-serif`;
+  ctx.fillStyle = color;
+  ctx.textBaseline = "top";
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], padding * 2, padding + i * lineHeight);
+  }
+
+  return Buffer.from(canvas.toBuffer("image/png"));
 }
 
 export async function applyTextOverlays(
@@ -65,7 +112,7 @@ export async function applyTextOverlays(
   let pipeline = sharp(inputBuffer);
 
   for (const overlay of overlays) {
-    const svgBuffer = textToSvg(overlay.text, width, {
+    const pngBuffer = renderTextToPng(overlay.text, width, {
       fontSize: overlay.fontSize,
       fontWeight: overlay.fontWeight,
       color: overlay.color,
@@ -74,7 +121,7 @@ export async function applyTextOverlays(
 
     pipeline = sharp(await pipeline.toBuffer()).composite([
       {
-        input: svgBuffer,
+        input: pngBuffer,
         gravity: positionToGravity(overlay.position) as sharp.Gravity,
       },
     ]);

@@ -106,7 +106,7 @@ export default async function UnipostPage() {
         }}
         recentPosts={recentPosts.map((p) => ({
           id: String(p.id),
-          caption: p.caption ? String(p.caption).slice(0, 200) : null,
+          caption: p.caption ? String(p.caption) : null,
           mediaUrl: ((p.media_urls as string[]) || [])[0] || (p.source_image_url ? String(p.source_image_url) : null),
           platform: String(p.platform),
           accountName: String(p.account_name),

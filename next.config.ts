@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
       "./node_modules/pdfjs-dist/build/**/*",
       "./node_modules/pdf-to-img/**/*",
       "./node_modules/pdf-lib/**/*",
+      "./node_modules/pdfjs-dist/standard_fonts/**/*",
     ],
   },
   // TracPost blog and projects always route through the tenant engine

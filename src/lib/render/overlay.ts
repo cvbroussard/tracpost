@@ -4,8 +4,28 @@
  * couldn't resolve fonts in serverless environments.
  */
 import sharp from "sharp";
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
+import path from "path";
 import { type TextOverlay, type OverlayPosition } from "./types";
+
+// Register a real font for serverless environments where system
+// fonts aren't available. LiberationSans is bundled via pdfjs-dist.
+let fontRegistered = false;
+function ensureFont() {
+  if (fontRegistered) return;
+  try {
+    const fontPaths = [
+      path.join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf"),
+      path.join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf"),
+    ];
+    for (const fp of fontPaths) {
+      try {
+        GlobalFonts.registerFromPath(fp);
+      } catch { /* font file may not exist in all envs */ }
+    }
+  } catch { /* non-fatal */ }
+  fontRegistered = true;
+}
 
 function positionToGravity(pos: OverlayPosition): string {
   const map: Record<OverlayPosition, string> = {
@@ -41,10 +61,13 @@ function renderTextToPng(
   const lineHeight = fontSize * 1.3;
   const maxTextWidth = canvasWidth - padding * 4;
 
+  ensureFont();
+  const fontFamily = "Liberation Sans, sans-serif";
+
   // Measure text to determine canvas height
   const measureCanvas = createCanvas(canvasWidth, 100);
   const measureCtx = measureCanvas.getContext("2d");
-  measureCtx.font = `${fontWeight}${fontSize}px sans-serif`;
+  measureCtx.font = `${fontWeight}${fontSize}px ${fontFamily}`;
 
   // Word wrap
   const words = text.slice(0, 80).split(" ");
@@ -90,7 +113,7 @@ function renderTextToPng(
   ctx.fill();
 
   // Text
-  ctx.font = `${fontWeight}${fontSize}px sans-serif`;
+  ctx.font = `${fontWeight}${fontSize}px ${fontFamily}`;
   ctx.fillStyle = color;
   ctx.textBaseline = "top";
   for (let i = 0; i < lines.length; i++) {

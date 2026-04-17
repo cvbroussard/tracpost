@@ -132,9 +132,21 @@ async function processOneAsset(
     if (mediaType?.startsWith("image")) {
       try {
         const { renderAssetVariants } = await import("@/lib/pipeline/render-step");
-        await renderAssetVariants(assetId);
+        const renderResult = await renderAssetVariants(assetId);
+        // Diagnostic: write render outcome to metadata so we can audit without Vercel logs
+        await sqlFn`
+          UPDATE media_assets
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ render_diagnostic: renderResult })}::jsonb
+          WHERE id = ${assetId}
+        `;
       } catch (err) {
-        console.error(`Render failed for ${assetId}:`, err instanceof Error ? err.message : err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`Render failed for ${assetId}:`, errMsg);
+        await sqlFn`
+          UPDATE media_assets
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ render_diagnostic: { error: errMsg } })}::jsonb
+          WHERE id = ${assetId}
+        `.catch(() => {});
       }
     }
 

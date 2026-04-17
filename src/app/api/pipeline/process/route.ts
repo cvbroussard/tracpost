@@ -102,9 +102,9 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // EXIF extraction
+      // EXIF extraction — always use currentUrl (original HEIC is already deleted)
       if (mediaType?.startsWith("image") && !meta.date_taken) {
-        const exifUrl = (storageUrl.endsWith(".heic") || storageUrl.endsWith(".heif")) ? storageUrl : currentUrl;
+        const exifUrl = currentUrl;
         let exif = await extractExif(exifUrl);
 
         if (!exif.dateTaken) {
@@ -150,18 +150,30 @@ export async function POST(req: NextRequest) {
       // Triage
       await triageAsset(assetId);
 
-      // Face detection — only if triage detected faces (has_faces = true)
+      // Face detection — only if triage detected faces (30s timeout)
       if (mediaType?.startsWith("image") && !meta.faces) {
         const [triaged] = await sql`SELECT ai_analysis FROM media_assets WHERE id = ${assetId}`;
         const analysis = (triaged?.ai_analysis || {}) as Record<string, unknown>;
         if (analysis.has_faces) {
           try {
             const { processFaces } = await import("@/lib/face-detect");
-            const faceResult = await processFaces(assetId, siteId, currentUrl);
-            console.log(`Face detection for ${assetId}: ${faceResult.matched} matched, ${faceResult.unmatched} unmatched`);
+            await Promise.race([
+              processFaces(assetId, siteId, currentUrl),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Face detection timed out (30s)")), 30000)),
+            ]);
           } catch (err) {
             console.error(`Face detection failed for ${assetId}:`, err instanceof Error ? err.message : err);
           }
+        }
+      }
+
+      // Render variants — per-platform crops, grades, overlays
+      if (mediaType?.startsWith("image")) {
+        try {
+          const { renderAssetVariants } = await import("@/lib/pipeline/render-step");
+          await renderAssetVariants(assetId);
+        } catch (err) {
+          console.error(`Render failed for ${assetId}:`, err instanceof Error ? err.message : err);
         }
       }
 

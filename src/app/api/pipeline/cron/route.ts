@@ -71,7 +71,7 @@ async function processOneAsset(
 
     // ── EXIF extraction ──
     if (mediaType?.startsWith("image") && !meta.date_taken) {
-      const exifUrl = (storageUrl.endsWith(".heic") || storageUrl.endsWith(".heif")) ? storageUrl : currentUrl;
+      const exifUrl = currentUrl;
       let exif = await extractExif(exifUrl);
       if (!exif.dateTaken) {
         const fileDate = parseDateFromFilename((meta.original_filename as string) || storageUrl);

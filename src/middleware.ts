@@ -274,10 +274,10 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(`https://platform.tracpost.com${rest}`));
   }
 
-  // tracpost.com marketing — rewrite root marketing pages to the
-  // tenant template (TracPost-as-tenant-of-itself). These were
-  // formerly in next.config but moved here so next.tracpost.com
-  // can bypass them and serve the new marketing route group.
+  // tracpost.com marketing — rewrite root marketing pages + blog +
+  // projects to the tenant template (TracPost-as-tenant-of-itself).
+  // next.tracpost.com bypasses these and serves the marketing route
+  // group directly.
   if (isTracpostMarketing) {
     const tenantRewrites: Record<string, string> = {
       "/": "/tenant/tracpost",
@@ -289,6 +289,17 @@ export async function middleware(req: NextRequest) {
     if (rewriteDest) {
       const url = req.nextUrl.clone();
       url.pathname = rewriteDest;
+      return NextResponse.rewrite(url);
+    }
+    // Blog + projects — rewrite to tenant engine
+    if (pathname === "/blog" || pathname.startsWith("/blog/")) {
+      const url = req.nextUrl.clone();
+      url.pathname = `/tenant/tracpost${pathname}`;
+      return NextResponse.rewrite(url);
+    }
+    if (pathname === "/projects" || pathname.startsWith("/projects/")) {
+      const url = req.nextUrl.clone();
+      url.pathname = `/tenant/tracpost${pathname}`;
       return NextResponse.rewrite(url);
     }
   }

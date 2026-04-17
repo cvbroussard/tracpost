@@ -26,13 +26,12 @@ const nextConfig: NextConfig = {
   // in middleware so they can be hostname-conditioned (tracpost.com
   // serves current tenant template; next.tracpost.com serves the
   // new marketing route group).
+  // Blog and projects rewrites moved to middleware so they can be
+  // hostname-conditioned. tracpost.com serves tenant-shell blog;
+  // next.tracpost.com serves marketing-shell blog. Projects follow
+  // the same pattern.
   async rewrites() {
-    return [
-      { source: "/blog", destination: "/tenant/tracpost/blog" },
-      { source: "/blog/:path*", destination: "/tenant/tracpost/blog/:path*" },
-      { source: "/projects", destination: "/tenant/tracpost/projects" },
-      { source: "/projects/:path*", destination: "/tenant/tracpost/projects/:path*" },
-    ];
+    return [];
   },
 };
 

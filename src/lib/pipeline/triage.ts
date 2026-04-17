@@ -229,7 +229,7 @@ Respond with ONLY valid JSON (no markdown):
   "content_pillars": [<1-3 matching pillar IDs from the pillars above, ordered by relevance>],
   "content_tags": [<2-5 matching tag IDs from the tags above, ordered by relevance>],
   "platform_fit": [<array of: "ig_feed", "ig_story", "ig_reel", "gbp", "youtube", "youtube_short", "fb_feed", "tiktok", "twitter", "linkedin", "pinterest">],
-  "has_faces": <true/false>,
+  "has_faces": <true/false — ONLY true if a human FACE is clearly visible (eyes, nose, mouth). Hands, arms, legs, torso, or humans seen from behind or waist-down do NOT count as faces>,
   "has_text_overlay": <true/false>,
   "description": "<1-sentence description of what's in the image>",
   "context_note": "<spec-style comma-separated list of specific materials, fixtures, vendors, techniques visible. Example: custom lacquer inset cabinets by Crystal Cabinet Works, Lacanche Sully range, zellige tile backsplash, rift-sawn white oak island. Only include what you can actually identify. No adjectives, no marketing language.>",

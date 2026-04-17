@@ -102,6 +102,7 @@ export function UnipostDashboard({ metrics, recentPosts, platforms, campaignGrou
   const [actioning, setActioning] = useState<string | null>(null);
   const [editingCaption, setEditingCaption] = useState<{ id: string; caption: string } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   async function postAction(postId: string, action: "approve" | "veto" | "retry") {
     setActioning(postId);
@@ -371,49 +372,50 @@ export function UnipostDashboard({ metrics, recentPosts, platforms, campaignGrou
                         {/* Action buttons */}
                         <div className="flex items-center gap-2 pt-1">
                           {post.status === "draft" && (
-                            <>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); postAction(post.id, "approve"); }}
-                                disabled={actioning === post.id}
-                                className="rounded bg-success/90 px-3 py-1.5 text-xs font-medium text-white hover:bg-success disabled:opacity-50"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); postAction(post.id, "veto"); }}
-                                disabled={actioning === post.id}
-                                className="px-3 py-1.5 text-xs text-muted hover:text-danger"
-                              >
-                                Dismiss
-                              </button>
-                            </>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); postAction(post.id, "approve"); }}
+                              disabled={actioning === post.id}
+                              className="rounded bg-success/90 px-3 py-1.5 text-xs font-medium text-white hover:bg-success disabled:opacity-50"
+                            >
+                              Approve
+                            </button>
                           )}
                           {post.status === "failed" && (
-                            <>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); postAction(post.id, "retry"); }}
+                              disabled={actioning === post.id}
+                              className="rounded bg-accent/90 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent disabled:opacity-50"
+                            >
+                              Retry
+                            </button>
+                          )}
+                          {/* Delete with confirmation */}
+                          {(post.status === "draft" || post.status === "failed" || post.status === "scheduled") && (
+                            confirmDeleteId === post.id ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-danger">This post will be permanently deleted and the slot reassigned.</span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); postAction(post.id, "veto"); setConfirmDeleteId(null); setExpandedId(null); }}
+                                  disabled={actioning === post.id}
+                                  className="rounded bg-danger px-3 py-1.5 text-xs font-medium text-white hover:bg-danger/80 disabled:opacity-50"
+                                >
+                                  Delete
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                                  className="text-[10px] text-muted hover:text-foreground"
+                                >
+                                  Keep
+                                </button>
+                              </div>
+                            ) : (
                               <button
-                                onClick={(e) => { e.stopPropagation(); postAction(post.id, "retry"); }}
-                                disabled={actioning === post.id}
-                                className="rounded bg-accent/90 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent disabled:opacity-50"
-                              >
-                                Retry
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); postAction(post.id, "veto"); }}
-                                disabled={actioning === post.id}
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(post.id); }}
                                 className="px-3 py-1.5 text-xs text-muted hover:text-danger"
                               >
-                                Dismiss
+                                Delete
                               </button>
-                            </>
-                          )}
-                          {post.status === "scheduled" && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); postAction(post.id, "veto"); }}
-                              disabled={actioning === post.id}
-                              className="px-3 py-1.5 text-xs text-muted hover:text-danger"
-                            >
-                              Cancel
-                            </button>
+                            )
                           )}
                           {post.platformPostUrl && (
                             <a

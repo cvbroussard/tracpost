@@ -11,7 +11,8 @@ interface SiteInfo {
 
 const siteNav = [
   { label: "Dashboard", path: "", icon: "◆" },
-  { label: "Brand", path: "/brand", icon: "◈" },
+  { label: "Unipost", path: "/unipost", icon: "◈" },
+  { label: "Brand", path: "/brand", icon: "◇" },
   { label: "Capture", path: "/capture", icon: "◎" },
   { label: "Media", path: "/media", icon: "▣" },
   { label: "Entities", path: "/entities", icon: "◫" },

@@ -106,6 +106,103 @@ async function selectNextAsset(
   return diverse.length > 0 ? diverse[0] : candidates[0];
 }
 
+const VIDEO_ONLY_PLATFORMS = new Set(["tiktok", "youtube"]);
+
+/**
+ * Generate a Kling editorial video for video-only platforms.
+ * Uses reward prompt as the script + asset photo as visual reference.
+ * Polls up to 5 min for Kling to complete.
+ */
+async function generateEditorialVideo(
+  siteId: string,
+  assetUrl: string,
+  assetId: string,
+  platform: string,
+): Promise<{ videoUrl: string; caption: string } | null> {
+  const [site] = await sql`
+    SELECT metadata->'reward_prompts' AS prompts, content_vibe
+    FROM sites WHERE id = ${siteId}
+  `;
+  const prompts = (site?.prompts || []) as Array<{
+    prompt: string;
+    visual: string;
+    scene: string;
+    category: string;
+  }>;
+
+  if (prompts.length === 0) return null;
+
+  // Find which prompts have been used recently for video
+  const usedPrompts = await sql`
+    SELECT DISTINCT metadata->>'generation_prompt' AS used_prompt
+    FROM media_assets
+    WHERE site_id = ${siteId}
+      AND source = 'ai_generated'
+      AND media_type = 'video'
+      AND created_at > NOW() - INTERVAL '30 days'
+  `;
+  const usedSet = new Set(usedPrompts.map((r) => String(r.used_prompt)));
+
+  // Pick first unused prompt, or cycle back to first if all used
+  const prompt = prompts.find((p) => !usedSet.has(p.prompt.slice(0, 100))) || prompts[0];
+
+  const contentVibe = (site?.content_vibe as string) || "";
+  const videoPrompt = `${prompt.prompt.slice(0, 100)}. ${contentVibe}`.trim();
+
+  try {
+    const { generateVideoFromImage } = await import("@/lib/video-gen/kling");
+    const video = await generateVideoFromImage(
+      assetUrl,
+      videoPrompt,
+      siteId,
+      { duration: "5", aspectRatio: "9:16" },
+    );
+
+    if (!video) return null;
+
+    // Register video as media asset
+    await sql`
+      INSERT INTO media_assets (
+        site_id, storage_url, media_type, context_note,
+        source, triage_status, quality_score,
+        ai_analysis, metadata
+      ) VALUES (
+        ${siteId}, ${video.url}, 'video',
+        ${prompt.prompt.slice(0, 200)},
+        'ai_generated', 'triaged', 0.95,
+        ${JSON.stringify({
+          scene_type: prompt.scene,
+          description: prompt.visual,
+        })}::jsonb,
+        ${JSON.stringify({
+          ai_generated: true,
+          duration: video.duration,
+          generation_prompt: videoPrompt,
+          reward_category: prompt.category,
+          source_asset_id: assetId,
+        })}::jsonb
+      )
+    `;
+
+    // Save as video variant on the source asset
+    await sql`
+      UPDATE media_assets
+      SET variants = COALESCE(variants, '{}'::jsonb) || ${JSON.stringify({
+        [platform]: { url: video.url, rendered_at: new Date().toISOString(), type: "kling_editorial" },
+      })}::jsonb
+      WHERE id = ${assetId}
+    `;
+
+    return {
+      videoUrl: video.url,
+      caption: prompt.prompt,
+    };
+  } catch (err) {
+    console.error("Kling video generation failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 /**
  * Get the platform-specific caption for an asset.
  * Uses generated_text fields based on platform conventions.
@@ -191,8 +288,27 @@ export async function autopilotPublish(siteId: string, opts: { force?: boolean }
     }
 
     const assetId = String(asset.id);
-    const caption = getPlatformCaption(asset, platform);
-    const mediaUrl = getVariantUrl(asset, platform);
+    let caption = getPlatformCaption(asset, platform);
+    let mediaUrl = getVariantUrl(asset, platform);
+    let mediaType = String(asset.media_type || "image");
+
+    // Video-only platforms: generate Kling editorial video from asset + reward prompt
+    if (VIDEO_ONLY_PLATFORMS.has(platform)) {
+      const videoResult = await generateEditorialVideo(
+        siteId,
+        String(asset.storage_url),
+        assetId,
+        platform,
+      );
+      if (videoResult) {
+        mediaUrl = videoResult.videoUrl;
+        caption = videoResult.caption;
+        mediaType = "video";
+      } else {
+        results.push({ platform, published: false, reason: "Video generation failed — Kling unavailable or no reward prompts" });
+        continue;
+      }
+    }
 
     if (!mediaUrl) {
       results.push({ platform, published: false, reason: "No rendered variant" });
@@ -222,7 +338,7 @@ export async function autopilotPublish(siteId: string, opts: { force?: boolean }
         )
         VALUES (
           ${account.account_id}, ${assetId}, ${caption},
-          ARRAY[${mediaUrl}], ${asset.media_type},
+          ARRAY[${mediaUrl}], ${mediaType},
           'scheduled', NOW(), NULL, true
         )
         RETURNING id

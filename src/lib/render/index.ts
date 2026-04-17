@@ -37,3 +37,10 @@ export {
   burnSubtitles,
   generateThumbnail,
 } from "./video";
+export {
+  syncEngagement,
+  aggregatePerformance,
+  recommendConfig,
+  recommendAllConfigs,
+  getPerformanceSummary,
+} from "./learning";

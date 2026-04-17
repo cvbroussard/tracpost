@@ -79,7 +79,7 @@ export async function POST(
         loadContentSignals(assetId),
         loadTenantSignals(siteId),
       ]);
-      const allPlans = generateRenderPlans(contentSignals, tenantSignals);
+      const allPlans = await generateRenderPlans(contentSignals, tenantSignals);
       const plan = allPlans.find((p) => p.platform === body.platform);
       if (!plan) {
         return NextResponse.json({ error: `No plan for platform: ${body.platform}` }, { status: 400 });
@@ -93,7 +93,7 @@ export async function POST(
       loadContentSignals(assetId),
       loadTenantSignals(siteId),
     ]);
-    const plans = generateRenderPlans(contentSignals, tenantSignals);
+    const plans = await generateRenderPlans(contentSignals, tenantSignals);
     const variants = await renderAsset(assetId, plans);
 
     return NextResponse.json({

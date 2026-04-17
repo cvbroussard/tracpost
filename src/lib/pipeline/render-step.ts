@@ -49,7 +49,7 @@ export async function renderAssetVariants(assetId: string): Promise<{
       loadContentSignals(assetId),
     ]);
 
-    const plans = generateRenderPlans(contentSignals, tenantSignals);
+    const plans = await generateRenderPlans(contentSignals, tenantSignals);
 
     if (plans.length === 0) {
       await sql`UPDATE media_assets SET render_status = 'skipped' WHERE id = ${assetId}`;

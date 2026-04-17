@@ -1,7 +1,13 @@
 /**
  * Platform playbook — the decision engine. Takes content signals +
  * tenant signals + connected platforms, outputs a RenderPlan per
- * platform. Phase 1: static rules engine.
+ * platform. Phase 6b: template-driven with DB-backed templates.
+ *
+ * Template resolution priority:
+ *   1. Exact match (platform + business_type + content_type)
+ *   2. Business-type match (platform + business_type, any content)
+ *   3. Platform default (platform, is_default=true)
+ *   4. Hardcoded fallback
  *
  * The playbook is the WHY. The render matrix is the WHAT.
  */
@@ -13,7 +19,6 @@ import type {
   RenderConfig,
   GradePreset,
   TextOverlay,
-  PLATFORM_ASPECTS,
 } from "./types";
 import { PLATFORM_ASPECTS as ASPECTS } from "./types";
 
@@ -35,36 +40,115 @@ interface TenantSignals {
 /**
  * Generate render plans for all connected platforms.
  */
-export function generateRenderPlans(
+export async function generateRenderPlans(
   content: ContentSignals,
   tenant: TenantSignals,
-): RenderPlan[] {
+): Promise<RenderPlan[]> {
   const plans: RenderPlan[] = [];
 
   for (const platform of tenant.connectedPlatforms) {
-    const plan = planForPlatform(platform, content, tenant);
+    const plan = await planForPlatform(platform, content, tenant);
     if (plan) plans.push(plan);
   }
 
   // Always render a blog variant
   if (!tenant.connectedPlatforms.includes("blog")) {
-    const blogPlan = planForPlatform("blog", content, tenant);
+    const blogPlan = await planForPlatform("blog", content, tenant);
     if (blogPlan) plans.push(blogPlan);
   }
 
   return plans;
 }
 
-function planForPlatform(
+/**
+ * Resolve the best matching template from the DB.
+ * Priority: exact (platform+business+content) → business → platform default.
+ */
+async function resolveTemplate(
+  platform: PlatformKey,
+  businessType: string | null,
+  contentType: string | null,
+): Promise<Record<string, unknown> | null> {
+  // Try exact match first
+  if (businessType && contentType) {
+    const [exact] = await sql`
+      SELECT config FROM render_templates
+      WHERE platform = ${platform} AND business_type = ${businessType} AND content_type = ${contentType}
+      LIMIT 1
+    `;
+    if (exact) return exact.config as Record<string, unknown>;
+  }
+
+  // Business-type match
+  if (businessType) {
+    const [bizMatch] = await sql`
+      SELECT config FROM render_templates
+      WHERE platform = ${platform} AND business_type = ${businessType} AND content_type IS NULL AND is_default = true
+      LIMIT 1
+    `;
+    if (bizMatch) return bizMatch.config as Record<string, unknown>;
+  }
+
+  // Platform default
+  const [defaultTmpl] = await sql`
+    SELECT config FROM render_templates
+    WHERE platform = ${platform} AND business_type IS NULL AND is_default = true
+    LIMIT 1
+  `;
+  return defaultTmpl ? (defaultTmpl.config as Record<string, unknown>) : null;
+}
+
+async function planForPlatform(
   platform: PlatformKey,
   content: ContentSignals,
   tenant: TenantSignals,
-): RenderPlan | null {
+): Promise<RenderPlan | null> {
   // Skip video-only platforms for image assets (for now)
   if (content.mediaType?.startsWith("video") && platform !== "tiktok" && platform !== "youtube") {
     return null;
   }
 
+  // Try template from DB first
+  const template = await resolveTemplate(
+    platform,
+    tenant.businessType,
+    content.sceneType,
+  );
+
+  if (template) {
+    // Template provides the base config; tenant overrides apply on top
+    const crop = (template.crop as string) || ASPECTS[platform];
+    const grade = tenant.renderConfig.grade_warmth && tenant.renderConfig.grade_warmth !== "auto"
+      ? tenant.renderConfig.grade_warmth
+      : (template.grade as GradePreset) || "auto";
+
+    let textOverlays = (template.textOverlays as TextOverlay[]) || [];
+
+    // Resolve template variables in overlay text
+    textOverlays = textOverlays.map((o) => ({
+      ...o,
+      text: resolveTemplateVars(o.text, content, tenant),
+    }));
+
+    // Add tier-gated overlays on top of template
+    const extraOverlays = resolveOverlays(platform, content, tenant);
+    textOverlays = [...textOverlays.filter((o) => o.text !== "__STAT_OVERLAY__"), ...extraOverlays];
+
+    const watermark = template.watermark !== undefined
+      ? Boolean(template.watermark) && (tenant.renderConfig.watermark_enabled !== false)
+      : resolveWatermark(platform, tenant);
+
+    return {
+      platform,
+      crop: crop as RenderPlan["crop"],
+      grade,
+      textOverlays,
+      watermark,
+      watermarkPosition: (template.watermarkPosition as RenderPlan["watermarkPosition"]) || tenant.renderConfig.watermark_position || "bottom-right",
+    };
+  }
+
+  // Fallback to hardcoded rules (Phase 6a)
   const crop = ASPECTS[platform];
   const grade = resolveGrade(tenant.renderConfig, platform);
   const textOverlays = resolveOverlays(platform, content, tenant);
@@ -78,6 +162,17 @@ function planForPlatform(
     watermark,
     watermarkPosition: tenant.renderConfig.watermark_position || "bottom-right",
   };
+}
+
+function resolveTemplateVars(
+  text: string,
+  content: ContentSignals,
+  tenant: TenantSignals,
+): string {
+  return text
+    .replace("{{scene_headline}}", content.sceneType ? formatSceneHeadline(content.sceneType) : "")
+    .replace("{{location}}", tenant.businessType || "")
+    .replace("{{stat_overlay}}", "__STAT_OVERLAY__");
 }
 
 function resolveGrade(config: RenderConfig, platform: PlatformKey): GradePreset {

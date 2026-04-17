@@ -52,7 +52,7 @@ export async function fillSlots(siteId: string): Promise<number> {
         : sql``;
 
       const candidates = await sql`
-        SELECT id, storage_url, media_type, quality_score, content_pillar, ai_analysis
+        SELECT id, storage_url, media_type, quality_score, content_pillar, ai_analysis, variants
         FROM media_assets
         WHERE site_id = ${siteId}
           AND triage_status = ${status}
@@ -79,6 +79,11 @@ export async function fillSlots(siteId: string): Promise<number> {
       continue;
     }
 
+    // Use rendered variant URL if available, else fall back to source
+    const variants = (asset.variants as Record<string, { url: string }>) || {};
+    const platformKey = String(slot.platform).toLowerCase();
+    const mediaUrl = variants[platformKey]?.url || String(asset.storage_url);
+
     // Create the social post (caption will be generated in a separate step)
     const [post] = await sql`
       INSERT INTO social_posts (
@@ -88,7 +93,7 @@ export async function fillSlots(siteId: string): Promise<number> {
       )
       VALUES (
         ${slot.account_id}, ${asset.id}, 'scheduled', 'pipeline',
-        ${asset.content_pillar}, ARRAY[${asset.storage_url}], ${asset.media_type},
+        ${asset.content_pillar}, ARRAY[${mediaUrl}], ${asset.media_type},
         ${slot.scheduled_at}, true, ${slot.id}
       )
       RETURNING id

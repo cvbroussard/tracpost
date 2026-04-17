@@ -17,3 +17,5 @@ export { generateRenderPlans, loadTenantSignals, loadContentSignals } from "./pl
 export { cropForPlatform } from "./crops";
 export { applyGrade } from "./grade";
 export { applyTextOverlays, applyWatermark } from "./overlay";
+export { createBeforeAfterComposite, detectBeforeAfterPair } from "./composite";
+export { composeCarousel, shouldComposeCarousel } from "./carousel";

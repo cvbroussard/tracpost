@@ -114,14 +114,17 @@ async function processOneAsset(
     // ── Triage (includes text generation — merged vision call) ──
     await triageAsset(assetId);
 
-    // ── Face detection ──
+    // ── Face detection (30s timeout — must not block render) ──
     if (mediaType?.startsWith("image") && !meta.faces) {
       const [triaged] = await sqlFn`SELECT ai_analysis FROM media_assets WHERE id = ${assetId}`;
       const analysis = (triaged?.ai_analysis || {}) as Record<string, unknown>;
       if (analysis.has_faces) {
         try {
           const { processFaces } = await import("@/lib/face-detect");
-          await processFaces(assetId, siteId, currentUrl);
+          await Promise.race([
+            processFaces(assetId, siteId, currentUrl),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Face detection timed out (30s)")), 30000)),
+          ]);
         } catch (err) {
           console.error(`Face detection failed for ${assetId}:`, err instanceof Error ? err.message : err);
         }

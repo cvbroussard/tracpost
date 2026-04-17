@@ -110,7 +110,7 @@ export default async function BlogPage({ searchParams }: Props) {
       <div className="mb-6">
         <h1 className="mb-1 text-lg font-semibold">Blog</h1>
         <p className="text-sm text-muted">
-          Review and publish generated posts
+          Review and publish generated articles
         </p>
       </div>
 

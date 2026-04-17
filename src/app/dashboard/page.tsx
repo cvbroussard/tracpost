@@ -260,11 +260,11 @@ export default async function DashboardOverview() {
         </section>
       )}
 
-      {/* Blog Posts */}
+      {/* Blog Articles */}
       {(blogStats[0]?.drafts > 0 || blogStats[0]?.flagged > 0 || blogStats[0]?.published > 0) && (
         <section className="mb-8">
           <div className="mb-4 flex items-center justify-between">
-            <h2>Blog Posts</h2>
+            <h2>Blog Articles</h2>
             <Link href="/dashboard/blog" className="text-sm text-accent hover:underline">
               View all
             </Link>

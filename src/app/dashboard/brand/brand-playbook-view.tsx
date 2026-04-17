@@ -69,7 +69,7 @@ export function BrandPlaybookView({ siteId, playbook: initialPlaybook, subscribe
         <h1>Brand Intelligence</h1>
         <p className="mt-2 text-muted">
           {refined
-            ? "Your brand playbook has been sharpened around your unique angle. This drives every caption, blog post, and social hook we create for you."
+            ? "Your brand playbook has been sharpened around your unique angle. This drives every caption, blog article, and social hook we create for you."
             : "Your brand playbook is ready. Tell us what makes you different to sharpen it."}
         </p>
         {version && (
@@ -213,7 +213,7 @@ export function BrandPlaybookView({ siteId, playbook: initialPlaybook, subscribe
         <section className="mb-8">
           <h2 className="mb-4">How We Speak to Them</h2>
           <p className="mb-3 text-sm text-muted">
-            Every caption and blog post uses language your customers actually use — not marketing speak.
+            Every caption and blog article uses language your customers actually use — not marketing speak.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {audiencePhrases.map((phrase, i) => (
@@ -255,7 +255,7 @@ export function BrandPlaybookView({ siteId, playbook: initialPlaybook, subscribe
             </div>
           </div>
           <p className="mt-3 text-xs text-muted">
-            These feed your social captions, blog posts, and publishing schedule automatically.
+            These feed your social captions, blog articles, and publishing schedule automatically.
           </p>
         </div>
       </section>

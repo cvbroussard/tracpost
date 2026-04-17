@@ -506,7 +506,7 @@ export function BrandWizard({
             <p className="mb-3 text-4xl">&#9733;</p>
             <h1>Brand Intelligence Complete</h1>
             <p className="mt-2 text-muted">
-              Your playbook is ready. Every blog post, caption, and social hook will now be informed by your brand intelligence.
+              Your playbook is ready. Every blog article, caption, and social hook will now be informed by your brand intelligence.
             </p>
           </div>
 

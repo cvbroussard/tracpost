@@ -380,13 +380,13 @@ export function BlogPostList({
         </select>
       </div>
 
-      {/* Post list */}
+      {/* Article list */}
       {posts.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border px-8 py-12 text-center">
           <p className="text-sm text-muted">
             {statusFilter === "all"
-              ? "No blog posts yet. Posts generate automatically as you upload content."
-              : `No ${statusFilter} posts.`}
+              ? "No blog articles yet. Articles generate automatically as you upload content."
+              : `No ${statusFilter} articles.`}
           </p>
         </div>
       ) : (

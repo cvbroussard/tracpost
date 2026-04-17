@@ -479,7 +479,7 @@ export function SiteControls({
           <ReadOnly label="Location" value={site.location} />
           <div className="mt-2 border-t border-border pt-2">
             <ReadOnly label="Assets" value={`${counts.totalAssets} (${counts.uploads} uploads, ${counts.aiAssets} AI)`} />
-            <ReadOnly label="Blog Posts" value={`${counts.totalPosts} (${counts.publishedPosts} published, ${counts.draftPosts} drafts)`} />
+            <ReadOnly label="Blog Articles" value={`${counts.totalPosts} (${counts.publishedPosts} published, ${counts.draftPosts} drafts)`} />
             <ReadOnly label="Vendors" value={counts.vendors} />
             <ReadOnly label="Projects" value={counts.projects} />
             <ReadOnly label="Personas" value={counts.personas} />

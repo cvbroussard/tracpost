@@ -131,7 +131,7 @@ export function AccountActions({
       <section className="mb-8">
         <h2 className="mb-1">Data Export</h2>
         <p className="mb-4 text-sm text-muted">
-          Download all your content — blog posts, social captions, images, and
+          Download all your content — blog articles, social captions, images, and
           configuration. You own everything.
         </p>
 

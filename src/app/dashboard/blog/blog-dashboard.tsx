@@ -178,7 +178,7 @@ export function BlogDashboard({
       )}
 
       {/* Posts list */}
-      <h2 className="mb-3 text-sm font-medium">Blog Posts</h2>
+      <h2 className="mb-3 text-sm font-medium">Blog Articles</h2>
       {posts.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border px-8 py-12 text-center">
           <p className="text-sm text-muted">

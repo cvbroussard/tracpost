@@ -6,6 +6,7 @@ import {
   PageLayoutEditor,
   HeroOverridePicker,
   RegenerateCopyButton,
+  RenderPipelineButton,
   RegenerateServicesButton,
   WorkContentEditor,
 } from "./website-pane";
@@ -1044,6 +1045,15 @@ export function SiteControls({
               Platform-derived: primary + additional GBP categories plus 6–8 service tiles. Each service anchors to a gcid for local SEO. Run after playbook sharpen; re-run when the offer changes.
             </p>
             <RegenerateServicesButton siteId={siteId} />
+          </div>
+
+          {/* Render Pipeline */}
+          <div className="rounded border border-border bg-background p-3">
+            <p className="mb-2 text-xs font-medium">Render Pipeline</p>
+            <p className="mb-3 text-[10px] text-muted">
+              Per-platform image rendering: smart crop, color grade, text overlays, watermark. Runs automatically on new uploads; trigger manually for existing assets.
+            </p>
+            <RenderPipelineButton siteId={siteId} />
           </div>
 
           {/* Work Page Content (override) */}

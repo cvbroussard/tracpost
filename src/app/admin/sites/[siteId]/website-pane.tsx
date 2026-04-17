@@ -268,6 +268,63 @@ export function RegenerateCopyButton({ siteId }: { siteId: string }) {
 }
 
 // ──────────────────────────────────────────────────────────────────
+// Render pipeline — batch render pending assets
+// ──────────────────────────────────────────────────────────────────
+
+export function RenderPipelineButton({ siteId }: { siteId: string }) {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{
+    total?: number;
+    rendered?: number;
+    skipped?: number;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runRender() {
+    setRunning(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/admin/sites/${siteId}/render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "render_pending" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setResult(data);
+      } else {
+        setError(data.error || "Render failed");
+      }
+    } catch {
+      setError("Request failed");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={runRender}
+        disabled={running}
+        className="bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+      >
+        {running ? "Rendering..." : "Render pending assets"}
+      </button>
+      {error && <p className="text-[10px] text-danger">{error}</p>}
+      {result && (
+        <div className="rounded border border-success/30 bg-success/5 p-2 space-y-1">
+          <p className="text-[10px] text-muted">
+            {result.total} assets checked · {result.rendered} variants rendered · {result.skipped} skipped
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
 // Services regenerate — GBP categorize + derive 6-8 service tiles
 // ──────────────────────────────────────────────────────────────────
 

@@ -177,6 +177,16 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        // ── Render variants — per-platform crops, grades, overlays ──
+        if (mediaType?.startsWith("image")) {
+          try {
+            const { renderAssetVariants } = await import("@/lib/pipeline/render-step");
+            await renderAssetVariants(assetId);
+          } catch (err) {
+            console.error(`Render failed for ${assetId}:`, err instanceof Error ? err.message : err);
+          }
+        }
+
         processed++;
       } catch (err) {
         processErrors++;

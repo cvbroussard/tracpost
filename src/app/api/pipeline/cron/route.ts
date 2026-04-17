@@ -177,6 +177,58 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        // ── Auto text generation — 5 outputs in one vision call ──
+        // Runs BEFORE render so pin_headline exists when Pinterest variant renders.
+        // Gated: playbook must exist, quality must be sufficient, generate-once.
+        if (mediaType?.startsWith("image")) {
+          try {
+            const [siteCheck] = await sql`
+              SELECT brand_playbook IS NOT NULL AS has_playbook
+              FROM sites WHERE id = ${siteId}
+            `;
+            const [assetCheck] = await sql`
+              SELECT quality_score, context_note,
+                     metadata->'generated_text'->>'generated_at' AS already_generated
+              FROM media_assets WHERE id = ${assetId}
+            `;
+            const qualityOk = (assetCheck?.quality_score as number) >= 0.4;
+            const notGenerated = !assetCheck?.already_generated;
+
+            if (siteCheck?.has_playbook && qualityOk && notGenerated) {
+              const { generateAssetText, buildProjectSnapshot, buildSiteSnapshot } = await import("@/lib/pipeline/project-captions");
+              const [projLink] = await sql`
+                SELECT project_id FROM asset_projects WHERE asset_id = ${assetId} LIMIT 1
+              `;
+              const snapshot = projLink?.project_id
+                ? await buildProjectSnapshot(String(projLink.project_id))
+                : await buildSiteSnapshot(siteId);
+
+              const [assetRow] = await sql`
+                SELECT id, site_id, storage_url, media_type, date_taken, context_note,
+                       metadata, ai_analysis
+                FROM media_assets WHERE id = ${assetId}
+              `;
+
+              const result = await generateAssetText(assetRow, snapshot);
+              if (result) {
+                await sql`
+                  UPDATE media_assets
+                  SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ generated_text: result })}::jsonb
+                  WHERE id = ${assetId}
+                `;
+                // Seed context_note only if tenant didn't provide one at upload
+                if (!assetCheck?.context_note) {
+                  await sql`
+                    UPDATE media_assets SET context_note = ${result.context_note} WHERE id = ${assetId}
+                  `;
+                }
+              }
+            }
+          } catch (err) {
+            console.error(`Text generation failed for ${assetId}:`, err instanceof Error ? err.message : err);
+          }
+        }
+
         // ── Render variants — per-platform crops, grades, overlays ──
         if (mediaType?.startsWith("image")) {
           try {

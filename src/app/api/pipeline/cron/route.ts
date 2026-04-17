@@ -12,6 +12,140 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
+ * Process a single asset end-to-end. Called concurrently in batches
+ * of 5 from the cron handler. Each call is independent — no shared
+ * state between assets.
+ *
+ * Pipeline: HEIC → EXIF → geo-match → project tag → triage (includes
+ * text gen) → face detect → render variants
+ *
+ * Text generation (pin_headline, display_caption, alt_text, social_hook)
+ * is merged INTO the triage vision call — one API call per asset instead
+ * of two. The triage prompt returns all analysis + text outputs.
+ */
+async function processOneAsset(
+  asset: Record<string, unknown>,
+  sqlFn: typeof sql,
+): Promise<boolean> {
+  const assetId = asset.id as string;
+  const siteId = asset.site_id as string;
+  const meta = (asset.metadata || {}) as Record<string, unknown>;
+  const mediaType = asset.media_type as string;
+  const storageUrl = asset.storage_url as string;
+
+  try {
+    // ── HEIC conversion ──
+    let currentUrl = storageUrl;
+    if (meta.needs_conversion && (storageUrl.endsWith(".heic") || storageUrl.endsWith(".heif"))) {
+      const { data, mimeType } = await fetchAndConvert(storageUrl);
+      const date = new Date().toISOString().slice(0, 10);
+      const fname = seoFilename("upload", "jpg");
+      const key = `sites/${siteId}/${date}/${fname}`;
+      currentUrl = await uploadBufferToR2(key, data, mimeType);
+      await sqlFn`
+        UPDATE media_assets
+        SET storage_url = ${currentUrl},
+            metadata = (COALESCE(metadata, '{}'::jsonb) - 'needs_conversion') || '{"converted": true}'::jsonb
+        WHERE id = ${assetId}
+      `;
+      const heicKey = (await import("@/lib/r2")).keyFromStorageUrl(storageUrl);
+      if (heicKey) {
+        try { await (await import("@/lib/r2")).deleteObjectFromR2(heicKey); }
+        catch { /* non-fatal */ }
+      }
+    }
+
+    // ── Filename date fallback (video, etc.) ──
+    if (!mediaType?.startsWith("image") && !meta.date_taken) {
+      const fileDate = parseDateFromFilename((meta.original_filename as string) || storageUrl);
+      if (fileDate) {
+        const sortOrder = new Date(fileDate).getTime() / 1000;
+        await sqlFn`
+          UPDATE media_assets
+          SET date_taken = ${fileDate}, sort_order = ${sortOrder},
+              metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ date_taken: fileDate })}::jsonb
+          WHERE id = ${assetId}
+        `;
+      }
+    }
+
+    // ── EXIF extraction ──
+    if (mediaType?.startsWith("image") && !meta.date_taken) {
+      const exifUrl = (storageUrl.endsWith(".heic") || storageUrl.endsWith(".heif")) ? storageUrl : currentUrl;
+      let exif = await extractExif(exifUrl);
+      if (!exif.dateTaken) {
+        const fileDate = parseDateFromFilename((meta.original_filename as string) || storageUrl);
+        if (fileDate) exif = { ...exif, dateTaken: fileDate };
+      }
+      if (exif.dateTaken || exif.lat !== null) {
+        const exifMeta: Record<string, unknown> = {
+          ...(exif.dateTaken && { date_taken: exif.dateTaken }),
+          ...(exif.lat !== null && { geo: { lat: exif.lat, lng: exif.lng } }),
+          ...(exif.camera && { camera: exif.camera }),
+        };
+        const sortOrder = exif.dateTaken ? new Date(exif.dateTaken).getTime() / 1000 : null;
+        await sqlFn`
+          UPDATE media_assets
+          SET date_taken = ${exif.dateTaken},
+              sort_order = COALESCE(${sortOrder}, sort_order),
+              metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(exifMeta)}::jsonb
+          WHERE id = ${assetId}
+        `;
+        if (exif.lat !== null && exif.lng !== null) {
+          await matchAssetToEntities(assetId, siteId, exif.lat, exif.lng).catch(() => {});
+        }
+      }
+    }
+
+    // ── Project tagging ──
+    const pendingProjectId = meta.pending_project_id as string | undefined;
+    if (pendingProjectId) {
+      await sqlFn`
+        INSERT INTO asset_projects (asset_id, project_id)
+        VALUES (${assetId}, ${pendingProjectId})
+        ON CONFLICT DO NOTHING
+      `;
+      await sqlFn`
+        UPDATE media_assets SET metadata = metadata - 'pending_project_id'
+        WHERE id = ${assetId}
+      `;
+    }
+
+    // ── Triage (includes text generation — merged vision call) ──
+    await triageAsset(assetId);
+
+    // ── Face detection ──
+    if (mediaType?.startsWith("image") && !meta.faces) {
+      const [triaged] = await sqlFn`SELECT ai_analysis FROM media_assets WHERE id = ${assetId}`;
+      const analysis = (triaged?.ai_analysis || {}) as Record<string, unknown>;
+      if (analysis.has_faces) {
+        try {
+          const { processFaces } = await import("@/lib/face-detect");
+          await processFaces(assetId, siteId, currentUrl);
+        } catch (err) {
+          console.error(`Face detection failed for ${assetId}:`, err instanceof Error ? err.message : err);
+        }
+      }
+    }
+
+    // ── Render variants (reads pin_headline from triage-generated text) ──
+    if (mediaType?.startsWith("image")) {
+      try {
+        const { renderAssetVariants } = await import("@/lib/pipeline/render-step");
+        await renderAssetVariants(assetId);
+      } catch (err) {
+        console.error(`Render failed for ${assetId}:`, err instanceof Error ? err.message : err);
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.error(`Asset processing failed for ${assetId}:`, err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
+/**
  * Parse date from common camera filename patterns.
  */
 function parseDateFromFilename(urlOrFilename: string): string | null {
@@ -52,202 +186,37 @@ export async function GET(req: NextRequest) {
 
   try {
     // ── 1. Process new assets ──
-    // Pick up assets at "received" older than 30 seconds (give the API time to finish)
-    // Process up to 30 per run
+    // Pick up assets at "received" older than 30 seconds.
+    // Process up to 50 per run with 5-at-a-time concurrency.
+    // With merged triage+text gen (one vision call), each asset
+    // takes ~15s. 10 groups of 5 × 15s = ~150s (under 300s limit).
     const pending = await sql`
       SELECT id, site_id, storage_url, media_type, metadata
       FROM media_assets
       WHERE triage_status = 'received'
         AND created_at < NOW() - INTERVAL '30 seconds'
       ORDER BY created_at ASC
-      LIMIT 30
+      LIMIT 50
     `;
 
     let processed = 0;
     let processErrors = 0;
 
-    for (const asset of pending) {
-      try {
-        const assetId = asset.id as string;
-        const siteId = asset.site_id as string;
-        const meta = (asset.metadata || {}) as Record<string, unknown>;
-        const mediaType = asset.media_type as string;
-        const storageUrl = asset.storage_url as string;
-
-        // ── HEIC conversion ──
-        let currentUrl = storageUrl;
-        if (meta.needs_conversion && (storageUrl.endsWith(".heic") || storageUrl.endsWith(".heif"))) {
-          try {
-            const { data, mimeType } = await fetchAndConvert(storageUrl);
-            const date = new Date().toISOString().slice(0, 10);
-            const fname = seoFilename("upload", "jpg");
-            const key = `sites/${siteId}/${date}/${fname}`;
-            currentUrl = await uploadBufferToR2(key, data, mimeType);
-            await sql`
-              UPDATE media_assets
-              SET storage_url = ${currentUrl},
-                  metadata = (COALESCE(metadata, '{}'::jsonb) - 'needs_conversion') || '{"converted": true}'::jsonb
-              WHERE id = ${assetId}
-            `;
-          } catch (err) {
-            console.error(`HEIC conversion failed for ${assetId}:`, err instanceof Error ? err.message : err);
-          }
-        }
-
-        // ── Filename date fallback for non-image assets (video, etc.) ──
-        if (!mediaType?.startsWith("image") && !meta.date_taken) {
-          const fileDate = parseDateFromFilename((meta.original_filename as string) || storageUrl);
-          if (fileDate) {
-            const sortOrder = new Date(fileDate).getTime() / 1000;
-            await sql`
-              UPDATE media_assets
-              SET date_taken = ${fileDate},
-                  sort_order = ${sortOrder},
-                  metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ date_taken: fileDate })}::jsonb
-              WHERE id = ${assetId}
-            `;
-          }
-        }
-
-        // ── EXIF extraction ──
-        if (mediaType?.startsWith("image") && !meta.date_taken) {
-          // For HEIC: extract from original URL (before conversion stripped EXIF)
-          const exifUrl = (storageUrl.endsWith(".heic") || storageUrl.endsWith(".heif")) ? storageUrl : currentUrl;
-          let exif = await extractExif(exifUrl);
-
-          // Fallback: filename date parsing
-          if (!exif.dateTaken) {
-            const originalFilename = (meta.original_filename as string) || storageUrl;
-            const fileDate = parseDateFromFilename(originalFilename);
-            if (fileDate) exif = { ...exif, dateTaken: fileDate };
-          }
-
-          if (exif.dateTaken || exif.lat !== null) {
-            const exifMeta: Record<string, unknown> = {
-              ...(exif.dateTaken && { date_taken: exif.dateTaken }),
-              ...(exif.lat !== null && { geo: { lat: exif.lat, lng: exif.lng } }),
-              ...(exif.camera && { camera: exif.camera }),
-            };
-            const sortOrder = exif.dateTaken ? new Date(exif.dateTaken).getTime() / 1000 : null;
-            await sql`
-              UPDATE media_assets
-              SET date_taken = ${exif.dateTaken},
-                  sort_order = COALESCE(${sortOrder}, sort_order),
-                  metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(exifMeta)}::jsonb
-              WHERE id = ${assetId}
-            `;
-
-            // ── Geo-match to locations/projects ──
-            if (exif.lat !== null && exif.lng !== null) {
-              await matchAssetToEntities(assetId, siteId, exif.lat, exif.lng).catch(() => {});
-            }
-          }
-        }
-
-        // ── Project tagging (from upload context) ──
-        const pendingProjectId = meta.pending_project_id as string | undefined;
-        if (pendingProjectId) {
-          await sql`
-            INSERT INTO asset_projects (asset_id, project_id)
-            VALUES (${assetId}, ${pendingProjectId})
-            ON CONFLICT DO NOTHING
-          `;
-          // Clear the pending flag
-          await sql`
-            UPDATE media_assets
-            SET metadata = metadata - 'pending_project_id'
-            WHERE id = ${assetId}
-          `;
-        }
-
-        // ── Triage ──
-        await triageAsset(assetId);
-
-        // ── Face detection — only if triage detected faces ──
-        if (mediaType?.startsWith("image") && !meta.faces) {
-          const [triaged] = await sql`SELECT ai_analysis FROM media_assets WHERE id = ${assetId}`;
-          const analysis = (triaged?.ai_analysis || {}) as Record<string, unknown>;
-          if (analysis.has_faces) {
-            try {
-              const { processFaces } = await import("@/lib/face-detect");
-              await processFaces(assetId, siteId, currentUrl);
-            } catch (err) {
-              console.error(`Face detection failed for ${assetId}:`, err instanceof Error ? err.message : err);
-            }
-          }
-        }
-
-        // ── Auto text generation — 5 outputs in one vision call ──
-        // Runs BEFORE render so pin_headline exists when Pinterest variant renders.
-        // Gated: playbook must exist, quality must be sufficient, generate-once.
-        if (mediaType?.startsWith("image")) {
-          try {
-            const [siteCheck] = await sql`
-              SELECT brand_playbook IS NOT NULL AS has_playbook
-              FROM sites WHERE id = ${siteId}
-            `;
-            const [assetCheck] = await sql`
-              SELECT quality_score, context_note,
-                     metadata->'generated_text'->>'generated_at' AS already_generated
-              FROM media_assets WHERE id = ${assetId}
-            `;
-            const qualityOk = (assetCheck?.quality_score as number) >= 0.4;
-            const notGenerated = !assetCheck?.already_generated;
-
-            if (siteCheck?.has_playbook && qualityOk && notGenerated) {
-              const { generateAssetText, buildProjectSnapshot, buildSiteSnapshot } = await import("@/lib/pipeline/project-captions");
-              const [projLink] = await sql`
-                SELECT project_id FROM asset_projects WHERE asset_id = ${assetId} LIMIT 1
-              `;
-              const snapshot = projLink?.project_id
-                ? await buildProjectSnapshot(String(projLink.project_id))
-                : await buildSiteSnapshot(siteId);
-
-              const [assetRow] = await sql`
-                SELECT id, site_id, storage_url, media_type, date_taken, context_note,
-                       metadata, ai_analysis
-                FROM media_assets WHERE id = ${assetId}
-              `;
-
-              const result = await generateAssetText(assetRow, snapshot);
-              if (result) {
-                await sql`
-                  UPDATE media_assets
-                  SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ generated_text: result })}::jsonb
-                  WHERE id = ${assetId}
-                `;
-                // Seed context_note only if tenant didn't provide one at upload
-                if (!assetCheck?.context_note) {
-                  await sql`
-                    UPDATE media_assets SET context_note = ${result.context_note} WHERE id = ${assetId}
-                  `;
-                }
-              }
-            }
-          } catch (err) {
-            console.error(`Text generation failed for ${assetId}:`, err instanceof Error ? err.message : err);
-          }
-        }
-
-        // ── Render variants — per-platform crops, grades, overlays ──
-        if (mediaType?.startsWith("image")) {
-          try {
-            const { renderAssetVariants } = await import("@/lib/pipeline/render-step");
-            await renderAssetVariants(assetId);
-          } catch (err) {
-            console.error(`Render failed for ${assetId}:`, err instanceof Error ? err.message : err);
-          }
-        }
-
-        processed++;
-      } catch (err) {
-        processErrors++;
-        console.error(`Asset processing failed for ${asset.id}:`, err instanceof Error ? err.message : err);
+    // Process in concurrent batches of 5
+    const CONCURRENCY = 5;
+    for (let batchStart = 0; batchStart < pending.length; batchStart += CONCURRENCY) {
+      const batch = pending.slice(batchStart, batchStart + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((asset) => processOneAsset(asset, sql)),
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value) processed++;
+        else processErrors++;
       }
-
-      // Delay between assets to avoid rate limiting
-      if (pending.length > 5) await new Promise((r) => setTimeout(r, 500));
     }
+
+    // processOneAsset handles everything in the old serial loop
+    // but is now called concurrently in batches of 5 above.
 
     // ── 1b. Check autopilot activation for processed sites ──
     if (processed > 0) {

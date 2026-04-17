@@ -90,4 +90,12 @@ export interface TriageResult {
   flag_reason?: string;
   shelve_reason?: string;
   ai_analysis: Record<string, unknown>;
+  generated_text?: {
+    context_note: string;
+    pin_headline: string;
+    display_caption: string;
+    alt_text: string;
+    social_hook: string;
+    generated_at: string;
+  };
 }

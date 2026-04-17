@@ -66,7 +66,11 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
     );
   }
 
-  // Persist triage result
+  // Persist triage result + generated text (merged into one vision call)
+  const metadataUpdate = result.generated_text
+    ? { generated_text: result.generated_text }
+    : {};
+
   await sql`
     UPDATE media_assets
     SET
@@ -79,27 +83,22 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
       flag_reason = ${result.flag_reason || null},
       shelve_reason = ${result.shelve_reason || null},
       ai_analysis = ${JSON.stringify(result.ai_analysis)},
+      metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metadataUpdate)}::jsonb,
       triaged_at = NOW()
     WHERE id = ${assetId}
   `;
 
-  // Auto-generate context note if the asset doesn't have one
-  // Skip for project-tagged assets — those use the progressive caption pipeline
+  // Seed context_note if tenant didn't provide one at upload.
+  // Uses the spec-style context_note from AI analysis (raw descriptors).
+  // Preserves mobile app captions — only writes if field is NULL.
   const autoContext = result.ai_analysis?.context_note as string | undefined;
   if (autoContext && !(asset.context_note as string)) {
-    const [projectLink] = await sql`
-      SELECT 1 FROM asset_projects WHERE asset_id = ${assetId} LIMIT 1
+    await sql`
+      UPDATE media_assets
+      SET context_note = ${autoContext},
+          metadata = COALESCE(metadata, '{}'::jsonb) || '{"context_auto_generated": true}'::jsonb
+      WHERE id = ${assetId} AND context_note IS NULL
     `;
-    const meta = (asset.metadata || {}) as Record<string, unknown>;
-    const hasPendingProject = !!meta.pending_project_id;
-    if (!projectLink && !hasPendingProject) {
-      await sql`
-        UPDATE media_assets
-        SET context_note = ${autoContext},
-            metadata = COALESCE(metadata, '{}'::jsonb) || '{"context_auto_generated": true}'::jsonb
-        WHERE id = ${assetId}
-      `;
-    }
   }
 
   // Log triage in history
@@ -167,6 +166,36 @@ async function visionTriage(
     ? `Brand context: ${JSON.stringify(brandVoice)}`
     : "";
 
+  // Load enriched context for text generation (playbook, services, GBP)
+  const siteId = asset.site_id as string;
+  let enrichedContext = "";
+  try {
+    const [siteExtra] = await sql`
+      SELECT brand_playbook, location FROM sites WHERE id = ${siteId}
+    `;
+    const parts: string[] = [];
+    const playbook = (siteExtra?.brand_playbook || {}) as Record<string, unknown>;
+    const positioning = (playbook.brandPositioning || {}) as Record<string, unknown>;
+    const angles = (positioning.selectedAngles || []) as Array<Record<string, unknown>>;
+    const offerCore = (playbook.offerCore || {}) as Record<string, unknown>;
+    if (angles[0]?.tagline) parts.push(`Brand tagline: ${angles[0].tagline}`);
+    if (angles[0]?.tone) parts.push(`Brand tone: ${angles[0].tone}`);
+    if (offerCore.offerStatement) {
+      const stmt = offerCore.offerStatement as Record<string, unknown>;
+      if (stmt.finalStatement) parts.push(`Brand promise: ${stmt.finalStatement}`);
+    }
+    const services = await sql`SELECT name FROM services WHERE site_id = ${siteId} ORDER BY display_order LIMIT 6`;
+    if (services.length > 0) parts.push(`Services: ${services.map((s) => String(s.name)).join(", ")}`);
+    const cats = await sql`
+      SELECT gc.name, sgc.is_primary FROM site_gbp_categories sgc
+      JOIN gbp_categories gc ON gc.gcid = sgc.gcid WHERE sgc.site_id = ${siteId}
+    `;
+    const primaryCat = cats.find((c) => c.is_primary);
+    if (primaryCat) parts.push(`Business category: ${primaryCat.name}`);
+    if (siteExtra?.location) parts.push(`Location: ${siteExtra.location}`);
+    enrichedContext = parts.join("\n");
+  } catch { /* non-fatal — text gen degrades gracefully */ }
+
   // Download image, convert HEIC if needed, encode as base64
   const { fetchAndConvert } = await import("@/lib/image-utils");
   const { data: imgBuffer, mimeType: imgMimeType } = await fetchAndConvert(storageUrl);
@@ -174,7 +203,7 @@ async function visionTriage(
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 512,
+    max_tokens: 800,
     messages: [
       {
         role: "user",
@@ -192,6 +221,7 @@ ${subscriberPillar ? `Subscriber suggested pillar: ${subscriberPillar}` : ""}
 ${pillarGuidance ? `## Content Pillars & Tags\n${pillarGuidance}\n` : `Available content pillars: ${pillarList}`}
 ${brandContext}
 ${brands && brands.length > 0 ? `\n## Known Vendors/Brands\nThe subscriber works with these vendors. If you recognize any of their products, materials, or equipment in the image, include them in detected_vendors.\n${brands.map((b) => `- ${b.name} (${b.slug})`).join("\n")}` : ""}
+${enrichedContext ? `\n## Business Context (for text generation)\n${enrichedContext}` : ""}
 
 Respond with ONLY valid JSON (no markdown):
 {
@@ -206,7 +236,11 @@ Respond with ONLY valid JSON (no markdown):
   "scene_type": "<one of: humans, environment, product, method, region — humans=people/animals visible, environment=space with no people, product=close-up of specific item/material, method=process/technique/craftsmanship shown, region=exterior/neighborhood/local context>",
   "quality_notes": "<brief note on quality issues if any>",
   "detected_vendors": [<array of vendor slugs from the known vendors list that appear in this image, e.g. ["lacanche", "crystal_cabinet_works"]>],
-  "detected_personas": [{"persona_id": "<id>", "persona_name": "<name>", "confidence": <0.0-1.0>, "role": "subject"|"background", "reasoning": "<why>"}]
+  "detected_personas": [{"persona_id": "<id>", "persona_name": "<name>", "confidence": <0.0-1.0>, "role": "subject"|"background", "reasoning": "<why>"}],
+  "pin_headline": "<6-8 word Pinterest headline. Title case. Include one searchable keyword relevant to the business. Example: 'Custom Zellige Backsplash with Floating Shelves'>",
+  "display_caption": "<1-2 sentence public-facing caption for the business website. Written in the brand's voice for their audience, not for the project owner.>",
+  "alt_text": "<concise image alt text for screen readers. What is literally shown, no interpretation. Under 125 characters.>",
+  "social_hook": "<scroll-stopping first line for social media. Creates curiosity or highlights the most interesting element. Under 15 words. No hashtags.>"
 }
 
 Rules:
@@ -295,6 +329,14 @@ ${personaPrompt || 'If no known characters list is provided, return "detected_pe
       detected_vendors: parsed.detected_vendors || [],
       detected_personas: parsed.detected_personas || [],
     },
+    generated_text: (parsed.pin_headline || parsed.display_caption) ? {
+      context_note: parsed.context_note || parsed.description || "",
+      pin_headline: parsed.pin_headline || "",
+      display_caption: parsed.display_caption || "",
+      alt_text: parsed.alt_text || "",
+      social_hook: parsed.social_hook || "",
+      generated_at: new Date().toISOString(),
+    } : undefined,
   };
 }
 

@@ -274,28 +274,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(`https://platform.tracpost.com${rest}`));
   }
 
-  // tracpost.com marketing — rewrite root marketing pages + blog +
-  // projects to the tenant template (TracPost-as-tenant-of-itself).
-  // next.tracpost.com bypasses these and serves the marketing route
-  // group directly.
+  // tracpost.com — marketing route group serves /, /about, /contact,
+  // /pricing, /blog, /changelog, /for/*, /tools/*. No rewrites needed
+  // for these — the (marketing) route group handles them directly.
+  //
+  // /projects still rewrites to the tenant engine (no marketing-shell
+  // projects page yet). /work redirects to /pricing (marketing equiv).
   if (isTracpostMarketing) {
-    const tenantRewrites: Record<string, string> = {
-      "/": "/tenant/tracpost",
-      "/about": "/tenant/tracpost/about",
-      "/work": "/tenant/tracpost/work",
-      "/contact": "/tenant/tracpost/contact",
-    };
-    const rewriteDest = tenantRewrites[pathname];
-    if (rewriteDest) {
+    if (pathname === "/work") {
       const url = req.nextUrl.clone();
-      url.pathname = rewriteDest;
-      return NextResponse.rewrite(url);
-    }
-    // Blog + projects — rewrite to tenant engine
-    if (pathname === "/blog" || pathname.startsWith("/blog/")) {
-      const url = req.nextUrl.clone();
-      url.pathname = `/tenant/tracpost${pathname}`;
-      return NextResponse.rewrite(url);
+      url.pathname = "/pricing";
+      return NextResponse.redirect(url, 301);
     }
     if (pathname === "/projects" || pathname.startsWith("/projects/")) {
       const url = req.nextUrl.clone();

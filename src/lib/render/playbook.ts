@@ -138,6 +138,22 @@ function resolveOverlays(
     }
   }
 
+  // Stat overlay for project heroes (Authority+ only)
+  if (
+    content.isProjectHero &&
+    content.projectId &&
+    (tenant.tier === "authority" || tenant.tier === "enterprise")
+  ) {
+    // Stat overlay is applied post-render in the engine via
+    // applyStatOverlay() since it needs async DB lookup. We signal
+    // intent here with a marker overlay that the engine intercepts.
+    overlays.push({
+      text: "__STAT_OVERLAY__",
+      position: "bottom-left",
+      fontSize: 0,
+    });
+  }
+
   return overlays;
 }
 

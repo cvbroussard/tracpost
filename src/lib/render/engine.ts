@@ -12,6 +12,7 @@ import { uploadBufferToR2, keyFromStorageUrl } from "@/lib/r2";
 import { cropForPlatform } from "./crops";
 import { applyGrade } from "./grade";
 import { applyTextOverlays, applyWatermark } from "./overlay";
+import { applyStatOverlay } from "./platform-specific";
 import type {
   RenderPlan,
   VariantRecord,
@@ -27,6 +28,7 @@ async function renderVariant(
   sourceBuffer: Buffer,
   plan: RenderPlan,
   logoBuffer: Buffer | null,
+  assetId?: string,
 ): Promise<Buffer> {
   let buffer = sourceBuffer;
 
@@ -38,12 +40,23 @@ async function renderVariant(
     buffer = await applyGrade(buffer, plan.grade);
   }
 
-  // 3. Text overlays (headline, CTA)
-  if (plan.textOverlays.length > 0) {
-    buffer = await applyTextOverlays(buffer, plan.textOverlays);
+  // 3. Text overlays (headline, CTA) — filter out stat overlay marker
+  const realOverlays = plan.textOverlays.filter((o) => o.text !== "__STAT_OVERLAY__");
+  const hasStatMarker = plan.textOverlays.some((o) => o.text === "__STAT_OVERLAY__");
+
+  if (realOverlays.length > 0) {
+    buffer = await applyTextOverlays(buffer, realOverlays);
   }
 
-  // 4. Watermark
+  // 4. Stat overlay (async — needs project ID from DB)
+  if (hasStatMarker && assetId) {
+    const [link] = await sql`SELECT project_id FROM asset_projects WHERE asset_id = ${assetId} LIMIT 1`;
+    if (link?.project_id) {
+      buffer = await applyStatOverlay(buffer, String(link.project_id));
+    }
+  }
+
+  // 5. Watermark
   if (plan.watermark && logoBuffer) {
     buffer = await applyWatermark(buffer, logoBuffer, plan.watermarkPosition || "bottom-right");
   }
@@ -119,7 +132,7 @@ export async function renderAsset(
 
   for (const plan of plans) {
     try {
-      const rendered = await renderVariant(sourceBuffer, plan, logoBuffer);
+      const rendered = await renderVariant(sourceBuffer, plan, logoBuffer, assetId);
       const key = variantKey(sourceKey, plan.platform, plan.crop);
       const url = await uploadBufferToR2(key, rendered, "image/jpeg");
 

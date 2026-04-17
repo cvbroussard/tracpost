@@ -19,3 +19,13 @@ export { applyGrade } from "./grade";
 export { applyTextOverlays, applyWatermark } from "./overlay";
 export { createBeforeAfterComposite, detectBeforeAfterPair } from "./composite";
 export { composeCarousel, shouldComposeCarousel } from "./carousel";
+export {
+  applyStatOverlay,
+  resolveLocationTag,
+  renderPinterestPin,
+  formatGbpPost,
+  inferGbpPostType,
+  type LocationTag,
+  type GbpPostType,
+  type GbpPostPayload,
+} from "./platform-specific";

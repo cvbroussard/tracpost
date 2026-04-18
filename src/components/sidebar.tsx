@@ -18,6 +18,7 @@ const siteNav = [
   { label: "Entities", path: "/entities", icon: "◫" },
   { label: "Calendar", path: "/calendar", icon: "▦" },
   { label: "Inbox", path: "/inbox", icon: "▤" },
+  { label: "Google", path: "/google", icon: "G" },
   { label: "Blog", path: "/blog", icon: "✎" },
   { label: "SEO", path: "/seo", icon: "◇" },
   { label: "Spotlight", path: "/spotlight", icon: "✦" },
@@ -73,7 +74,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
                 const active =
                   item.path === ""
                     ? pathname === prefix || pathname === prefix + "/"
-                    : pathname === fullPath || pathname === fullPath + "/";
+                    : pathname === fullPath || pathname === fullPath + "/" || pathname.startsWith(fullPath + "/");
                 return (
                   <Link
                     key={item.href}

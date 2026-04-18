@@ -29,7 +29,6 @@ export default async function GooglePhotosPage() {
     WHERE ma.site_id = ${siteId}
       AND ma.triage_status = 'triaged'
       AND ma.quality_score >= 0.5
-      AND ma.platform_fit @> ARRAY['gbp']::text[]
       AND ma.media_type LIKE 'image/%'
       AND NOT EXISTS (
         SELECT 1 FROM gbp_photo_sync gps
@@ -54,7 +53,7 @@ export default async function GooglePhotosPage() {
   const [gbpConnected] = await sql`
     SELECT 1 FROM social_accounts sa
     JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
+    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status IN ('active', 'token_expired')
     LIMIT 1
   `;
 

@@ -33,7 +33,6 @@ export async function GET(req: NextRequest) {
     WHERE ma.site_id = ${siteId}
       AND ma.triage_status = 'triaged'
       AND ma.quality_score >= 0.5
-      AND ma.platform_fit @> ARRAY['gbp']::text[]
       AND ma.media_type LIKE 'image/%'
       AND NOT EXISTS (
         SELECT 1 FROM gbp_photo_sync gps

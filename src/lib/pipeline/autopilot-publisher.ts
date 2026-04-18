@@ -282,9 +282,12 @@ export async function autopilotPublish(siteId: string, opts: { force?: boolean; 
       }
     }
 
-    // Select the next best asset
+    // Select the next best asset using site-relative thresholds
+    const { getThresholds, publishAbove } = await import("./quality-thresholds");
+    const thresholds = await getThresholds(siteId);
     const asset = await selectNextAsset(siteId, platform, {
       boostPillars: campaign?.boost_pillars,
+      qualityThreshold: publishAbove(thresholds),
     });
 
     if (!asset) {
@@ -320,8 +323,8 @@ export async function autopilotPublish(siteId: string, opts: { force?: boolean; 
       continue;
     }
 
-    // Run quality gates
-    const gates = await runGates(assetId, caption);
+    // Run quality gates with site-relative threshold
+    const gates = await runGates(assetId, caption, { qualityThreshold: publishAbove(thresholds) });
     if (!gates.pass) {
       const redFlags = gates.flags.filter((f) => f.severity === "red");
       await quarantineAsset(assetId, redFlags.map((f) => f.reason).join("; "));

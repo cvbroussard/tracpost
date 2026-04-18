@@ -130,8 +130,9 @@ async function findMatchingAsset(
   siteId: string,
   prompt: RewardPrompt
 ): Promise<ContentPairing["asset"] | null> {
-  // Get candidate assets — triaged, decent quality, not over-used, no existing post
-  // Prefer assets matching the reward prompt's scene type
+  // Get candidate assets — triaged, above site-relative publish threshold
+  const { getThresholds, publishAbove } = await import("./quality-thresholds");
+  const qt = await getThresholds(siteId);
   const candidates = await sql`
     SELECT ma.id, ma.storage_url, ma.context_note, ma.quality_score,
            ma.content_pillar, ma.content_tags, ma.ai_analysis,
@@ -141,7 +142,7 @@ async function findMatchingAsset(
     LEFT JOIN blog_posts bp ON bp.source_asset_id = ma.id
     WHERE ma.site_id = ${siteId}
       AND ma.triage_status IN ('triaged', 'scheduled')
-      AND ma.quality_score >= 0.5
+      AND ma.quality_score >= ${publishAbove(qt)}
       AND bp.id IS NULL
     ORDER BY
       CASE WHEN ma.ai_analysis->>'scene_type' = ${prompt.scene} THEN 0 ELSE 1 END,

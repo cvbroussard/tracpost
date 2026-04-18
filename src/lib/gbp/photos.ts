@@ -214,11 +214,10 @@ export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; 
   const metadata = gbpAccount.metadata as Record<string, unknown>;
   const locationPath = buildLocationPath(metadata, gbpAccount.account_id);
 
-  // Get quality threshold from site config
-  const [site] = await sql`
-    SELECT autopilot_config FROM sites WHERE id = ${siteId}
-  `;
-  const minQuality = (site?.autopilot_config as Record<string, number>)?.min_quality ?? 0.5;
+  // Use site-relative publish threshold
+  const { getThresholds, publishAbove } = await import("@/lib/pipeline/quality-thresholds");
+  const qt = await getThresholds(siteId);
+  const minQuality = publishAbove(qt);
 
   // Find eligible assets not yet synced
   const eligible = await sql`

@@ -101,6 +101,12 @@ export async function triageAsset(assetId: string): Promise<TriageResult> {
     `;
   }
 
+  // Recalculate site-relative quality thresholds
+  try {
+    const { recalculateThresholds } = await import("./quality-thresholds");
+    await recalculateThresholds(asset.site_id as string);
+  } catch { /* non-fatal */ }
+
   // Log triage in history
   await sql`
     INSERT INTO subscriber_actions (site_id, action_type, target_type, target_id, payload)

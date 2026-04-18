@@ -113,6 +113,12 @@ export async function detectBeforeAfterPair(
   projectId: string,
 ): Promise<{ beforeUrl: string; afterUrl: string } | null> {
   const { sql } = await import("@/lib/db");
+  const { getThresholds, publishAbove } = await import("@/lib/pipeline/quality-thresholds");
+
+  // Get site_id from project to load adaptive thresholds
+  const [proj] = await sql`SELECT site_id FROM projects WHERE id = ${projectId}`;
+  const qt = proj ? await getThresholds(proj.site_id as string) : null;
+  const minScore = qt ? publishAbove(qt) : 0.5;
 
   const assets = await sql`
     SELECT ma.storage_url, ma.date_taken, ma.quality_score,
@@ -122,7 +128,7 @@ export async function detectBeforeAfterPair(
     WHERE ap.project_id = ${projectId}
       AND ma.triage_status IN ('triaged', 'scheduled', 'consumed')
       AND ma.media_type LIKE 'image%'
-      AND ma.quality_score >= 0.5
+      AND ma.quality_score >= ${minScore}
     ORDER BY ma.date_taken ASC NULLS LAST, ma.created_at ASC
   `;
 

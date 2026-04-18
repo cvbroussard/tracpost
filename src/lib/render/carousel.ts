@@ -97,6 +97,10 @@ export async function composeCarousel(
   const maxSlides = config.maxSlides || PLATFORM_MAX_SLIDES[config.platform] || 5;
   const aspect = PLATFORM_ASPECTS[config.platform];
 
+  // Use site-relative threshold (shelve boundary = lowest acceptable)
+  const { getThresholds, shelveBelow } = await import("@/lib/pipeline/quality-thresholds");
+  const qt = await getThresholds(siteId);
+
   // Fetch project photos
   const photos = await sql`
     SELECT ma.id, ma.storage_url, ma.quality_score, ma.date_taken,
@@ -106,7 +110,7 @@ export async function composeCarousel(
     WHERE ap.project_id = ${projectId}
       AND ma.triage_status IN ('triaged', 'scheduled', 'consumed')
       AND ma.media_type LIKE 'image%'
-      AND ma.quality_score >= 0.4
+      AND ma.quality_score >= ${shelveBelow(qt)}
     ORDER BY ma.date_taken ASC NULLS LAST, ma.created_at ASC
   `;
 

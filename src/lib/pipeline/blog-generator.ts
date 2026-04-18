@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
 import { researchContextNote } from "@/lib/research/wikipedia";
 import { scanContent } from "@/lib/pipeline/content-guard";
+import { getThresholds, publishAbove, heroAbove } from "@/lib/pipeline/quality-thresholds";
 
 /**
  * Blog content types — determines structure, length, and prompt.
@@ -134,13 +135,14 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   `;
   const recentUrls = recentPostImages.map((r) => r.og_image_url as string).filter(Boolean);
 
+  const qt = await getThresholds(asset.site_id as string);
   const inlineImages = await sql`
     SELECT storage_url, context_note, content_pillar
     FROM media_assets
     WHERE site_id = ${asset.site_id}
       AND id != ${assetId}
       AND triage_status IN ('triaged', 'scheduled')
-      AND quality_score > 0.6
+      AND quality_score > ${heroAbove(qt)}
       AND storage_url IS NOT NULL
       AND storage_url != ALL(${recentUrls.length > 0 ? recentUrls : ["__none__"]})
     ORDER BY
@@ -409,12 +411,13 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
   }
 
   // Query images from media library for inline use
+  const qt2 = await getThresholds(topic.site_id as string);
   const inlineImages = await sql`
     SELECT storage_url, context_note
     FROM media_assets
     WHERE site_id = ${topic.site_id}
       AND triage_status IN ('triaged', 'scheduled')
-      AND quality_score > 0.6
+      AND quality_score > ${heroAbove(qt2)}
       AND storage_url IS NOT NULL
     ORDER BY
       CASE WHEN content_pillar = ${topic.pillar || ''} THEN 0 ELSE 1 END,
@@ -1048,6 +1051,8 @@ export async function generateFromPairing(
   const uploadCount = (siteData.inline_upload_count as number) ?? 1;
   const aiCount = (siteData.inline_ai_count as number) ?? 3;
   const totalInline = uploadCount + aiCount;
+  const qtPairing = await getThresholds(siteData.site_id as string);
+  const pairingFloor = publishAbove(qtPairing);
 
   const uploadsInline = await sql`
     SELECT id, storage_url, context_note
@@ -1056,7 +1061,7 @@ export async function generateFromPairing(
       AND id != ${asset.id}
       AND source = 'upload'
       AND triage_status IN ('triaged', 'scheduled')
-      AND quality_score > 0.5
+      AND quality_score > ${pairingFloor}
       AND storage_url IS NOT NULL
       AND storage_url != ALL(${excludeUrls})
     ORDER BY
@@ -1073,7 +1078,7 @@ export async function generateFromPairing(
       AND id != ${asset.id}
       AND source = 'ai_generated'
       AND triage_status IN ('triaged', 'scheduled')
-      AND quality_score > 0.5
+      AND quality_score > ${pairingFloor}
       AND storage_url IS NOT NULL
       AND storage_url != ALL(${excludeUrls})
     ORDER BY
@@ -1093,7 +1098,7 @@ export async function generateFromPairing(
       WHERE site_id = ${siteData.site_id}
         AND id != ${asset.id}
         AND triage_status IN ('triaged', 'scheduled')
-        AND quality_score > 0.5
+        AND quality_score > ${pairingFloor}
         AND storage_url IS NOT NULL
         AND storage_url != ALL(${excludeUrls})
         AND storage_url != ALL(${inlineImages.map(i => i.storage_url as string)})

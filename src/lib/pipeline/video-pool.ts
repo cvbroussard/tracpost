@@ -27,6 +27,7 @@ function buildVideoPrompt(
   contextNote: string,
   brandPlaybook: Record<string, unknown> | null,
   contentVibe: string,
+  corrections?: string,
 ): string {
   const parts: string[] = [];
 
@@ -60,7 +61,12 @@ function buildVideoPrompt(
     parts.push(contentVibe.slice(0, 60));
   }
 
-  return parts.join(". ").slice(0, 200);
+  // Append corrections as constraints (Kling prompt is short, so keep tight)
+  if (corrections) {
+    parts.push(corrections.replace(/\n/g, " ").slice(0, 80));
+  }
+
+  return parts.join(". ").slice(0, 250);
 }
 
 /**
@@ -157,11 +163,21 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
 
   for (const candidate of toGenerate) {
     const analysis = (candidate.ai_analysis || {}) as Record<string, unknown>;
+
+    // Load corrections scoped to video
+    let videoCorrections = "";
+    try {
+      const { loadCorrections, formatCorrectionsForPrompt } = await import("@/lib/corrections");
+      const corrections = await loadCorrections(siteId, "video");
+      videoCorrections = formatCorrectionsForPrompt(corrections);
+    } catch { /* non-fatal */ }
+
     const prompt = buildVideoPrompt(
       analysis,
       (candidate.context_note as string) || "",
       (site.brand_playbook || null) as Record<string, unknown> | null,
       (site.content_vibe as string) || "",
+      videoCorrections,
     );
 
     try {

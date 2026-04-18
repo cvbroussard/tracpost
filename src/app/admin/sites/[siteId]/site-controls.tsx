@@ -11,6 +11,7 @@ import {
   RegenerateServicesButton,
   WorkContentEditor,
   SyncReviewsButton,
+  CorrectionsPanel,
 } from "./website-pane";
 
 interface SiteData {
@@ -858,6 +859,16 @@ export function SiteControls({
           <ReadOnly label="Image Corrections" value={`${counts.corrections} entity corrections`} />
           <ReadOnly label="URL Validation" value="Active — strips 404s before storing" />
           <ReadOnly label="Vendor Detection" value={`${counts.vendors} vendors in recognition dictionary`} />
+        </div>
+      </Section>
+
+      {/* Tier 6: Content Corrections */}
+      <Section title="Content Corrections" tier={6}>
+        <div className="rounded border border-border bg-background p-3">
+          <p className="mb-3 text-[10px] text-muted">
+            Tenant-requested adjustments to generated content. Corrections inject into all future generation prompts (triage, blog, video, captions). Never modify published content — only affects new output.
+          </p>
+          <CorrectionsPanel siteId={siteId} />
         </div>
       </Section>
 

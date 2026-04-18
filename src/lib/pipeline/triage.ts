@@ -202,6 +202,14 @@ async function visionTriage(
     enrichedContext = parts.join("\n");
   } catch { /* non-fatal — text gen degrades gracefully */ }
 
+  // Load content corrections for prompt injection
+  let correctionsBlock = "";
+  try {
+    const { loadCorrections, formatCorrectionsForPrompt } = await import("@/lib/corrections");
+    const corrections = await loadCorrections(asset.site_id as string, "social");
+    correctionsBlock = formatCorrectionsForPrompt(corrections);
+  } catch { /* non-fatal */ }
+
   // Download image, convert HEIC if needed, encode as base64
   const { fetchAndConvert } = await import("@/lib/image-utils");
   const { data: imgBuffer, mimeType: imgMimeType } = await fetchAndConvert(storageUrl);
@@ -228,7 +236,7 @@ ${pillarGuidance ? `## Content Pillars & Tags\n${pillarGuidance}\n` : `Available
 ${brandContext}
 ${brands && brands.length > 0 ? `\n## Known Vendors/Brands\nThe subscriber works with these vendors. If you recognize any of their products, materials, or equipment in the image, include them in detected_vendors.\n${brands.map((b) => `- ${b.name} (${b.slug})`).join("\n")}` : ""}
 ${enrichedContext ? `\n## Business Context (for text generation)\n${enrichedContext}` : ""}
-
+${correctionsBlock}
 Respond with ONLY valid JSON (no markdown):
 {
   "quality_score": <0.0-1.0, see scoring guide below>,

@@ -839,3 +839,242 @@ export function SyncReviewsButton({ siteId }: { siteId: string }) {
     </div>
   );
 }
+
+const CORRECTION_CATEGORIES = [
+  { value: "terminology", label: "Terminology" },
+  { value: "tone", label: "Tone & Voice" },
+  { value: "content", label: "Content Direction" },
+  { value: "visual", label: "Visual Style" },
+  { value: "factual", label: "Factual Accuracy" },
+  { value: "platform", label: "Platform-Specific" },
+];
+
+const CORRECTION_SCOPES = [
+  { value: "all", label: "All content" },
+  { value: "blog", label: "Blog articles" },
+  { value: "social", label: "Social captions" },
+  { value: "video", label: "Video prompts" },
+  { value: "instagram", label: "Instagram" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "pinterest", label: "Pinterest" },
+  { value: "gbp", label: "Google Business" },
+];
+
+interface Correction {
+  id: string;
+  category: string;
+  rule: string;
+  scope: string;
+  example_before: string | null;
+  example_after: string | null;
+  source_note: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export function CorrectionsPanel({ siteId }: { siteId: string }) {
+  const [corrections, setCorrections] = useState<Correction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [category, setCategory] = useState("terminology");
+  const [rule, setRule] = useState("");
+  const [scope, setScope] = useState("all");
+  const [exBefore, setExBefore] = useState("");
+  const [exAfter, setExAfter] = useState("");
+  const [sourceNote, setSourceNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [impact, setImpact] = useState<{ blogPosts: number; captions: number } | null>(null);
+
+  // Load corrections on mount
+  useState(() => {
+    fetch(`/api/admin/sites/${siteId}/corrections`)
+      .then((r) => r.json())
+      .then((data) => {
+        setCorrections(data.corrections || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  });
+
+  async function previewImpact() {
+    const res = await fetch(`/api/admin/sites/${siteId}/corrections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category, rule, scope, example_before: exBefore, preview_only: true }),
+    });
+    const data = await res.json();
+    setImpact(data.impact);
+  }
+
+  async function addCorrection() {
+    if (!rule.trim()) return;
+    setSaving(true);
+    const res = await fetch(`/api/admin/sites/${siteId}/corrections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category,
+        rule: rule.trim(),
+        scope,
+        example_before: exBefore.trim() || null,
+        example_after: exAfter.trim() || null,
+        source_note: sourceNote.trim() || null,
+      }),
+    });
+    const data = await res.json();
+    if (data.correction) {
+      setCorrections([data.correction, ...corrections]);
+      setRule("");
+      setExBefore("");
+      setExAfter("");
+      setSourceNote("");
+      setImpact(null);
+    }
+    setSaving(false);
+  }
+
+  async function toggleCorrection(id: string, active: boolean) {
+    await fetch(`/api/admin/sites/${siteId}/corrections`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, is_active: active }),
+    });
+    setCorrections(corrections.map((c) => c.id === id ? { ...c, is_active: active } : c));
+  }
+
+  const activeCount = corrections.filter((c) => c.is_active).length;
+
+  return (
+    <div className="space-y-3">
+      {/* Add correction form */}
+      <div className="rounded border border-border bg-background p-3 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-[9px] text-muted mb-0.5">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full bg-surface-hover px-2 py-1 text-xs text-muted"
+            >
+              {CORRECTION_CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[9px] text-muted mb-0.5">Scope</label>
+            <select
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+              className="w-full bg-surface-hover px-2 py-1 text-xs text-muted"
+            >
+              {CORRECTION_SCOPES.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-[9px] text-muted mb-0.5">Rule</label>
+          <textarea
+            value={rule}
+            onChange={(e) => setRule(e.target.value)}
+            placeholder="Use 'bespoke' instead of 'custom' when describing cabinetry"
+            rows={2}
+            className="w-full resize-none bg-surface-hover px-2 py-1 text-xs"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-[9px] text-muted mb-0.5">Example before</label>
+            <input
+              value={exBefore}
+              onChange={(e) => setExBefore(e.target.value)}
+              placeholder="custom cabinets"
+              className="w-full bg-surface-hover px-2 py-1 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] text-muted mb-0.5">Example after</label>
+            <input
+              value={exAfter}
+              onChange={(e) => setExAfter(e.target.value)}
+              placeholder="bespoke cabinetry"
+              className="w-full bg-surface-hover px-2 py-1 text-xs"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-[9px] text-muted mb-0.5">Source (tenant request reference)</label>
+          <input
+            value={sourceNote}
+            onChange={(e) => setSourceNote(e.target.value)}
+            placeholder="Email from John, April 18"
+            className="w-full bg-surface-hover px-2 py-1 text-xs"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={previewImpact}
+            disabled={!rule.trim()}
+            className="bg-surface-hover px-3 py-1 text-[10px] font-medium text-foreground hover:bg-accent hover:text-white disabled:opacity-50"
+          >
+            Preview Impact
+          </button>
+          <button
+            onClick={addCorrection}
+            disabled={!rule.trim() || saving}
+            className="bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Add Correction"}
+          </button>
+          {impact && (
+            <span className="text-[10px] text-muted">
+              Would affect {impact.blogPosts} article{impact.blogPosts !== 1 ? "s" : ""}, {impact.captions} caption{impact.captions !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Existing corrections */}
+      {loading ? (
+        <p className="text-[10px] text-muted">Loading...</p>
+      ) : corrections.length === 0 ? (
+        <p className="text-[10px] text-muted">No corrections yet. Add one when a tenant requests content adjustments.</p>
+      ) : (
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted">{activeCount} active correction{activeCount !== 1 ? "s" : ""}</p>
+          {corrections.map((c) => (
+            <div
+              key={c.id}
+              className={`rounded border border-border p-2 text-xs ${!c.is_active ? "opacity-50" : ""}`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-surface-hover px-1.5 py-0.5 text-[9px] text-muted">
+                  {c.category}
+                </span>
+                <span className="rounded bg-surface-hover px-1.5 py-0.5 text-[9px] text-muted">
+                  {c.scope}
+                </span>
+                <button
+                  onClick={() => toggleCorrection(c.id, !c.is_active)}
+                  className={`ml-auto text-[9px] ${c.is_active ? "text-danger" : "text-accent"}`}
+                >
+                  {c.is_active ? "Deactivate" : "Reactivate"}
+                </button>
+              </div>
+              <p className="mt-1">{c.rule}</p>
+              {c.example_before && c.example_after && (
+                <p className="mt-0.5 text-[10px] text-muted">
+                  &quot;{c.example_before}&quot; → &quot;{c.example_after}&quot;
+                </p>
+              )}
+              {c.source_note && (
+                <p className="mt-0.5 text-[9px] text-muted">Source: {c.source_note}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

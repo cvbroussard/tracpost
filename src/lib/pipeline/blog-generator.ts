@@ -1153,6 +1153,14 @@ export async function generateFromPairing(
     if (v.url && vendorLinks.length < 3) vendorLinks.push(`${v.name}: ${v.url}`);
   }
 
+  // Load content corrections
+  let blogCorrectionsBlock = "";
+  try {
+    const { loadCorrections, formatCorrectionsForPrompt } = await import("@/lib/corrections");
+    const corrections = await loadCorrections(siteData.site_id as string, "blog");
+    blogCorrectionsBlock = formatCorrectionsForPrompt(corrections);
+  } catch { /* non-fatal */ }
+
   // Map reward category to content type
   const typeMap: Record<string, BlogContentType> = {
     moment: "project_story",
@@ -1201,7 +1209,7 @@ ${imageUrls.length > 0
 ${existingTitles.length > 0
   ? `## DO NOT REUSE\n${existingTitles.map(t => `- ${t}`).join("\n")}\n`
   : ""}
-
+${blogCorrectionsBlock}
 ## Rules
 - Title: 40-60 chars. Lead with the reward/outcome, not the product.
 - Open with the reward scene — make the reader feel it first.

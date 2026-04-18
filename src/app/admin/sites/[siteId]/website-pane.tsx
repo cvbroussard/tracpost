@@ -328,12 +328,25 @@ export function RenderPipelineButton({ siteId }: { siteId: string }) {
 // Autopilot controls — publish now + refresh expired tokens
 // ──────────────────────────────────────────────────────────────────
 
+const PUBLISH_PLATFORMS = [
+  { value: "", label: "All platforms" },
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "pinterest", label: "Pinterest" },
+  { value: "youtube", label: "YouTube" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "twitter", label: "Twitter/X" },
+  { value: "gbp", label: "Google Business" },
+];
+
 export function AutopilotControls({ siteId }: { siteId: string }) {
   const [running, setRunning] = useState<string | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState("");
 
-  async function trigger(action: string) {
+  async function trigger(action: string, extra?: Record<string, unknown>) {
     setRunning(action);
     setError(null);
     setResult(null);
@@ -341,7 +354,7 @@ export function AutopilotControls({ siteId }: { siteId: string }) {
       const res = await fetch(`/api/admin/sites/${siteId}/autopilot`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...extra }),
       });
       const data = await res.json();
       if (res.ok) setResult(data);
@@ -355,9 +368,18 @@ export function AutopilotControls({ siteId }: { siteId: string }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={selectedPlatform}
+          onChange={(e) => setSelectedPlatform(e.target.value)}
+          className="bg-surface-hover px-2 py-1 text-[10px] border border-border rounded"
+        >
+          {PUBLISH_PLATFORMS.map((p) => (
+            <option key={p.value} value={p.value}>{p.label}</option>
+          ))}
+        </select>
         <button
-          onClick={() => trigger("publish")}
+          onClick={() => trigger("publish", selectedPlatform ? { platform: selectedPlatform } : {})}
           disabled={!!running}
           className="bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent-hover disabled:opacity-50"
         >

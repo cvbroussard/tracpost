@@ -249,7 +249,7 @@ function getVariantUrl(asset: Record<string, unknown>, platform: string): string
  * Publish content for one site across all platforms.
  * Called by the pipeline cron every hour.
  */
-export async function autopilotPublish(siteId: string, opts: { force?: boolean } = {}): Promise<PublishResult[]> {
+export async function autopilotPublish(siteId: string, opts: { force?: boolean; platform?: string | null } = {}): Promise<PublishResult[]> {
   const config = await loadCadenceConfig(siteId);
   const results: PublishResult[] = [];
 
@@ -267,6 +267,11 @@ export async function autopilotPublish(siteId: string, opts: { force?: boolean }
 
   for (const account of accounts) {
     const platform = String(account.platform);
+
+    // Platform filter — admin can target a single platform for testing
+    if (opts.platform && platform !== opts.platform) {
+      continue;
+    }
 
     // Should we publish now? (admin force bypasses cadence gates)
     if (!opts.force) {

@@ -179,6 +179,15 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     result.errors.push(`inbox-sync: ${msg}`);
   }
 
+  // Step 8: Auto-sync eligible photos to GBP gallery
+  try {
+    const { autoSyncPhotos } = await import("@/lib/gbp/photos");
+    await autoSyncPhotos(siteId);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    result.errors.push(`gbp-photo-sync: ${msg}`);
+  }
+
   // Send push notification if there are meaningful results
   await notifyPipelineResults(siteId, result);
 

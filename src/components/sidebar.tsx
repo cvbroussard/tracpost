@@ -34,6 +34,7 @@ const siteNav: NavItem[] = [
       { label: "Photos", path: "/google/photos" },
     ],
   },
+  { label: "Campaigns", path: "/campaigns", icon: "▶" },
   { label: "Blog", path: "/blog", icon: "✎" },
   { label: "SEO", path: "/seo", icon: "◇" },
   { label: "Spotlight", path: "/spotlight", icon: "✦" },

@@ -216,6 +216,24 @@ export async function autopilotPublish(siteId: string, opts: { force?: boolean; 
       continue;
     }
 
+    // Skip platforms with 3+ consecutive recent failures (unless admin force)
+    if (!opts.force) {
+      const [recentFailures] = await sql`
+        SELECT COUNT(*)::int AS fail_count
+        FROM (
+          SELECT status FROM social_posts
+          WHERE account_id = ${account.account_id}
+          ORDER BY created_at DESC
+          LIMIT 3
+        ) recent
+        WHERE status = 'failed'
+      `;
+      if (recentFailures?.fail_count >= 3) {
+        results.push({ platform, published: false, reason: "Skipped — 3+ consecutive failures. Reconnect or refresh token." });
+        continue;
+      }
+    }
+
     // Should we publish now? (admin force bypasses cadence gates)
     if (!opts.force) {
       const cadenceCheck = await shouldPublishNow(siteId, platform, config);
@@ -297,6 +315,11 @@ export async function autopilotPublish(siteId: string, opts: { force?: boolean; 
       if (publishResult.success) {
         results.push({ platform, published: true, postId: String(post.id) });
       } else {
+        // Auto-flag token issues to prevent future attempts
+        const errMsg = (publishResult.error || "").toLowerCase();
+        if (errMsg.includes("token") || errMsg.includes("401") || errMsg.includes("auth") || errMsg.includes("expired") || errMsg.includes("oauth")) {
+          await sql`UPDATE social_accounts SET status = 'token_expired', updated_at = NOW() WHERE id = ${account.account_id}`;
+        }
         results.push({
           platform,
           published: false,

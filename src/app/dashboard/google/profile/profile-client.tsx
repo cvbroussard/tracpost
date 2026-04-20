@@ -107,7 +107,7 @@ function Field({ label, value, editable, onSave, format }: {
   const [saving, setSaving] = useState(false);
 
   return (
-    <div className="flex items-start justify-between border-b border-border py-2 last:border-0">
+    <div className="group/field flex items-start justify-between border-b border-border py-2 last:border-0">
       <div className="flex-1">
         <p className="text-[10px] text-muted">{label}</p>
         {editing ? (
@@ -167,8 +167,11 @@ function Field({ label, value, editable, onSave, format }: {
         )}
       </div>
       {editable && !editing && (
-        <button onClick={() => setEditing(true)} className="text-[9px] text-accent hover:underline ml-2">
-          Edit
+        <button onClick={() => setEditing(true)} className="ml-2 text-gray-300 transition-colors group-hover/field:text-muted hover:!text-accent" title="Edit">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
         </button>
       )}
     </div>
@@ -260,20 +263,32 @@ function CategoryPicker({ siteId, onDirty }: { siteId: string; onDirty?: () => v
       {categories.length > 0 ? (
         <div className="space-y-1">
           {primary && (
-            <div className="flex items-center justify-between border-b border-border py-1.5">
+            <div className="group/cat flex items-center justify-between border-b border-border py-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium">{primary.name}</span>
                 <span className="rounded border border-border px-1.5 py-0.5 text-[8px] font-medium text-muted">PRIMARY</span>
               </div>
-              <button onClick={() => removeCategory(primary.gcid)} className="text-[9px] text-muted hover:text-danger">Remove</button>
+              <button onClick={() => removeCategory(primary.gcid)} className="text-gray-300 transition-colors group-hover/cat:text-muted hover:!text-danger" title="Remove">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
             </div>
           )}
           {additional.map((cat) => (
-            <div key={cat.gcid} className="flex items-center justify-between border-b border-border py-1.5 last:border-0">
+            <div key={cat.gcid} className="group/cat flex items-center justify-between border-b border-border py-1.5 last:border-0">
               <span className="text-xs">{cat.name}</span>
               <div className="flex items-center gap-2">
-                <button onClick={() => setPrimary(cat.gcid)} className="text-[9px] text-accent hover:underline">Make primary</button>
-                <button onClick={() => removeCategory(cat.gcid)} className="text-[9px] text-muted hover:text-danger">Remove</button>
+                <button onClick={() => setPrimary(cat.gcid)} className="text-gray-300 transition-colors group-hover/cat:text-muted hover:!text-accent" title="Make primary">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </button>
+                <button onClick={() => removeCategory(cat.gcid)} className="text-gray-300 transition-colors group-hover/cat:text-muted hover:!text-danger" title="Remove">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
               </div>
             </div>
           ))}
@@ -876,7 +891,7 @@ export function ProfileClient({ siteId }: { siteId: string }) {
                     {places.length > 0 && (
                       <div className="space-y-1 mb-2">
                         {places.map((place, i) => (
-                          <div key={i} className="flex items-center justify-between border-b border-border py-1 last:border-0">
+                          <div key={i} className="group/place flex items-center justify-between border-b border-border py-1 last:border-0">
                             <span className="text-xs">{place.placeName}</span>
                             <button
                               onClick={() => {
@@ -891,9 +906,12 @@ export function ProfileClient({ siteId }: { siteId: string }) {
                                 } : prev);
                                 setDirty(true);
                               }}
-                              className="text-[9px] text-muted hover:text-danger"
+                              className="text-gray-300 transition-colors group-hover/place:text-muted hover:!text-danger"
+                              title="Remove"
                             >
-                              Remove
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
                             </button>
                           </div>
                         ))}

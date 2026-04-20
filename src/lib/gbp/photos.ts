@@ -219,7 +219,13 @@ export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; 
   const qt = await getThresholds(siteId);
   const minQuality = publishAbove(qt);
 
-  // Find eligible assets not yet synced
+  // Check if this is a service-area business (no storefront categories allowed)
+  const isServiceArea = await sql`
+    SELECT 1 FROM sites WHERE id = ${siteId} AND (gbp_profile->>'serviceArea') IS NOT NULL
+  `;
+  const serviceAreaBusiness = isServiceArea.length > 0;
+
+  // Find eligible assets not yet synced (skip previously failed uploads)
   const eligible = await sql`
     SELECT ma.id, ma.storage_url, ma.content_pillar, ma.quality_score,
            ma.ai_analysis, ma.metadata AS asset_metadata
@@ -232,6 +238,7 @@ export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; 
         SELECT 1 FROM gbp_photo_sync gps
         WHERE gps.media_asset_id = ma.id AND gps.site_id = ${siteId}
       )
+      AND NOT (COALESCE(ma.metadata->>'gbp_upload_failed', 'false') = 'true')
     ORDER BY ma.quality_score DESC
     LIMIT 20
   `;
@@ -241,9 +248,29 @@ export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; 
 
   for (const asset of eligible) {
     try {
+      // Skip images below Google's 250x250 minimum
+      const assetMeta = (asset.asset_metadata || {}) as Record<string, unknown>;
+      const width = (assetMeta.width as number) || 0;
+      const height = (assetMeta.height as number) || 0;
+      if (width > 0 && height > 0 && (width < 250 || height < 250)) {
+        await sql`
+          UPDATE media_assets
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"gbp_upload_failed": true, "gbp_fail_reason": "Image below 250x250 minimum"}'::jsonb
+          WHERE id = ${asset.id}
+        `;
+        skipped++;
+        continue;
+      }
+
       const analysis = asset.ai_analysis as Record<string, unknown> | null;
       const sceneType = (analysis?.scene_type as string) || null;
-      const category = mapToGbpCategory(asset.content_pillar, sceneType);
+      let category = mapToGbpCategory(asset.content_pillar, sceneType);
+
+      // Service-area businesses can't use INTERIOR, EXTERIOR, COMMON_AREAS
+      if (serviceAreaBusiness && (category === "INTERIOR" || category === "EXTERIOR" || category === "COMMON_AREAS")) {
+        category = "ADDITIONAL";
+      }
+
       const description = (analysis?.description as string) || undefined;
 
       const result = await uploadGbpPhoto(
@@ -261,10 +288,21 @@ export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; 
         `;
         synced++;
       } else {
+        // Mark as failed so we don't retry
+        await sql`
+          UPDATE media_assets
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"gbp_upload_failed": true}'::jsonb
+          WHERE id = ${asset.id}
+        `;
         skipped++;
       }
     } catch (err) {
       console.error(`GBP photo sync failed for asset ${asset.id}:`, err instanceof Error ? err.message : err);
+      await sql`
+        UPDATE media_assets
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"gbp_upload_failed": true}'::jsonb
+        WHERE id = ${asset.id}
+      `;
       skipped++;
     }
   }

@@ -9,11 +9,19 @@ type SyncedPhoto = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EligibleAsset = any;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ImageAsset = any;
+
 interface Props {
   siteId: string;
   connected: boolean;
   initialSynced: SyncedPhoto[];
   initialEligible: EligibleAsset[];
+  allImages: ImageAsset[];
+  coverUrl: string | null;
+  logoUrl: string | null;
+  coverAssetId: string | null;
+  logoAssetId: string | null;
   stats: {
     total: number;
     product: number;
@@ -52,13 +60,53 @@ function StatCard({ label, count }: { label: string; count: number }) {
   );
 }
 
-export function PhotosClient({ siteId, connected, initialSynced, initialEligible, stats }: Props) {
+function ImagePicker({ images, currentId, onSelect, onClose, title }: {
+  images: ImageAsset[];
+  currentId: string | null;
+  onSelect: (id: string, url: string) => void;
+  onClose: () => void;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-3xl rounded-xl border border-border bg-surface p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium">{title}</h3>
+          <button onClick={onClose} className="text-muted hover:text-foreground">✕</button>
+        </div>
+        <div className="grid grid-cols-5 gap-2 max-h-[60vh] overflow-y-auto">
+          {images.map((img: ImageAsset) => (
+            <button
+              key={img.id}
+              onClick={() => onSelect(img.id, img.storage_url)}
+              className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-colors ${
+                img.id === currentId ? "border-accent" : "border-transparent hover:border-accent/50"
+              }`}
+            >
+              <img src={img.storage_url} alt="" className="h-full w-full object-cover" />
+              {img.id === currentId && (
+                <div className="absolute inset-0 bg-accent/20 flex items-center justify-center">
+                  <span className="rounded-full bg-accent px-2 py-0.5 text-[9px] text-white">Current</span>
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PhotosClient({ siteId, connected, initialSynced, initialEligible, allImages, coverUrl, logoUrl, coverAssetId, logoAssetId, stats }: Props) {
   const [synced, setSynced] = useState<SyncedPhoto[]>(initialSynced);
   const [eligible] = useState<EligibleAsset[]>(initialEligible);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"gallery" | "eligible">("gallery");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [currentCover, setCurrentCover] = useState<{ id: string | null; url: string | null }>({ id: coverAssetId, url: coverUrl });
+  const [currentLogo, setCurrentLogo] = useState<{ id: string | null; url: string | null }>({ id: logoAssetId, url: logoUrl });
+  const [pickerOpen, setPickerOpen] = useState<"cover" | "logo" | null>(null);
 
   if (!connected) {
     return (
@@ -110,8 +158,93 @@ export function PhotosClient({ siteId, connected, initialSynced, initialEligible
     setDeleting(null);
   }
 
+  async function setAsset(type: "cover" | "logo", assetId: string, url: string) {
+    const res = await fetch(`/api/admin/sites/${siteId}/photos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: type === "cover" ? "set_cover" : "set_logo", sourceUrl: url }),
+    });
+
+    // Save reference locally
+    await fetch(`/api/google/profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        site_id: siteId,
+        [`gbp_${type}_asset_id`]: assetId,
+      }),
+    });
+
+    if (type === "cover") {
+      setCurrentCover({ id: assetId, url });
+    } else {
+      setCurrentLogo({ id: assetId, url });
+    }
+    setPickerOpen(null);
+    setSyncResult(`${type === "cover" ? "Cover" : "Logo"} updated`);
+    setTimeout(() => setSyncResult(null), 3000);
+  }
+
   return (
     <div className="p-4">
+      {/* Cover + Logo */}
+      <div className="mb-4 grid grid-cols-[1fr_auto] gap-4">
+        {/* Cover photo */}
+        <div
+          className="relative h-36 overflow-hidden rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 cursor-pointer group"
+          onClick={() => setPickerOpen("cover")}
+        >
+          {currentCover.url ? (
+            <img src={currentCover.url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-xs text-white/40">Click to set cover photo</p>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+            <span className="text-xs text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+              {currentCover.url ? "Change Cover" : "Set Cover"}
+            </span>
+          </div>
+          <span className="absolute top-2 left-2 rounded bg-black/50 px-2 py-0.5 text-[9px] text-white">
+            Cover Photo · 1080×608
+          </span>
+        </div>
+
+        {/* Logo */}
+        <div
+          className="relative h-36 w-36 overflow-hidden rounded-xl bg-surface-hover cursor-pointer group border border-border"
+          onClick={() => setPickerOpen("logo")}
+        >
+          {currentLogo.url ? (
+            <img src={currentLogo.url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-[10px] text-muted text-center px-2">Click to set logo</p>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+            <span className="text-xs text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+              {currentLogo.url ? "Change" : "Set Logo"}
+            </span>
+          </div>
+          <span className="absolute top-2 left-2 rounded bg-black/50 px-2 py-0.5 text-[9px] text-white">
+            Logo · 250×250
+          </span>
+        </div>
+      </div>
+
+      {/* Image picker modal */}
+      {pickerOpen && (
+        <ImagePicker
+          images={allImages}
+          currentId={pickerOpen === "cover" ? currentCover.id : currentLogo.id}
+          title={pickerOpen === "cover" ? "Select Cover Photo" : "Select Logo"}
+          onSelect={(id, url) => setAsset(pickerOpen, id, url)}
+          onClose={() => setPickerOpen(null)}
+        />
+      )}
+
       {/* Stats bar */}
       <div className="mb-4 grid grid-cols-6 gap-2">
         <StatCard label="On Google" count={stats.total} />

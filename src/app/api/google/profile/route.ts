@@ -92,6 +92,35 @@ export async function POST(req: NextRequest) {
       : NextResponse.json({ error: "Sync failed" }, { status: 500 });
   }
 
+  // Cover/logo asset reference updates
+  if (updates.gbp_cover_asset_id !== undefined || updates.gbp_logo_asset_id !== undefined) {
+    const { sql } = await import("@/lib/db");
+    if (updates.gbp_cover_asset_id !== undefined) {
+      await sql`UPDATE sites SET gbp_cover_asset_id = ${updates.gbp_cover_asset_id} WHERE id = ${site_id}`;
+
+      // Also store the URL in the cached profile for the hero banner
+      const [asset] = await sql`SELECT storage_url FROM media_assets WHERE id = ${updates.gbp_cover_asset_id}`;
+      if (asset) {
+        await sql`
+          UPDATE sites SET gbp_profile = jsonb_set(COALESCE(gbp_profile, '{}'::jsonb), '{coverPhotoUrl}', ${JSON.stringify(asset.storage_url)}::jsonb)
+          WHERE id = ${site_id}
+        `;
+      }
+    }
+    if (updates.gbp_logo_asset_id !== undefined) {
+      await sql`UPDATE sites SET gbp_logo_asset_id = ${updates.gbp_logo_asset_id} WHERE id = ${site_id}`;
+
+      const [asset] = await sql`SELECT storage_url FROM media_assets WHERE id = ${updates.gbp_logo_asset_id}`;
+      if (asset) {
+        await sql`
+          UPDATE sites SET gbp_profile = jsonb_set(COALESCE(gbp_profile, '{}'::jsonb), '{logoUrl}', ${JSON.stringify(asset.storage_url)}::jsonb)
+          WHERE id = ${site_id}
+        `;
+      }
+    }
+    return NextResponse.json({ success: true });
+  }
+
   const { updateProfile } = await import("@/lib/gbp/profile");
   const result = await updateProfile(site_id, updates);
 

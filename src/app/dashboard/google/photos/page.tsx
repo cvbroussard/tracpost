@@ -57,12 +57,47 @@ export default async function GooglePhotosPage() {
     LIMIT 1
   `;
 
+  // Cover + logo asset references
+  const [siteAssets] = await sql`
+    SELECT gbp_cover_asset_id, gbp_logo_asset_id FROM sites WHERE id = ${siteId}
+  `;
+  const coverAssetId = siteAssets?.gbp_cover_asset_id as string | null;
+  const logoAssetId = siteAssets?.gbp_logo_asset_id as string | null;
+
+  let coverUrl: string | null = null;
+  let logoUrl: string | null = null;
+
+  if (coverAssetId) {
+    const [a] = await sql`SELECT storage_url FROM media_assets WHERE id = ${coverAssetId}`;
+    coverUrl = (a?.storage_url as string) || null;
+  }
+  if (logoAssetId) {
+    const [a] = await sql`SELECT storage_url FROM media_assets WHERE id = ${logoAssetId}`;
+    logoUrl = (a?.storage_url as string) || null;
+  }
+
+  // All image assets for the picker
+  const allImages = await sql`
+    SELECT id, storage_url, quality_score, context_note
+    FROM media_assets
+    WHERE site_id = ${siteId}
+      AND media_type LIKE 'image/%'
+      AND triage_status IN ('triaged', 'consumed')
+    ORDER BY quality_score DESC
+    LIMIT 100
+  `;
+
   return (
     <PhotosClient
       siteId={siteId}
       connected={!!gbpConnected}
       initialSynced={synced}
       initialEligible={eligible}
+      allImages={allImages}
+      coverUrl={coverUrl}
+      logoUrl={logoUrl}
+      coverAssetId={coverAssetId}
+      logoAssetId={logoAssetId}
       stats={{
         total: (stats?.total_synced as number) ?? 0,
         product: (stats?.product as number) ?? 0,

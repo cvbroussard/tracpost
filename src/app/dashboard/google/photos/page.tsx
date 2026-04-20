@@ -29,7 +29,7 @@ export default async function GooglePhotosPage() {
     WHERE ma.site_id = ${siteId}
       AND ma.triage_status = 'triaged'
       AND ma.quality_score >= 0.5
-      AND ma.media_type LIKE 'image/%'
+      AND (ma.media_type LIKE 'image/%' OR ma.media_type = 'image')
       AND NOT EXISTS (
         SELECT 1 FROM gbp_photo_sync gps
         WHERE gps.media_asset_id = ma.id AND gps.site_id = ${siteId}
@@ -81,9 +81,9 @@ export default async function GooglePhotosPage() {
     SELECT id, storage_url, quality_score, context_note
     FROM media_assets
     WHERE site_id = ${siteId}
-      AND media_type LIKE 'image/%'
-      AND triage_status IN ('triaged', 'consumed')
-    ORDER BY quality_score DESC
+      AND (media_type LIKE 'image/%' OR media_type = 'image')
+      AND triage_status IN ('triaged', 'consumed', 'scheduled', 'received')
+    ORDER BY quality_score DESC NULLS LAST
     LIMIT 100
   `;
 

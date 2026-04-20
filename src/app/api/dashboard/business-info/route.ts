@@ -66,13 +66,41 @@ export async function POST(req: NextRequest) {
     return uploadBufferToR2(key, buffer, file.type);
   }
 
-  // Logo upload
+  // Logo upload — square, min 250x250, bedrock R2 key
   let logoUrl: string | null = existingLogoUrl;
   if (logoFile && logoFile.size > 0) {
     try {
-      logoUrl = await uploadImage(logoFile, "logo", 2 * 1024 * 1024);
+      if (!logoFile.type.startsWith("image/")) {
+        return NextResponse.json({ error: "Logo must be an image (JPG or PNG)" }, { status: 400 });
+      }
+      if (logoFile.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: "Logo must be under 5MB" }, { status: 400 });
+      }
+
+      const buffer = Buffer.from(await logoFile.arrayBuffer());
+
+      // Check dimensions + convert to PNG for universal compatibility
+      const sharp = (await import("sharp")).default;
+      const metadata = await sharp(buffer).metadata();
+      if (metadata.width && metadata.height) {
+        if (metadata.width < 250 || metadata.height < 250) {
+          return NextResponse.json({ error: `Logo must be at least 250×250 pixels. Got ${metadata.width}×${metadata.height}.` }, { status: 400 });
+        }
+        if (Math.abs(metadata.width - metadata.height) > metadata.width * 0.1) {
+          return NextResponse.json({ error: `Logo should be square (1:1). Got ${metadata.width}×${metadata.height}.` }, { status: 400 });
+        }
+      }
+
+      // Convert to PNG (lossless, preserves transparency, GBP-compatible)
+      const pngBuffer = await sharp(buffer).png().toBuffer();
+      const key = `sites/${siteId}/branding/logo.png`;
+      logoUrl = await uploadBufferToR2(key, pngBuffer, "image/png");
     } catch (err) {
-      return NextResponse.json({ error: err instanceof Error ? err.message : "Logo upload failed" }, { status: 400 });
+      const msg = err instanceof Error ? err.message : "Logo upload failed";
+      if (msg.includes("250") || msg.includes("square")) {
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
   }
 

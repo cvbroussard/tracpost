@@ -116,3 +116,18 @@ export async function fetchAndConvert(
 
   return ensureWebFormat(buffer, contentType);
 }
+
+/**
+ * Get image dimensions from a buffer using sharp.
+ */
+export async function imageDimensions(buffer: Buffer): Promise<{ width: number; height: number } | null> {
+  try {
+    const metadata = await sharp(buffer).metadata();
+    if (metadata.width && metadata.height) {
+      return { width: metadata.width, height: metadata.height };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

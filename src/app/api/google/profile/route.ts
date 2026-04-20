@@ -62,7 +62,22 @@ export async function GET(req: NextRequest) {
     }, { status: 404 });
   }
 
-  return NextResponse.json(profile);
+  // Enrich with branding assets from sites table
+  const { sql: dbSql } = await import("@/lib/db");
+  const [siteAssets] = await dbSql`
+    SELECT business_logo, gbp_cover_asset_id FROM sites WHERE id = ${siteId}
+  `;
+  let enrichedCoverUrl: string | null = null;
+  if (siteAssets?.gbp_cover_asset_id) {
+    const [coverAsset] = await dbSql`SELECT storage_url FROM media_assets WHERE id = ${siteAssets.gbp_cover_asset_id}`;
+    enrichedCoverUrl = (coverAsset?.storage_url as string) || null;
+  }
+
+  return NextResponse.json({
+    ...profile,
+    logoUrl: siteAssets?.business_logo || null,
+    coverPhotoUrl: enrichedCoverUrl || (profile as unknown as Record<string, unknown>).coverPhotoUrl || null,
+  });
 }
 
 export async function POST(req: NextRequest) {

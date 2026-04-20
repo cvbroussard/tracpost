@@ -32,6 +32,13 @@ export default async function DashboardLayout({
   const activeSite = session.sites.find((s) => s.id === session.activeSiteId) || session.sites[0];
   const siteId = activeSite?.id;
 
+  // Fetch site logo for breadcrumb
+  let siteLogo: string | null = null;
+  if (siteId) {
+    const [logoRow] = await sql`SELECT business_logo FROM sites WHERE id = ${siteId}`;
+    siteLogo = (logoRow?.business_logo as string) || null;
+  }
+
   // Load onboarding state
   let checklistState: ChecklistState | null = null;
 
@@ -101,6 +108,7 @@ export default async function DashboardLayout({
         <TopBar userName={session.userName} />
         <PageHeader
           siteName={activeSite?.name || "TracPost"}
+          siteIcon={siteLogo || undefined}
           sites={session.sites}
           activeSiteId={session.activeSiteId}
         />

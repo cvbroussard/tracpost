@@ -41,7 +41,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/settings": "Settings",
 };
 
-export function PageHeader({ siteName, sites, activeSiteId, children }: PageHeaderProps) {
+export function PageHeader({ siteName, siteIcon, sites, activeSiteId, children }: PageHeaderProps) {
   const pathname = usePathname();
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -100,8 +100,11 @@ export function PageHeader({ siteName, sites, activeSiteId, children }: PageHead
             <div className="relative" ref={pickerRef}>
               <button
                 onClick={() => setPickerOpen(!pickerOpen)}
-                className="flex items-center gap-1 font-medium text-foreground hover:text-accent"
+                className="flex items-center gap-1.5 font-medium text-foreground hover:text-accent"
               >
+                {siteIcon && (
+                  <img src={siteIcon} alt="" className="h-5 w-5 rounded-sm object-cover" />
+                )}
                 {siteName}
                 {sites.length > 0 && (
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`}>

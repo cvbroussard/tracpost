@@ -11,9 +11,17 @@ export async function GET(req: NextRequest) {
   const authResult = await authenticateRequest(req);
   if (authResult instanceof NextResponse) return authResult;
 
-  const siteId = new URL(req.url).searchParams.get("site_id");
+  const params = new URL(req.url).searchParams;
+  const siteId = params.get("site_id");
   if (!siteId) {
     return NextResponse.json({ error: "site_id required" }, { status: 400 });
+  }
+
+  // Quick dirty check — no profile fetch needed
+  if (params.get("check_dirty")) {
+    const { sql } = await import("@/lib/db");
+    const [site] = await sql`SELECT gbp_sync_dirty FROM sites WHERE id = ${siteId}`;
+    return NextResponse.json({ dirty: site?.gbp_sync_dirty || false });
   }
 
   const { fetchProfile, syncProfileFromGoogle } = await import("@/lib/gbp/profile");
@@ -68,7 +76,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "site_id required" }, { status: 400 });
   }
 
-  // Manual refresh from Google
+  // Push all changes to Google
+  if (action === "push") {
+    const { pushProfileToGoogle } = await import("@/lib/gbp/profile");
+    const result = await pushProfileToGoogle(site_id);
+    return NextResponse.json(result, { status: result.success ? 200 : 500 });
+  }
+
+  // Manual refresh from Google (kept for admin use)
   if (action === "sync") {
     const { syncProfileFromGoogle } = await import("@/lib/gbp/profile");
     const profile = await syncProfileFromGoogle(site_id);

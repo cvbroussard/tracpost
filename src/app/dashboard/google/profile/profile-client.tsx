@@ -98,22 +98,37 @@ function Field({ label, value, editable, onSave }: {
       <div className="flex-1">
         <p className="text-[10px] text-muted">{label}</p>
         {editing ? (
-          <div className="mt-0.5">
+          <div className="mt-1">
             {value.length > 60 ? (
               <textarea
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = "auto";
+                    el.style.height = el.scrollHeight + "px";
+                  }
+                }}
                 value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                rows={3}
-                className="w-full resize-none bg-surface-hover px-2 py-1 text-xs"
+                onChange={(e) => {
+                  setEditValue(e.target.value);
+                  const el = e.target;
+                  el.style.height = "auto";
+                  el.style.height = el.scrollHeight + "px";
+                }}
+                autoFocus
+                className="w-full resize-none rounded-lg border border-accent/30 bg-background px-3 py-2 text-xs leading-relaxed focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20"
               />
             ) : (
               <input
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
-                className="w-full bg-surface-hover px-2 py-1 text-xs"
+                autoFocus
+                className="w-full rounded-lg border border-accent/30 bg-background px-3 py-2 text-xs focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20"
               />
             )}
-            <div className="mt-1 flex gap-1">
+            {value.length > 60 && (
+              <p className="mt-1 text-[9px] text-muted text-right">{editValue.length}/750</p>
+            )}
+            <div className="mt-2 flex gap-2">
               <button
                 onClick={async () => {
                   setSaving(true);
@@ -122,13 +137,13 @@ function Field({ label, value, editable, onSave }: {
                   setEditing(false);
                 }}
                 disabled={saving}
-                className="rounded bg-accent px-2 py-0.5 text-[9px] text-white"
+                className="rounded bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent/90"
               >
                 Save
               </button>
               <button
                 onClick={() => { setEditing(false); setEditValue(value); }}
-                className="rounded px-2 py-0.5 text-[9px] text-muted"
+                className="rounded px-3 py-1 text-[10px] text-muted hover:text-foreground"
               >
                 Cancel
               </button>
@@ -155,7 +170,7 @@ interface SiteCategory {
   reasoning: string | null;
 }
 
-function CategoryPicker({ siteId }: { siteId: string }) {
+function CategoryPicker({ siteId, onDirty }: { siteId: string; onDirty?: () => void }) {
   const [categories, setCategories] = useState<SiteCategory[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ gcid: string; name: string }>>([]);
@@ -195,6 +210,7 @@ function CategoryPicker({ siteId }: { siteId: string }) {
       setSearchQuery("");
       setSearchResults([]);
       loadCategories();
+      onDirty?.();
     } else {
       const data = await res.json();
       setStatus(data.error || "Failed to add");
@@ -209,6 +225,7 @@ function CategoryPicker({ siteId }: { siteId: string }) {
       body: JSON.stringify({ site_id: siteId, action: "remove", gcid }),
     });
     loadCategories();
+    onDirty?.();
   }
 
   async function setPrimary(gcid: string) {
@@ -218,18 +235,7 @@ function CategoryPicker({ siteId }: { siteId: string }) {
       body: JSON.stringify({ site_id: siteId, action: "set_primary", gcid }),
     });
     loadCategories();
-  }
-
-  async function pushToGoogle() {
-    setStatus("Pushing to Google...");
-    const res = await fetch("/api/google/categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site_id: siteId, action: "push_to_google" }),
-    });
-    const data = await res.json();
-    setStatus(data.success ? "Synced to Google" : data.error || "Push failed");
-    setTimeout(() => setStatus(null), 3000);
+    onDirty?.();
   }
 
   const primary = categories.find((c) => c.is_primary);
@@ -290,17 +296,7 @@ function CategoryPicker({ siteId }: { siteId: string }) {
       {/* Footer */}
       <div className="mt-3 flex items-center justify-between">
         <p className="text-[9px] text-muted">{categories.length}/10 categories · 1 primary + {Math.max(0, categories.length - 1)} additional</p>
-        <div className="flex items-center gap-2">
-          {status && <span className="text-[9px] text-accent">{status}</span>}
-          {categories.length > 0 && (
-            <button
-              onClick={pushToGoogle}
-              className="rounded bg-accent px-3 py-1 text-[9px] text-white hover:bg-accent/90"
-            >
-              Push to Google
-            </button>
-          )}
-        </div>
+        {status && <span className="text-[9px] text-accent">{status}</span>}
       </div>
     </Section>
   );
@@ -310,21 +306,46 @@ export function ProfileClient({ siteId }: { siteId: string }) {
   const [profile, setProfile] = useState<GbpProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pushStatus, setPushStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/google/profile?site_id=${siteId}`)
-      .then((r) => {
+    Promise.all([
+      fetch(`/api/google/profile?site_id=${siteId}`).then((r) => {
         if (!r.ok) throw new Error("No GBP connection");
         return r.json();
+      }),
+      fetch(`/api/google/profile?site_id=${siteId}&check_dirty=1`).then((r) => r.ok ? r.json() : null),
+    ])
+      .then(([profileData, dirtyData]) => {
+        setProfile(profileData);
+        if (dirtyData?.dirty) setDirty(true);
       })
-      .then(setProfile)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [siteId]);
 
+  // Intercept nav-away when dirty — block link clicks, show inline warning
+  const [navBlocked, setNavBlocked] = useState(false);
+  const [blockedHref, setBlockedHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (!dirty) return;
+      const target = (e.target as HTMLElement).closest("a");
+      if (target && target.href && !target.href.includes("/google/profile")) {
+        e.preventDefault();
+        e.stopPropagation();
+        setBlockedHref(target.href);
+        setNavBlocked(true);
+      }
+    }
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, [dirty]);
+
   async function saveField(field: string, value: string) {
-    setSaveStatus("Saving...");
     const res = await fetch("/api/google/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -332,30 +353,35 @@ export function ProfileClient({ siteId }: { siteId: string }) {
     });
     const data = await res.json();
     if (data.success) {
-      setSaveStatus("Saved — syncs to Google tonight");
-      // Refresh local data with the synced version
-      if (data.title) setProfile(data);
-    } else {
-      setSaveStatus(data.error || "Save failed");
+      // Update local state so the UI reflects the edit
+      setProfile((prev) => prev ? { ...prev, [field]: value } : prev);
+      setDirty(true);
     }
-    setTimeout(() => setSaveStatus(null), 3000);
   }
 
-  async function refreshFromGoogle() {
-    setSaveStatus("Syncing from Google...");
-    const res = await fetch("/api/google/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site_id: siteId, action: "sync" }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setProfile(data);
-      setSaveStatus("Synced from Google");
-    } else {
-      setSaveStatus("Sync failed");
+  async function pushToGoogle() {
+    setPushing(true);
+    setPushStatus(null);
+    try {
+      // Push profile fields
+      const profileRes = await fetch("/api/google/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site_id: siteId, action: "push" }),
+      });
+      const profileData = await profileRes.json();
+
+      if (profileData.success) {
+        setDirty(false);
+        setPushStatus("Synced to Google");
+      } else {
+        setPushStatus(profileData.error || "Push failed");
+      }
+    } catch {
+      setPushStatus("Push failed");
     }
-    setTimeout(() => setSaveStatus(null), 3000);
+    setPushing(false);
+    setTimeout(() => setPushStatus(null), 4000);
   }
 
   if (loading) {
@@ -396,28 +422,56 @@ export function ProfileClient({ siteId }: { siteId: string }) {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Completeness + sync info */}
+      {/* Completeness + push controls */}
       <div className="flex items-center justify-between">
         <ScoreRing score={profile.completeness.score} />
         <div className="flex items-center gap-3">
-          {saveStatus && (
-            <span className="text-xs text-accent">{saveStatus}</span>
+          {pushStatus && (
+            <span className="text-xs text-accent">{pushStatus}</span>
           )}
-          <div className="text-right">
-            {profile.synced_at && (
-              <p className="text-[9px] text-muted">
-                Last synced: {new Date(profile.synced_at).toLocaleDateString()}
-              </p>
-            )}
+          {dirty && (
+            <span className="rounded-full bg-warning/10 px-2.5 py-1 text-[10px] font-medium text-warning">
+              Unsaved changes
+            </span>
+          )}
+          <button
+            onClick={pushToGoogle}
+            disabled={pushing || !dirty}
+            className={`rounded px-4 py-1.5 text-xs font-medium transition-colors ${
+              dirty
+                ? "bg-accent text-white hover:bg-accent/90"
+                : "bg-surface-hover text-muted cursor-not-allowed"
+            } disabled:opacity-50`}
+          >
+            {pushing ? "Pushing..." : "Push to Google"}
+          </button>
+        </div>
+      </div>
+
+      {/* Nav-away warning */}
+      {navBlocked && (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 flex items-center justify-between">
+          <p className="text-xs text-warning">You have unpushed changes that won&apos;t reach Google until you push.</p>
+          <div className="flex items-center gap-2">
             <button
-              onClick={refreshFromGoogle}
-              className="text-[10px] text-accent hover:underline"
+              onClick={() => {
+                setNavBlocked(false);
+                setDirty(false);
+                if (blockedHref) window.location.href = blockedHref;
+              }}
+              className="rounded px-3 py-1 text-[10px] text-muted hover:text-foreground"
             >
-              Refresh from Google
+              Leave anyway
+            </button>
+            <button
+              onClick={() => { setNavBlocked(false); setBlockedHref(null); }}
+              className="rounded bg-warning px-3 py-1 text-[10px] font-medium text-white"
+            >
+              Stay and push
             </button>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Missing fields alert */}
       {profile.completeness.missing.length > 0 && (
@@ -446,7 +500,7 @@ export function ProfileClient({ siteId }: { siteId: string }) {
             )}
           </Section>
 
-          <CategoryPicker siteId={siteId} />
+          <CategoryPicker siteId={siteId} onDirty={() => setDirty(true)} />
 
           <Section title="Contact">
             <Field
@@ -516,9 +570,27 @@ export function ProfileClient({ siteId }: { siteId: string }) {
           </Section>
 
           <Section title="Status">
-            <Field label="Voice of Merchant" value={profile.metadata.hasVoiceOfMerchant ? "Verified owner" : "Not verified"} />
-            <Field label="Can Modify Services" value={profile.metadata.canModifyServiceList ? "Yes" : "No"} />
-            <Field label="Resource Name" value={profile.name} />
+            <div className="flex items-center gap-3 border-b border-border py-3">
+              {profile.metadata.hasVoiceOfMerchant ? (
+                <>
+                  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M23 12l-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.81.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.68L23 12z' fill='%2322c55e'/%3E%3Cpath d='M10 15.5l-3.5-3.5 1.41-1.41L10 12.67l5.59-5.59L17 8.5l-7 7z' fill='white'/%3E%3C/svg%3E" alt="" className="h-6 w-6 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium">Verified Owner</p>
+                    <p className="text-[9px] text-muted">Google-verified business listing</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-hover text-muted text-[10px]">?</span>
+                  <div>
+                    <p className="text-xs font-medium text-warning">Not Verified</p>
+                    <p className="text-[9px] text-muted">Complete Google verification to unlock all features</p>
+                  </div>
+                </>
+              )}
+            </div>
+            <Field label="Services Editable" value={profile.metadata.canModifyServiceList ? "Yes" : "No"} />
+            <Field label="Resource ID" value={profile.name.split("/").pop() || profile.name} />
           </Section>
         </div>
       </div>

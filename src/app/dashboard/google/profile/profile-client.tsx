@@ -625,10 +625,59 @@ export function ProfileClient({ siteId }: { siteId: string }) {
   }
   const closedDays = DAY_ORDER.filter((d) => !profile.regularHours.some((h) => h.day === d));
 
+  // Cover photo + logo from cached profile or top asset
+  const coverUrl = (profile as unknown as Record<string, unknown>).coverPhotoUrl as string | undefined;
+  const logoUrl = (profile as unknown as Record<string, unknown>).logoUrl as string | undefined;
+
   return (
-    <div className="p-4 space-y-4">
+    <div className="space-y-4">
+      {/* Hero banner — cover photo + logo + identity */}
+      <div className="relative overflow-hidden rounded-xl">
+        {/* Cover photo */}
+        <div className="h-44 bg-gradient-to-br from-gray-700 to-gray-900">
+          {coverUrl && (
+            <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+          )}
+          {!coverUrl && (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-xs text-white/40">Cover photo — set from Photos tab</p>
+            </div>
+          )}
+        </div>
+
+        {/* Identity overlay */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-5 pb-4 pt-12">
+          <div className="flex items-end gap-4">
+            {/* Logo */}
+            <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 border-white/20 bg-surface shadow-lg">
+              {logoUrl ? (
+                <img src={logoUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-gray-800 text-lg font-bold text-white/60">
+                  {profile.title.charAt(0)}
+                </div>
+              )}
+            </div>
+
+            {/* Business info */}
+            <div className="flex-1 min-w-0 pb-0.5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-white truncate">{profile.title}</h2>
+                {profile.metadata.hasVoiceOfMerchant && (
+                  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M23 12l-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.81.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.68L23 12z' fill='%2322c55e'/%3E%3Cpath d='M10 15.5l-3.5-3.5 1.41-1.41L10 12.67l5.59-5.59L17 8.5l-7 7z' fill='white'/%3E%3C/svg%3E" alt="Verified" className="h-5 w-5 flex-shrink-0" />
+                )}
+              </div>
+              <p className="text-xs text-white/70">
+                {profile.categories.primary}
+                {profile.address.locality ? ` · ${profile.address.locality}, ${profile.address.administrativeArea}` : ""}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Completeness + push controls */}
-      <div className="flex items-center justify-between">
+      <div className="px-4 flex items-center justify-between">
         <ScoreRing score={profile.completeness.score} />
         <div className="flex items-center gap-3">
           {pushStatus && (
@@ -655,7 +704,7 @@ export function ProfileClient({ siteId }: { siteId: string }) {
 
       {/* Nav-away warning */}
       {navBlocked && (
-        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 flex items-center justify-between">
+        <div className="mx-4 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 flex items-center justify-between">
           <p className="text-xs text-warning">You have unpushed changes that won&apos;t reach Google until you push.</p>
           <div className="flex items-center gap-2">
             <button
@@ -680,7 +729,7 @@ export function ProfileClient({ siteId }: { siteId: string }) {
 
       {/* Missing fields alert */}
       {profile.completeness.missing.length > 0 && (
-        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
+        <div className="mx-4 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
           <p className="text-xs font-medium text-warning">Missing profile information</p>
           <p className="mt-1 text-[10px] text-muted">
             Complete these fields to improve your local search ranking: {profile.completeness.missing.join(", ")}
@@ -689,7 +738,7 @@ export function ProfileClient({ siteId }: { siteId: string }) {
       )}
 
       {/* Two-column layout */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="px-4 grid grid-cols-2 gap-4">
         {/* Left column */}
         <div className="space-y-4">
           <Section title="About">

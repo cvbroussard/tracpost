@@ -4,10 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface Location {
+  accountId: string;
+  locationId: string;
+  locationName: string;
+  address: string;
+}
+
+interface PendingConnection {
   socialAccountId: string;
-  name: string;
-  address: string | null;
-  currentSiteId: string | null;
+  email: string;
+  initiatingSiteId: string | null;
+  initiatingSiteName: string | null;
+  locations: Location[];
 }
 
 interface Site {
@@ -16,63 +24,43 @@ interface Site {
 }
 
 interface Props {
-  locations: Location[];
+  pendingConnections: PendingConnection[];
   sites: Site[];
-  source: string;
-  initiatingSiteId: string | null;
 }
 
-export function LocationPickerClient({ locations, sites, source, initiatingSiteId }: Props) {
+export function LocationPickerClient({ pendingConnections, sites }: Props) {
   const router = useRouter();
-  const [assignments, setAssignments] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
+  const [selections, setSelections] = useState<Record<string, { siteId: string; locationIndex: number } | null>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [completed, setCompleted] = useState<Set<string>>(new Set());
 
-    for (const loc of locations) {
-      if (loc.currentSiteId) {
-        // Already linked — preserve
-        initial[loc.socialAccountId] = loc.currentSiteId;
-      } else {
-        // Try auto-match by name similarity
-        const match = sites.find((s) =>
-          s.name.toLowerCase().includes(loc.name.toLowerCase().split(",")[0].split(" ")[0]) ||
-          loc.name.toLowerCase().includes(s.name.toLowerCase().split(" ")[0])
-        );
-        if (match) {
-          initial[loc.socialAccountId] = match.id;
-        }
-      }
-    }
-    return initial;
-  });
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  async function handleSave() {
-    setSaving(true);
+  async function assignLocation(
+    socialAccountId: string,
+    siteId: string,
+    locationIndex: number,
+  ) {
+    setSaving(socialAccountId);
 
     try {
       const res = await fetch("/api/google/link-locations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assignments }),
+        body: JSON.stringify({
+          social_account_id: socialAccountId,
+          site_id: siteId,
+          location_index: locationIndex,
+        }),
       });
 
       if (res.ok) {
-        setSaved(true);
-        setTimeout(() => {
-          if (source === "admin" && initiatingSiteId) {
-            router.push(`/admin/sites/${initiatingSiteId}`);
-          } else {
-            router.push("/dashboard/accounts?connected=Google%20Business");
-          }
-        }, 1000);
+        setCompleted((prev) => new Set([...prev, socialAccountId]));
       }
     } catch { /* ignore */ }
 
-    setSaving(false);
+    setSaving(null);
   }
 
-  const allAssigned = locations.every((loc) => assignments[loc.socialAccountId]);
+  const allDone = pendingConnections.every((pc) => completed.has(pc.socialAccountId));
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-4">
@@ -80,81 +68,96 @@ export function LocationPickerClient({ locations, sites, source, initiatingSiteI
         <div className="mb-1 text-center">
           <span className="text-2xl">G</span>
         </div>
-        <h2 className="text-center text-lg font-medium mb-1">Link Google Business Locations</h2>
+        <h2 className="text-center text-lg font-medium mb-1">Assign Google Business Location</h2>
         <p className="text-center text-xs text-muted mb-6">
-          We found {locations.length} locations on your Google account. Assign each to the correct site.
+          A tenant connected their Google account. Select the correct location for this site.
         </p>
 
-        <div className="space-y-3">
-          {locations.map((loc) => {
-            const currentAssignment = assignments[loc.socialAccountId];
-            const assignedSite = sites.find((s) => s.id === currentAssignment);
+        {pendingConnections.map((pc) => (
+          <div key={pc.socialAccountId} className="mb-6">
+            <div className="mb-3 rounded-lg bg-surface-hover px-3 py-2">
+              <p className="text-xs">
+                <span className="text-muted">Connected by:</span>{" "}
+                <span className="font-medium">{pc.initiatingSiteName || "Unknown"}</span>
+              </p>
+              <p className="text-[10px] text-muted">{pc.email} · {pc.locations.length} location{pc.locations.length !== 1 ? "s" : ""} found</p>
+            </div>
 
-            return (
-              <div
-                key={loc.socialAccountId}
-                className={`rounded-lg border p-4 transition-colors ${
-                  currentAssignment ? "border-accent/30 bg-accent/5" : "border-border"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{loc.name}</p>
-                    {loc.address && (
-                      <p className="mt-0.5 text-[10px] text-muted">{loc.address}</p>
-                    )}
-                  </div>
-                  <select
-                    value={currentAssignment || ""}
-                    onChange={(e) => {
-                      setAssignments((prev) => ({
-                        ...prev,
-                        [loc.socialAccountId]: e.target.value,
-                      }));
-                    }}
-                    className={`rounded border px-3 py-1.5 text-xs ${
-                      currentAssignment
-                        ? "border-accent bg-accent/10 text-foreground"
-                        : "border-border bg-surface-hover text-muted"
-                    }`}
-                  >
-                    <option value="">Select a site...</option>
-                    {sites.map((site) => (
-                      <option key={site.id} value={site.id}>
-                        {site.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {assignedSite && (
-                  <p className="mt-2 text-[10px] text-accent">
-                    → {assignedSite.name}
-                  </p>
-                )}
+            {completed.has(pc.socialAccountId) ? (
+              <div className="rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-center">
+                <p className="text-sm text-success font-medium">Location assigned</p>
               </div>
-            );
-          })}
-        </div>
+            ) : (
+              <div className="space-y-2">
+                {pc.locations.map((loc, index) => {
+                  const sel = selections[pc.socialAccountId];
+                  const isSelected = sel?.locationIndex === index;
 
-        <div className="mt-6 flex items-center justify-between">
-          <p className="text-[10px] text-muted">
-            {Object.values(assignments).filter(Boolean).length} of {locations.length} assigned
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => router.push("/dashboard/accounts")}
-              className="rounded px-4 py-2 text-xs text-muted hover:text-foreground"
-            >
-              Skip for now
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || !allAssigned}
-              className="rounded bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
-            >
-              {saving ? "Saving..." : saved ? "Linked!" : "Link Locations"}
-            </button>
+                  return (
+                    <div
+                      key={loc.locationId}
+                      className={`rounded-lg border p-3 cursor-pointer transition-colors ${
+                        isSelected ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"
+                      }`}
+                      onClick={() => setSelections((prev) => ({
+                        ...prev,
+                        [pc.socialAccountId]: { siteId: "", locationIndex: index },
+                      }))}
+                    >
+                      <p className="text-sm font-medium">{loc.locationName}</p>
+                      {loc.address && (
+                        <p className="mt-0.5 text-[10px] text-muted">{loc.address}</p>
+                      )}
+
+                      {isSelected && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <select
+                            value={sel?.siteId || ""}
+                            onChange={(e) => setSelections((prev) => ({
+                              ...prev,
+                              [pc.socialAccountId]: { siteId: e.target.value, locationIndex: index },
+                            }))}
+                            className="flex-1 rounded border border-border bg-background px-3 py-1.5 text-xs"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <option value="">Assign to site...</option>
+                            {sites.map((site) => (
+                              <option key={site.id} value={site.id}>{site.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (sel?.siteId) {
+                                assignLocation(pc.socialAccountId, sel.siteId, index);
+                              }
+                            }}
+                            disabled={!sel?.siteId || saving === pc.socialAccountId}
+                            className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+                          >
+                            {saving === pc.socialAccountId ? "Linking..." : "Link"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+        ))}
+
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() => router.push("/dashboard/accounts")}
+            className={`rounded px-4 py-2 text-xs font-medium ${
+              allDone
+                ? "bg-accent text-white hover:bg-accent/90"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            {allDone ? "Done" : "Skip for now"}
+          </button>
         </div>
       </div>
     </div>

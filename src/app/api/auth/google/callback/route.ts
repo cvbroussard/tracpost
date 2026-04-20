@@ -99,12 +99,12 @@ export async function GET(req: NextRequest) {
       const socialAccount = await sql`
         INSERT INTO social_accounts (
           subscription_id, platform, account_name, account_id,
-          access_token_encrypted, token_expires_at,
+          access_token_encrypted, refresh_token_encrypted, token_expires_at,
           scopes, status, metadata
         )
         VALUES (
           ${state.subscription_id}, 'gbp', ${loc.locationName}, ${loc.locationId},
-          ${encrypt(accessToken)}, ${expiresAt},
+          ${encrypt(accessToken)}, ${encrypt(refreshToken)}, ${expiresAt},
           ${"{business.manage}"},
           'active',
           ${JSON.stringify({
@@ -121,6 +121,7 @@ export async function GET(req: NextRequest) {
         DO UPDATE SET
           account_name = EXCLUDED.account_name,
           access_token_encrypted = EXCLUDED.access_token_encrypted,
+          refresh_token_encrypted = EXCLUDED.refresh_token_encrypted,
           token_expires_at = EXCLUDED.token_expires_at,
           status = 'active',
           metadata = EXCLUDED.metadata,

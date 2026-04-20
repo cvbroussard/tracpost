@@ -29,6 +29,7 @@ export function CommentsListClient({ postGroups, siteId }: CommentsListClientPro
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [didAutoSelect, setDidAutoSelect] = useState(false);
 
   async function loadComments(platformPostId: string) {
     setSelectedPostId(platformPostId);
@@ -41,6 +42,11 @@ export function CommentsListClient({ postGroups, siteId }: CommentsListClientPro
       }
     } catch { /* ignore */ }
     setLoading(false);
+  }
+
+  if (!didAutoSelect && postGroups.length > 0) {
+    setDidAutoSelect(true);
+    loadComments(postGroups[0].platform_post_id);
   }
 
   if (postGroups.length === 0) {

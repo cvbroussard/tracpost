@@ -24,7 +24,7 @@ export default async function CommentsPage() {
       COUNT(*) FILTER (WHERE ic.is_read = false)::int AS unread_count,
       MAX(ic.commented_at) AS latest_activity
     FROM inbox_comments ic
-    LEFT JOIN social_posts sp ON sp.platform_post_id = ic.platform_post_id
+    LEFT JOIN social_posts sp ON sp.platform_post_id = ic.platform_post_id OR sp.id::text = ic.platform_post_id
     WHERE ic.site_id = ${siteId}
       AND ic.subscription_id = ${session.subscriptionId}
       AND ic.is_hidden = false

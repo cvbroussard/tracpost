@@ -73,10 +73,27 @@ export async function GET(req: NextRequest) {
     enrichedCoverUrl = (coverAsset?.storage_url as string) || null;
   }
 
+  // Get TracPost categories (source of truth)
+  const tpCategories = await dbSql`
+    SELECT sgc.gcid, sgc.is_primary, gc.name
+    FROM site_gbp_categories sgc
+    JOIN gbp_categories gc ON gc.gcid = sgc.gcid
+    WHERE sgc.site_id = ${siteId}
+    ORDER BY sgc.is_primary DESC, gc.name
+  `;
+  const primaryCat = tpCategories.find((c) => c.is_primary);
+  const additionalCats = tpCategories.filter((c) => !c.is_primary);
+
   return NextResponse.json({
     ...profile,
     logoUrl: siteAssets?.business_logo || null,
     coverPhotoUrl: enrichedCoverUrl || (profile as unknown as Record<string, unknown>).coverPhotoUrl || null,
+    categories: {
+      primary: primaryCat?.name || profile.categories?.primary || "",
+      additional: additionalCats.length > 0
+        ? additionalCats.map((c) => c.name as string)
+        : profile.categories?.additional || [],
+    },
   });
 }
 

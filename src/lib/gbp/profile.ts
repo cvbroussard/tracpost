@@ -218,6 +218,7 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
 export async function updateProfile(
   siteId: string,
   updates: {
+    title?: string;
     description?: string;
     phoneNumber?: string;
     websiteUri?: string;
@@ -233,6 +234,7 @@ export async function updateProfile(
   }
 
   // Apply updates to local cache
+  if (updates.title !== undefined) cached.title = updates.title;
   if (updates.description !== undefined) cached.description = updates.description;
   if (updates.phoneNumber !== undefined) cached.phoneNumber = updates.phoneNumber;
   if (updates.websiteUri !== undefined) cached.websiteUri = updates.websiteUri;
@@ -268,6 +270,10 @@ export async function pushProfileToGoogle(siteId: string): Promise<{ success: bo
   const body: Record<string, unknown> = {};
 
   // Always push editable fields
+  if (profile.title) {
+    updateMask.push("title");
+    body.title = profile.title;
+  }
   if (profile.description) {
     updateMask.push("profile.description");
     body.profile = { description: profile.description };

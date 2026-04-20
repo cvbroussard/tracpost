@@ -167,7 +167,7 @@ function Field({ label, value, editable, onSave, format }: {
         )}
       </div>
       {editable && !editing && (
-        <button onClick={() => setEditing(true)} className="ml-2 text-gray-300 transition-colors group-hover/field:text-muted hover:!text-accent" title="Edit">
+        <button onClick={() => setEditing(true)} className="ml-2 text-gray-400 transition-colors group-hover/field:text-muted hover:!text-accent" title="Edit">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -268,23 +268,28 @@ function CategoryPicker({ siteId, onDirty }: { siteId: string; onDirty?: () => v
                 <span className="text-xs font-medium">{primary.name}</span>
                 <span className="rounded border border-border px-1.5 py-0.5 text-[8px] font-medium text-muted">PRIMARY</span>
               </div>
-              <button onClick={() => removeCategory(primary.gcid)} className="text-gray-300 transition-colors group-hover/cat:text-muted hover:!text-danger" title="Remove">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              <div className="flex items-center gap-2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#eab308" stroke="#eab308" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
-              </button>
+                <button onClick={() => removeCategory(primary.gcid)} className="text-gray-400 transition-colors group-hover/cat:text-muted hover:!text-danger" title="Remove">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
             </div>
           )}
           {additional.map((cat) => (
             <div key={cat.gcid} className="group/cat flex items-center justify-between border-b border-border py-1.5 last:border-0">
               <span className="text-xs">{cat.name}</span>
               <div className="flex items-center gap-2">
-                <button onClick={() => setPrimary(cat.gcid)} className="text-gray-300 transition-colors group-hover/cat:text-muted hover:!text-accent" title="Make primary">
+                <button onClick={() => setPrimary(cat.gcid)} className="text-gray-400 transition-colors group-hover/cat:text-muted hover:!text-yellow-500" title="Make primary">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 </button>
-                <button onClick={() => removeCategory(cat.gcid)} className="text-gray-300 transition-colors group-hover/cat:text-muted hover:!text-danger" title="Remove">
+                <button onClick={() => removeCategory(cat.gcid)} className="text-gray-400 transition-colors group-hover/cat:text-muted hover:!text-danger" title="Remove">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
@@ -529,6 +534,8 @@ export function ProfileClient({ siteId }: { siteId: string }) {
   const [dirty, setDirty] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [pushStatus, setPushStatus] = useState<string | null>(null);
+  const [editingHeroName, setEditingHeroName] = useState(false);
+  const [heroNameValue, setHeroNameValue] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -647,9 +654,9 @@ export function ProfileClient({ siteId }: { siteId: string }) {
   return (
     <div className="space-y-4">
       {/* Hero banner — cover photo + logo + identity */}
-      <div className="relative overflow-hidden rounded-xl">
+      <div className="group relative overflow-hidden rounded-xl">
         {/* Cover photo */}
-        <div className="h-44 bg-gradient-to-br from-gray-700 to-gray-900">
+        <div className="h-56 bg-gradient-to-br from-gray-700 to-gray-900">
           {coverUrl && (
             <img src={coverUrl} alt="" className="h-full w-full object-cover" />
           )}
@@ -677,9 +684,57 @@ export function ProfileClient({ siteId }: { siteId: string }) {
             {/* Business info */}
             <div className="flex-1 min-w-0 pb-0.5">
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-white truncate">{profile.title}</h2>
-                {profile.metadata.hasVoiceOfMerchant && (
-                  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M23 12l-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.81.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.68L23 12z' fill='%2322c55e'/%3E%3Cpath d='M10 15.5l-3.5-3.5 1.41-1.41L10 12.67l5.59-5.59L17 8.5l-7 7z' fill='white'/%3E%3C/svg%3E" alt="Verified" className="h-5 w-5 flex-shrink-0" />
+                {editingHeroName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={heroNameValue}
+                      onChange={(e) => setHeroNameValue(e.target.value)}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && heroNameValue.trim()) {
+                          saveField("title", heroNameValue.trim());
+                          setEditingHeroName(false);
+                        }
+                        if (e.key === "Escape") setEditingHeroName(false);
+                      }}
+                      style={{ color: "white", backgroundColor: "rgba(0,0,0,0.4)" }}
+                      className="border border-white/20 rounded px-2 py-0.5 text-lg font-semibold focus:outline-none focus:border-white/50 backdrop-blur-sm"
+                    />
+                    <button
+                      onClick={() => {
+                        if (heroNameValue.trim()) {
+                          saveField("title", heroNameValue.trim());
+                        }
+                        setEditingHeroName(false);
+                      }}
+                      className="text-white/60 hover:text-white text-xs"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={() => setEditingHeroName(false)}
+                      className="text-white/40 hover:text-white/70 text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="text-lg font-semibold text-white truncate">{profile.title}</h2>
+                    <button
+                      onClick={() => { setHeroNameValue(profile.title); setEditingHeroName(true); }}
+                      className="text-white/0 group-hover:text-white/40 hover:!text-white transition-colors"
+                      title="Edit business name"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+                {!editingHeroName && profile.metadata.hasVoiceOfMerchant && (
+                  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M23 12l-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.81.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.68L23 12z' fill='%2322c55e'/%3E%3Cpath d='M10 15.5l-3.5-3.5 1.41-1.41L10 12.67l5.59-5.59L17 8.5l-7 7z' fill='white'/%3E%3C/svg%3E" alt="Verified" title="Google-verified business listing" className="h-5 w-5 flex-shrink-0" />
                 )}
               </div>
               <p className="text-xs text-white/70">
@@ -757,7 +812,7 @@ export function ProfileClient({ siteId }: { siteId: string }) {
         {/* Left column */}
         <div className="space-y-4">
           <Section title="About">
-            <Field label="Business Name" value={profile.title} />
+            <Field label="Business Name" value={profile.title} editable onSave={(v) => saveField("title", v)} />
             <Field
               label="Description"
               value={profile.description}
@@ -906,7 +961,7 @@ export function ProfileClient({ siteId }: { siteId: string }) {
                                 } : prev);
                                 setDirty(true);
                               }}
-                              className="text-gray-300 transition-colors group-hover/place:text-muted hover:!text-danger"
+                              className="text-gray-400 transition-colors group-hover/place:text-muted hover:!text-danger"
                               title="Remove"
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -941,30 +996,6 @@ export function ProfileClient({ siteId }: { siteId: string }) {
 
         {/* Right column */}
         <div className="space-y-4">
-          <Section title="Status">
-            <div className="flex items-center gap-3 border-b border-border py-3">
-              {profile.metadata.hasVoiceOfMerchant ? (
-                <>
-                  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M23 12l-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.81.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.68L23 12z' fill='%2322c55e'/%3E%3Cpath d='M10 15.5l-3.5-3.5 1.41-1.41L10 12.67l5.59-5.59L17 8.5l-7 7z' fill='white'/%3E%3C/svg%3E" alt="" className="h-6 w-6 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-medium">Verified Owner</p>
-                    <p className="text-[9px] text-muted">Google-verified business listing</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-hover text-muted text-[10px]">?</span>
-                  <div>
-                    <p className="text-xs font-medium text-warning">Not Verified</p>
-                    <p className="text-[9px] text-muted">Complete Google verification to unlock all features</p>
-                  </div>
-                </>
-              )}
-            </div>
-            <Field label="Services Editable" value={profile.metadata.canModifyServiceList ? "Yes" : "No"} />
-            <Field label="Resource ID" value={profile.name.split("/").pop() || profile.name} />
-          </Section>
-
           <SocialProfilesCard siteId={siteId} />
 
           <AskForReviewsCard profile={profile} siteId={siteId} onStatus={setPushStatus} />

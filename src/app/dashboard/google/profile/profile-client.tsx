@@ -42,6 +42,7 @@ interface GbpProfile {
     score: number;
     missing: string[];
   };
+  synced_at?: string;
 }
 
 const DAY_ORDER = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
@@ -171,7 +172,30 @@ export function ProfileClient({ siteId }: { siteId: string }) {
       body: JSON.stringify({ site_id: siteId, [field]: value }),
     });
     const data = await res.json();
-    setSaveStatus(data.success ? "Saved to Google" : data.error || "Save failed");
+    if (data.success) {
+      setSaveStatus("Saved to Google");
+      // Refresh local data with the synced version
+      if (data.title) setProfile(data);
+    } else {
+      setSaveStatus(data.error || "Save failed");
+    }
+    setTimeout(() => setSaveStatus(null), 3000);
+  }
+
+  async function refreshFromGoogle() {
+    setSaveStatus("Syncing from Google...");
+    const res = await fetch("/api/google/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site_id: siteId, action: "sync" }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setProfile(data);
+      setSaveStatus("Synced from Google");
+    } else {
+      setSaveStatus("Sync failed");
+    }
     setTimeout(() => setSaveStatus(null), 3000);
   }
 
@@ -213,12 +237,27 @@ export function ProfileClient({ siteId }: { siteId: string }) {
 
   return (
     <div className="p-4 space-y-4 max-w-3xl">
-      {/* Completeness + save status */}
+      {/* Completeness + sync info */}
       <div className="flex items-center justify-between">
         <ScoreRing score={profile.completeness.score} />
-        {saveStatus && (
-          <span className="text-xs text-accent">{saveStatus}</span>
-        )}
+        <div className="flex items-center gap-3">
+          {saveStatus && (
+            <span className="text-xs text-accent">{saveStatus}</span>
+          )}
+          <div className="text-right">
+            {profile.synced_at && (
+              <p className="text-[9px] text-muted">
+                Last synced: {new Date(profile.synced_at).toLocaleDateString()}
+              </p>
+            )}
+            <button
+              onClick={refreshFromGoogle}
+              className="text-[10px] text-accent hover:underline"
+            >
+              Refresh from Google
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Missing fields alert */}

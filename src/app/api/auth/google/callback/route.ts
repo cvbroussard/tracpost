@@ -139,6 +139,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Pull and cache GBP profile on initial connection
+    try {
+      const { syncProfileFromGoogle } = await import("@/lib/gbp/profile");
+      await syncProfileFromGoogle(state.site_id);
+    } catch (err) {
+      console.error("GBP profile initial sync failed:", err);
+    }
+
     // Log usage
     await sql`
       INSERT INTO usage_log (subscription_id, action, metadata)

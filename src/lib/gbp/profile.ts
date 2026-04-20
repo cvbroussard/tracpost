@@ -50,6 +50,7 @@ export interface GbpProfile {
     score: number;
     missing: string[];
   };
+  synced_at?: string;
 }
 
 const READ_MASK = [
@@ -88,9 +89,27 @@ async function getGbpCredentials(siteId: string): Promise<{
 }
 
 /**
- * Fetch the full GBP profile for a site's location.
+ * Get the GBP profile — reads from local DB cache first.
+ * Falls back to live API call if cache is empty.
  */
 export async function fetchProfile(siteId: string): Promise<GbpProfile | null> {
+  // Try local cache first
+  const [site] = await sql`SELECT gbp_profile FROM sites WHERE id = ${siteId}`;
+  const cached = (site?.gbp_profile || {}) as Record<string, unknown>;
+
+  if (cached.title && cached.completeness) {
+    return cached as unknown as GbpProfile;
+  }
+
+  // Cache empty — pull from Google and store
+  return syncProfileFromGoogle(siteId);
+}
+
+/**
+ * Pull profile from Google API, parse it, and store in local DB.
+ * Called on initial connection, weekly integrity check, or manual refresh.
+ */
+export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile | null> {
   const creds = await getGbpCredentials(siteId);
   if (!creds) return null;
 
@@ -152,7 +171,7 @@ export async function fetchProfile(siteId: string): Promise<GbpProfile | null> {
   const filledFields = totalFields - missing.length;
   const score = Math.round((filledFields / totalFields) * 100);
 
-  return {
+  const result: GbpProfile = {
     name: data.name || "",
     title: data.title || "",
     description: data.profile?.description || "",
@@ -181,11 +200,20 @@ export async function fetchProfile(siteId: string): Promise<GbpProfile | null> {
       canHaveFoodMenus: data.metadata?.canHaveFoodMenus || false,
     },
     completeness: { score, missing },
+    synced_at: new Date().toISOString(),
   };
+
+  // Cache in local DB
+  await sql`
+    UPDATE sites SET gbp_profile = ${JSON.stringify(result)}::jsonb WHERE id = ${siteId}
+  `;
+
+  return result;
 }
 
 /**
  * Update specific fields on the GBP profile.
+ * Pushes to Google AND updates local cache.
  */
 export async function updateProfile(
   siteId: string,
@@ -250,6 +278,9 @@ export async function updateProfile(
     console.error("GBP profile update failed:", err.slice(0, 200));
     return { success: false, error: `Update failed (${res.status})` };
   }
+
+  // Re-sync from Google to update local cache with confirmed state
+  await syncProfileFromGoogle(siteId);
 
   return { success: true };
 }

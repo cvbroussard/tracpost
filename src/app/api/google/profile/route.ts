@@ -31,10 +31,19 @@ export async function POST(req: NextRequest) {
   if (authResult instanceof NextResponse) return authResult;
 
   const body = await req.json();
-  const { site_id, ...updates } = body;
+  const { site_id, action, ...updates } = body;
 
   if (!site_id) {
     return NextResponse.json({ error: "site_id required" }, { status: 400 });
+  }
+
+  // Manual refresh from Google
+  if (action === "sync") {
+    const { syncProfileFromGoogle } = await import("@/lib/gbp/profile");
+    const profile = await syncProfileFromGoogle(site_id);
+    return profile
+      ? NextResponse.json(profile)
+      : NextResponse.json({ error: "Sync failed" }, { status: 500 });
   }
 
   const { updateProfile } = await import("@/lib/gbp/profile");

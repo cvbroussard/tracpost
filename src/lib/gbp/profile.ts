@@ -42,6 +42,9 @@ export interface GbpProfile {
   serviceArea: Record<string, unknown> | null;
   openingDate: string | null;
   metadata: {
+    placeId: string | null;
+    mapsUri: string | null;
+    newReviewUri: string | null;
     hasVoiceOfMerchant: boolean;
     canModifyServiceList: boolean;
     canHaveFoodMenus: boolean;
@@ -195,6 +198,9 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
       ? `${data.openInfo.openingDate.year}-${String(data.openInfo.openingDate.month).padStart(2, "0")}-${String(data.openInfo.openingDate.day).padStart(2, "0")}`
       : null,
     metadata: {
+      placeId: data.metadata?.placeId || null,
+      mapsUri: data.metadata?.mapsUri || null,
+      newReviewUri: data.metadata?.newReviewUri || null,
       hasVoiceOfMerchant: data.metadata?.hasVoiceOfMerchant || false,
       canModifyServiceList: data.metadata?.canModifyServiceList || false,
       canHaveFoodMenus: data.metadata?.canHaveFoodMenus || false,

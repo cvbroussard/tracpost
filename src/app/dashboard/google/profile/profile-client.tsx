@@ -35,6 +35,9 @@ interface GbpProfile {
   serviceArea: Record<string, unknown> | null;
   openingDate: string | null;
   metadata: {
+    placeId: string | null;
+    mapsUri: string | null;
+    newReviewUri: string | null;
     hasVoiceOfMerchant: boolean;
     canModifyServiceList: boolean;
     canHaveFoodMenus: boolean;
@@ -390,10 +393,8 @@ function AskForReviewsCard({ profile, siteId, onStatus }: { profile: GbpProfile;
   const [sent, setSent] = useState(false);
 
   const location = profile.address.locality || "";
-  const storedReviewUri = (profile as unknown as Record<string, unknown>).reviewUri as string | undefined;
-  const placeId = (profile as unknown as Record<string, unknown>).placeId as string | undefined;
-  const reviewUrl = storedReviewUri
-    || (placeId ? `https://search.google.com/local/writereview?placeid=${placeId}` : null)
+  const reviewUrl = profile.metadata.newReviewUri
+    || (profile.metadata.placeId ? `https://search.google.com/local/writereview?placeid=${profile.metadata.placeId}` : null)
     || `https://www.google.com/maps/search/${encodeURIComponent(profile.title + (location ? " " + location : ""))}`;
 
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(reviewUrl)}`;

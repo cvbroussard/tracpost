@@ -1121,14 +1121,16 @@ export function ProfileClient({ siteId }: { siteId: string }) {
                           type="time"
                           value={openTime}
                           onChange={(e) => updateHours(e.target.value, closeTime)}
-                          className="rounded border border-border bg-background px-1.5 py-0.5 text-xs w-[5.5rem] focus:border-accent focus:outline-none"
+                          style={{ fontSize: "13px" }}
+                          className="rounded border border-border bg-background px-1.5 py-0.5 w-[5.5rem] focus:border-accent focus:outline-none"
                         />
                         <span className="text-[10px] text-muted">—</span>
                         <input
                           type="time"
                           value={closeTime}
                           onChange={(e) => updateHours(openTime, e.target.value)}
-                          className="rounded border border-border bg-background px-1.5 py-0.5 text-xs w-[5.5rem] focus:border-accent focus:outline-none"
+                          style={{ fontSize: "13px" }}
+                          className="rounded border border-border bg-background px-1.5 py-0.5 w-[5.5rem] focus:border-accent focus:outline-none"
                         />
                         <button
                           onClick={toggleClosed}

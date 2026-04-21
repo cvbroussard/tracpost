@@ -109,8 +109,13 @@ export async function fetchProfile(siteId: string): Promise<GbpProfile | null> {
 }
 
 /**
- * Pull profile from Google API, parse it, and store in local DB.
- * Called on initial connection, weekly integrity check, or manual refresh.
+ * Pull profile from Google API and store in local DB.
+ *
+ * Initial sync (no cached profile): full write — Google is source of truth.
+ * Re-sync (cached profile exists): safe merge — only updates read-only
+ * metadata fields (placeId, mapsUri, reviewUri, verification status).
+ * Never overwrites operator-editable fields (title, description, phone,
+ * website, hours, address, categories, opening date).
  */
 export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile | null> {
   const creds = await getGbpCredentials(siteId);
@@ -209,10 +214,33 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
     synced_at: new Date().toISOString(),
   };
 
-  // Cache in local DB
-  await sql`
-    UPDATE sites SET gbp_profile = ${JSON.stringify(result)}::jsonb WHERE id = ${siteId}
-  `;
+  // Check if this is initial sync or re-sync
+  const [existingSite] = await sql`SELECT gbp_profile FROM sites WHERE id = ${siteId}`;
+  const existing = (existingSite?.gbp_profile || {}) as Record<string, unknown>;
+  const isInitialSync = !existing.title;
+
+  if (isInitialSync) {
+    // Initial sync — full write, Google is source of truth
+    await sql`
+      UPDATE sites SET gbp_profile = ${JSON.stringify(result)}::jsonb WHERE id = ${siteId}
+    `;
+  } else {
+    // Re-sync — only update read-only metadata fields
+    const safeUpdate = {
+      ...existing,
+      metadata: result.metadata,
+      completeness: result.completeness,
+      synced_at: result.synced_at,
+    };
+    await sql`
+      UPDATE sites SET gbp_profile = ${JSON.stringify(safeUpdate)}::jsonb WHERE id = ${siteId}
+    `;
+  }
+
+  // Return the merged result for the UI
+  if (!isInitialSync) {
+    return { ...(existing as unknown as GbpProfile), metadata: result.metadata, completeness: result.completeness, synced_at: result.synced_at };
+  }
 
   return result;
 }

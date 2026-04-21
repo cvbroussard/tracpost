@@ -419,10 +419,10 @@ export async function pushCategoriesToGoogle(siteId: string): Promise<{ success:
   const body: Record<string, unknown> = {
     categories: {
       primaryCategory: primary
-        ? { categoryId: primary.gcid, displayName: primary.name }
+        ? { name: primary.gcid, displayName: primary.name }
         : undefined,
       additionalCategories: additional.map((c) => ({
-        categoryId: c.gcid,
+        name: c.gcid,
         displayName: c.name,
       })),
     },

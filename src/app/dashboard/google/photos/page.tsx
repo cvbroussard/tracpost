@@ -12,42 +12,18 @@ export default async function GooglePhotosPage() {
 
   const siteId = session.activeSiteId;
 
-  const synced = await sql`
-    SELECT gps.id, gps.media_asset_id, gps.gbp_media_name, gps.gbp_media_url,
-           gps.source_url, gps.category, gps.media_type, gps.synced_at,
-           ma.quality_score, ma.content_pillar
-    FROM gbp_photo_sync gps
-    LEFT JOIN media_assets ma ON ma.id = gps.media_asset_id
-    WHERE gps.site_id = ${siteId}
-    ORDER BY gps.synced_at DESC
-  `;
-
-  const eligible = await sql`
+  // All image assets with sync status
+  const allPhotos = await sql`
     SELECT ma.id, ma.storage_url, ma.quality_score, ma.content_pillar,
-           ma.ai_analysis, ma.created_at
+           ma.ai_analysis->>'scene_type' AS scene_type,
+           gps.id AS sync_id, gps.synced_at
     FROM media_assets ma
+    LEFT JOIN gbp_photo_sync gps ON gps.media_asset_id = ma.id AND gps.site_id = ${siteId}
     WHERE ma.site_id = ${siteId}
-      AND ma.triage_status = 'triaged'
-      AND ma.quality_score >= 0.5
       AND (ma.media_type LIKE 'image/%' OR ma.media_type = 'image')
-      AND NOT EXISTS (
-        SELECT 1 FROM gbp_photo_sync gps
-        WHERE gps.media_asset_id = ma.id AND gps.site_id = ${siteId}
-      )
-    ORDER BY ma.quality_score DESC
-    LIMIT 50
-  `;
-
-  const [stats] = await sql`
-    SELECT
-      COUNT(*)::int AS total_synced,
-      COUNT(*) FILTER (WHERE category = 'PRODUCT')::int AS product,
-      COUNT(*) FILTER (WHERE category = 'AT_WORK')::int AS at_work,
-      COUNT(*) FILTER (WHERE category = 'EXTERIOR')::int AS exterior,
-      COUNT(*) FILTER (WHERE category = 'INTERIOR')::int AS interior,
-      COUNT(*) FILTER (WHERE category = 'ADDITIONAL')::int AS additional
-    FROM gbp_photo_sync
-    WHERE site_id = ${siteId}
+      AND ma.triage_status IN ('triaged', 'consumed', 'scheduled', 'received')
+      AND COALESCE(ma.metadata->>'gbp_upload_failed', 'false') != 'true'
+    ORDER BY ma.quality_score DESC NULLS LAST
   `;
 
   const [gbpConnected] = await sql`
@@ -57,7 +33,7 @@ export default async function GooglePhotosPage() {
     LIMIT 1
   `;
 
-  // Cover asset + logo from branding
+  // Cover + logo
   const [siteAssets] = await sql`
     SELECT gbp_cover_asset_id, business_logo FROM sites WHERE id = ${siteId}
   `;
@@ -70,35 +46,36 @@ export default async function GooglePhotosPage() {
     coverUrl = (a?.storage_url as string) || null;
   }
 
-  // All image assets for the picker
-  const allImages = await sql`
-    SELECT id, storage_url, quality_score, context_note
-    FROM media_assets
-    WHERE site_id = ${siteId}
-      AND (media_type LIKE 'image/%' OR media_type = 'image')
-      AND triage_status IN ('triaged', 'consumed', 'scheduled', 'received')
-    ORDER BY quality_score DESC NULLS LAST
-    LIMIT 100
-  `;
+  // Blue ribbon = top 50 by quality
+  const blueRibbonIds = new Set(
+    allPhotos.slice(0, 50).map((p) => p.id as string)
+  );
+
+  const photos = allPhotos.map((p) => ({
+    id: p.id as string,
+    storageUrl: p.storage_url as string,
+    qualityScore: Number(p.quality_score) || 0,
+    contentPillar: (p.content_pillar as string) || null,
+    sceneType: (p.scene_type as string) || null,
+    isSynced: !!p.sync_id,
+    syncedAt: (p.synced_at as string) || null,
+    isBlueRibbon: blueRibbonIds.has(p.id as string),
+  }));
+
+  const syncedCount = photos.filter((p) => p.isSynced).length;
+  const blueRibbonCount = photos.filter((p) => p.isBlueRibbon).length;
 
   return (
     <PhotosClient
       siteId={siteId}
       connected={!!gbpConnected}
-      initialSynced={synced}
-      initialEligible={eligible}
-      allImages={allImages}
+      photos={photos}
       coverUrl={coverUrl}
       logoUrl={logoUrl}
       coverAssetId={coverAssetId}
-      stats={{
-        total: (stats?.total_synced as number) ?? 0,
-        product: (stats?.product as number) ?? 0,
-        at_work: (stats?.at_work as number) ?? 0,
-        exterior: (stats?.exterior as number) ?? 0,
-        interior: (stats?.interior as number) ?? 0,
-        additional: (stats?.additional as number) ?? 0,
-      }}
+      syncedCount={syncedCount}
+      blueRibbonCount={blueRibbonCount}
+      totalCount={photos.length}
     />
   );
 }

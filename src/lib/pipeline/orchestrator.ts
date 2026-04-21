@@ -179,14 +179,8 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     result.errors.push(`inbox-sync: ${msg}`);
   }
 
-  // Step 8: Auto-sync eligible photos to GBP gallery
-  try {
-    const { autoSyncPhotos } = await import("@/lib/gbp/photos");
-    await autoSyncPhotos(siteId);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    result.errors.push(`gbp-photo-sync: ${msg}`);
-  }
+  // Step 8: GBP photo sync — removed from cron, now operator-driven
+  // Photos are synced manually from Google > Photos tab
 
   // Send push notification if there are meaningful results
   await notifyPipelineResults(siteId, result);

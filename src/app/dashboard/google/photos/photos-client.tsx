@@ -2,65 +2,32 @@
 
 import { useState } from "react";
 import { EmptyState } from "@/components/empty-state";
-import Link from "next/link";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SyncedPhoto = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EligibleAsset = any;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ImageAsset = any;
+interface Photo {
+  id: string;
+  storageUrl: string;
+  qualityScore: number;
+  contentPillar: string | null;
+  sceneType: string | null;
+  isSynced: boolean;
+  syncedAt: string | null;
+  isBlueRibbon: boolean;
+}
 
 interface Props {
   siteId: string;
   connected: boolean;
-  initialSynced: SyncedPhoto[];
-  initialEligible: EligibleAsset[];
-  allImages: ImageAsset[];
+  photos: Photo[];
   coverUrl: string | null;
   logoUrl: string | null;
   coverAssetId: string | null;
-  stats: {
-    total: number;
-    product: number;
-    at_work: number;
-    exterior: number;
-    interior: number;
-    additional: number;
-  };
-}
-
-const CATEGORY_LABELS: Record<string, string> = {
-  PRODUCT: "Product / Results",
-  AT_WORK: "At Work",
-  EXTERIOR: "Exterior",
-  INTERIOR: "Interior",
-  TEAMS: "Team",
-  ADDITIONAL: "Additional",
-  COVER: "Cover Photo",
-  LOGO: "Logo",
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-  PRODUCT: "bg-blue-100 text-blue-800",
-  AT_WORK: "bg-amber-100 text-amber-800",
-  EXTERIOR: "bg-emerald-100 text-emerald-800",
-  INTERIOR: "bg-purple-100 text-purple-800",
-  ADDITIONAL: "bg-gray-100 text-gray-500",
-};
-
-function StatCard({ label, count }: { label: string; count: number }) {
-  return (
-    <div className="rounded-lg border border-border bg-surface px-3 py-2 text-center">
-      <p className="text-xl font-semibold">{count}</p>
-      <p className="text-[10px] text-muted">{label}</p>
-    </div>
-  );
+  syncedCount: number;
+  blueRibbonCount: number;
+  totalCount: number;
 }
 
 function ImagePicker({ images, currentId, onSelect, onClose, title }: {
-  images: ImageAsset[];
+  images: Photo[];
   currentId: string | null;
   onSelect: (id: string, url: string) => void;
   onClose: () => void;
@@ -74,15 +41,15 @@ function ImagePicker({ images, currentId, onSelect, onClose, title }: {
           <button onClick={onClose} className="text-muted hover:text-foreground">✕</button>
         </div>
         <div className="grid grid-cols-5 gap-2 max-h-[60vh] overflow-y-auto">
-          {images.map((img: ImageAsset) => (
+          {images.map((img) => (
             <button
               key={img.id}
-              onClick={() => onSelect(img.id, img.storage_url)}
+              onClick={() => onSelect(img.id, img.storageUrl)}
               className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-colors ${
                 img.id === currentId ? "border-accent" : "border-transparent hover:border-accent/50"
               }`}
             >
-              <img src={img.storage_url} alt="" className="h-full w-full object-cover" />
+              <img src={img.storageUrl} alt="" className="h-full w-full object-cover" />
               {img.id === currentId && (
                 <div className="absolute inset-0 bg-accent/20 flex items-center justify-center">
                   <span className="rounded-full bg-accent px-2 py-0.5 text-[9px] text-white">Current</span>
@@ -96,15 +63,14 @@ function ImagePicker({ images, currentId, onSelect, onClose, title }: {
   );
 }
 
-export function PhotosClient({ siteId, connected, initialSynced, initialEligible, allImages, coverUrl, logoUrl, coverAssetId, stats }: Props) {
-  const [synced, setSynced] = useState<SyncedPhoto[]>(initialSynced);
-  const [eligible] = useState<EligibleAsset[]>(initialEligible);
+export function PhotosClient({ siteId, connected, photos, coverUrl, logoUrl, coverAssetId, syncedCount, blueRibbonCount, totalCount }: Props) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<"all" | "ribbon" | "synced">("all");
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"gallery" | "eligible">("gallery");
-  const [deleting, setDeleting] = useState<string | null>(null);
   const [currentCover, setCurrentCover] = useState<{ id: string | null; url: string | null }>({ id: coverAssetId, url: coverUrl });
   const [pickerOpen, setPickerOpen] = useState<"cover" | null>(null);
+  const [photoList, setPhotoList] = useState(photos);
 
   if (!connected) {
     return (
@@ -112,48 +78,68 @@ export function PhotosClient({ siteId, connected, initialSynced, initialEligible
         <EmptyState
           icon="▣"
           title="Connect Google Business Profile"
-          description="Link your GBP account to sync your best photos to your Google listing automatically."
+          description="Link your GBP account to manage your Google listing photos."
         />
       </div>
     );
   }
 
-  async function handleSync() {
+  const filtered = photoList.filter((p) => {
+    if (filter === "ribbon") return p.isBlueRibbon;
+    if (filter === "synced") return p.isSynced;
+    return true;
+  });
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id));
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (allFilteredSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((p) => next.delete(p.id));
+        return next;
+      });
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((p) => next.add(p.id));
+        return next;
+      });
+    }
+  }
+
+  async function syncPhotos(ids: string[]) {
+    if (ids.length === 0) return;
     setSyncing(true);
     setSyncResult(null);
     try {
       const res = await fetch(`/api/admin/sites/${siteId}/photos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sync" }),
+        body: JSON.stringify({ action: "sync_selected", asset_ids: ids }),
       });
       const data = await res.json();
       if (data.success) {
-        setSyncResult(`${data.synced} photos synced, ${data.skipped} skipped`);
-        window.location.reload();
+        setSyncResult(`${data.synced} photo${data.synced !== 1 ? "s" : ""} synced to Google`);
+        // Update local state
+        setPhotoList((prev) => prev.map((p) => ids.includes(p.id) ? { ...p, isSynced: true, syncedAt: new Date().toISOString() } : p));
+        setSelected(new Set());
       } else {
-        setSyncResult("Sync failed");
+        setSyncResult(data.error || "Sync failed");
       }
     } catch {
       setSyncResult("Sync failed");
     }
     setSyncing(false);
-  }
-
-  async function handleDelete(gbpMediaName: string) {
-    setDeleting(gbpMediaName);
-    try {
-      const res = await fetch(`/api/admin/sites/${siteId}/photos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", gbpMediaName }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSynced((prev) => prev.filter((p: SyncedPhoto) => p.gbp_media_name !== gbpMediaName));
-      }
-    } catch { /* ignore */ }
-    setDeleting(null);
+    setTimeout(() => setSyncResult(null), 4000);
   }
 
   async function setCoverPhoto(assetId: string, url: string) {
@@ -162,24 +148,21 @@ export function PhotosClient({ siteId, connected, initialSynced, initialEligible
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "set_cover", sourceUrl: url }),
     });
-
-    await fetch(`/api/google/profile`, {
+    await fetch("/api/google/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ site_id: siteId, gbp_cover_asset_id: assetId }),
     });
-
     setCurrentCover({ id: assetId, url });
     setPickerOpen(null);
-    setSyncResult("Cover photo updated");
-    setTimeout(() => setSyncResult(null), 3000);
   }
+
+  const ribbonIds = photoList.filter((p) => p.isBlueRibbon && !p.isSynced).map((p) => p.id);
 
   return (
     <div className="p-4">
       {/* Cover + Logo */}
       <div className="mb-4 grid grid-cols-[1fr_auto] gap-4">
-        {/* Cover photo */}
         <div
           className="relative h-36 overflow-hidden rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 cursor-pointer group"
           onClick={() => setPickerOpen("cover")}
@@ -201,7 +184,6 @@ export function PhotosClient({ siteId, connected, initialSynced, initialEligible
           </span>
         </div>
 
-        {/* Logo — managed in Settings, displayed here */}
         <a
           href="/dashboard/settings"
           className="relative h-36 w-36 overflow-hidden rounded-xl bg-surface-hover group border border-border block"
@@ -224,10 +206,10 @@ export function PhotosClient({ siteId, connected, initialSynced, initialEligible
         </a>
       </div>
 
-      {/* Cover photo picker modal */}
+      {/* Cover picker modal */}
       {pickerOpen && (
         <ImagePicker
-          images={allImages}
+          images={photoList}
           currentId={currentCover.id}
           title="Select Cover Photo"
           onSelect={(id, url) => setCoverPhoto(id, url)}
@@ -235,134 +217,145 @@ export function PhotosClient({ siteId, connected, initialSynced, initialEligible
         />
       )}
 
-      {/* Stats bar */}
-      <div className="mb-4 grid grid-cols-6 gap-2">
-        <StatCard label="On Google" count={stats.total} />
-        <StatCard label="Product" count={stats.product} />
-        <StatCard label="At Work" count={stats.at_work} />
-        <StatCard label="Exterior" count={stats.exterior} />
-        <StatCard label="Interior" count={stats.interior} />
-        <StatCard label="Eligible" count={eligible.length} />
-      </div>
-
-      {/* Actions */}
-      <div className="mb-4 flex items-center gap-3">
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="rounded bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
-        >
-          {syncing ? "Syncing..." : "Sync to Google"}
-        </button>
-        {syncResult && <span className="text-xs text-muted">{syncResult}</span>}
-
-        <div className="ml-auto flex gap-1">
+      {/* Toolbar */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* Select all */}
           <button
-            onClick={() => setActiveTab("gallery")}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              activeTab === "gallery" ? "bg-accent text-white" : "bg-surface-hover text-muted"
+            onClick={toggleSelectAll}
+            className={`rounded border px-3 py-1.5 text-[10px] font-medium transition-colors ${
+              allFilteredSelected
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border text-muted hover:text-foreground"
             }`}
           >
-            On Google ({synced.length})
+            {allFilteredSelected ? "Deselect All" : "Select All"}
           </button>
-          <button
-            onClick={() => setActiveTab("eligible")}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              activeTab === "eligible" ? "bg-accent text-white" : "bg-surface-hover text-muted"
-            }`}
-          >
-            Eligible ({eligible.length})
-          </button>
+
+          {/* Filters */}
+          <div className="flex gap-1 ml-2">
+            {([
+              { key: "all" as const, label: "All", count: totalCount },
+              { key: "ribbon" as const, label: "Blue Ribbon", count: blueRibbonCount },
+              { key: "synced" as const, label: "Synced", count: syncedCount },
+            ]).map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`rounded-full px-3 py-1 text-[10px] font-medium transition-colors ${
+                  filter === f.key
+                    ? "bg-accent text-white"
+                    : "bg-surface-hover text-muted hover:text-foreground"
+                }`}
+              >
+                {f.label} ({f.count})
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {syncResult && <span className="text-xs text-accent">{syncResult}</span>}
+
+          {selected.size > 0 && (
+            <button
+              onClick={() => syncPhotos(Array.from(selected))}
+              disabled={syncing}
+              className="rounded bg-accent px-3 py-1.5 text-[10px] font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+            >
+              {syncing ? "Syncing..." : `Sync Selected (${selected.size})`}
+            </button>
+          )}
+
+          {ribbonIds.length > 0 && (
+            <button
+              onClick={() => syncPhotos(ribbonIds)}
+              disabled={syncing}
+              className="rounded border border-accent px-3 py-1.5 text-[10px] font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
+            >
+              {syncing ? "Syncing..." : `Sync Blue Ribbon (${ribbonIds.length})`}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Gallery: synced photos */}
-      {activeTab === "gallery" && (
-        <>
-          {synced.length === 0 ? (
-            <EmptyState
-              icon="▣"
-              title="No photos on Google yet"
-              description="Click 'Sync to Google' to push your best media assets to your GBP listing."
-            />
-          ) : (
-            <div className="grid grid-cols-4 gap-3">
-              {synced.map((photo: SyncedPhoto) => (
-                <div key={photo.id} className="group relative overflow-hidden rounded-lg border border-border bg-surface">
-                  <div className="aspect-[4/3] bg-surface-hover">
-                    <img
-                      src={photo.gbp_media_url || photo.source_url}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                  <div className="p-2">
-                    <div className="flex items-center justify-between">
-                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${
-                        CATEGORY_COLORS[photo.category] || CATEGORY_COLORS.ADDITIONAL
-                      }`}>
-                        {CATEGORY_LABELS[photo.category] || photo.category}
-                      </span>
-                      {photo.quality_score && (
-                        <span className="text-[9px] text-muted">{Math.round(photo.quality_score * 100)}%</span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-[9px] text-muted">
-                      {new Date(photo.synced_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleDelete(photo.gbp_media_name)}
-                    disabled={deleting === photo.gbp_media_name}
-                    className="absolute right-1.5 top-1.5 rounded bg-black/60 px-2 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    {deleting === photo.gbp_media_name ? "..." : "Remove"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      {/* Photo grid */}
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon="▣"
+          title="No photos"
+          description={filter === "synced" ? "No photos synced to Google yet." : filter === "ribbon" ? "No blue ribbon photos." : "No photos in the media library."}
+        />
+      ) : (
+        <div className="grid grid-cols-5 gap-3">
+          {filtered.map((photo) => (
+            <div
+              key={photo.id}
+              onClick={() => toggleSelect(photo.id)}
+              className={`group relative aspect-square overflow-hidden rounded-lg cursor-pointer border-2 transition-colors ${
+                selected.has(photo.id)
+                  ? "border-accent ring-2 ring-accent/20"
+                  : "border-transparent hover:border-accent/30"
+              }`}
+            >
+              <img src={photo.storageUrl} alt="" className="h-full w-full object-cover" />
 
-      {/* Eligible: assets ready to sync */}
-      {activeTab === "eligible" && (
-        <>
-          {eligible.length === 0 ? (
-            <EmptyState
-              icon="▣"
-              title="All eligible photos synced"
-              description="New high-quality assets will appear here as they're uploaded and triaged."
-            />
-          ) : (
-            <>
-              <p className="mb-3 text-xs text-muted">
-                These assets scored above threshold and are GBP-eligible. Click &quot;Sync to Google&quot; to push them.
-              </p>
-              <div className="grid grid-cols-4 gap-3">
-                {eligible.map((asset: EligibleAsset) => (
-                  <div key={asset.id} className="overflow-hidden rounded-lg border border-border bg-surface">
-                    <div className="aspect-[4/3] bg-surface-hover">
-                      <img
-                        src={asset.storage_url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="p-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-muted">{asset.content_pillar || "—"}</span>
-                        <span className="text-[9px] font-medium">
-                          {Math.round((asset.quality_score || 0) * 100)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              {/* Selection checkmark */}
+              {selected.has(photo.id) && (
+                <div className="absolute top-1.5 left-1.5 h-5 w-5 rounded-full bg-accent flex items-center justify-center">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+              )}
+
+              {/* Unselected circle */}
+              {!selected.has(photo.id) && (
+                <div className="absolute top-1.5 left-1.5 h-5 w-5 rounded-full border-2 border-white/50 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
+
+              {/* Blue ribbon badge */}
+              {photo.isBlueRibbon && (
+                <div className="absolute top-1.5 right-1.5 rounded bg-blue-500 px-1.5 py-0.5 text-[8px] font-bold text-white shadow">
+                  ★
+                </div>
+              )}
+
+              {/* Synced badge / unsync action */}
+              {photo.isSynced && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!confirm("Remove this photo from Google?")) return;
+                    fetch(`/api/admin/sites/${siteId}/photos`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "unsync", asset_id: photo.id }),
+                    }).then((res) => {
+                      if (res.ok) {
+                        setPhotoList((prev) => prev.map((p) => p.id === photo.id ? { ...p, isSynced: false, syncedAt: null } : p));
+                        setSyncResult("Photo removed from Google");
+                        setTimeout(() => setSyncResult(null), 3000);
+                      }
+                    });
+                  }}
+                  className="absolute bottom-1.5 right-1.5 rounded bg-emerald-500 px-1.5 py-0.5 text-[8px] font-medium text-white shadow group-hover:bg-red-500 transition-colors"
+                  title="Remove from Google"
+                >
+                  <span className="group-hover:hidden">Synced</span>
+                  <span className="hidden group-hover:inline">Unsync</span>
+                </button>
+              )}
+
+              {/* Quality score on hover */}
+              <div className="absolute bottom-1.5 left-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-white">
+                  {Math.round(photo.qualityScore * 100)}%
+                </span>
               </div>
-            </>
-          )}
-        </>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

@@ -341,11 +341,7 @@ export async function pushProfileToGoogle(siteId: string): Promise<{ success: bo
       console.error("GBP profile push failed:", err.slice(0, 300));
       console.error("GBP push attempted fields:", updateMask.join(", "));
       // Keep dirty flag on ALL errors so user can retry
-      return {
-        success: false,
-        error: isQuota ? "Quota exceeded — will retry" : `Push failed (${res.status}): ${err.slice(0, 150)}`,
-        debug: { fields: updateMask, status: res.status },
-      };
+      return { success: false, error: isQuota ? "Quota exceeded — will retry" : `Push failed (${res.status}). Fields: ${updateMask.join(", ")}. Google: ${err.slice(0, 100)}` };
     }
   }
 

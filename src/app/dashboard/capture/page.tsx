@@ -137,7 +137,7 @@ function CaptureForm() {
 
   return (
     <div
-      className="mx-auto max-w-lg"
+      className="p-4 max-w-2xl"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}

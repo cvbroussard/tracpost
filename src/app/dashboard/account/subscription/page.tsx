@@ -47,7 +47,7 @@ export default async function SubscriptionPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       <h1>Subscription</h1>
       <p className="mt-2 mb-8 text-muted">Plan, billing, and account settings</p>
 

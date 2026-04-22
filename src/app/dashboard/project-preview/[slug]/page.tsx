@@ -80,7 +80,7 @@ export default async function ProjectPreviewPage({
   const endDate = project.end_date ? new Date(project.end_date as string).toLocaleDateString("en-US", { year: "numeric", month: "long" }) : null;
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       {/* Preview banner */}
       <div className="mb-6 rounded bg-warning/10 px-4 py-2 text-center text-xs text-warning">
         Preview — this page is not published

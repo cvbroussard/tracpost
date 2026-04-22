@@ -42,7 +42,7 @@ export default async function SpotlightPage() {
     : "0.0";
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1>Spotlight</h1>

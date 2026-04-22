@@ -23,7 +23,7 @@ export default async function MyAccountPage() {
   const isOwner = role === "owner";
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       <h1>My Account</h1>
       <p className="mt-2 mb-8 text-muted">Your profile and preferences</p>
 

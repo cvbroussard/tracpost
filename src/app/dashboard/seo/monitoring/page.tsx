@@ -11,7 +11,7 @@ export default async function SeoMonitoringPage() {
 
   if (!session.activeSiteId) {
     return (
-      <div className="mx-auto max-w-4xl">
+      <div className="p-4 space-y-6">
         <h1 className="mb-1 text-lg font-semibold">SEO Monitoring</h1>
         <p className="py-12 text-center text-sm text-muted">
           Add a site first.
@@ -56,7 +56,7 @@ export default async function SeoMonitoringPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       <h1 className="mb-1 text-lg font-semibold">SEO Monitoring</h1>
       <p className="mb-8 text-sm text-muted">
         Site health, issues, and Core Web Vitals

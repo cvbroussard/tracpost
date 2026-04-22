@@ -146,7 +146,7 @@ export default async function DashboardOverview() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       {/* Pipeline status */}
       <div className="mb-2 flex items-center gap-3">
         <span className={`inline-block h-2.5 w-2.5 rounded-full ${healthColor}`} />

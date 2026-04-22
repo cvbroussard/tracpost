@@ -40,7 +40,7 @@ export default async function AccountsPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       <OnboardingTip
         tipKey="accounts"
         message="Every platform is a discovery channel. A client might find you on TikTok but book through Instagram. Connecting all 8 maximizes your reach and gives the autopilot the widest publishing surface."

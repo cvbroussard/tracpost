@@ -184,6 +184,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
 
                 return (
                   <div key={mod.label}>
+                    {isExpanded && <div className="my-1 border-t border-border" />}
                     {/* Module toggle */}
                     <button
                       onClick={() => toggleModule(mod.label)}
@@ -227,6 +228,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
                         })}
                       </div>
                     )}
+                    {isExpanded && <div className="my-1 border-t border-border" />}
                   </div>
                 );
               })}

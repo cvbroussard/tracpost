@@ -84,7 +84,7 @@ export function SeoOverviewClient({
   const totalClicks = topQueries.reduce((s, q) => s + q.clicks, 0);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="p-4 space-y-6">
       <div>
         <h1 className="text-lg font-semibold">SEO</h1>
         <p className="text-xs text-muted">{siteName} · site health and search visibility</p>

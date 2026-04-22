@@ -28,7 +28,7 @@ export default async function BrandPage() {
   const isProvisioning = site.provisioning_status === "requested" || site.provisioning_status === "in_progress";
 
   return (
-    <div className="mx-auto max-w-2xl py-4">
+    <div className="p-4 space-y-6">
       {!hasPlaybook && isProvisioning && (
         <div className="py-16 text-center">
           <div className="mb-4 mx-auto h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />

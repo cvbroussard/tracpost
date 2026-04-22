@@ -57,7 +57,7 @@ export default async function TeamPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       <h1 className="mb-1 text-lg font-semibold">Team</h1>
       <p className="mb-8 text-sm text-muted">
         Manage users and site access. {memberList.length}/{userLimit} users on {plan} plan.

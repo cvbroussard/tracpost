@@ -10,7 +10,7 @@ export default async function UnipostPage() {
   if (!session) redirect("/login");
   if (!session.activeSiteId) {
     return (
-      <div className="mx-auto max-w-5xl">
+      <div className="p-4 space-y-6">
         <h1 className="mb-1 text-lg font-semibold">Unipost</h1>
         <p className="py-12 text-center text-sm text-muted">Add a site first.</p>
       </div>
@@ -90,7 +90,7 @@ export default async function UnipostPage() {
   `;
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="p-4 space-y-6">
       <div className="mb-6">
         <h1 className="mb-1 text-lg font-semibold">Unipost</h1>
         <p className="text-sm text-muted">

@@ -15,7 +15,7 @@ export default async function MediaPage({ searchParams }: Props) {
   if (!session) redirect("/login");
   if (!session.activeSiteId) {
     return (
-      <div className="mx-auto max-w-5xl">
+      <div className="p-4 space-y-6">
         <h1 className="mb-1 text-lg font-semibold">Media Library</h1>
         <p className="py-12 text-center text-sm text-muted">Add a site first to start uploading media.</p>
       </div>
@@ -204,7 +204,7 @@ export default async function MediaPage({ searchParams }: Props) {
   // picks from project-matching rows, not from the library at large.
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="p-4 space-y-6">
       <div className="mb-6 flex items-baseline justify-between">
         <div>
           <h1 className="mb-1 text-lg font-semibold">Media Library</h1>

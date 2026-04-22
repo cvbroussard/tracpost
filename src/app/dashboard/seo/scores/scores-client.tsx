@@ -69,7 +69,7 @@ export function ScoresClient({
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="p-4 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold">Page Scores</h1>

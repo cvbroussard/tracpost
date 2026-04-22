@@ -13,7 +13,7 @@ export default async function SettingsPage() {
   if (!session) redirect("/login");
   if (!session.activeSiteId) {
     return (
-      <div className="mx-auto max-w-4xl">
+      <div className="p-4 space-y-6">
         <h1>Settings</h1>
         <p className="mt-2 py-12 text-center text-muted">No site configured yet.</p>
       </div>
@@ -61,7 +61,7 @@ export default async function SettingsPage() {
   const autopilotConfig = (site?.autopilot_config || {}) as Record<string, unknown>;
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       <h1>Settings</h1>
       <p className="mt-2 mb-8 text-muted">Site configuration and autopilot settings</p>
 

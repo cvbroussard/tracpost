@@ -61,7 +61,7 @@ export function SearchClient({ siteId }: { siteId: string }) {
   const avgCtr = totalImpressions > 0 ? Math.round((totalClicks / totalImpressions) * 1000) / 10 : 0;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="p-4 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold">Search Performance</h1>

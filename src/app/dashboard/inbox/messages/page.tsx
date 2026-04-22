@@ -34,7 +34,7 @@ export default async function MessagesPage() {
 
   if (validSubmissions.length === 0) {
     return (
-      <div className="mx-auto max-w-4xl">
+      <div className="p-4 space-y-6">
         <h1 className="mb-1 text-lg font-semibold">Messages</h1>
         <p className="mb-8 text-sm text-muted">
           Contact form submissions from your website.
@@ -54,7 +54,7 @@ export default async function MessagesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="p-4 space-y-6">
       <h1 className="mb-1 text-lg font-semibold">Messages</h1>
       <p className="mb-8 text-sm text-muted">
         Contact form submissions from your website. Reply directly to the visitor via email — replies from your inbox go straight to them.

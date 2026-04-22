@@ -99,6 +99,7 @@ interface SidebarProps {
 export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: SidebarProps) {
   const pathname = usePathname();
   const [hoveredModule, setHoveredModule] = useState<string | null>(null);
+  const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   const isSubdomain =
     typeof window !== "undefined" &&
@@ -156,7 +157,13 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
                   <div
                     key={mod.label}
                     className="relative"
-                    onMouseEnter={() => { if (!active) setHoveredModule(mod.label); }}
+                    onMouseEnter={(e) => {
+                      if (!active) {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setFlyoutPos({ top: rect.top, left: rect.right + 4 });
+                        setHoveredModule(mod.label);
+                      }
+                    }}
                     onMouseLeave={() => setHoveredModule(null)}
                   >
                     {/* Module link */}
@@ -174,7 +181,12 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
 
                     {/* Flyout on hover (when NOT active) */}
                     {hovered && !active && subs.length > 0 && (
-                      <div className="absolute left-full top-0 ml-1 z-50 w-44 rounded-lg border border-border bg-surface shadow-lg py-1">
+                      <div
+                        className="fixed z-50 w-44 rounded-lg border border-border bg-surface shadow-lg py-1"
+                        style={{ top: flyoutPos.top, left: flyoutPos.left }}
+                        onMouseEnter={() => setHoveredModule(mod.label)}
+                        onMouseLeave={() => setHoveredModule(null)}
+                      >
                         {subs.map((sub) => (
                           <Link
                             key={sub.path}

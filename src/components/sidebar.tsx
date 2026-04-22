@@ -79,9 +79,9 @@ const MODULES: Module[] = [
 ];
 
 const ACCOUNT_NAV = [
-  { label: "My Account", path: "/account", icon: "◯" },
-  { label: "Team", path: "/account/team", icon: "◱" },
-  { label: "Subscription", path: "/account/subscription", icon: "◈" },
+  { label: "My Account", path: "/account" },
+  { label: "Team", path: "/account/team" },
+  { label: "Subscription", path: "/account/subscription" },
 ];
 
 const MANAGER_SUB_PATHS = new Set([
@@ -127,25 +127,29 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
   }
 
   return (
-    <aside className="flex h-full w-48 flex-col border-r border-border bg-surface overflow-y-auto">
-      <nav className="flex flex-1 flex-col px-2 py-3">
+    <aside className="flex h-full w-52 flex-col border-r border-border bg-surface overflow-y-auto">
+      <nav className="flex flex-1 flex-col px-3 py-4">
         {activeSiteId ? (
           <>
             {/* Dashboard home */}
             <Link
               href={prefix || "/"}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 mb-2 transition-colors ${
+              className={`flex items-center gap-2.5 rounded px-2.5 py-[7px] text-[13px] transition-colors ${
                 pathname === prefix || pathname === prefix + "/"
-                  ? "bg-accent-muted text-accent"
-                  : "text-muted hover:bg-surface-hover hover:text-foreground"
+                  ? "text-foreground font-medium bg-surface-hover"
+                  : "text-muted hover:text-foreground"
               }`}
             >
-              <span className="text-xs">◆</span>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="shrink-0 opacity-60">
+                <path d="M8 1L1 5.5V14h5V10h4v4h5V5.5L8 1z"/>
+              </svg>
               Dashboard
             </Link>
 
+            <div className="my-2 border-t border-border" />
+
             {/* Module links */}
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-px">
               {MODULES.map((mod) => {
                 const subs = filteredSubs(mod);
                 if (subs.length === 0 && isManager) return null;
@@ -169,20 +173,29 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
                     {/* Module link */}
                     <Link
                       href={prefix + mod.path}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
+                      className={`flex items-center gap-2.5 rounded px-2.5 py-[7px] text-[13px] transition-colors ${
                         active
-                          ? "bg-accent-muted text-accent"
-                          : "text-muted hover:bg-surface-hover hover:text-foreground"
+                          ? "text-foreground font-medium bg-surface-hover"
+                          : "text-muted hover:text-foreground"
                       }`}
                     >
-                      <span className="text-xs">{mod.icon}</span>
-                      {mod.label}
+                      <span className="shrink-0 text-[11px] w-3.5 text-center opacity-60">{mod.icon}</span>
+                      <span className="flex-1">{mod.label}</span>
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className={`shrink-0 opacity-40 transition-transform ${active ? "rotate-90" : ""}`}
+                      >
+                        <path d="M6 3l5 5-5 5V3z"/>
+                      </svg>
                     </Link>
 
                     {/* Flyout on hover (when NOT active) */}
                     {hovered && !active && subs.length > 0 && (
                       <div
-                        className="fixed z-50 w-44 rounded-lg border border-border bg-surface shadow-lg py-1"
+                        className="fixed z-50 w-44 rounded-md border border-border bg-surface shadow-lg py-1"
                         style={{ top: flyoutPos.top, left: flyoutPos.left }}
                         onMouseEnter={() => setHoveredModule(mod.label)}
                         onMouseLeave={() => setHoveredModule(null)}
@@ -191,7 +204,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
                           <Link
                             key={sub.path}
                             href={prefix + sub.path}
-                            className="block px-3 py-1.5 text-xs text-muted hover:bg-surface-hover hover:text-foreground transition-colors"
+                            className="block px-3 py-[6px] text-[13px] text-muted hover:bg-surface-hover hover:text-foreground transition-colors"
                           >
                             {sub.label}
                           </Link>
@@ -201,16 +214,16 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
 
                     {/* Expanded sub-links (when active) */}
                     {active && subs.length > 0 && (
-                      <div className="ml-5 flex flex-col gap-0.5 py-0.5 border-l border-border/50">
+                      <div className="ml-[22px] flex flex-col gap-px py-px border-l border-border/40">
                         {subs.map((sub) => {
                           const subActive = isSubActive(sub.path);
                           return (
                             <Link
                               key={sub.path}
                               href={prefix + sub.path}
-                              className={`rounded-md px-3 py-1 text-xs transition-colors ${
+                              className={`rounded px-2.5 py-[5px] text-[13px] transition-colors ${
                                 subActive
-                                  ? "text-accent font-medium"
+                                  ? "text-foreground font-medium"
                                   : "text-muted hover:text-foreground"
                               }`}
                             >
@@ -225,16 +238,16 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
               })}
             </div>
 
-            <div className="mx-3 my-3 border-t border-border" />
+            <div className="my-2 border-t border-border" />
           </>
         ) : (
-          <div className="mb-2 px-3 py-2">
-            <p className="text-[10px] text-muted">Select a site to access content tools</p>
+          <div className="mb-2 px-2.5 py-2">
+            <p className="text-[11px] text-muted">Select a site to access content tools</p>
           </div>
         )}
 
         {/* Account nav */}
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-px">
           {(isManager ? ACCOUNT_NAV.filter(i => i.path === "/account") : ACCOUNT_NAV).map((item) => {
             const href = prefix + item.path;
             const active = pathname === href || pathname === href + "/";
@@ -242,13 +255,12 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                className={`flex items-center rounded px-2.5 py-[7px] text-[13px] transition-colors ${
                   active
-                    ? "bg-accent-muted text-accent"
-                    : "text-muted hover:bg-surface-hover hover:text-foreground"
+                    ? "text-foreground font-medium bg-surface-hover"
+                    : "text-muted hover:text-foreground"
                 }`}
               >
-                <span className="text-xs">{item.icon}</span>
                 {item.label}
               </Link>
             );

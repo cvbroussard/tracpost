@@ -192,7 +192,7 @@ export function SeoDashboardClient({
                 <div key={c.id} className="px-5 py-3">
                   <div className="flex items-center justify-between">
                     <p className="truncate text-sm">
-                      {c.url || "Unknown URL"}
+                      {c.page_id || c.page_type || "Unknown"}
                     </p>
                     <span
                       className={`rounded px-2 py-0.5 text-[10px] font-medium ${

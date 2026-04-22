@@ -31,7 +31,7 @@ export default async function SeoPage() {
       LIMIT 50
     `,
     sql`
-      SELECT id, page_type, url, meta_title, meta_description,
+      SELECT id, page_type, page_id, meta_title, meta_description,
              og_title, og_description, structured_data, status, updated_at
       FROM seo_content
       WHERE site_id = ${siteId}
@@ -75,7 +75,7 @@ export interface AuditRow {
 export interface ContentRow {
   id: string;
   page_type: string | null;
-  url: string | null;
+  page_id: string | null;
   meta_title: string | null;
   meta_description: string | null;
   og_title: string | null;

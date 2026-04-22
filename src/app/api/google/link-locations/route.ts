@@ -161,9 +161,48 @@ export async function POST(req: NextRequest) {
     await syncProfileFromGoogle(site_id);
   } catch { /* non-fatal */ }
 
+  // Detect Search Console property for this site's custom domain
+  let gscStatus: "found" | "not_found" | "skipped" = "skipped";
+  try {
+    const [siteRow] = await sql`
+      SELECT bs.custom_domain FROM blog_settings bs WHERE bs.site_id = ${site_id}
+    `;
+    const customDomain = siteRow?.custom_domain as string | null;
+
+    if (customDomain) {
+      const accessToken = decrypt(pending.access_token_encrypted as string);
+      const { listProperties } = await import("@/lib/gsc/search-console");
+      const properties = await listProperties(accessToken);
+
+      const domainProperty = `sc-domain:${customDomain}`;
+      const urlProperty = `https://${customDomain}/`;
+      const match = properties.find(
+        p => p.siteUrl === domainProperty || p.siteUrl === urlProperty
+      );
+
+      if (match) {
+        await sql`UPDATE sites SET gsc_property = ${match.siteUrl} WHERE id = ${site_id}`;
+        gscStatus = "found";
+      } else {
+        gscStatus = "not_found";
+        // Notify admin that Search Console isn't verified for this domain
+        await sql`
+          INSERT INTO notifications (subscription_id, category, severity, title, body, metadata)
+          VALUES (
+            ${pending.subscription_id}, 'campaigns', 'info',
+            ${"Search Console not verified"},
+            ${`${customDomain} is not verified in the tenant's Google Search Console. Search analytics won't be available until the tenant adds the domain as a property.`},
+            ${JSON.stringify({ type: "gsc_not_verified", site_id, domain: customDomain })}
+          )
+        `;
+      }
+    }
+  } catch { /* non-fatal */ }
+
   return NextResponse.json({
     success: true,
     location: selectedLocation.locationName,
     socialAccountId: newAccount.id,
+    gscStatus,
   });
 }

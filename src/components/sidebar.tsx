@@ -142,6 +142,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
             {/* Dashboard home */}
             <Link
               href={prefix || "/"}
+              onClick={() => setExpanded(null)}
               className={`flex items-center gap-2.5 rounded px-2.5 py-[7px] text-[13px] transition-colors ${
                 pathname === prefix || pathname === prefix + "/"
                   ? "text-foreground font-medium bg-surface-hover"

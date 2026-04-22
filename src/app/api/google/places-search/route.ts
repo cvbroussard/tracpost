@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 /**
  * GET /api/google/places-search?q=Pittsburgh
  * Returns place predictions for service area selection.
- * Uses Google Places Autocomplete API (cities/regions only).
+ * Uses Google Places API (New) — Autocomplete endpoint, regions only.
  */
 export async function GET(req: NextRequest) {
   const query = new URL(req.url).searchParams.get("q");
@@ -16,7 +16,6 @@ export async function GET(req: NextRequest) {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {
-    // Fallback: return a simple text-based result without Places API
     return NextResponse.json({
       predictions: [
         { placeId: `manual_${query.replace(/\s+/g, "_").toLowerCase()}`, placeName: query },
@@ -26,13 +25,19 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await fetch(
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?` +
-        new URLSearchParams({
+      "https://places.googleapis.com/v1/places:autocomplete",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+        },
+        body: JSON.stringify({
           input: query,
-          types: "(regions)",
-          components: "country:us",
-          key: apiKey,
-        })
+          includedPrimaryTypes: ["locality", "sublocality", "administrative_area_level_1", "administrative_area_level_2"],
+          includedRegionCodes: ["us"],
+        }),
+      }
     );
 
     if (!res.ok) {
@@ -40,10 +45,12 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await res.json();
-    const predictions = (data.predictions || []).map((p: Record<string, unknown>) => ({
-      placeId: p.place_id as string,
-      placeName: p.description as string,
-    }));
+    const predictions = (data.suggestions || [])
+      .filter((s: Record<string, unknown>) => s.placePrediction)
+      .map((s: { placePrediction: { placeId: string; text: { text: string } } }) => ({
+        placeId: s.placePrediction.placeId,
+        placeName: s.placePrediction.text.text,
+      }));
 
     return NextResponse.json({ predictions });
   } catch {

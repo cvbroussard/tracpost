@@ -15,12 +15,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "site_id, email, and review_url required" }, { status: 400 });
   }
 
-  const [site] = await sql`SELECT name, gbp_profile->>'title' AS title FROM sites WHERE id = ${site_id}`;
+  const [site] = await sql`SELECT name, subdomain, gbp_profile->>'title' AS title FROM sites WHERE id = ${site_id}`;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
 
   const businessName = (site.title as string) || (site.name as string);
+
+  // Use TracPost redirect for click tracking + GA4 attribution
+  const slug = (site.subdomain as string) || (site.name as string).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const trackedReviewUrl = `https://tracpost.com/r/${slug}?utm_source=tracpost&utm_medium=email&utm_campaign=review_request`;
 
   try {
     const { Resend } = await import("resend");
@@ -41,7 +45,7 @@ export async function POST(req: NextRequest) {
           <p style="font-size: 15px; color: #555; line-height: 1.6; margin: 0 0 24px 0;">
             Would you take a moment to share your experience?
           </p>
-          <a href="${review_url}" style="display: inline-block; background: #1a73e8; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; font-weight: 500;">
+          <a href="${trackedReviewUrl}" style="display: inline-block; background: #1a73e8; color: white; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; font-weight: 500;">
             Leave a Review
           </a>
           <p style="font-size: 12px; color: #999; margin: 32px 0 0 0;">

@@ -17,14 +17,30 @@ interface SubItem {
 
 interface Module {
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   subs: SubItem[];
 }
+
+function Icon({ d, size = 16 }: { d: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d={d} />
+    </svg>
+  );
+}
+
+const ICONS = {
+  configure: <Icon d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />,
+  publish: <Icon d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />,
+  promote: <Icon d="M22 2 11 13M22 2l-7 20-4-9-9-4Z" />,
+  engage: <Icon d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />,
+  quantify: <Icon d="M18 20V10M12 20V4M6 20v-6" />,
+};
 
 const MODULES: Module[] = [
   {
     label: "Configure",
-    icon: "⚙",
+    icon: ICONS.configure,
     subs: [
       { label: "Brand", path: "/brand" },
       { label: "Connections", path: "/accounts" },
@@ -35,7 +51,7 @@ const MODULES: Module[] = [
   },
   {
     label: "Publish",
-    icon: "◎",
+    icon: ICONS.publish,
     subs: [
       { label: "Capture", path: "/capture" },
       { label: "Media", path: "/media" },
@@ -47,14 +63,14 @@ const MODULES: Module[] = [
   },
   {
     label: "Promote",
-    icon: "▶",
+    icon: ICONS.promote,
     subs: [
       { label: "Campaigns", path: "/campaigns" },
     ],
   },
   {
     label: "Engage",
-    icon: "✦",
+    icon: ICONS.engage,
     subs: [
       { label: "Inbox", path: "/inbox" },
       { label: "Reviews", path: "/google/reviews" },
@@ -63,7 +79,7 @@ const MODULES: Module[] = [
   },
   {
     label: "Quantify",
-    icon: "▥",
+    icon: ICONS.quantify,
     subs: [
       { label: "Analytics", path: "/analytics" },
       { label: "SEO", path: "/seo" },
@@ -177,7 +193,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
                           : "text-muted hover:text-foreground"
                       }`}
                     >
-                      <span className="shrink-0 text-[11px] w-3.5 text-center opacity-60">{mod.icon}</span>
+                      <span className={`shrink-0 w-4 ${containsActive ? "opacity-100" : "opacity-40"}`}>{mod.icon}</span>
                       <span className="flex-1 text-left">{mod.label}</span>
                       <svg
                         width="12"

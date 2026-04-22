@@ -2,7 +2,7 @@ import { sql } from "@/lib/db";
 import Link from "next/link";
 
 interface Alert {
-  type: "new_subscriber" | "token_expiring" | "pipeline_error" | "gbp_pending";
+  type: "new_subscriber" | "token_expiring" | "pipeline_error" | "gbp_pending" | "log_errors";
   severity: "warning" | "danger" | "info";
   title: string;
   detail: string;
@@ -10,10 +10,46 @@ interface Alert {
   timestamp: string;
 }
 
+async function fetchLogCounts(): Promise<{ errors: number; warnings: number }> {
+  const token = process.env.AXIOM_TOKEN;
+  const dataset = process.env.AXIOM_DATASET || "vercel";
+  if (!token) return { errors: 0, warnings: 0 };
+
+  try {
+    const startTime = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const res = await fetch("https://api.axiom.co/v1/datasets/_apl?format=tabular", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        apl: `['${dataset}'] | where level == "error" or level == "warning" | summarize count() by level`,
+        startTime,
+        endTime: new Date().toISOString(),
+      }),
+      next: { revalidate: 120 },
+    });
+    if (!res.ok) return { errors: 0, warnings: 0 };
+    const data = await res.json();
+    const cols = data.tables?.[0]?.columns || [];
+    const levels = cols[0] || [];
+    const counts = cols[1] || [];
+    let errors = 0, warnings = 0;
+    for (let i = 0; i < levels.length; i++) {
+      if (levels[i] === "error") errors = counts[i];
+      if (levels[i] === "warning") warnings = counts[i];
+    }
+    return { errors, warnings };
+  } catch {
+    return { errors: 0, warnings: 0 };
+  }
+}
+
 export async function AdminAlerts() {
   const alerts: Alert[] = [];
 
-  const [newSubscribers, expiringTokens, pendingGbp] = await Promise.all([
+  const [newSubscribers, expiringTokens, pendingGbp, logCounts] = await Promise.all([
     // Sites with provisioning explicitly requested by subscriber
     sql`
       SELECT sub.id AS subscription_id, u.name AS subscriber_name,
@@ -46,6 +82,7 @@ export async function AdminAlerts() {
         AND sa.status = 'pending_assignment'
       ORDER BY sa.created_at DESC
     `,
+    fetchLogCounts(),
   ]);
 
   for (const sub of newSubscribers) {
@@ -89,6 +126,26 @@ export async function AdminAlerts() {
       detail: `${meta.initiating_site_name || gbp.account_name} — ${locationCount} location${locationCount !== 1 ? "s" : ""} found`,
       href: `/admin/google/location-picker`,
       timestamp: gbp.created_at as string,
+    });
+  }
+
+  if (logCounts.errors > 0) {
+    alerts.push({
+      type: "log_errors",
+      severity: "danger",
+      title: `${logCounts.errors} error${logCounts.errors !== 1 ? "s" : ""} in the last hour`,
+      detail: logCounts.warnings > 0 ? `+ ${logCounts.warnings} warning${logCounts.warnings !== 1 ? "s" : ""}` : "View logs for details",
+      href: "/admin/logs?severity=error",
+      timestamp: new Date().toISOString(),
+    });
+  } else if (logCounts.warnings > 0) {
+    alerts.push({
+      type: "log_errors",
+      severity: "warning",
+      title: `${logCounts.warnings} warning${logCounts.warnings !== 1 ? "s" : ""} in the last hour`,
+      detail: "View logs for details",
+      href: "/admin/logs?severity=warning",
+      timestamp: new Date().toISOString(),
     });
   }
 

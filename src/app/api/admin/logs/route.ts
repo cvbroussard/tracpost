@@ -22,12 +22,6 @@ export async function GET(req: NextRequest) {
 
   const filters: string[] = [];
 
-  if (severity === "error") {
-    filters.push(`(level == "error" or level == "warning")`);
-  } else if (severity) {
-    filters.push(`level == "${severity}"`);
-  }
-
   if (route) {
     filters.push(`request.path contains "${route}"`);
   }
@@ -74,7 +68,7 @@ export async function GET(req: NextRequest) {
       return idx !== undefined ? columns[idx]?.[i] : null;
     };
 
-    const entries = Array.from({ length: rowCount }, (_, i) => ({
+    const flat = Array.from({ length: rowCount }, (_, i) => ({
       timestamp: (col("_time", i) as string) || "",
       severity: (col("level", i) as string) || "info",
       message: (col("message", i) as string) || "",
@@ -85,9 +79,70 @@ export async function GET(req: NextRequest) {
       source: (col("vercel.source", i) as string) || "",
       host: (col("request.host", i) as string) || "",
       region: (col("vercel.region", i) as string) || "",
+      requestId: (col("request.id", i) as string) || "",
     }));
 
-    return NextResponse.json({ entries, count: entries.length });
+    // Group by requestId: entries with a statusCode are request-level parents,
+    // everything else is a console log line that nests underneath
+    const isParent = (e: typeof flat[0]) => e.statusCode !== null;
+    const groups = new Map<string, { parent: typeof flat[0] | null; logs: typeof flat[0][] }>();
+
+    for (const entry of flat) {
+      if (!entry.requestId) {
+        groups.set(`orphan-${groups.size}`, { parent: entry, logs: [] });
+        continue;
+      }
+      const existing = groups.get(entry.requestId);
+      if (existing) {
+        if (isParent(entry) && !existing.parent) {
+          existing.parent = entry;
+        } else if (isParent(entry)) {
+          // duplicate parent — skip
+        } else {
+          existing.logs.push(entry);
+        }
+      } else {
+        if (isParent(entry)) {
+          groups.set(entry.requestId, { parent: entry, logs: [] });
+        } else {
+          groups.set(entry.requestId, { parent: null, logs: [entry] });
+        }
+      }
+    }
+
+    const entries = [...groups.values()]
+      .filter((g) => g.parent !== null || g.logs.length > 0)
+      .map((g) => {
+        // If no parent request was captured, promote the first log line
+        if (!g.parent && g.logs.length > 0) {
+          g.parent = g.logs.shift()!;
+        }
+        const worstSeverity = g.logs.some((l) => l.severity === "error") ? "error"
+          : g.logs.some((l) => l.severity === "warning") ? "warning"
+          : g.parent!.severity;
+        return {
+          ...g.parent!,
+          severity: worstSeverity,
+          logs: g.logs.map((l) => ({
+            timestamp: l.timestamp,
+            severity: l.severity,
+            message: l.message,
+          })),
+        };
+      });
+
+    entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // Apply severity filter after grouping so parent+child stay together
+    const filtered = severity
+      ? entries.filter((e) =>
+          severity === "error"
+            ? e.severity === "error" || e.severity === "warning"
+            : e.severity === severity
+        )
+      : entries;
+
+    return NextResponse.json({ entries: filtered, count: filtered.length });
   } catch (err) {
     console.error("Axiom request error:", err);
     return NextResponse.json({ error: "Failed to query logs" }, { status: 500 });

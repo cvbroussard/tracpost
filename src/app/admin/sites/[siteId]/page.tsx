@@ -1,6 +1,6 @@
 import { sql } from "@/lib/db";
 import { notFound } from "next/navigation";
-import { SiteControls } from "./site-controls";
+import { SiteTabs } from "./site-tabs";
 import { verifyDomain } from "@/lib/vercel-domains";
 import { normalizePageConfig } from "@/lib/tenant-site/page-config";
 
@@ -162,7 +162,7 @@ export default async function SiteControlPanel({ params }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <div className="mb-4 flex items-center gap-1.5 text-xs text-muted">
         <a href="/admin/sites" className="hover:text-accent">Site Controls</a>
         <span>/</span>
@@ -170,12 +170,12 @@ export default async function SiteControlPanel({ params }: Props) {
       </div>
       <div className="mb-6">
         <h1 className="text-lg font-semibold">{site.name}</h1>
-        <p className="text-sm text-muted">
+        <p className="text-xs text-muted">
           {site.subscriber_name} · {site.plan} · {site.provisioning_status}
         </p>
       </div>
 
-      <SiteControls
+      <SiteTabs
         siteId={siteId}
         site={{
           name: site.name as string,

@@ -201,7 +201,7 @@ export async function promoteBlogPost(blogPostId: string): Promise<PromotionResu
           ${account.id},
           ${fullCaption},
           ${post.og_image_url ? [post.og_image_url as string] : []},
-          ${config.supportsLinks ? blogUrl : null},
+          ${config.supportsLinks ? (await import("@/lib/utm")).blogArticleLink(blogUrl, account.platform as string) : null},
           ${(post.content_pillar as string) || null},
           'draft',
           ${scheduledAt},

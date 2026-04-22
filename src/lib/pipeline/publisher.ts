@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { getAdapter } from "./adapters/registry";
+import { socialPostLink } from "@/lib/utm";
 
 /**
  * Publish a scheduled social post to its target platform via adapter.
@@ -42,7 +43,7 @@ export async function publishPost(postId: string): Promise<{ success: boolean; e
       caption: fullCaption,
       mediaUrls: post.media_urls as string[],
       mediaType: post.media_type,
-      linkUrl: post.link_url || undefined,
+      linkUrl: post.link_url ? socialPostLink(post.link_url as string, post.platform as string, postId) : undefined,
       accountMetadata: (post.account_metadata || {}) as Record<string, unknown>,
     });
 

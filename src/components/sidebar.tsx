@@ -38,7 +38,17 @@ const siteNav: NavItem[] = [
   { label: "Blog", path: "/blog", icon: "✎" },
   { label: "SEO", path: "/seo", icon: "◇" },
   { label: "Spotlight", path: "/spotlight", icon: "✦" },
-  { label: "Analytics", path: "/analytics", icon: "▥" },
+  {
+    label: "Analytics", path: "/analytics", icon: "▥",
+    children: [
+      { label: "Overview", path: "/analytics" },
+      { label: "Acquisition", path: "/analytics/acquisition" },
+      { label: "Engagement", path: "/analytics/engagement" },
+      { label: "Audience", path: "/analytics/audience" },
+      { label: "Search", path: "/analytics/search" },
+      { label: "Conversions", path: "/analytics/conversions" },
+    ],
+  },
   { label: "Connections", path: "/accounts", icon: "◉" },
   { label: "Settings", path: "/settings", icon: "⚙" },
 ];

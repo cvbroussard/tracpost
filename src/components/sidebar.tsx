@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface SiteInfo {
   id: string;
@@ -17,7 +17,6 @@ interface SubItem {
 
 interface Module {
   label: string;
-  path: string;
   icon: string;
   subs: SubItem[];
 }
@@ -25,7 +24,6 @@ interface Module {
 const MODULES: Module[] = [
   {
     label: "Configure",
-    path: "/configure",
     icon: "⚙",
     subs: [
       { label: "Brand", path: "/brand" },
@@ -37,7 +35,6 @@ const MODULES: Module[] = [
   },
   {
     label: "Publish",
-    path: "/publish",
     icon: "◎",
     subs: [
       { label: "Capture", path: "/capture" },
@@ -50,7 +47,6 @@ const MODULES: Module[] = [
   },
   {
     label: "Promote",
-    path: "/promote",
     icon: "▶",
     subs: [
       { label: "Campaigns", path: "/campaigns" },
@@ -58,7 +54,6 @@ const MODULES: Module[] = [
   },
   {
     label: "Engage",
-    path: "/engage",
     icon: "✦",
     subs: [
       { label: "Inbox", path: "/inbox" },
@@ -68,7 +63,6 @@ const MODULES: Module[] = [
   },
   {
     label: "Quantify",
-    path: "/quantify",
     icon: "▥",
     subs: [
       { label: "Analytics", path: "/analytics" },
@@ -98,32 +92,54 @@ interface SidebarProps {
 
 export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: SidebarProps) {
   const pathname = usePathname();
-  const [hoveredModule, setHoveredModule] = useState<string | null>(null);
-  const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
   const isSubdomain =
     typeof window !== "undefined" &&
     window.location.hostname === "studio.tracpost.com";
   const prefix = isSubdomain ? "" : "/dashboard";
   const isManager = role === "manager";
 
-  function isModuleActive(mod: Module): boolean {
-    const hubPath = prefix + mod.path;
-    if (pathname === hubPath || pathname === hubPath + "/") return true;
-    return mod.subs.some((sub) => {
-      const full = prefix + sub.path;
-      return pathname === full || pathname === full + "/" || pathname.startsWith(full + "/");
-    });
-  }
-
   function isSubActive(subPath: string): boolean {
     const full = prefix + subPath;
     return pathname === full || pathname === full + "/" || pathname.startsWith(full + "/");
   }
 
+  function moduleContainsActive(mod: Module): boolean {
+    return mod.subs.some((sub) => isSubActive(sub.path));
+  }
+
   function filteredSubs(mod: Module): SubItem[] {
     if (!isManager) return mod.subs;
     return mod.subs.filter((s) => MANAGER_SUB_PATHS.has(s.path));
+  }
+
+  // Track which modules are expanded — auto-expand the one containing the active page
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    for (const mod of MODULES) {
+      if (moduleContainsActive(mod)) initial.add(mod.label);
+    }
+    return initial;
+  });
+
+  // Update expanded state when pathname changes
+  useEffect(() => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const mod of MODULES) {
+        if (moduleContainsActive(mod)) next.add(mod.label);
+      }
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  function toggleModule(label: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
   }
 
   return (
@@ -154,66 +170,35 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
                 const subs = filteredSubs(mod);
                 if (subs.length === 0 && isManager) return null;
 
-                const active = isModuleActive(mod);
-                const hovered = hoveredModule === mod.label;
+                const isExpanded = expanded.has(mod.label);
+                const containsActive = moduleContainsActive(mod);
 
                 return (
-                  <div
-                    key={mod.label}
-                    className="relative"
-                    onMouseEnter={(e) => {
-                      if (!active) {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setFlyoutPos({ top: rect.top, left: rect.right + 4 });
-                        setHoveredModule(mod.label);
-                      }
-                    }}
-                    onMouseLeave={() => setHoveredModule(null)}
-                  >
-                    {/* Module link */}
-                    <Link
-                      href={prefix + mod.path}
-                      className={`flex items-center gap-2.5 rounded px-2.5 py-[7px] text-[13px] transition-colors ${
-                        active
-                          ? "text-foreground font-medium bg-surface-hover"
+                  <div key={mod.label}>
+                    {/* Module toggle */}
+                    <button
+                      onClick={() => toggleModule(mod.label)}
+                      className={`flex w-full items-center gap-2.5 rounded px-2.5 py-[7px] text-[13px] transition-colors ${
+                        containsActive
+                          ? "text-foreground font-medium"
                           : "text-muted hover:text-foreground"
                       }`}
                     >
                       <span className="shrink-0 text-[11px] w-3.5 text-center opacity-60">{mod.icon}</span>
-                      <span className="flex-1">{mod.label}</span>
+                      <span className="flex-1 text-left">{mod.label}</span>
                       <svg
                         width="12"
                         height="12"
                         viewBox="0 0 16 16"
                         fill="currentColor"
-                        className={`shrink-0 opacity-40 transition-transform ${active ? "rotate-90" : ""}`}
+                        className={`shrink-0 opacity-40 transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
                       >
                         <path d="M6 3l5 5-5 5V3z"/>
                       </svg>
-                    </Link>
+                    </button>
 
-                    {/* Flyout on hover (when NOT active) */}
-                    {hovered && !active && subs.length > 0 && (
-                      <div
-                        className="fixed z-50 w-44 rounded-md border border-border bg-surface shadow-lg py-1"
-                        style={{ top: flyoutPos.top, left: flyoutPos.left }}
-                        onMouseEnter={() => setHoveredModule(mod.label)}
-                        onMouseLeave={() => setHoveredModule(null)}
-                      >
-                        {subs.map((sub) => (
-                          <Link
-                            key={sub.path}
-                            href={prefix + sub.path}
-                            className="block px-3 py-[6px] text-[13px] text-muted hover:bg-surface-hover hover:text-foreground transition-colors"
-                          >
-                            {sub.label}
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Expanded sub-links (when active) */}
-                    {active && subs.length > 0 && (
+                    {/* Sub-links */}
+                    {isExpanded && (
                       <div className="ml-[22px] flex flex-col gap-px py-px border-l border-border/40">
                         {subs.map((sub) => {
                           const subActive = isSubActive(sub.path);

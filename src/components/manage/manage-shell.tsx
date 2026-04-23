@@ -197,13 +197,6 @@ export function ManageShell({
               </select>
             </div>
 
-            {/* Quick stats */}
-            {selectedSubscriber && (
-              <div className="rounded bg-surface-hover px-2.5 py-2 text-[11px]">
-                <p className="font-medium">{selectedSubscriber.name}</p>
-                <p className="text-muted">{selectedSubscriber.plan} · {selectedSubscriber.siteCount} site{selectedSubscriber.siteCount !== 1 ? "s" : ""}</p>
-              </div>
-            )}
           </div>
 
           <div className="mx-3 my-2 border-t border-border" />

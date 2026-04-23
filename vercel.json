@@ -19,6 +19,10 @@
     {
       "path": "/api/pipeline/video-pool",
       "schedule": "0 */3 * * *"
+    },
+    {
+      "path": "/api/seo/score-cron",
+      "schedule": "0 * * * *"
     }
   ]
 }

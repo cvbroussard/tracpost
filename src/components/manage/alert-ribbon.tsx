@@ -95,10 +95,10 @@ export function AlertRibbon() {
 
   const categoryY: Record<string, number> = {};
   CATEGORIES.forEach((cat, i) => {
-    categoryY[cat.key] = 28 + i * 28;
+    categoryY[cat.key] = 14 + i * 22;
   });
 
-  const totalHeight = 28 + CATEGORIES.length * 28 + 20;
+  const totalHeight = 14 + CATEGORIES.length * 22 + 14;
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -394,7 +394,7 @@ const ribbonStyles = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 16px 0;
+    padding: 4px 16px 0;
   }
   .ribbon-left { display: flex; align-items: center; gap: 8px; }
   .ribbon-title {
@@ -430,7 +430,7 @@ const ribbonStyles = `
   }
 
   .ribbon-graph {
-    padding: 4px 16px 8px;
+    padding: 2px 16px 4px;
     position: relative;
     cursor: grab;
     user-select: none;

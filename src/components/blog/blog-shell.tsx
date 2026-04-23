@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { blogHubUrl, projectsHubUrl } from "@/lib/urls";
 import Script from "next/script";
 
@@ -146,7 +147,7 @@ gtag('config', '${ga4MeasurementId}');`}
         <div className="bs-header-inner">
           <a href={navLinks[0]?.href || "/"} className="bs-brand" aria-label={siteName}>
             {theme.logoUrl ? (
-              <img src={theme.logoUrl} alt={siteName} className="bs-logo" width={160} height={40} />
+              <Image src={theme.logoUrl} alt={siteName} className="bs-logo" width={160} height={40} sizes="160px" quality={75} />
             ) : (
               <span className="bs-site-name">{siteName}</span>
             )}

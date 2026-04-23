@@ -267,7 +267,10 @@ export function ManageShell({
                 </span>
               </>
             ) : (
-              <h1 className="text-sm text-muted">Select a subscriber to get started</h1>
+              <>
+                <h1 className="text-sm font-semibold">All Subscribers</h1>
+                <span className="text-xs text-muted">{subscribers.length} subscribers · {sites.length} sites</span>
+              </>
             )}
           </div>
           {children}

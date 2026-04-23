@@ -2,9 +2,19 @@
  * Markdown→HTML converter for blog body content.
  * Shared between public blog renderer and dashboard preview.
  */
+function optimizeImageUrl(src: string, width: number = 800): string {
+  if (src.includes("assets.tracpost.com")) {
+    return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=75`;
+  }
+  return src;
+}
+
 export function markdownToHtml(md: string): string {
   return md
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
+      const optimized = optimizeImageUrl(src);
+      return `<img src="${optimized}" alt="${alt}" loading="lazy" width="800" height="450" decoding="async" style="aspect-ratio:16/9;object-fit:cover;">`;
+    })
     .replace(/^### (.+)$/gm, "<h3>$1</h3>")
     .replace(/^## (.+)$/gm, "<h2>$1</h2>")
     .replace(/^# (.+)$/gm, "<h1>$1</h1>")
@@ -14,6 +24,9 @@ export function markdownToHtml(md: string): string {
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>')
     .replace(/^- (.+)$/gm, "<li>$1</li>")
     .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
+    .replace(/<img\s+src="(https:\/\/assets\.tracpost\.com\/[^"]+)"/g, (_match, src) => {
+      return `<img src="${optimizeImageUrl(src)}" width="800" height="450" decoding="async" style="aspect-ratio:16/9;object-fit:cover;"`;
+    })
     .split(/\n\n+/)
     .map((block) => {
       const trimmed = block.trim();

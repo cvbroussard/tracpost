@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 interface Feature {
   text: string;
   visible: boolean;
+  description: string;
 }
 
 interface Product {
@@ -83,7 +84,7 @@ export function ProductsClient() {
 
   function addFeature() {
     if (!featureInput.trim() || !editing) return;
-    updateField("features", [...editing.features, { text: featureInput.trim(), visible: true }]);
+    updateField("features", [...editing.features, { text: featureInput.trim(), visible: true, description: "" }]);
     setFeatureInput("");
   }
 
@@ -380,7 +381,19 @@ export function ProductsClient() {
                       >
                         {f.visible ? "✓" : ""}
                       </button>
-                      <span className="flex-1 text-xs">{f.text}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs">{f.text}</span>
+                        <input
+                          value={f.description}
+                          onChange={e => {
+                            const next = [...editing.features];
+                            next[i] = { ...next[i], description: e.target.value };
+                            updateField("features", next);
+                          }}
+                          placeholder="Add tooltip description..."
+                          className="block w-full bg-transparent text-[10px] text-muted mt-0.5 focus:outline-none focus:text-foreground"
+                        />
+                      </div>
                       <button onClick={() => removeFeature(i)} className="text-[10px] text-muted hover:text-danger shrink-0">✕</button>
                     </div>
                   ))}

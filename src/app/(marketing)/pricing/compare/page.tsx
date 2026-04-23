@@ -13,6 +13,7 @@ export const revalidate = 300;
 interface Feature {
   text: string;
   visible: boolean;
+  description: string;
 }
 
 export default async function ComparePage() {
@@ -24,16 +25,18 @@ export default async function ComparePage() {
   `;
 
   // Build a unified feature list — all unique feature texts across all plans
-  const featureSet = new Map<string, Record<string, boolean>>();
+  const featureSet = new Map<string, { plans: Record<string, boolean>; description: string }>();
   const planNames = products.map(p => p.name as string);
 
   for (const plan of products) {
     const features = (plan.features as Feature[]) || [];
     for (const f of features) {
       if (!featureSet.has(f.text)) {
-        featureSet.set(f.text, {});
+        featureSet.set(f.text, { plans: {}, description: f.description || "" });
       }
-      featureSet.get(f.text)![plan.name as string] = true;
+      const entry = featureSet.get(f.text)!;
+      entry.plans[plan.name as string] = true;
+      if (f.description && !entry.description) entry.description = f.description;
     }
   }
 
@@ -162,13 +165,21 @@ export default async function ComparePage() {
                       <td colSpan={planNames.length + 1} className="cp-category-label">{cat.label}</td>
                     </tr>,
                     ...relevantFeatures.map(featureText => {
-                      const planMap = featureSet.get(featureText) || {};
+                      const entry = featureSet.get(featureText) || { plans: {}, description: "" };
                       return (
                         <tr key={featureText} className="cp-feature-row">
-                          <td className="cp-feature-name">{featureText}</td>
+                          <td className="cp-feature-name">
+                            {featureText}
+                            {entry.description && (
+                              <span className="cp-tooltip-wrap">
+                                <span className="cp-info-icon">ⓘ</span>
+                                <span className="cp-tooltip">{entry.description}</span>
+                              </span>
+                            )}
+                          </td>
                           {planNames.map(name => (
                             <td key={name} className="cp-check-cell">
-                              {planMap[name] ? (
+                              {entry.plans[name] ? (
                                 <span className="cp-check">✓</span>
                               ) : (
                                 <span className="cp-dash">—</span>
@@ -316,6 +327,38 @@ const compareStyles = `
     text-decoration: none;
     border-radius: 6px;
     cursor: pointer;
+  }
+
+  .cp-tooltip-wrap {
+    position: relative;
+    display: inline-block;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .cp-info-icon {
+    font-size: 12px;
+    color: #9ca3af;
+    cursor: help;
+  }
+  .cp-tooltip {
+    display: none;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 8px 12px;
+    border-radius: 6px;
+    width: 260px;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    pointer-events: none;
+  }
+  .cp-tooltip-wrap:hover .cp-tooltip {
+    display: block;
   }
 
   @media (max-width: 768px) {

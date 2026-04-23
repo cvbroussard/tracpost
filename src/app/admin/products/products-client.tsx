@@ -2,13 +2,18 @@
 
 import { useState, useEffect } from "react";
 
+interface Feature {
+  text: string;
+  visible: boolean;
+}
+
 interface Product {
   id: string;
   name: string;
   tagline: string | null;
   price: string;
   frequency: string;
-  features: string[];
+  features: Feature[];
   cta_text: string;
   cta_href: string | null;
   highlight: boolean;
@@ -17,7 +22,7 @@ interface Product {
   is_active: boolean;
 }
 
-const EMPTY: Omit<Product, "id" | "is_active"> = {
+const EMPTY_PRODUCT: Omit<Product, "id" | "is_active"> = {
   name: "",
   tagline: "",
   price: "",
@@ -37,6 +42,7 @@ export function ProductsClient() {
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [featureInput, setFeatureInput] = useState("");
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   useEffect(() => { loadProducts(); }, []);
 
@@ -50,13 +56,13 @@ export function ProductsClient() {
   }
 
   function startCreate() {
-    setEditing({ id: "", is_active: true, ...EMPTY });
+    setEditing({ id: "", is_active: true, ...EMPTY_PRODUCT });
     setCreating(true);
     setFeatureInput("");
   }
 
   function startEdit(p: Product) {
-    setEditing({ ...p });
+    setEditing({ ...p, features: [...p.features] });
     setCreating(false);
     setFeatureInput("");
   }
@@ -64,6 +70,7 @@ export function ProductsClient() {
   function cancelEdit() {
     setEditing(null);
     setCreating(false);
+    setDragIdx(null);
   }
 
   function updateField(key: string, value: unknown) {
@@ -73,7 +80,7 @@ export function ProductsClient() {
 
   function addFeature() {
     if (!featureInput.trim() || !editing) return;
-    updateField("features", [...editing.features, featureInput.trim()]);
+    updateField("features", [...editing.features, { text: featureInput.trim(), visible: true }]);
     setFeatureInput("");
   }
 
@@ -82,26 +89,40 @@ export function ProductsClient() {
     updateField("features", editing.features.filter((_, i) => i !== idx));
   }
 
-  function moveFeature(idx: number, dir: -1 | 1) {
+  function toggleFeatureVisible(idx: number) {
     if (!editing) return;
     const next = [...editing.features];
-    const j = idx + dir;
-    if (j < 0 || j >= next.length) return;
-    [next[idx], next[j]] = [next[j], next[idx]];
+    next[idx] = { ...next[idx], visible: !next[idx].visible };
     updateField("features", next);
+  }
+
+  function handleDragStart(idx: number) {
+    setDragIdx(idx);
+  }
+
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === idx || !editing) return;
+    const next = [...editing.features];
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(idx, 0, moved);
+    updateField("features", next);
+    setDragIdx(idx);
+  }
+
+  function handleDragEnd() {
+    setDragIdx(null);
   }
 
   async function save() {
     if (!editing) return;
     setSaving(true);
-
     const method = creating ? "POST" : "PATCH";
     const res = await fetch("/api/admin/products", {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(editing),
     });
-
     if (res.ok) {
       await loadProducts();
       setEditing(null);
@@ -127,6 +148,9 @@ export function ProductsClient() {
     );
   }
 
+  const visCount = (f: Feature[]) => f.filter(x => x.visible).length;
+  const cmpCount = (f: Feature[]) => f.filter(x => !x.visible).length;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -150,7 +174,7 @@ export function ProductsClient() {
             onClick={() => startEdit(p)}
           >
             {p.highlight && (
-              <span className="mb-2 inline-block rounded bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">Recommended</span>
+              <span className="mb-2 inline-block rounded bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">Most popular</span>
             )}
             <h2 className="text-lg font-semibold">{p.name}</h2>
             <p className="text-xs text-muted mt-0.5">{p.tagline}</p>
@@ -159,29 +183,25 @@ export function ProductsClient() {
               <span className="text-xs text-muted">{p.frequency}</span>
             </p>
             <ul className="mt-3 space-y-1">
-              {p.features.map((f, i) => (
+              {p.features.filter(f => f.visible).map((f, i) => (
                 <li key={i} className="text-xs text-muted flex items-start gap-1.5">
                   <span className="text-success mt-0.5">✓</span>
-                  {f}
+                  {f.text}
                 </li>
               ))}
             </ul>
+            {cmpCount(p.features) > 0 && (
+              <p className="mt-2 text-[10px] text-muted">+ {cmpCount(p.features)} more in compare</p>
+            )}
             <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-              <span className={`rounded px-2 py-0.5 text-[10px] ${
-                p.cta_href ? "bg-surface-hover text-muted" : "bg-accent/10 text-accent"
-              }`}>
-                {p.cta_text}
-              </span>
+              <span className="rounded px-2 py-0.5 text-[10px] bg-accent/10 text-accent">{p.cta_text}</span>
               <span className="text-[10px] text-muted">#{p.sort_order}</span>
             </div>
-            {p.stripe_price_id && (
-              <p className="mt-2 text-[9px] text-muted font-mono truncate">{p.stripe_price_id}</p>
-            )}
           </div>
         ))}
       </div>
 
-      {/* Inactive products */}
+      {/* Inactive */}
       {products.filter(p => !p.is_active).length > 0 && (
         <div>
           <p className="text-xs text-muted mb-2">Inactive</p>
@@ -218,108 +238,90 @@ export function ProductsClient() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] text-muted mb-1">Name</label>
-                  <input
-                    value={editing.name}
-                    onChange={e => updateField("name", e.target.value)}
-                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
-                    placeholder="Growth"
-                  />
+                  <input value={editing.name} onChange={e => updateField("name", e.target.value)}
+                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm" placeholder="Growth" />
                 </div>
                 <div>
                   <label className="block text-[10px] text-muted mb-1">Sort Order</label>
-                  <input
-                    type="number"
-                    value={editing.sort_order}
-                    onChange={e => updateField("sort_order", Number(e.target.value))}
-                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
-                  />
+                  <input type="number" value={editing.sort_order} onChange={e => updateField("sort_order", Number(e.target.value))}
+                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm" />
                 </div>
               </div>
 
               <div>
                 <label className="block text-[10px] text-muted mb-1">Tagline</label>
-                <input
-                  value={editing.tagline || ""}
-                  onChange={e => updateField("tagline", e.target.value)}
-                  className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
-                  placeholder="Own your category."
-                />
+                <input value={editing.tagline || ""} onChange={e => updateField("tagline", e.target.value)}
+                  className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm" placeholder="Own your category." />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] text-muted mb-1">Price</label>
-                  <input
-                    value={editing.price}
-                    onChange={e => updateField("price", e.target.value)}
-                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
-                    placeholder="$219"
-                  />
+                  <input value={editing.price} onChange={e => updateField("price", e.target.value)}
+                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm" placeholder="$219" />
                 </div>
                 <div>
                   <label className="block text-[10px] text-muted mb-1">Frequency</label>
-                  <input
-                    value={editing.frequency}
-                    onChange={e => updateField("frequency", e.target.value)}
-                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
-                    placeholder="/month"
-                  />
+                  <input value={editing.frequency} onChange={e => updateField("frequency", e.target.value)}
+                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm" placeholder="/month" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] text-muted mb-1">CTA Text</label>
-                  <input
-                    value={editing.cta_text}
-                    onChange={e => updateField("cta_text", e.target.value)}
-                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
-                    placeholder="Start 14-day trial"
-                  />
+                  <input value={editing.cta_text} onChange={e => updateField("cta_text", e.target.value)}
+                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm" placeholder="Start 14-day trial" />
                 </div>
                 <div>
                   <label className="block text-[10px] text-muted mb-1">CTA Link (blank = checkout)</label>
-                  <input
-                    value={editing.cta_href || ""}
-                    onChange={e => updateField("cta_href", e.target.value || null)}
-                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
-                    placeholder="/contact"
-                  />
+                  <input value={editing.cta_href || ""} onChange={e => updateField("cta_href", e.target.value || null)}
+                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm" placeholder="/contact" />
                 </div>
               </div>
 
               <div>
                 <label className="block text-[10px] text-muted mb-1">Stripe Price ID</label>
-                <input
-                  value={editing.stripe_price_id || ""}
-                  onChange={e => updateField("stripe_price_id", e.target.value || null)}
-                  className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm font-mono"
-                  placeholder="price_1Abc..."
-                />
+                <input value={editing.stripe_price_id || ""} onChange={e => updateField("stripe_price_id", e.target.value || null)}
+                  className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm font-mono" placeholder="price_1Abc..." />
               </div>
 
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={editing.highlight}
-                    onChange={e => updateField("highlight", e.target.checked)}
-                  />
-                  Highlight (recommended badge)
-                </label>
-              </div>
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={editing.highlight} onChange={e => updateField("highlight", e.target.checked)} />
+                Highlight (most popular badge)
+              </label>
 
-              {/* Features */}
+              {/* Features with drag-and-drop + visibility */}
               <div>
-                <label className="block text-[10px] text-muted mb-1">Features ({editing.features.length})</label>
-                <div className="space-y-1 mb-2">
+                <div className="flex items-baseline justify-between mb-1">
+                  <label className="text-[10px] text-muted">
+                    Features ({visCount(editing.features)} on card · {cmpCount(editing.features)} compare-only)
+                  </label>
+                </div>
+                <div className="space-y-0.5 mb-2 max-h-60 overflow-y-auto">
                   {editing.features.map((f, i) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-muted w-4 text-right">{i + 1}</span>
-                      <span className="flex-1 text-xs">{f}</span>
-                      <button onClick={() => moveFeature(i, -1)} disabled={i === 0} className="text-[10px] text-muted hover:text-foreground disabled:opacity-30">↑</button>
-                      <button onClick={() => moveFeature(i, 1)} disabled={i === editing.features.length - 1} className="text-[10px] text-muted hover:text-foreground disabled:opacity-30">↓</button>
-                      <button onClick={() => removeFeature(i)} className="text-[10px] text-danger hover:underline">✕</button>
+                    <div
+                      key={i}
+                      draggable
+                      onDragStart={() => handleDragStart(i)}
+                      onDragOver={(e) => handleDragOver(e, i)}
+                      onDragEnd={handleDragEnd}
+                      className={`flex items-center gap-1.5 rounded px-2 py-1.5 transition-colors ${
+                        dragIdx === i ? "bg-accent/10" : "hover:bg-surface-hover"
+                      } ${!f.visible ? "opacity-50" : ""}`}
+                    >
+                      <span className="cursor-grab text-[10px] text-muted select-none">⠿</span>
+                      <button
+                        onClick={() => toggleFeatureVisible(i)}
+                        className={`shrink-0 w-4 h-4 rounded border text-[10px] flex items-center justify-center ${
+                          f.visible ? "border-success bg-success/10 text-success" : "border-border text-muted"
+                        }`}
+                        title={f.visible ? "Visible on card" : "Compare only"}
+                      >
+                        {f.visible ? "✓" : ""}
+                      </button>
+                      <span className="flex-1 text-xs">{f.text}</span>
+                      <button onClick={() => removeFeature(i)} className="text-[10px] text-muted hover:text-danger shrink-0">✕</button>
                     </div>
                   ))}
                 </div>
@@ -331,10 +333,12 @@ export function ProductsClient() {
                     className="flex-1 rounded border border-border bg-background px-3 py-1.5 text-xs"
                     placeholder="Add a feature..."
                   />
-                  <button onClick={addFeature} disabled={!featureInput.trim()} className="rounded bg-surface-hover px-3 py-1.5 text-xs text-muted hover:text-foreground disabled:opacity-50">
+                  <button onClick={addFeature} disabled={!featureInput.trim()}
+                    className="rounded bg-surface-hover px-3 py-1.5 text-xs text-muted hover:text-foreground disabled:opacity-50">
                     Add
                   </button>
                 </div>
+                <p className="mt-1 text-[9px] text-muted">Drag to reorder · ✓ = shown on pricing card · unchecked = compare plans only</p>
               </div>
             </div>
 
@@ -342,23 +346,15 @@ export function ProductsClient() {
             <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
               <div>
                 {!creating && (
-                  <button
-                    onClick={() => { deactivate(editing.id); cancelEdit(); }}
-                    className="text-xs text-danger hover:underline"
-                  >
+                  <button onClick={() => { deactivate(editing.id); cancelEdit(); }} className="text-xs text-danger hover:underline">
                     Deactivate
                   </button>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={cancelEdit} className="rounded border border-border px-4 py-1.5 text-xs text-muted hover:text-foreground">
-                  Cancel
-                </button>
-                <button
-                  onClick={save}
-                  disabled={saving || !editing.name || !editing.price}
-                  className="rounded bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-                >
+                <button onClick={cancelEdit} className="rounded border border-border px-4 py-1.5 text-xs text-muted hover:text-foreground">Cancel</button>
+                <button onClick={save} disabled={saving || !editing.name || !editing.price}
+                  className="rounded bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50">
                   {saving ? "Saving..." : creating ? "Create" : "Save"}
                 </button>
               </div>

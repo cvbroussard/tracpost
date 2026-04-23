@@ -32,7 +32,8 @@ export default async function PricingPage() {
 
           <div className="mp-pricing-grid">
             {products.map((plan) => {
-              const features = (plan.features as string[]) || [];
+              const allFeatures = (plan.features as Array<{ text: string; visible: boolean }>) || [];
+              const features = allFeatures.filter(f => f.visible);
               const ctaHref = (plan.cta_href as string) || "/signup";
               const isHighlight = plan.highlight as boolean;
 
@@ -51,8 +52,8 @@ export default async function PricingPage() {
                     <span className="mp-plan-period">{plan.frequency as string}</span>
                   </p>
                   <ul className="mp-plan-features">
-                    {features.map((f) => (
-                      <li key={f}>{f}</li>
+                    {features.map((f, i) => (
+                      <li key={i}>{f.text}</li>
                     ))}
                   </ul>
                   <Link

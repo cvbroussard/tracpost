@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { TopBar } from "@/components/topbar";
 import { AlertRibbon } from "./alert-ribbon";
 
 interface Subscriber {
@@ -150,7 +151,7 @@ export function ManageShell({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      {/* Ribbon — full width, persistent */}
+      <TopBar userName="Operator" variant="manage" />
       <AlertRibbon />
 
       <div className="flex flex-1 overflow-hidden">

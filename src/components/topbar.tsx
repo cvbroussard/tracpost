@@ -6,7 +6,7 @@ import { ThemeToggle } from "./theme-toggle";
 
 interface TopBarProps {
   userName: string;
-  variant?: "studio" | "platform";
+  variant?: "studio" | "platform" | "manage";
 }
 
 export function TopBar({ userName, variant = "studio" }: TopBarProps) {
@@ -15,10 +15,11 @@ export function TopBar({ userName, variant = "studio" }: TopBarProps) {
   const isSubdomain =
     typeof window !== "undefined" &&
     (window.location.hostname === "studio.tracpost.com" ||
-      window.location.hostname === "platform.tracpost.com");
+      window.location.hostname === "platform.tracpost.com" ||
+      window.location.hostname === "manage.tracpost.com");
 
   async function handleLogout() {
-    if (variant === "platform") {
+    if (variant === "platform" || variant === "manage") {
       await fetch("/api/auth/admin", { method: "DELETE" });
       router.push(isSubdomain ? "/login" : "/admin-login");
     } else {
@@ -36,7 +37,12 @@ export function TopBar({ userName, variant = "studio" }: TopBarProps) {
         </span>
         {variant === "platform" && (
           <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
-            ADMIN
+            PLATFORM
+          </span>
+        )}
+        {variant === "manage" && (
+          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
+            MANAGE
           </span>
         )}
       </div>

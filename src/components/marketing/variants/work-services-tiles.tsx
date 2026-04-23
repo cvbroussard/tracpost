@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ServiceTile } from "@/lib/tenant-site";
 
 interface Props {
@@ -27,7 +28,7 @@ export default function WorkServicesTiles({ headline, subheadline, tiles }: Prop
             <div className="ws-tiles-grid">
               {tiles.map((tile, i) => (
                 <div key={i} className="ws-tile">
-                  {tile.image && <img src={tile.image} alt={tile.title} className="ws-tile-img" width={640} height={360} loading="lazy" />}
+                  {tile.image && <Image src={tile.image} alt={tile.title} className="ws-tile-img" width={640} height={360} sizes="(max-width: 768px) 100vw, 33vw" quality={75} />}
                   {tile.icon && !tile.image && <div className="ws-tile-icon">{tile.icon}</div>}
                   <h2 className="ws-tile-title">{tile.title}</h2>
                   <p className="ws-tile-desc">{tile.description}</p>

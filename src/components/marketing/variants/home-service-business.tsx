@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { HomePageData } from "@/lib/tenant-site";
 
 interface Props {
@@ -14,7 +15,7 @@ export default function HomeServiceBusiness({ data, prefix }: Props) {
   return (
     <>
       <section className="ws-hero">
-        {data.heroImage && <img src={data.heroImage} alt={data.heroTitle || ""} className="ws-hero-bg" width={1920} height={1080} fetchPriority="high" />}
+        {data.heroImage && <Image src={data.heroImage} alt={data.heroTitle || ""} className="ws-hero-bg" width={1920} height={1080} priority sizes="100vw" quality={75} />}
         <div className="ws-hero-overlay">
           <div className="ws-container ws-hero-content">
             <h1 className="ws-hero-title">{data.heroTitle}</h1>
@@ -46,7 +47,7 @@ export default function HomeServiceBusiness({ data, prefix }: Props) {
               {data.services.map((service, i) => (
                 <div key={i} className="ws-service-card">
                   {service.image && (
-                    <img src={service.image} alt={service.title} className="ws-service-img" width={640} height={360} loading="lazy" />
+                    <Image src={service.image} alt={service.title} className="ws-service-img" width={640} height={360} sizes="(max-width: 768px) 100vw, 33vw" quality={75} />
                   )}
                   <h3 className="ws-service-name">{service.title}</h3>
                   <p className="ws-service-desc">{service.description}</p>
@@ -67,7 +68,7 @@ export default function HomeServiceBusiness({ data, prefix }: Props) {
             <div className="ws-gallery">
               {data.galleryImages.slice(0, 6).map((img, i) => (
                 <a key={i} href={`${prefix}/work`} className="ws-gallery-item">
-                  <img src={img.url} alt={img.alt || ""} width={400} height={400} loading="lazy" />
+                  <Image src={img.url} alt={img.alt || ""} width={400} height={400} sizes="(max-width: 640px) 50vw, 33vw" quality={75} />
                 </a>
               ))}
             </div>

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { AboutPageData } from "@/lib/tenant-site";
 
 interface Props {
@@ -37,7 +38,7 @@ export default function AboutFounder({ data, prefix }: Props) {
           <div className="ws-container">
             <div className="ws-founder-body">
               {data.aboutHero && (
-                <img src={data.aboutHero} alt="About" className="ws-founder-portrait" width={400} height={500} loading="lazy" />
+                <Image src={data.aboutHero} alt="About" className="ws-founder-portrait" width={400} height={500} sizes="(max-width: 768px) 100vw, 400px" quality={75} />
               )}
               <div
                 className="ws-founder-story"

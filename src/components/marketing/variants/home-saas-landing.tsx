@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { HomePageData } from "@/lib/tenant-site";
 
 interface Props {
@@ -74,7 +75,7 @@ export default function HomeSaasLanding({ data, prefix }: Props) {
             <div className="ws-saas-articles">
               {data.recentArticles.map((a) => (
                 <a key={a.slug} href={`${prefix}/blog/${a.slug}`} className="ws-saas-article">
-                  {a.image && <img src={a.image} alt={a.title} className="ws-saas-article-img" width={640} height={360} loading="lazy" />}
+                  {a.image && <Image src={a.image} alt={a.title} className="ws-saas-article-img" width={640} height={360} sizes="(max-width: 768px) 100vw, 33vw" quality={75} />}
                   <div className="ws-saas-article-body">
                     {a.date && <p className="ws-saas-article-date">{a.date}</p>}
                     <h3 className="ws-saas-article-title">{a.title}</h3>

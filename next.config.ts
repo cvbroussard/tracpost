@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "assets.tracpost.com" },
+    ],
+  },
   // Externalize native + ESM-only modules so they load at runtime instead of being bundled.
   serverExternalPackages: [
     "@napi-rs/canvas",

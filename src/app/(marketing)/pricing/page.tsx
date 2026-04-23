@@ -93,7 +93,10 @@ export default async function PricingPage() {
             Both plans use the same AI engine and publish to the same 8 platforms. The difference is
             content volume and how many sites you need. Most solo businesses start with Growth.
           </p>
-          <Link href="/contact" className="mp-btn-outline mp-btn-lg">Talk to us</Link>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <Link href="/pricing/compare" className="mp-btn-primary mp-btn-lg">Compare all features</Link>
+            <Link href="/contact" className="mp-btn-outline mp-btn-lg">Talk to us</Link>
+          </div>
         </div>
       </section>
 

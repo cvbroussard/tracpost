@@ -3,6 +3,50 @@ import { sql } from "@/lib/db";
 
 const API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 const PSI_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
+const MAX_PAGES = 50;
+
+/**
+ * Discover all page URLs from the sitemap index.
+ * Fetches /sitemap.xml → finds sub-sitemaps → extracts all <loc> URLs.
+ * Falls back to 6 core pages if sitemap is unavailable.
+ */
+async function discoverPagesFromSitemap(baseUrl: string): Promise<string[]> {
+  const fallback = [
+    baseUrl,
+    `${baseUrl}/about`,
+    `${baseUrl}/blog`,
+    `${baseUrl}/projects`,
+    `${baseUrl}/contact`,
+    `${baseUrl}/work`,
+  ];
+
+  try {
+    const indexRes = await fetch(`${baseUrl}/sitemap.xml`, { signal: AbortSignal.timeout(10000) });
+    if (!indexRes.ok) return fallback;
+    const indexXml = await indexRes.text();
+
+    // Extract sub-sitemap URLs from the index
+    const sitemapLocs = [...indexXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
+
+    if (sitemapLocs.length === 0) return fallback;
+
+    const allUrls: string[] = [];
+
+    for (const sitemapUrl of sitemapLocs) {
+      try {
+        const subRes = await fetch(sitemapUrl, { signal: AbortSignal.timeout(10000) });
+        if (!subRes.ok) continue;
+        const subXml = await subRes.text();
+        const urls = [...subXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
+        allUrls.push(...urls);
+      } catch { /* skip failed sub-sitemap */ }
+    }
+
+    return allUrls.length > 0 ? allUrls.slice(0, MAX_PAGES) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 interface AuditItem {
   id: string;
@@ -123,14 +167,8 @@ export async function POST(
       ? `https://${domain}`
       : `https://tracpost.com/${slug}`;
 
-    const pages = [
-      baseUrl,
-      `${baseUrl}/about`,
-      `${baseUrl}/blog`,
-      `${baseUrl}/projects`,
-      `${baseUrl}/contact`,
-      `${baseUrl}/work`,
-    ];
+    // Discover pages from sitemap index → sub-sitemaps
+    const pages = await discoverPagesFromSitemap(baseUrl);
 
     const results = [];
     for (const url of pages) {

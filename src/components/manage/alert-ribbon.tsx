@@ -336,7 +336,7 @@ export function AlertRibbon() {
         return (
           <div
             className="ribbon-tooltip"
-            style={{ left: tooltipPos.x + 16, top: tooltipPos.y + 8 }}
+            style={{ left: tooltipPos.x, top: tooltipPos.y + 8, transform: "translateX(-50%)" }}
             onMouseEnter={() => {
               if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
               setTooltipLocked(true);

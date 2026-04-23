@@ -20,9 +20,9 @@ export async function GET(_req: Request, { params }: RouteParams) {
   const customDomain = await getCustomDomain(site.siteId);
 
   const projects = await sql`
-    SELECT slug, updated_at FROM projects
+    SELECT slug, created_at FROM projects
     WHERE site_id = ${site.siteId}
-    ORDER BY updated_at DESC
+    ORDER BY created_at DESC
     LIMIT 500
   `;
 
@@ -31,7 +31,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
   const projectUrls = projects.map((p) => `
   <url>
     <loc>${publicProjectUrl(siteSlug, p.slug as string, customDomain)}</loc>
-    <lastmod>${p.updated_at ? new Date(p.updated_at as string).toISOString() : new Date().toISOString()}</lastmod>
+    <lastmod>${p.created_at ? new Date(p.created_at as string).toISOString() : new Date().toISOString()}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>`).join("");

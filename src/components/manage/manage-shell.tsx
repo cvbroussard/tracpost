@@ -135,7 +135,9 @@ export function ManageShell({
   // Set subscriber when site is selected
   function handleSiteChange(siteId: string) {
     setSelectedSiteId(siteId);
-    if (siteId !== "all") {
+    if (siteId === "all") {
+      router.push("/manage");
+    } else {
       const site = sites.find(s => s.id === siteId);
       if (site) setSelectedSubscriberId(site.subscriptionId);
     }

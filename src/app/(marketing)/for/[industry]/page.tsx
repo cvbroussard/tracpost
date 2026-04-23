@@ -138,7 +138,7 @@ export default async function IndustryPage({ params }: Props) {
 
           <div style={{ textAlign: "center", marginTop: 48 }}>
             <Link href="/pricing" className="mp-btn-primary mp-btn-lg">
-              Start 14-day trial
+              Start 7-day trial
             </Link>
           </div>
         </div>

@@ -87,7 +87,7 @@ export default async function MarketingHomePage() {
           </p>
           <div className="mp-hero-actions">
             <Link href="/pricing" className="mp-btn-primary mp-btn-lg">
-              Start 14-day trial
+              Start 7-day trial
             </Link>
             <a href="#product" className="mp-btn-outline mp-btn-lg">
               See how it works
@@ -314,7 +314,7 @@ export default async function MarketingHomePage() {
           </p>
           <div className="mp-hero-actions" style={{ justifyContent: "center" }}>
             <Link href="/pricing" className="mp-btn-primary mp-btn-lg">
-              Start 14-day trial
+              Start 7-day trial
             </Link>
             <Link href="/contact" className="mp-btn-outline mp-btn-lg">
               Talk to us

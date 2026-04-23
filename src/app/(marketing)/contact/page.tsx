@@ -49,7 +49,7 @@ export default function ContactPage() {
               Ready to start? You don&apos;t need to talk to us first.
             </p>
             <Link href="/pricing" className="mp-btn-primary mp-btn-lg">
-              Start 14-day trial
+              Start 7-day trial
             </Link>
           </div>
         </div>

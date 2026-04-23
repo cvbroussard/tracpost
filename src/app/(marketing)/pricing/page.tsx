@@ -5,7 +5,7 @@ import { CheckoutButton } from "@/components/marketing-platform/checkout-button"
 
 export const metadata: Metadata = {
   title: "Pricing — TracPost",
-  description: "Simple pricing for AI-powered content automation. Growth $99/mo, Authority $219/mo. 14-day free trial.",
+  description: "Simple pricing for AI-powered content automation. Growth $99/mo, Authority $219/mo. 7-day free trial.",
 };
 
 export const revalidate = 300;
@@ -25,10 +25,10 @@ export default async function PricingPage() {
           <h1 className="mp-section-title" style={{ fontSize: 48 }}>Simple pricing</h1>
           <p className="mp-section-subtitle" style={{ margin: "0 auto 16px" }}>
             Both plans include all 8 platforms, the mobile capture app, AI brand intelligence,
-            and managed account setup. Start with a 14-day free trial.
+            and managed account setup. Start with a 7-day free trial.
           </p>
           <p className="mp-section-subtitle" style={{ margin: "0 auto 48px", fontSize: 14 }}>
-            No credit card required. Cancel anytime.
+            Try free for 7 days. Cancel anytime.
           </p>
 
           <div className="mp-pricing-grid">

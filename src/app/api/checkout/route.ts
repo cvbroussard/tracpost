@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     payment_method_types: ["card"],
     line_items: [{ price: product.stripe_price_id as string, quantity: 1 }],
     subscription_data: {
-      trial_period_days: 14,
+      trial_period_days: 7,
     },
     success_url: `${origin}/setup?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/pricing`,

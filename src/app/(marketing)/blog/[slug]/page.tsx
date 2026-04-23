@@ -95,7 +95,7 @@ export default async function MarketingBlogArticle({ params }: Props) {
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
             <Link href="/pricing" className="mp-btn-primary mp-btn-lg">
-              Start 14-day trial
+              Start 7-day trial
             </Link>
             <Link href="/contact" className="mp-btn-outline mp-btn-lg">
               Talk to us

@@ -164,24 +164,38 @@ const formStyles = `
   }
   .su-optional { font-weight: 400; color: #9ca3af; }
 
-  .su-field input {
+  .su-field input,
+  .su-field input[type="email"],
+  .su-field input[type="text"],
+  .su-field input[type="tel"] {
     width: 100%;
     padding: 12px 14px;
     font-size: 15px;
     border: 1px solid #c5cbd3 !important;
     border-radius: 8px;
     background: #f9fafb !important;
-    color: #374151;
-    transition: border-color 0.15s, background 0.15s, color 0.15s;
+    color: #1a1a1a !important;
+    transition: border-color 0.15s, background 0.15s;
+    -webkit-text-fill-color: #1a1a1a;
   }
   .su-field input:focus {
     outline: none;
     border-color: #1a1a1a !important;
     background: #fff !important;
-    color: #111827;
+    color: #1a1a1a !important;
+    -webkit-text-fill-color: #1a1a1a;
     box-shadow: 0 0 0 3px rgba(26,26,26,0.06);
   }
-  .su-field input::placeholder { color: #b0b8c4; }
+  .su-field input::placeholder {
+    color: #b0b8c4 !important;
+    -webkit-text-fill-color: #b0b8c4;
+  }
+  .su-field input:-webkit-autofill,
+  .su-field input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #1a1a1a !important;
+    -webkit-box-shadow: 0 0 0 1000px #f9fafb inset !important;
+    border: 1px solid #c5cbd3 !important;
+  }
 
   .su-field-error input {
     border-color: #ef4444 !important;

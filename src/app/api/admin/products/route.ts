@@ -12,7 +12,7 @@ import { stripe } from "@/lib/stripe";
 export async function GET() {
   const products = await sql`
     SELECT id, name, tagline, price, frequency, features, cta_text, cta_href,
-           highlight, sort_order, stripe_price_id, is_active, created_at
+           highlight, sort_order, stripe_price_id, trial_days, is_active, created_at
     FROM products
     ORDER BY sort_order ASC, created_at ASC
   `;
@@ -33,18 +33,19 @@ export async function POST(req: NextRequest) {
   }
 
   const [product] = await sql`
-    INSERT INTO products (name, tagline, price, frequency, features, cta_text, cta_href, highlight, sort_order, stripe_price_id)
+    INSERT INTO products (name, tagline, price, frequency, features, cta_text, cta_href, highlight, sort_order, stripe_price_id, trial_days)
     VALUES (
       ${name},
       ${tagline || null},
       ${price},
       ${frequency || "/month"},
       ${JSON.stringify(features || [])},
-      ${cta_text || "Start 14-day trial"},
+      ${cta_text || "Start 7-day trial"},
       ${cta_href || null},
       ${highlight || false},
       ${sort_order || 0},
-      ${stripe_price_id || null}
+      ${stripe_price_id || null},
+      ${body.trial_days || 7}
     )
     RETURNING id, name
   `;
@@ -77,6 +78,7 @@ export async function PATCH(req: NextRequest) {
       highlight = ${body.highlight || false},
       sort_order = ${body.sort_order || 0},
       stripe_price_id = ${body.stripe_price_id || null},
+      trial_days = ${body.trial_days || 7},
       is_active = ${body.is_active !== undefined ? body.is_active : true},
       updated_at = NOW()
     WHERE id = ${id}

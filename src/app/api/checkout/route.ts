@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [product] = await sql`
-    SELECT name, stripe_price_id, cta_href
+    SELECT name, stripe_price_id, cta_href, trial_days
     FROM products
     WHERE id = ${product_id} AND is_active = true
   `;
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     payment_method_types: ["card"],
     line_items: [{ price: product.stripe_price_id as string, quantity: 1 }],
     subscription_data: {
-      trial_period_days: 7,
+      trial_period_days: (product.trial_days as number) || 7,
     },
     success_url: `${origin}/setup?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/pricing`,

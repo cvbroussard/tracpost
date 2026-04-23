@@ -19,6 +19,7 @@ interface Product {
   highlight: boolean;
   sort_order: number;
   stripe_price_id: string | null;
+  trial_days: number;
   is_active: boolean;
 }
 
@@ -28,11 +29,12 @@ const EMPTY_PRODUCT: Omit<Product, "id" | "is_active"> = {
   price: "",
   frequency: "/month",
   features: [],
-  cta_text: "Start 14-day trial",
+  cta_text: "Start 7-day trial",
   cta_href: null,
   highlight: false,
   sort_order: 0,
   stripe_price_id: null,
+  trial_days: 7,
 };
 
 export function ProductsClient() {
@@ -255,7 +257,7 @@ export function ProductsClient() {
             </div>
 
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[10px] text-muted mb-1">Name</label>
                   <input value={editing.name} onChange={e => updateField("name", e.target.value)}
@@ -264,6 +266,11 @@ export function ProductsClient() {
                 <div>
                   <label className="block text-[10px] text-muted mb-1">Sort Order</label>
                   <input type="number" value={editing.sort_order} onChange={e => updateField("sort_order", Number(e.target.value))}
+                    className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-muted mb-1">Trial Days</label>
+                  <input type="number" value={editing.trial_days} onChange={e => updateField("trial_days", Number(e.target.value))}
                     className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm" />
                 </div>
               </div>

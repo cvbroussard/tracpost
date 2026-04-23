@@ -168,7 +168,7 @@ export function ManageShell({
               >
                 <option value="all">All subscribers ({subscribers.length})</option>
                 {filteredSubscribers.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} · {s.plan}</option>
+                  <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             </div>

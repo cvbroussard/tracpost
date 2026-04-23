@@ -58,11 +58,19 @@ export default async function PricingPage() {
                     ))}
                   </ul>
                   {plan.stripe_price_id && !plan.cta_href ? (
-                    <CheckoutButton
-                      productId={plan.id as string}
-                      label={plan.cta_text as string}
-                      className={isHighlight ? "mp-btn-primary mp-btn-lg mp-plan-cta" : "mp-btn-outline mp-btn-lg mp-plan-cta"}
-                    />
+                    <div className="mp-plan-actions">
+                      <CheckoutButton
+                        productId={plan.id as string}
+                        label={plan.cta_text as string}
+                        className="mp-btn-primary mp-btn-lg mp-plan-cta"
+                      />
+                      <CheckoutButton
+                        productId={plan.id as string}
+                        label="Subscribe now"
+                        skipTrial
+                        className="mp-btn-outline mp-btn-lg mp-plan-cta"
+                      />
+                    </div>
                   ) : (
                     <Link
                       href={ctaHref}
@@ -172,5 +180,6 @@ const pricingStyles = `
     flex-shrink: 0;
   }
   .mp-plan-features li:last-child { border-bottom: none; }
-  .mp-plan-cta { display: block; text-align: center; width: 100%; }
+  .mp-plan-actions { display: flex; flex-direction: column; gap: 8px; }
+  .mp-plan-cta { display: block; text-align: center; width: 100%; cursor: pointer; }
 `;

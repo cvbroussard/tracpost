@@ -315,7 +315,7 @@ export function AlertRibbon() {
 
       {/* Tooltip — shows events near the cursor */}
       {cursorPct !== null && (() => {
-        const snapRange = timeFilter === "30d" ? 3 : timeFilter === "7d" ? 4 : 6;
+        const snapRange = timeFilter === "30d" ? 2 : timeFilter === "7d" ? 2.5 : 3;
         const nearby = events.filter(evt => {
           const x = xPercent(evt.timestamp);
           return Math.abs(x - cursorPct) < snapRange;

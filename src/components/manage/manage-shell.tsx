@@ -129,13 +129,14 @@ export function ManageShell({
     setSelectedSubscriberId(id);
     setSelectedSiteId("all");
     setSubscriberSearch("");
-    if (id === "all") router.push("/manage");
+    if (id === "all") { setExpandedGroup(null); router.push("/manage"); }
   }
 
   // Set subscriber when site is selected
   function handleSiteChange(siteId: string) {
     setSelectedSiteId(siteId);
     if (siteId === "all") {
+      setExpandedGroup(null);
       router.push("/manage");
     } else {
       const site = sites.find(s => s.id === siteId);

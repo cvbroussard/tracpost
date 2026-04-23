@@ -256,7 +256,7 @@ export function AlertRibbon() {
                   x1="80" x2="100%"
                   y1={categoryY[cat.key]} y2={categoryY[cat.key]}
                   stroke={cat.color}
-                  strokeOpacity={0.3}
+                  strokeOpacity={0.5}
                   strokeWidth={1}
                 />
                 <text

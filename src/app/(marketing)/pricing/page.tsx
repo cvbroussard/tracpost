@@ -19,7 +19,7 @@ export default async function PricingPage() {
 
   return (
     <>
-      <section className="mp-section">
+      <section className="mp-section" style={{ paddingTop: 80 }}>
         <div className="mp-container mp-text-center">
           <h1 className="mp-section-title" style={{ fontSize: 48 }}>Simple pricing</h1>
           <p className="mp-section-subtitle" style={{ margin: "0 auto 16px" }}>
@@ -86,7 +86,7 @@ export default async function PricingPage() {
         </div>
       </section>
 
-      <section className="mp-section mp-section-alt">
+      <section className="mp-section mp-section-alt" style={{ marginTop: 48 }}>
         <div className="mp-container mp-text-center">
           <h2 className="mp-section-title">Not sure which plan?</h2>
           <p className="mp-section-subtitle" style={{ margin: "0 auto 32px" }}>

@@ -248,6 +248,32 @@ export async function middleware(req: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  if (subdomain === "manage") {
+    if (pathname.startsWith("/dashboard")) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+
+    if (pathname === "/admin-login" || pathname.startsWith("/admin-login")) {
+      return NextResponse.next();
+    }
+
+    if (pathname === "/login") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/admin-login";
+      return NextResponse.rewrite(url);
+    }
+
+    // Rewrite: /subscribers → /manage/subscribers, / → /manage
+    const rewritePath = pathname === "/" ? "/manage" : `/manage${pathname}`;
+
+    const gate = gateAdmin(req, rewritePath);
+    if (gate) return gate;
+
+    const url = req.nextUrl.clone();
+    url.pathname = rewritePath;
+    return NextResponse.rewrite(url);
+  }
+
   // next.tracpost.com — new marketing site staging. Routes to the
   // (marketing) route group directly. Blog/projects still rewrite
   // via next.config. Block admin/dashboard.

@@ -15,6 +15,7 @@ export type SubdomainType =
   | "next"
   | "studio"
   | "platform"
+  | "manage"
   | "blog"
   | "projects"
   | "preview";
@@ -33,6 +34,7 @@ export function classifyHost(hostname: string): SubdomainType {
 
   if (host === "studio.tracpost.com") return "studio";
   if (host === "platform.tracpost.com") return "platform";
+  if (host === "manage.tracpost.com") return "manage";
   if (host === "next.tracpost.com") return "next";
   if (host === "preview.tracpost.com" || host === "staging.tracpost.com") return "preview";
 
@@ -63,6 +65,12 @@ export function studioUrl(path = ""): string {
 export function platformUrl(path = ""): string {
   if (useSubdomains()) return `https://platform.tracpost.com${path}`;
   return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3099"}/admin${path}`;
+}
+
+/** Manage (subscriber operations) base URL. */
+export function manageUrl(path = ""): string {
+  if (useSubdomains()) return `https://manage.tracpost.com${path}`;
+  return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3099"}/manage${path}`;
 }
 
 /** Marketing (public) base URL. */

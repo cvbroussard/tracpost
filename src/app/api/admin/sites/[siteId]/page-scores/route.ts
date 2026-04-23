@@ -172,24 +172,33 @@ export async function POST(
     // Discover pages from sitemap index → sub-sitemaps
     const pages = await discoverPagesFromSitemap(baseUrl);
 
-    const results = [];
-    for (const url of pages) {
-      try {
-        const result = await scoreUrl(url);
-        await sql`
-          INSERT INTO page_scores (site_id, url, performance, seo, accessibility, best_practices, audits, scored_at)
-          VALUES (${siteId}, ${url}, ${result.performance}, ${result.seo}, ${result.accessibility}, ${result.bestPractices}, ${JSON.stringify(result.audits)}, NOW())
-          ON CONFLICT (site_id, url) DO UPDATE SET
-            performance = EXCLUDED.performance,
-            seo = EXCLUDED.seo,
-            accessibility = EXCLUDED.accessibility,
-            best_practices = EXCLUDED.best_practices,
-            audits = EXCLUDED.audits,
-            scored_at = NOW()
-        `;
-        results.push({ url, ...result, status: "scored" });
-      } catch (err) {
-        results.push({ url, status: "error", error: err instanceof Error ? err.message : "Unknown" });
+    // Score in batches of 3 concurrently to stay within timeout
+    const BATCH_SIZE = 3;
+    const results: Array<Record<string, unknown>> = [];
+
+    for (let i = 0; i < pages.length; i += BATCH_SIZE) {
+      const batch = pages.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.allSettled(
+        batch.map(async (url) => {
+          const result = await scoreUrl(url);
+          await sql`
+            INSERT INTO page_scores (site_id, url, performance, seo, accessibility, best_practices, audits, scored_at)
+            VALUES (${siteId}, ${url}, ${result.performance}, ${result.seo}, ${result.accessibility}, ${result.bestPractices}, ${JSON.stringify(result.audits)}, NOW())
+            ON CONFLICT (site_id, url) DO UPDATE SET
+              performance = EXCLUDED.performance,
+              seo = EXCLUDED.seo,
+              accessibility = EXCLUDED.accessibility,
+              best_practices = EXCLUDED.best_practices,
+              audits = EXCLUDED.audits,
+              scored_at = NOW()
+          `;
+          return { url, ...result, status: "scored" };
+        })
+      );
+
+      for (const r of batchResults) {
+        if (r.status === "fulfilled") results.push(r.value);
+        else results.push({ url: batch[batchResults.indexOf(r)], status: "error", error: String(r.reason) });
       }
     }
 

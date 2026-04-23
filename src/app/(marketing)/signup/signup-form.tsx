@@ -13,6 +13,7 @@ export function SignupForm({ productId, productName, skipTrial }: Props) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   function isValidEmail(v: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
@@ -84,44 +85,62 @@ export function SignupForm({ productId, productName, skipTrial }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="su-form">
-      <div className="su-field">
+      <div className={`su-field ${errors.email ? "su-field-error" : ""}`}>
         <label htmlFor="su-email">Work email</label>
         <input
           id="su-email"
           type="email"
           required
           value={email}
-          onChange={e => setEmail(e.target.value)}
-          onBlur={() => { if (email) saveLead({ email }); }}
+          onChange={e => { setEmail(e.target.value); setErrors(prev => ({ ...prev, email: "" })); }}
+          onBlur={() => {
+            if (!email) return;
+            if (!isValidEmail(email)) { setErrors(prev => ({ ...prev, email: "Enter a valid email address" })); return; }
+            setErrors(prev => ({ ...prev, email: "" }));
+            saveLead({ email });
+          }}
           placeholder="you@yourbusiness.com"
           autoComplete="email"
         />
+        {errors.email && <span className="su-error">{errors.email}</span>}
       </div>
 
-      <div className="su-field">
+      <div className={`su-field ${errors.name ? "su-field-error" : ""}`}>
         <label htmlFor="su-name">Full name</label>
         <input
           id="su-name"
           type="text"
           value={name}
-          onChange={e => setName(e.target.value)}
-          onBlur={() => { if (name && email) saveLead({ email, name }); }}
+          onChange={e => { setName(e.target.value); setErrors(prev => ({ ...prev, name: "" })); }}
+          onBlur={() => {
+            if (!name) return;
+            if (!isValidName(name)) { setErrors(prev => ({ ...prev, name: "Enter your full name" })); return; }
+            setErrors(prev => ({ ...prev, name: "" }));
+            if (email) saveLead({ email, name });
+          }}
           placeholder="John Smith"
           autoComplete="name"
         />
+        {errors.name && <span className="su-error">{errors.name}</span>}
       </div>
 
-      <div className="su-field">
+      <div className={`su-field ${errors.phone ? "su-field-error" : ""}`}>
         <label htmlFor="su-phone">Phone <span className="su-optional">(optional)</span></label>
         <input
           id="su-phone"
           type="tel"
           value={phone}
-          onChange={e => setPhone(e.target.value)}
-          onBlur={() => { if (phone && email) saveLead({ email, phone }); }}
+          onChange={e => { setPhone(e.target.value); setErrors(prev => ({ ...prev, phone: "" })); }}
+          onBlur={() => {
+            if (!phone) return;
+            if (!isValidPhone(phone)) { setErrors(prev => ({ ...prev, phone: "Enter a valid phone number" })); return; }
+            setErrors(prev => ({ ...prev, phone: "" }));
+            if (email) saveLead({ email, phone });
+          }}
           placeholder="(412) 555-0123"
           autoComplete="tel"
         />
+        {errors.phone && <span className="su-error">{errors.phone}</span>}
       </div>
 
       <button type="submit" disabled={loading || !email} className="su-submit">
@@ -163,6 +182,21 @@ const formStyles = `
     box-shadow: 0 0 0 3px rgba(26,26,26,0.06);
   }
   .su-field input::placeholder { color: #b0b8c4; }
+
+  .su-field-error input {
+    border-color: #ef4444;
+    background: #fef2f2;
+  }
+  .su-field-error input:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239,68,68,0.08);
+  }
+  .su-error {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #ef4444;
+  }
 
   .su-submit {
     width: 100%;

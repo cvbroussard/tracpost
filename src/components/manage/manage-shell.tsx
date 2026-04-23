@@ -200,8 +200,19 @@ export function ManageShell({
 
           <div className="mx-3 my-2 border-t border-border" />
 
-          {/* Nav groups */}
+          {/* Nav */}
           <nav className="flex flex-col gap-px px-3 pb-4">
+            <Link
+              href="/manage"
+              onClick={() => setExpandedGroup(null)}
+              className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
+                pathname === "/manage" || pathname === "/manage/"
+                  ? "text-foreground font-medium bg-surface-hover"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Overview
+            </Link>
             {NAV_GROUPS.map(group => {
               const isExpanded = expandedGroup === group.label;
               const containsActive = groupContainsActive(group);

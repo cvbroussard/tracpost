@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 
+export const maxDuration = 300;
+
 const API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 const PSI_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
 const MAX_PAGES = 50;

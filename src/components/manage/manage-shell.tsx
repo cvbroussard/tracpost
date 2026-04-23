@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { TopBar } from "@/components/topbar";
 import { ManageProvider } from "./manage-context";
 import { AlertRibbon } from "./alert-ribbon";
@@ -104,6 +104,7 @@ export function ManageShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [selectedSubscriberId, setSelectedSubscriberId] = useState<string>("all");
   const [selectedSiteId, setSelectedSiteId] = useState<string>("all");
   const [subscriberSearch, setSubscriberSearch] = useState("");
@@ -128,6 +129,7 @@ export function ManageShell({
     setSelectedSubscriberId(id);
     setSelectedSiteId("all");
     setSubscriberSearch("");
+    if (id === "all") router.push("/manage");
   }
 
   // Set subscriber when site is selected

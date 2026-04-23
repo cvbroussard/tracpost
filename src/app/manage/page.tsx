@@ -28,13 +28,14 @@ interface SiteOverview {
   platforms: Array<{ platform: string; account_name: string; status: string }>;
 }
 
-function Stat({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
+function Stat({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
   return (
     <div className="rounded-lg border border-border bg-surface-hover p-3">
       <p className={`text-lg font-semibold ${accent ? "text-success" : ""}`}>
         {typeof value === "number" ? value.toLocaleString() : value}
       </p>
       <p className="text-[10px] text-muted">{label}</p>
+      {sub && <p className="text-[9px] text-muted mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -214,8 +215,146 @@ function SubscriberOverview({ subscriberId }: { subscriberId: string }) {
 export default function ManageDashboard() {
   const { subscriberId, siteId } = useManageContext();
 
-  if (subscriberId === "all") return null;
+  if (subscriberId === "all") return <PlatformDashboard />;
   if (siteId === "all") return <SubscriberOverview subscriberId={subscriberId} />;
 
   return <SiteOverviewContent siteId={siteId} />;
+}
+
+interface DashboardData {
+  subscribers: { total: number; active: number; cancelled: number; onboarding: number };
+  content: { total_sites: number; total_assets: number; published_articles: number; articles_this_week: number; published_posts: number; autopilot_sites: number };
+  health: { active_connections: number; expiring_tokens: number; pending_gbp: number; pending_provisioning: number };
+  recentArticles: Array<{ title: string; published_at: string; site_name: string }>;
+  attentionSites: Array<{ id: string; name: string; subscriber_name: string; provisioning_status: string; autopilot_enabled: boolean; assets: number; published: number }>;
+}
+
+function PlatformDashboard() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/manage/dashboard")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setData(d))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { subscribers, content, health } = data;
+
+  return (
+    <div className="p-4 space-y-6">
+      {/* Top stats */}
+      <div className="grid grid-cols-4 gap-3">
+        <Stat label="Subscribers" value={subscribers.active} sub={`${subscribers.total} total`} />
+        <Stat label="Sites" value={content.total_sites} sub={`${content.autopilot_sites} on autopilot`} accent />
+        <Stat label="Published Articles" value={content.published_articles} sub={`${content.articles_this_week} this week`} accent />
+        <Stat label="Total Assets" value={content.total_assets} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Platform health */}
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+          <h3 className="text-sm font-medium mb-3">Platform Health</h3>
+          <div className="space-y-2">
+            <HealthRow
+              label="Active Connections"
+              value={health.active_connections}
+              status="good"
+            />
+            <HealthRow
+              label="Expiring Tokens"
+              value={health.expiring_tokens}
+              status={health.expiring_tokens > 0 ? "warning" : "good"}
+            />
+            <HealthRow
+              label="Pending Provisioning"
+              value={health.pending_provisioning}
+              status={health.pending_provisioning > 0 ? "action" : "good"}
+            />
+            <HealthRow
+              label="Pending GBP Assignment"
+              value={health.pending_gbp}
+              status={health.pending_gbp > 0 ? "action" : "good"}
+            />
+            <HealthRow
+              label="Autopilot Coverage"
+              value={content.total_sites > 0 ? `${Math.round((content.autopilot_sites / content.total_sites) * 100)}%` : "—"}
+              status={content.autopilot_sites === content.total_sites ? "good" : "warning"}
+            />
+          </div>
+        </div>
+
+        {/* Needs attention */}
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+          <h3 className="text-sm font-medium mb-3">Needs Attention</h3>
+          {data.attentionSites.length > 0 ? (
+            <div className="space-y-1.5">
+              {data.attentionSites.map(site => (
+                <div key={site.id} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+                  <div>
+                    <p className="text-xs font-medium">{site.name}</p>
+                    <p className="text-[10px] text-muted">{site.subscriber_name}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {site.provisioning_status !== "complete" && (
+                      <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[9px] text-warning">{site.provisioning_status}</span>
+                    )}
+                    {!site.autopilot_enabled && (
+                      <span className="rounded bg-muted/10 px-1.5 py-0.5 text-[9px] text-muted">No autopilot</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted">All sites healthy — nothing needs attention.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Recent articles */}
+      {data.recentArticles.length > 0 && (
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+          <h3 className="text-sm font-medium mb-3">Recently Published</h3>
+          <div className="space-y-1.5">
+            {data.recentArticles.map((article, i) => (
+              <div key={i} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs truncate">{article.title as string}</p>
+                  <p className="text-[10px] text-muted">{article.site_name as string}</p>
+                </div>
+                <span className="text-[10px] text-muted shrink-0 ml-3">
+                  {article.published_at ? new Date(article.published_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HealthRow({ label, value, status }: { label: string; value: string | number; status: "good" | "warning" | "action" }) {
+  const dotColor = status === "good" ? "bg-success" : status === "warning" ? "bg-warning" : "bg-accent";
+  return (
+    <div className="flex items-center justify-between py-1 border-b border-border last:border-0">
+      <div className="flex items-center gap-2">
+        <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+        <span className="text-xs">{label}</span>
+      </div>
+      <span className="text-xs font-medium">{value}</span>
+    </div>
+  );
 }

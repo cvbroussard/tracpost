@@ -386,7 +386,7 @@ export function AlertRibbon() {
 const ribbonStyles = `
   .ribbon-wrap {
     border-bottom: 1px solid var(--color-border);
-    background: color-mix(in srgb, var(--color-surface) 85%, #000);
+    background: var(--color-surface);
     flex-shrink: 0;
   }
 

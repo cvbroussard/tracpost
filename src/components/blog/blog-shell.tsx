@@ -1,5 +1,14 @@
 import Image from "next/image";
 import { blogHubUrl, projectsHubUrl } from "@/lib/urls";
+
+function ensureMutedContrast(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  if (luminance > 0.4) return "#4b5563";
+  return hex;
+}
 import Script from "next/script";
 
 export interface BlogTheme {
@@ -110,7 +119,7 @@ export default function BlogShell({
       "--bs-accent": theme.accentColor || "#3b82f6",
       "--bs-bg": theme.backgroundColor || "#ffffff",
       "--bs-text": theme.textColor || "#1a1a1a",
-      "--bs-muted": theme.mutedColor || "#6b7280",
+      "--bs-muted": ensureMutedContrast(theme.mutedColor || "#6b7280"),
       "--bs-border": theme.borderColor || "#e5e7eb",
       "--bs-font": theme.fontFamily || "system-ui, sans-serif",
       "--bs-heading-font": theme.headingFontFamily || theme.fontFamily || "system-ui, sans-serif",

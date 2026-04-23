@@ -14,16 +14,37 @@ export function SignupForm({ productId, productName, skipTrial }: Props) {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
 
+  function isValidEmail(v: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
+  }
+
+  function isValidName(v: string): boolean {
+    return v.trim().length >= 2 && /[a-zA-Z]/.test(v);
+  }
+
+  function isValidPhone(v: string): boolean {
+    const digits = v.replace(/\D/g, "");
+    return digits.length >= 7 && digits.length <= 15;
+  }
+
   const saveLead = useCallback(async (fields: Record<string, unknown>) => {
-    if (!fields.email && !email) return;
+    const e = ((fields.email as string) || email).trim();
+    if (!isValidEmail(e)) return;
+
+    const n = (fields.name as string) || name || null;
+    if (n && !isValidName(n)) return;
+
+    const p = (fields.phone as string) || phone || null;
+    if (p && !isValidPhone(p)) return;
+
     try {
       await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: (fields.email as string) || email,
-          name: (fields.name as string) || name || null,
-          phone: (fields.phone as string) || phone || null,
+          email: e,
+          name: n?.trim() || null,
+          phone: p?.trim() || null,
           product_id: productId,
           is_trial: !skipTrial,
           source: "signup",

@@ -14,6 +14,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "email and product_id required" }, { status: 400 });
   }
 
+  const emailClean = email.toLowerCase().trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailClean)) {
+    return NextResponse.json({ error: "invalid email" }, { status: 400 });
+  }
+
+  if (name && (String(name).trim().length < 2 || !/[a-zA-Z]/.test(name))) {
+    return NextResponse.json({ error: "invalid name" }, { status: 400 });
+  }
+
+  if (phone) {
+    const digits = String(phone).replace(/\D/g, "");
+    if (digits.length < 7 || digits.length > 15) {
+      return NextResponse.json({ error: "invalid phone" }, { status: 400 });
+    }
+  }
+
   await sql`
     INSERT INTO leads (email, name, phone, product_id, is_trial, source)
     VALUES (

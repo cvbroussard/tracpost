@@ -171,8 +171,7 @@ const serviceBusinessStyles = `
   }
   .ws-service-desc {
     font-size: 14px;
-    color: var(--ws-text);
-    opacity: 0.8;
+    color: var(--ws-muted);
     padding: 0 16px 16px;
     line-height: 1.6;
   }

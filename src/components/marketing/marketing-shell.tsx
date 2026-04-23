@@ -74,9 +74,15 @@ export default async function MarketingShell({ ctx, activePage, children }: Mark
   if (theme.headingFontFamily) extractGoogleFonts(theme.headingFontFamily).forEach((f) => fontsToLoad.add(f));
   const fontsUrl = googleFontsUrl([...fontsToLoad]);
 
+  // Pick button text color based on accent luminance
+  const accentRgb = [1, 3, 5].map(i => parseInt((theme.accentColor || "#3b82f6").slice(i, i + 2), 16));
+  const accentLum = (0.299 * accentRgb[0] + 0.587 * accentRgb[1] + 0.114 * accentRgb[2]) / 255;
+  const btnTextColor = accentLum > 0.5 ? "#1a1a1a" : "#ffffff";
+
   const cssVars: React.CSSProperties = {
     "--ws-primary": theme.primaryColor,
     "--ws-accent": theme.accentColor,
+    "--ws-accent-text": btnTextColor,
     "--ws-bg": theme.backgroundColor,
     "--ws-text": theme.textColor,
     "--ws-muted": theme.mutedColor,
@@ -221,17 +227,16 @@ const shellStyles = `
   .ws-nav-link {
     font-size: 15px;
     font-weight: 500;
-    color: var(--ws-text);
-    opacity: 0.6;
+    color: var(--ws-muted);
     text-decoration: none;
-    transition: color 0.15s, opacity 0.15s;
+    transition: color 0.15s;
     padding: 12px 0;
     min-height: 48px;
     display: inline-flex;
     align-items: center;
   }
-  .ws-nav-link:hover { opacity: 1; }
-  .ws-nav-active { color: var(--ws-primary); opacity: 1; }
+  .ws-nav-link:hover { color: var(--ws-primary); }
+  .ws-nav-active { color: var(--ws-primary); }
 
   /* Footer */
   .ws-footer {
@@ -255,24 +260,22 @@ const shellStyles = `
   }
   .ws-footer-tagline {
     font-size: 14px;
-    color: var(--ws-text);
-    opacity: 0.8;
+    color: var(--ws-muted);
     margin-top: 6px;
     font-style: italic;
     max-width: 400px;
   }
-  .ws-footer-contact { font-size: 14px; color: var(--ws-text); margin-top: 8px; opacity: 0.8; }
+  .ws-footer-contact { font-size: 14px; color: var(--ws-muted); margin-top: 8px; }
   .ws-footer-nav { display: flex; flex-direction: column; gap: 4px; }
-  .ws-footer-link { font-size: 14px; color: var(--ws-text); text-decoration: none; opacity: 0.8; padding: 8px 0; min-height: 44px; display: inline-flex; align-items: center; }
-  .ws-footer-link:hover { color: var(--ws-accent); opacity: 1; }
+  .ws-footer-link { font-size: 14px; color: var(--ws-muted); text-decoration: none; padding: 8px 0; min-height: 44px; display: inline-flex; align-items: center; }
+  .ws-footer-link:hover { color: var(--ws-accent); }
   .ws-powered { margin-top: 16px; font-size: 11px; }
-  .ws-powered a { color: var(--ws-text); text-decoration: none; opacity: 0.6; }
+  .ws-powered a { color: var(--ws-muted); text-decoration: none; }
   .ws-powered a:hover { opacity: 1; }
   .ws-copyright {
     padding-top: 16px;
     font-size: 12px;
-    color: var(--ws-text);
-    opacity: 0.6;
+    color: var(--ws-muted);
   }
 
   /* Responsive */
@@ -299,8 +302,7 @@ const shellStyles = `
   }
   .ws-section-subtitle {
     font-size: 17px;
-    color: var(--ws-text);
-    opacity: 0.8;
+    color: var(--ws-muted);
     max-width: 600px;
     line-height: 1.6;
     margin-bottom: 40px;
@@ -314,7 +316,7 @@ const shellStyles = `
     border-radius: var(--ws-radius);
     transition: all 0.2s;
   }
-  .ws-btn-primary { background: var(--ws-accent); color: #fff; }
+  .ws-btn-primary { background: var(--ws-accent); color: var(--ws-accent-text); }
   .ws-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
   .ws-btn-outline {
     border: 2px solid var(--ws-border);

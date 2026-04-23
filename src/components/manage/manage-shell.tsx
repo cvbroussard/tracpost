@@ -183,7 +183,7 @@ export function ManageShell({
               >
                 <option value="all">All sites ({filteredSites.length})</option>
                 {filteredSites.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}{s.customDomain ? ` · ${s.customDomain}` : ""}</option>
+                  <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             </div>

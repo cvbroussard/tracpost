@@ -35,9 +35,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Provision",
     items: [
-      { label: "Onboarding", path: "/onboarding" },
-      { label: "GBP Assignment", path: "/gbp-assignment" },
-      { label: "Account Setup", path: "/account-setup" },
+      { label: "Pipeline", path: "/provisioning" },
     ],
   },
   {

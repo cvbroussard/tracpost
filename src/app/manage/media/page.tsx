@@ -121,7 +121,7 @@ function MediaContent({ siteId }: { siteId: string }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-6 gap-2">
+      <div className="grid grid-cols-8 gap-1.5">
         {filtered.map(asset => (
           <div
             key={asset.id}
@@ -135,7 +135,7 @@ function MediaContent({ siteId }: { siteId: string }) {
               alt={asset.context || ""}
               width={160}
               height={160}
-              sizes="160px"
+              sizes="(max-width: 1200px) 14vw, 140px"
               quality={50}
               className="w-full aspect-square object-cover"
             />

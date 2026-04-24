@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { loadTenantContext } from "@/lib/tenant-site";
+import { loadTenantContext, tenantOgMetadata } from "@/lib/tenant-site";
 import { detectHostMode } from "@/lib/urls";
 import { sql } from "@/lib/db";
 import MarketingShell from "@/components/marketing/marketing-shell";
@@ -68,7 +68,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    ...(ctx.faviconUrl ? { icons: { icon: ctx.faviconUrl } } : {}),
+    ...tenantOgMetadata(ctx),
   };
 }
 

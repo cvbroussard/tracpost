@@ -27,6 +27,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: post.excerpt ? String(post.excerpt).slice(0, 160) : undefined,
       images: post.og_image_url ? [String(post.og_image_url)] : undefined,
     },
+    alternates: {
+      canonical: `https://tracpost.com/blog/${slug}`,
+    },
   };
 }
 
@@ -52,8 +55,49 @@ export default async function MarketingBlogArticle({ params }: Props) {
       })
     : null;
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Article",
+        headline: String(post.title),
+        description: post.excerpt ? String(post.excerpt) : undefined,
+        image: post.og_image_url ? String(post.og_image_url) : undefined,
+        datePublished: post.published_at
+          ? new Date(String(post.published_at)).toISOString()
+          : undefined,
+        author: {
+          "@type": "Organization",
+          name: "TracPost",
+          url: "https://tracpost.com",
+        },
+        publisher: {
+          "@type": "Organization",
+          name: "TracPost",
+          url: "https://tracpost.com",
+          logo: {
+            "@type": "ImageObject",
+            url: "https://tracpost.com/icon.png",
+          },
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: "https://tracpost.com" },
+          { "@type": "ListItem", position: 2, name: "Blog", item: "https://tracpost.com/blog" },
+          { "@type": "ListItem", position: 3, name: String(post.title) },
+        ],
+      },
+    ],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <article className="mp-article">
         <div className="mp-container mp-article-container">
           <div className="mp-article-header">

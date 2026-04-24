@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
   loadTenantContext,
+  tenantOgMetadata,
   loadPageMetadata,
   loadWorkContent,
   loadServiceTiles,
@@ -32,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: meta.title,
     description: meta.description,
-    ...(ctx.faviconUrl ? { icons: { icon: ctx.faviconUrl } } : {}),
+    ...tenantOgMetadata(ctx),
   };
 }
 

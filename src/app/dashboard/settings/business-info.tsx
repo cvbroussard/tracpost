@@ -11,6 +11,9 @@ interface Props {
     business_email: string | null;
     business_logo: string | null;
     business_favicon: string | null;
+    og_image: string | null;
+    og_title: string | null;
+    og_description: string | null;
   };
 }
 
@@ -26,6 +29,12 @@ export function BusinessInfo({ initial }: Props) {
   const [faviconUrl, setFaviconUrl] = useState(initial.business_favicon || "");
   const [faviconFile, setFaviconFile] = useState<File | null>(null);
   const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
+  const [ogImageUrl, setOgImageUrl] = useState(initial.og_image || "");
+  const [ogImageFile, setOgImageFile] = useState<File | null>(null);
+  const [ogImagePreview, setOgImagePreview] = useState<string | null>(null);
+  const [ogTitle, setOgTitle] = useState(initial.og_title || "");
+  const [ogDescription, setOgDescription] = useState(initial.og_description || "");
+  const ogImageInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +94,25 @@ export function BusinessInfo({ initial }: Props) {
     if (faviconInputRef.current) faviconInputRef.current.value = "";
   }
 
+  function handleOgImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setError("OG image must be an image"); return; }
+    if (file.size > 5 * 1024 * 1024) { setError("OG image must be under 5MB"); return; }
+    setError(null);
+    setOgImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setOgImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function removeOgImage() {
+    setOgImageFile(null);
+    setOgImagePreview(null);
+    setOgImageUrl("");
+    if (ogImageInputRef.current) ogImageInputRef.current.value = "";
+  }
+
   async function save() {
     setSaving(true);
     setSaved(false);
@@ -106,6 +134,13 @@ export function BusinessInfo({ initial }: Props) {
     } else {
       formData.set("business_favicon_url", faviconUrl);
     }
+    if (ogImageFile) {
+      formData.set("og_image", ogImageFile);
+    } else {
+      formData.set("og_image_url", ogImageUrl);
+    }
+    formData.set("og_title", ogTitle);
+    formData.set("og_description", ogDescription);
 
     try {
       const res = await fetch("/api/dashboard/business-info", {
@@ -128,6 +163,10 @@ export function BusinessInfo({ initial }: Props) {
         if (data.business_favicon) setFaviconUrl(data.business_favicon);
         setFaviconPreview(null);
         if (faviconInputRef.current) faviconInputRef.current.value = "";
+        setOgImageFile(null);
+        if (data.og_image) setOgImageUrl(data.og_image);
+        setOgImagePreview(null);
+        if (ogImageInputRef.current) ogImageInputRef.current.value = "";
         setTimeout(() => setSaved(false), 2000);
       }
     } catch {
@@ -295,6 +334,82 @@ export function BusinessInfo({ initial }: Props) {
           onChange={handleFaviconSelect}
           className="hidden"
         />
+      </div>
+
+      <div className="mt-6 mb-2 border-t border-border pt-4">
+        <h3 className="text-sm font-medium mb-1">Social Sharing Preview</h3>
+        <p className="text-xs text-muted mb-4">Controls how your site appears when shared on social media, Slack, or search results.</p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-muted">
+          OG Image
+          <span className="ml-1 text-dim">— 1200×630 recommended. Auto-cropped on upload.</span>
+        </label>
+
+        {(ogImagePreview || ogImageUrl) ? (
+          <div className="flex items-start gap-3">
+            <div className="rounded border border-border bg-surface p-1">
+              <img src={ogImagePreview || ogImageUrl} alt="OG Image" className="h-20 w-auto object-cover rounded" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <button type="button" onClick={() => ogImageInputRef.current?.click()} className="text-xs text-accent hover:underline text-left">Replace</button>
+              <button type="button" onClick={removeOgImage} className="text-xs text-muted hover:text-foreground text-left">Remove</button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => ogImageInputRef.current?.click()}
+            className="rounded border border-dashed border-border bg-surface px-4 py-6 text-xs text-muted hover:border-accent hover:text-accent w-full"
+          >
+            Click to upload OG image (1200×630)
+          </button>
+        )}
+
+        <input
+          ref={ogImageInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={handleOgImageSelect}
+          className="hidden"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-muted">OG Title</label>
+        <input
+          type="text"
+          value={ogTitle}
+          onChange={(e) => setOgTitle(e.target.value)}
+          className="w-full text-sm"
+          placeholder={name || "Your business name"}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-muted">OG Description</label>
+        <textarea
+          value={ogDescription}
+          onChange={(e) => setOgDescription(e.target.value)}
+          className="w-full text-sm"
+          rows={2}
+          placeholder="A brief description of your business for social sharing"
+        />
+      </div>
+
+      {/* Social preview card */}
+      <div className="rounded-lg border border-border bg-surface-hover p-3">
+        <p className="text-[10px] text-muted mb-2">Preview</p>
+        <div className="rounded border border-border bg-background overflow-hidden">
+          {(ogImagePreview || ogImageUrl) && (
+            <img src={ogImagePreview || ogImageUrl} alt="" className="w-full h-32 object-cover" />
+          )}
+          <div className="px-3 py-2">
+            <p className="text-xs font-medium truncate">{ogTitle || name || "Your Business"}</p>
+            <p className="text-[10px] text-muted truncate">{ogDescription || "Add a description for social sharing"}</p>
+          </div>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

@@ -29,6 +29,7 @@ export default async function SettingsPage() {
              s.content_pillars, s.pillar_config, s.autopilot_config, s.created_at,
              s.is_active, s.blog_cadence,
              s.business_phone, s.business_email, s.business_logo, s.business_favicon,
+             s.brand_assets,
              s.provisioning_status, s.metadata AS site_metadata
       FROM sites s
       WHERE s.id = ${siteId}
@@ -77,6 +78,9 @@ export default async function SettingsPage() {
             business_email: (site?.business_email as string) || null,
             business_logo: (site?.business_logo as string) || null,
             business_favicon: (site?.business_favicon as string) || null,
+            og_image: ((site?.brand_assets as Record<string, unknown>)?.ogImage as string) || null,
+            og_title: ((site?.brand_assets as Record<string, unknown>)?.ogTitle as string) || null,
+            og_description: ((site?.brand_assets as Record<string, unknown>)?.ogDescription as string) || null,
           }}
         />
         <div className="mt-4 flex items-baseline justify-between border-t border-border py-2">

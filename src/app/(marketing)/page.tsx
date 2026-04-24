@@ -1,6 +1,16 @@
+import type { Metadata } from "next";
 import { sql } from "@/lib/db";
 import Link from "next/link";
 import { RoiCalculator } from "@/components/marketing-platform/roi-calculator";
+
+export const metadata: Metadata = {
+  title: "TracPost — AI-Powered Content Automation for Local Businesses",
+  description:
+    "Capture photos of your work, and TracPost publishes across Instagram, TikTok, Facebook, Google Business, and 4 more platforms. Blog posts, social content, and SEO — all automated.",
+  alternates: {
+    canonical: "https://tracpost.com",
+  },
+};
 
 export const revalidate = 3600;
 

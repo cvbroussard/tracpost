@@ -45,37 +45,13 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Content",
-    items: [
-      { label: "Pipeline", path: "/pipeline" },
-      { label: "Media", path: "/media" },
-      { label: "Blog", path: "/blog" },
-    ],
-  },
-  {
-    label: "Publish",
-    items: [
-      { label: "Autopilot", path: "/autopilot" },
-      { label: "Connections", path: "/connections" },
-      { label: "Calendar", path: "/calendar" },
-      { label: "Unipost", path: "/unipost" },
-    ],
-  },
-  {
     label: "Monitor",
     items: [
+      { label: "Media", path: "/media" },
+      { label: "Blog", path: "/blog" },
       { label: "SEO", path: "/seo" },
       { label: "Analytics", path: "/analytics" },
-      { label: "PageSpeed", path: "/pagespeed" },
-      { label: "Search Console", path: "/search-console" },
-    ],
-  },
-  {
-    label: "Engage",
-    items: [
-      { label: "Reviews", path: "/reviews" },
-      { label: "Inbox", path: "/inbox" },
-      { label: "Spotlight", path: "/spotlight" },
+      { label: "Review Advisor", path: "/review-advisor" },
     ],
   },
   {
@@ -219,6 +195,17 @@ export function ManageShell({
               }`}
             >
               Provision Pipeline
+            </Link>
+            <Link
+              href="/manage/site-actions"
+              onClick={() => setExpandedGroup(null)}
+              className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
+                pathname.startsWith("/manage/site-actions")
+                  ? "text-foreground font-medium bg-surface-hover"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Site Actions
             </Link>
             {NAV_GROUPS.map(group => {
               const isExpanded = expandedGroup === group.label;

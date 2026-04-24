@@ -93,7 +93,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { industry } = await params;
   const data = INDUSTRIES[industry];
   if (!data) return {};
-  return { title: data.title, description: data.subtitle };
+  return {
+    title: data.title,
+    description: data.subtitle,
+    alternates: {
+      canonical: `https://tracpost.com/for/${industry}`,
+    },
+  };
 }
 
 export async function generateStaticParams() {
@@ -105,8 +111,21 @@ export default async function IndustryPage({ params }: Props) {
   const data = INDUSTRIES[industry];
   if (!data) notFound();
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://tracpost.com" },
+      { "@type": "ListItem", position: 2, name: data.title },
+    ],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <section className="mp-section">
         <div className="mp-container" style={{ maxWidth: 780 }}>
           <h1 className="mp-section-title" style={{ fontSize: 44 }}>{data.headline}</h1>

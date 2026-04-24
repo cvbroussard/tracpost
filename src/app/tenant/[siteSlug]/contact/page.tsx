@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { loadTenantContext, loadContactPage, loadPageMetadata, slotByKey } from "@/lib/tenant-site";
+import { loadTenantContext, tenantOgMetadata, loadContactPage, loadPageMetadata, slotByKey } from "@/lib/tenant-site";
 import MarketingShell from "@/components/marketing/marketing-shell";
 import ContactForm from "@/components/marketing/variants/contact-form";
 import ContactBookingDemo from "@/components/marketing/variants/contact-booking-demo";
@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: meta.title,
     description: meta.description,
-    ...(ctx.faviconUrl ? { icons: { icon: ctx.faviconUrl } } : {}),
+    ...tenantOgMetadata(ctx),
   };
 }
 

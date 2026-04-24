@@ -4,7 +4,7 @@ import { SyncReviewsButton } from "@/app/admin/sites/[siteId]/website-pane";
 
 export default function Page() {
   return (
-    <ManagePage title="Reviews" requireSite>
+    <ManagePage title="Review Advisor" requireSite>
       {({ siteId }) => (
         <div className="p-4">
           <div className="rounded-xl border border-border bg-surface p-4 shadow-card">

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { loadTenantContext, loadAboutPage, loadPageMetadata, slotByKey } from "@/lib/tenant-site";
+import { loadTenantContext, tenantOgMetadata, loadAboutPage, loadPageMetadata, slotByKey } from "@/lib/tenant-site";
 import { detectHostMode } from "@/lib/urls";
 import MarketingShell from "@/components/marketing/marketing-shell";
 import AboutSoloPractitioner from "@/components/marketing/variants/about-solo-practitioner";
@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: meta.title,
     description: meta.description,
-    ...(ctx.faviconUrl ? { icons: { icon: ctx.faviconUrl } } : {}),
+    ...tenantOgMetadata(ctx),
   };
 }
 

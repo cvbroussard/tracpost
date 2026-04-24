@@ -13,6 +13,7 @@ interface SiteInfo {
 interface SubItem {
   label: string;
   path: string;
+  children?: { label: string; path: string }[];
 }
 
 interface Module {
@@ -42,7 +43,20 @@ const MODULES: Module[] = [
     label: "Configure",
     icon: ICONS.configure,
     subs: [
-      { label: "Connections", path: "/accounts" },
+      {
+        label: "Connections",
+        path: "/accounts",
+        children: [
+          { label: "Instagram", path: "/accounts/instagram" },
+          { label: "Facebook", path: "/accounts/facebook" },
+          { label: "Google Business", path: "/accounts/google-business" },
+          { label: "YouTube", path: "/accounts/youtube" },
+          { label: "TikTok", path: "/accounts/tiktok" },
+          { label: "LinkedIn", path: "/accounts/linkedin" },
+          { label: "X (Twitter)", path: "/accounts/x-twitter" },
+          { label: "Pinterest", path: "/accounts/pinterest" },
+        ],
+      },
       { label: "Brand", path: "/brand" },
       { label: "Google Profile", path: "/google/profile" },
       { label: "Entities", path: "/entities" },
@@ -213,17 +227,38 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
                         {subs.map((sub) => {
                           const subActive = isSubActive(sub.path);
                           return (
-                            <Link
-                              key={sub.path}
-                              href={prefix + sub.path}
-                              className={`rounded px-2.5 py-[5px] text-[13px] transition-colors ${
-                                subActive
-                                  ? "text-foreground font-medium"
-                                  : "text-muted hover:text-foreground"
-                              }`}
-                            >
-                              {sub.label}
-                            </Link>
+                            <div key={sub.path}>
+                              <Link
+                                href={prefix + sub.path}
+                                className={`block rounded px-2.5 py-[5px] text-[13px] transition-colors ${
+                                  subActive
+                                    ? "text-foreground font-medium"
+                                    : "text-muted hover:text-foreground"
+                                }`}
+                              >
+                                {sub.label}
+                              </Link>
+                              {sub.children && subActive && (
+                                <div className="ml-3 flex flex-col gap-px border-l border-border/30">
+                                  {sub.children.map((child) => {
+                                    const childActive = pathname === prefix + child.path || pathname === prefix + child.path + "/";
+                                    return (
+                                      <Link
+                                        key={child.path}
+                                        href={prefix + child.path}
+                                        className={`rounded px-2.5 py-[4px] text-[12px] transition-colors ${
+                                          childActive
+                                            ? "text-foreground font-medium"
+                                            : "text-muted hover:text-foreground"
+                                        }`}
+                                      >
+                                        {child.label}
+                                      </Link>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                       </div>

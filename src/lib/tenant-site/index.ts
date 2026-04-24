@@ -8,8 +8,8 @@
  * Server-only — these helpers query the DB and must not be imported
  * into client components.
  */
-export { loadTenantContext } from "./context";
-export type { TenantContext, TenantTheme } from "./context";
+export { loadTenantContext, tenantOgMetadata } from "./context";
+export type { TenantContext, TenantTheme, BrandAssets } from "./context";
 
 export {
   defaultPageConfig,

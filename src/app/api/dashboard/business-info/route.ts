@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
   const existingLogoUrl = (formData.get("business_logo_url") as string) || null;
   const faviconFile = formData.get("business_favicon") as File | null;
   const existingFaviconUrl = (formData.get("business_favicon_url") as string) || null;
+  const ogImageFile = formData.get("og_image") as File | null;
+  const existingOgImageUrl = (formData.get("og_image_url") as string) || null;
+  const ogTitle = (formData.get("og_title") as string)?.trim() || null;
+  const ogDescription = (formData.get("og_description") as string)?.trim() || null;
 
   if (!name) {
     return NextResponse.json({ error: "Site name is required" }, { status: 400 });
@@ -114,6 +118,34 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // OG image upload — 1200x630 recommended, landscape
+  let ogImageUrl: string | null = existingOgImageUrl;
+  if (ogImageFile && ogImageFile.size > 0) {
+    try {
+      if (!ogImageFile.type.startsWith("image/")) {
+        return NextResponse.json({ error: "OG image must be an image" }, { status: 400 });
+      }
+      if (ogImageFile.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: "OG image must be under 5MB" }, { status: 400 });
+      }
+      const buffer = Buffer.from(await ogImageFile.arrayBuffer());
+      const sharp = (await import("sharp")).default;
+      const ogBuffer = await sharp(buffer).resize(1200, 630, { fit: "cover" }).jpeg({ quality: 85 }).toBuffer();
+      const key = `sites/${siteId}/branding/og-image.jpg`;
+      ogImageUrl = await uploadBufferToR2(key, ogBuffer, "image/jpeg");
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : "OG image upload failed" }, { status: 400 });
+    }
+  }
+
+  const brandAssets = {
+    logo: logoUrl,
+    favicon: faviconUrl,
+    ogImage: ogImageUrl,
+    ogTitle: ogTitle || name,
+    ogDescription: ogDescription,
+  };
+
   await sql`
     UPDATE sites
     SET name = ${name},
@@ -123,9 +155,10 @@ export async function POST(req: NextRequest) {
         business_email = ${email},
         business_logo = ${logoUrl},
         business_favicon = ${faviconUrl},
+        brand_assets = ${JSON.stringify(brandAssets)},
         updated_at = NOW()
     WHERE id = ${siteId}
   `;
 
-  return NextResponse.json({ success: true, business_logo: logoUrl, business_favicon: faviconUrl });
+  return NextResponse.json({ success: true, business_logo: logoUrl, business_favicon: faviconUrl, og_image: ogImageUrl, brand_assets: brandAssets });
 }

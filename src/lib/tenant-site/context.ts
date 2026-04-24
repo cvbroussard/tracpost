@@ -21,6 +21,14 @@ export interface TenantTheme {
   borderRadius: string;
 }
 
+export interface BrandAssets {
+  logo: string | null;
+  favicon: string | null;
+  ogImage: string | null;
+  ogTitle: string | null;
+  ogDescription: string | null;
+}
+
 export interface TenantContext {
   siteId: string;
   siteSlug: string;
@@ -36,6 +44,7 @@ export interface TenantContext {
   customDomain: string | null;
   ga4MeasurementId: string | null;
   gscVerificationToken: string | null;
+  brandAssets: BrandAssets;
   theme: TenantTheme;
   pageConfig: PageConfig;
 }
@@ -63,6 +72,22 @@ const DEFAULT_THEME: TenantTheme = {
   borderRadius: "6px",
 };
 
+export function tenantOgMetadata(ctx: TenantContext): Record<string, unknown> {
+  const a = ctx.brandAssets;
+  const domain = ctx.customDomain || `${ctx.siteSlug}.tracpost.com`;
+  return {
+    icons: ctx.faviconUrl ? { icon: ctx.faviconUrl } : undefined,
+    openGraph: {
+      title: a.ogTitle || ctx.siteName,
+      description: a.ogDescription || ctx.tagline || undefined,
+      siteName: ctx.siteName,
+      type: "website",
+      url: `https://${domain}`,
+      ...(a.ogImage ? { images: [{ url: a.ogImage, width: 1200, height: 630 }] } : {}),
+    },
+  };
+}
+
 /**
  * Load shared context for a tenant's marketing site.
  * Returns null if the site doesn't exist or is inactive.
@@ -71,7 +96,7 @@ export async function loadTenantContext(siteSlug: string): Promise<TenantContext
   const [row] = await sql`
     SELECT s.id, s.name, s.blog_slug, s.business_type, s.location, s.url,
            s.business_phone, s.business_email, s.business_logo, s.business_favicon,
-           s.brand_playbook, s.page_config, s.ga4_measurement_id, s.gsc_verification_token,
+           s.brand_playbook, s.brand_assets, s.page_config, s.ga4_measurement_id, s.gsc_verification_token,
            bs.custom_domain, bs.theme
     FROM sites s
     LEFT JOIN blog_settings bs ON bs.site_id = s.id
@@ -102,6 +127,14 @@ export async function loadTenantContext(siteSlug: string): Promise<TenantContext
 
   const businessType = (row.business_type as string) || null;
   const pageConfig = normalizePageConfig(row.page_config, businessType);
+  const rawAssets = (row.brand_assets || {}) as Record<string, unknown>;
+  const brandAssets: BrandAssets = {
+    logo: (rawAssets.logo as string) || (row.business_logo as string) || null,
+    favicon: (rawAssets.favicon as string) || (row.business_favicon as string) || null,
+    ogImage: (rawAssets.ogImage as string) || null,
+    ogTitle: (rawAssets.ogTitle as string) || null,
+    ogDescription: (rawAssets.ogDescription as string) || null,
+  };
 
   return {
     siteId: row.id as string,
@@ -118,6 +151,7 @@ export async function loadTenantContext(siteSlug: string): Promise<TenantContext
     customDomain: (row.custom_domain as string) || null,
     ga4MeasurementId: (row.ga4_measurement_id as string) || null,
     gscVerificationToken: (row.gsc_verification_token as string) || null,
+    brandAssets,
     theme,
     pageConfig,
   };

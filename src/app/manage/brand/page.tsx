@@ -44,16 +44,6 @@ function BrandContent({ siteId }: { siteId: string }) {
     return <p className="p-6 text-xs text-muted">Failed to load brand data.</p>;
   }
 
-  if (!data.hasPlaybook && data.provisioningStatus === "requested") {
-    return (
-      <div className="p-6 py-16 text-center">
-        <div className="mb-4 mx-auto h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-        <h2 className="text-sm font-medium">Generating Brand Playbook</h2>
-        <p className="mt-2 text-xs text-muted">Building brand intelligence. This typically takes a few minutes.</p>
-      </div>
-    );
-  }
-
   if (!data.hasPlaybook) {
     return (
       <div className="p-6">

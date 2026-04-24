@@ -29,13 +29,15 @@ export async function GET(req: NextRequest) {
   `;
 
   const assets = await sql`
-    SELECT id, storage_url, media_type, source, triage_status, quality_score,
-           context_note,
-           COALESCE((metadata->>'context_auto_generated')::boolean, false) AS auto_context
-    FROM media_assets
-    WHERE site_id = ${siteId}
-      AND media_type != 'pdf'
-    ORDER BY quality_score DESC NULLS LAST
+    SELECT ma.id, ma.storage_url, ma.media_type, ma.source, ma.triage_status, ma.quality_score,
+           ma.context_note,
+           COALESCE((ma.metadata->>'context_auto_generated')::boolean, false) AS auto_context,
+           (SELECT array_agg(b.name) FROM asset_brands ab JOIN brands b ON b.id = ab.brand_id WHERE ab.asset_id = ma.id) AS brands,
+           (SELECT array_agg(p.name) FROM asset_projects ap JOIN projects p ON p.id = ap.project_id WHERE ap.asset_id = ma.id) AS projects
+    FROM media_assets ma
+    WHERE ma.site_id = ${siteId}
+      AND ma.media_type != 'pdf'
+    ORDER BY ma.quality_score DESC NULLS LAST
     LIMIT 200
   `;
 
@@ -50,6 +52,8 @@ export async function GET(req: NextRequest) {
       quality: a.quality_score,
       context: a.context_note,
       autoContext: a.auto_context,
+      brands: (a.brands as string[]) || [],
+      projects: (a.projects as string[]) || [],
     })),
   });
 }

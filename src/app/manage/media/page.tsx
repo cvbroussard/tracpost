@@ -12,6 +12,8 @@ interface Asset {
   quality: number | null;
   context: string | null;
   autoContext: boolean;
+  brands: string[];
+  projects: string[];
 }
 
 interface Counts {
@@ -178,33 +180,45 @@ function MediaContent({ siteId }: { siteId: string }) {
         return (
           <div className="rounded-xl border border-accent/30 bg-surface p-4 shadow-card">
             <div className="flex gap-4">
-              <div className="shrink-0" style={{ width: 280 }}>
+              <div className="shrink-0 space-y-2" style={{ width: 280 }}>
                 {selected.type === "video" ? (
                   <video src={selected.url} controls preload="metadata" className="rounded-lg w-full" />
                 ) : (
                   <img src={selected.url} alt={selected.context || ""} className="rounded-lg w-full" loading="lazy" />
                 )}
+
+                {/* Tags below image */}
+                <div className="space-y-1">
+                  {selected.projects.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {selected.projects.map((p, i) => (
+                        <span key={i} className="rounded bg-accent/10 px-1.5 py-0.5 text-[9px] text-accent">{p}</span>
+                      ))}
+                    </div>
+                  )}
+                  {selected.brands.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {selected.brands.map((b, i) => (
+                        <span key={i} className="rounded bg-success/10 px-1.5 py-0.5 text-[9px] text-success">{b}</span>
+                      ))}
+                    </div>
+                  )}
+                  {selected.projects.length === 0 && selected.brands.length === 0 && (
+                    <p className="text-[9px] text-muted">No tags</p>
+                  )}
+                </div>
               </div>
               <div className="flex-1 space-y-3">
-                {/* Navigation + meta */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className={`font-medium ${qualityColor(selected.quality)}`}>
-                      Quality: {selected.quality ? Math.round(selected.quality * 100) + "%" : "—"}
-                    </span>
-                    <span className="text-muted">·</span>
-                    <span className="text-muted capitalize">{selected.source}</span>
-                    <span className="text-muted">·</span>
-                    <span className={selected.status === "triaged" ? "text-success" : "text-warning"}>{selected.status}</span>
-                    {selected.autoContext && <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[9px] text-warning">Auto-generated</span>}
-                    <span className="text-muted">·</span>
-                    <span className="text-[10px] text-muted">{idx + 1} of {filtered.length}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => nav(-1)} disabled={!hasPrev} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground disabled:opacity-30">←</button>
-                    <button onClick={() => nav(1)} disabled={!hasNext} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground disabled:opacity-30">→</button>
-                    <button onClick={() => setSelected(null)} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground ml-1">✕</button>
-                  </div>
+                {/* Meta */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className={`font-medium ${qualityColor(selected.quality)}`}>
+                    Quality: {selected.quality ? Math.round(selected.quality * 100) + "%" : "—"}
+                  </span>
+                  <span className="text-muted">·</span>
+                  <span className="text-muted capitalize">{selected.source}</span>
+                  <span className="text-muted">·</span>
+                  <span className={selected.status === "triaged" ? "text-success" : "text-warning"}>{selected.status}</span>
+                  {selected.autoContext && <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[9px] text-warning">Auto-generated</span>}
                 </div>
 
                 {/* Context note */}
@@ -223,8 +237,8 @@ function MediaContent({ siteId }: { siteId: string }) {
                   />
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2">
+                {/* Actions + pagination */}
+                <div className="flex items-center justify-between">
                   <button
                     onClick={() => saveContext(selected.id)}
                     disabled={saving}
@@ -232,6 +246,12 @@ function MediaContent({ siteId }: { siteId: string }) {
                   >
                     {saving ? "Saving..." : "Save Context"}
                   </button>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted mr-1">{idx + 1} of {filtered.length}</span>
+                    <button onClick={() => nav(-1)} disabled={!hasPrev} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground disabled:opacity-30">←</button>
+                    <button onClick={() => nav(1)} disabled={!hasNext} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground disabled:opacity-30">→</button>
+                    <button onClick={() => setSelected(null)} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground ml-1">✕</button>
+                  </div>
                 </div>
               </div>
             </div>

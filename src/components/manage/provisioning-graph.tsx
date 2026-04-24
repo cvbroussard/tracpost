@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 
 interface Task {
   task_key: string;
@@ -33,12 +34,70 @@ interface NodePos {
   row: number;
 }
 
+interface TaskAction {
+  label: string;
+  href?: string;
+  action?: string;
+  icon: string;
+}
+
+const TASK_ACTIONS: Record<string, TaskAction[]> = {
+  checkout: [
+    { label: "View subscription", href: "/manage/billing", icon: "→" },
+  ],
+  business_info: [
+    { label: "View site settings", href: "/manage/sites", icon: "→" },
+  ],
+  playbook: [
+    { label: "View playbook", href: "/manage/brand", icon: "→" },
+    { label: "Regenerate playbook", action: "regenerate_playbook", icon: "⟳" },
+  ],
+  social_accounts: [
+    { label: "Manage connections", href: "/manage/connections", icon: "→" },
+  ],
+  oauth_connect: [
+    { label: "View connections", href: "/manage/connections", icon: "→" },
+    { label: "Send connection invite", action: "send_invite", icon: "✉" },
+  ],
+  gbp_oauth: [
+    { label: "Initiate Google OAuth", action: "gbp_oauth", icon: "G" },
+  ],
+  gbp_location: [
+    { label: "Assign location", action: "gbp_assign", icon: "◎" },
+  ],
+  domain_provision: [
+    { label: "Manage domain", href: "/manage/website", icon: "→" },
+    { label: "Provision domain", action: "provision_domain", icon: "◎" },
+  ],
+  dns_config: [
+    { label: "Manage domain", href: "/manage/website", icon: "→" },
+    { label: "Send DNS email to tenant", action: "send_dns_email", icon: "✉" },
+  ],
+  first_upload: [
+    { label: "View media", href: "/manage/media", icon: "→" },
+  ],
+  first_content: [
+    { label: "View pipeline", href: "/manage/pipeline", icon: "→" },
+    { label: "Trigger generation", action: "trigger_generation", icon: "▶" },
+  ],
+  autopilot: [
+    { label: "Manage autopilot", href: "/manage/autopilot", icon: "→" },
+    { label: "Activate autopilot", action: "activate_autopilot", icon: "▶" },
+  ],
+  search_console: [
+    { label: "View SEO", href: "/manage/seo", icon: "→" },
+    { label: "Verify domain", action: "verify_gsc", icon: "✓" },
+  ],
+};
+
 export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
+  const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [completedCount, setCompletedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ taskKey: string; x: number; y: number } | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -52,19 +111,33 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
       .finally(() => setLoading(false));
   }, [subscriberId]);
 
-  async function toggleStatus(taskKey: string, currentStatus: string) {
-    const newStatus = currentStatus === "complete" ? "pending" : "complete";
-    await fetch("/api/manage/provisioning", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscriber_id: subscriberId, task_key: taskKey, status: newStatus }),
-    });
+  const refreshTasks = useCallback(async () => {
     const res = await fetch(`/api/manage/provisioning?subscriber_id=${subscriberId}`);
     if (res.ok) {
       const data = await res.json();
       setTasks(data.tasks);
       setCompletedCount(data.completedCount);
       setTotalCount(data.totalCount);
+    }
+  }, [subscriberId]);
+
+  async function updateStatus(taskKey: string, status: string) {
+    await fetch("/api/manage/provisioning", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscriber_id: subscriberId, task_key: taskKey, status }),
+    });
+    await refreshTasks();
+  }
+
+  function handleContextAction(taskKey: string, action: TaskAction) {
+    setContextMenu(null);
+    if (action.href) {
+      router.push(action.href);
+    }
+    // Inline actions — TODO: wire to real endpoints
+    if (action.action) {
+      console.log(`Action: ${action.action} for task ${taskKey}`);
     }
   }
 
@@ -221,7 +294,15 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
                 className="cursor-pointer"
                 onMouseEnter={() => setHovered(t.task_key)}
                 onMouseLeave={() => setHovered(null)}
-                onClick={() => toggleStatus(t.task_key, t.status)}
+                onClick={() => {
+                  const actions = TASK_ACTIONS[t.task_key] || [];
+                  const navAction = actions.find(a => a.href);
+                  if (navAction?.href) router.push(navAction.href);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu({ taskKey: t.task_key, x: e.clientX, y: e.clientY });
+                }}
               >
                 {/* Outer ring — owner color */}
                 <circle
@@ -296,7 +377,7 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
                   {new Date(hoveredTask.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                 </span>
               )}
-              <span className="text-[9px] text-muted ml-auto">Click to toggle status</span>
+              <span className="text-[9px] text-muted ml-auto">Click to navigate · Right-click for actions</span>
             </div>
             {hoveredTask.depends_on.length > 0 && (
               <p className="text-[9px] text-muted mt-1">Depends on: {hoveredTask.depends_on.join(", ")}</p>
@@ -304,6 +385,68 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
           </div>
         )}
       </div>
+
+      {/* Context menu */}
+      {contextMenu && (() => {
+        const task = tasks.find(t => t.task_key === contextMenu.taskKey);
+        if (!task) return null;
+        const actions = TASK_ACTIONS[task.task_key] || [];
+        const isComplete = task.status === "complete";
+
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+            <div
+              className="fixed z-50 w-52 rounded-lg border border-border bg-surface shadow-lg py-1"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+            >
+              <div className="px-3 py-1.5 border-b border-border">
+                <p className="text-[10px] font-medium">{task.step_label}. {task.title}</p>
+              </div>
+              {actions.map((action, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleContextAction(task.task_key, action)}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted hover:bg-surface-hover hover:text-foreground transition-colors"
+                >
+                  <span className="w-4 text-center text-[10px]">{action.icon}</span>
+                  {action.label}
+                </button>
+              ))}
+              <div className="border-t border-border mt-1 pt-1">
+                {!isComplete ? (
+                  <>
+                    {task.status !== "in_progress" && (
+                      <button
+                        onClick={() => { updateStatus(task.task_key, "in_progress"); setContextMenu(null); }}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted hover:bg-surface-hover hover:text-foreground"
+                      >
+                        <span className="w-4 text-center text-[10px]">▶</span>
+                        Mark in progress
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { updateStatus(task.task_key, "complete"); setContextMenu(null); }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-success hover:bg-surface-hover"
+                    >
+                      <span className="w-4 text-center text-[10px]">✓</span>
+                      Mark complete
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => { updateStatus(task.task_key, "pending"); setContextMenu(null); }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-warning hover:bg-surface-hover"
+                  >
+                    <span className="w-4 text-center text-[10px]">↩</span>
+                    Undo completion
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

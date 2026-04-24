@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
     const [site] = await sql`
       SELECT s.image_style, s.image_variations, s.image_processing_mode,
              s.inline_upload_count, s.inline_ai_count, s.content_vibe,
-             s.hero_asset_id
+             s.hero_asset_id, s.pillar_config
       FROM sites s
       WHERE s.id = ${siteId}
     `;

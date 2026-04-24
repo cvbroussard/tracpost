@@ -1,6 +1,6 @@
 "use client";
 import { ManagePage } from "@/components/manage/manage-page";
-import { AutopilotControls, RenderPipelineButton, RegenerateServicesButton, RegenerateCopyButton, SyncReviewsButton } from "@/app/admin/sites/[siteId]/website-pane";
+import { AutopilotControls, RenderPipelineButton, RegenerateServicesButton } from "@/app/admin/sites/[siteId]/website-pane";
 export default function Page() {
   return (
     <ManagePage title="Pipeline" requireSite>
@@ -15,11 +15,6 @@ export default function Page() {
             <h3 className="text-sm font-medium mb-1">Render Pipeline</h3>
             <p className="text-[10px] text-muted mb-3">Batch render pending assets.</p>
             <RenderPipelineButton siteId={siteId} />
-          </div>
-          <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
-            <h3 className="text-sm font-medium mb-1">Regenerate Copy</h3>
-            <p className="text-[10px] text-muted mb-3">AI-write new website copy.</p>
-            <RegenerateCopyButton siteId={siteId} />
           </div>
           <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
             <h3 className="text-sm font-medium mb-1">Services & Categories</h3>

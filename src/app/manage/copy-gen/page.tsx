@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { ManagePage } from "@/components/manage/manage-page";
 import { CorrectionsPanel } from "@/app/admin/sites/[siteId]/website-pane";
+import { ContextReview } from "@/app/admin/provisioning/context-review";
 
 interface Pillar {
   id: string;
@@ -90,8 +91,42 @@ function CopyGenContent({ siteId }: { siteId: string }) {
         </div>
       </div>
 
+      {/* Context notes */}
+      <ContextNotesCard siteId={siteId} />
+
       {/* Content pillars */}
       <PillarsEditor siteId={siteId} initial={pillars} />
+    </div>
+  );
+}
+
+function ContextNotesCard({ siteId }: { siteId: string }) {
+  const [assets, setAssets] = useState<Array<{
+    id: string; storage_url: string; context_note: string | null;
+    quality_score: number | null; context_auto_generated: boolean; detected_vendors: string[];
+  }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/manage/context-notes?site_id=${siteId}`)
+      .then(r => r.ok ? r.json() : { assets: [] })
+      .then(d => setAssets(d.assets || []))
+      .finally(() => setLoading(false));
+  }, [siteId]);
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <h3 className="text-sm font-medium mb-2">Context Notes</h3>
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+      <ContextReview siteId={siteId} initialAssets={assets} />
     </div>
   );
 }

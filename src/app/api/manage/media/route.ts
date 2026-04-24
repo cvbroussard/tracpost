@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
            COALESCE((metadata->>'context_auto_generated')::boolean, false) AS auto_context
     FROM media_assets
     WHERE site_id = ${siteId}
+      AND (media_type LIKE 'image%' OR media_type = 'image')
     ORDER BY quality_score DESC NULLS LAST
     LIMIT 200
   `;

@@ -99,7 +99,6 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ taskKey: string; x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(800);
 
   useEffect(() => {
     setLoading(true);
@@ -112,16 +111,6 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
       })
       .finally(() => setLoading(false));
   }, [subscriberId]);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver(entries => {
-      for (const entry of entries) setContainerWidth(entry.contentRect.width);
-    });
-    observer.observe(containerRef.current);
-    setContainerWidth(containerRef.current.clientWidth);
-    return () => observer.disconnect();
-  }, []);
 
   const refreshTasks = useCallback(async () => {
     const res = await fetch(`/api/manage/provisioning?subscriber_id=${subscriberId}`);
@@ -192,8 +181,8 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
     const ROW_GAP = 30;
 
     // Calculate column spacing from available width
-    const availableWidth = containerWidth - PAD_X * 2;
-    const colSpacing = Math.max(80, availableWidth / (maxCol + 1));
+    const availableWidth = 1000 - PAD_X * 2;
+    const colSpacing = availableWidth / (maxCol + 1);
 
     const nodePositions: NodePos[] = [];
     const nodeMap = new Map<string, NodePos>();
@@ -216,11 +205,11 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
       }
     }
 
-    const svgWidth = containerWidth;
+    const svgWidth = 1000;
     const svgHeight = PAD_Y * 2 + maxRows * (NODE_H + ROW_GAP) - ROW_GAP;
 
     return { nodes: nodePositions, edges: edgeList, width: svgWidth, height: svgHeight };
-  }, [tasks, containerWidth]);
+  }, [tasks]);
 
   if (loading) {
     return (
@@ -234,7 +223,7 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
   const hoveredTask = hovered ? tasks.find(t => t.task_key === hovered) : null;
 
   return (
-    <div ref={containerRef} className="p-4 space-y-4">
+    <div className="p-4 space-y-4">
       {/* Progress bar */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between mb-2">
@@ -258,7 +247,7 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
 
       {/* Graph */}
       <div className="rounded-xl border border-border bg-surface shadow-card">
-        <svg width={width} height={height} className="block">
+        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} className="block" preserveAspectRatio="xMidYMid meet">
           {/* Start / Finish labels */}
           <text x={20} y={height / 2} fill="currentColor" fontSize={11} opacity={0.3} fontWeight={500}>Start</text>
           <text x={width - 20} y={height / 2} fill="currentColor" fontSize={11} opacity={0.3} fontWeight={500} textAnchor="end">Finish</text>

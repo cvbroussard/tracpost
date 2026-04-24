@@ -7,10 +7,12 @@ function BlogContent({ siteId }: { siteId: string }) {
   const [generatingEditorial, setGeneratingEditorial] = useState(false);
   const [generatingProject, setGeneratingProject] = useState(false);
   const [selectedProject, setSelectedProject] = useState("");
-  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; promptCount: number }>>([]);
   const [recentArticles, setRecentArticles] = useState<Array<{ title: string; status: string; published_at: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({ published: 0, draft: 0, total: 0 });
+  const [projectPrompts, setProjectPrompts] = useState<Array<{ title: string; angle: string }> | null>(null);
+  const [loadingPrompts, setLoadingPrompts] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -120,26 +122,66 @@ function BlogContent({ siteId }: { siteId: string }) {
         <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
           <h3 className="text-sm font-medium mb-1">Project Article</h3>
           <p className="text-[10px] text-muted mb-3">
-            Generate from a project&apos;s captioned assets.
+            Generate from a project&apos;s captioned assets ({projects.length} projects, {projects.reduce((s, p) => s + p.promptCount, 0)} prompts).
           </p>
           {projects.length > 0 ? (
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedProject}
-                onChange={e => setSelectedProject(e.target.value)}
-                className="rounded border border-border bg-background px-2 py-1 text-xs flex-1"
-              >
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedProject}
+                  onChange={e => { setSelectedProject(e.target.value); setProjectPrompts(null); }}
+                  className="rounded border border-border bg-background px-2 py-1 text-xs flex-1"
+                >
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={generateProject}
+                  disabled={generatingProject}
+                  className="bg-accent px-3 py-1 text-xs font-medium text-white rounded hover:bg-accent-hover disabled:opacity-50"
+                >
+                  {generatingProject ? "Writing..." : "Write"}
+                </button>
+              </div>
               <button
-                onClick={generateProject}
-                disabled={generatingProject}
-                className="bg-accent px-3 py-1 text-xs font-medium text-white rounded hover:bg-accent-hover disabled:opacity-50"
+                onClick={async () => {
+                  if (!selectedProject) return;
+                  setLoadingPrompts(true);
+                  try {
+                    const res = await fetch(`/api/projects/${selectedProject}/generate-article`);
+                    if (res.ok) {
+                      const data = await res.json();
+                      setProjectPrompts(data.prompts || []);
+                    }
+                  } catch { /* ignore */ }
+                  setLoadingPrompts(false);
+                }}
+                disabled={loadingPrompts}
+                className="text-[10px] text-accent hover:underline disabled:opacity-50"
               >
-                {generatingProject ? "Writing..." : "Write"}
+                {loadingPrompts ? "Loading..." : "View prompts"}
               </button>
+
+              {projectPrompts && (
+                <div className="rounded border border-border bg-background p-2 mt-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-medium">{projectPrompts.length} article angles</span>
+                    <button onClick={() => setProjectPrompts(null)} className="text-[10px] text-muted hover:text-foreground">Close</button>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-1.5">
+                    {projectPrompts.map((p, i) => (
+                      <div key={i} className="border-b border-border pb-1.5 last:border-0">
+                        <p className="text-[10px] font-medium">{p.title}</p>
+                        <p className="text-[9px] text-muted">{p.angle}</p>
+                      </div>
+                    ))}
+                    {projectPrompts.length === 0 && (
+                      <p className="text-[10px] text-muted">No prompts yet — click Write to generate them.</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-[10px] text-muted">No projects configured.</p>

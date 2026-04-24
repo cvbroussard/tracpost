@@ -23,7 +23,9 @@ export async function GET(req: NextRequest) {
       LIMIT 20
     `,
     sql`
-      SELECT id, name FROM projects
+      SELECT id, name,
+        COALESCE(jsonb_array_length(metadata->'article_prompts'), 0)::int AS prompt_count
+      FROM projects
       WHERE site_id = ${siteId}
       ORDER BY name
     `,
@@ -38,6 +40,7 @@ export async function GET(req: NextRequest) {
     projects: projects.map(p => ({
       id: p.id,
       name: p.name,
+      promptCount: (p.prompt_count as number) || 0,
     })),
   });
 }

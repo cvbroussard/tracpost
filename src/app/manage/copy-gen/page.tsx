@@ -58,8 +58,10 @@ function CopyGenContent({ siteId }: { siteId: string }) {
   const configuredCount = pillars.filter(p => p.tags.length > 0).length;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4">
       <div className="grid grid-cols-2 gap-4">
+        {/* Left column */}
+        <div className="space-y-4">
         {/* Content direction */}
         <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
           <h3 className="text-sm font-medium mb-3">Content Direction</h3>
@@ -83,19 +85,23 @@ function CopyGenContent({ siteId }: { siteId: string }) {
           </div>
         </div>
 
+        {/* Context notes */}
+        <ContextNotesCard siteId={siteId} />
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-4">
         {/* Content corrections */}
         <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
           <h3 className="text-sm font-medium mb-1">Content Corrections</h3>
           <p className="text-[10px] text-muted mb-3">Tenant-requested adjustments injected into all future generation prompts.</p>
           <CorrectionsPanel siteId={siteId} />
         </div>
+
+        {/* Content pillars */}
+        <PillarsEditor siteId={siteId} initial={pillars} />
+        </div>
       </div>
-
-      {/* Context notes */}
-      <ContextNotesCard siteId={siteId} />
-
-      {/* Content pillars */}
-      <PillarsEditor siteId={siteId} initial={pillars} />
     </div>
   );
 }

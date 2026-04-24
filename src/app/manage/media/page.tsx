@@ -121,7 +121,7 @@ function MediaContent({ siteId }: { siteId: string }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-8 gap-1.5">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "6px" }}>
         {filtered.map(asset => (
           <div
             key={asset.id}
@@ -130,13 +130,11 @@ function MediaContent({ siteId }: { siteId: string }) {
               selected?.id === asset.id ? "border-accent ring-2 ring-accent/30" : "border-border hover:border-accent/50"
             }`}
           >
-            <Image
+            <img
               src={asset.url}
               alt={asset.context || ""}
-              fill
-              sizes="120px"
-              quality={50}
-              className="object-cover"
+              loading="lazy"
+              style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: "0" }}
             />
             <span className="absolute top-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[8px] font-mono text-white">
               {asset.quality ? Math.round(asset.quality * 100) : "—"}

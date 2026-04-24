@@ -65,8 +65,13 @@ function MediaGenContent({ siteId }: { siteId: string }) {
 
   if (!data) return <p className="p-6 text-xs text-muted">Failed to load.</p>;
 
+  const assetCount = data.heroAssets?.length || 0;
+
   return (
-    <div className="p-4 grid grid-cols-2 gap-4">
+    <div className="p-4">
+      <div className="grid grid-cols-2 gap-4">
+      {/* Left column */}
+      <div className="space-y-4">
       {/* Photography style */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <h3 className="text-sm font-medium mb-3">Photography Style</h3>
@@ -131,17 +136,6 @@ function MediaGenContent({ siteId }: { siteId: string }) {
         </div>
       </div>
 
-      {/* Hero image */}
-      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
-        <h3 className="text-sm font-medium mb-1">Hero Image</h3>
-        <p className="text-[10px] text-muted mb-3">Pin a specific hero or let quality score decide.</p>
-        <HeroOverridePicker
-          siteId={siteId}
-          initialHeroAssetId={data.site.hero_asset_id || null}
-          candidates={data.heroAssets}
-        />
-      </div>
-
       {/* Composition variations */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <h3 className="text-sm font-medium mb-3">Composition Variations ({variations.length})</h3>
@@ -184,11 +178,52 @@ function MediaGenContent({ siteId }: { siteId: string }) {
         </div>
       </div>
 
+      </div>
+
+      {/* Right column */}
+      <div className="space-y-4">
+      {/* Quality gates — read only */}
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <h3 className="text-sm font-medium mb-3">Quality Gates</h3>
+        <div className="space-y-1.5 text-xs">
+          <div className="flex items-baseline justify-between py-1 border-b border-border">
+            <span className="text-[10px] text-muted">Content Guard</span>
+            <span className="font-medium text-success">Active</span>
+          </div>
+          <div className="flex items-baseline justify-between py-1 border-b border-border">
+            <span className="text-[10px] text-muted">Quality Cutoff</span>
+            <span className="font-medium">0.7</span>
+          </div>
+          <div className="flex items-baseline justify-between py-1 border-b border-border">
+            <span className="text-[10px] text-muted">URL Validation</span>
+            <span className="font-medium text-success">Active</span>
+          </div>
+          <div className="flex items-baseline justify-between py-1">
+            <span className="text-[10px] text-muted">Asset Pool</span>
+            <span className="font-medium">{assetCount} triaged</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Hero image */}
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <h3 className="text-sm font-medium mb-1">Hero Image</h3>
+        <p className="text-[10px] text-muted mb-3">Pin a specific hero or let quality score decide.</p>
+        <HeroOverridePicker
+          siteId={siteId}
+          initialHeroAssetId={data.site.hero_asset_id || null}
+          candidates={data.heroAssets}
+        />
+      </div>
+
       {/* Render pipeline */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <h3 className="text-sm font-medium mb-1">Render Pipeline</h3>
         <p className="text-[10px] text-muted mb-3">Batch render pending assets across all platforms.</p>
         <RenderPipelineButton siteId={siteId} />
+      </div>
+
+      </div>
       </div>
     </div>
   );

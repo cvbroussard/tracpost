@@ -137,7 +137,7 @@ const roiStyles = `
     border-bottom: 1px solid #e5e7eb;
     margin-bottom: 20px;
   }
-  .mp-roi-current-label { display: block; font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .mp-roi-current-label { display: block; font-size: 12px; color: #4b5563; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
   .mp-roi-current-value { display: block; font-size: 32px; font-weight: 700; color: #1a1a1a; font-variant-numeric: tabular-nums; }
 
   .mp-roi-compare { display: flex; flex-direction: column; gap: 12px; }
@@ -155,6 +155,6 @@ const roiStyles = `
     border-width: 2px;
   }
   .mp-roi-plan-name { font-size: 13px; font-weight: 600; color: #1a1a1a; }
-  .mp-roi-plan-price { font-size: 13px; color: #6b7280; font-variant-numeric: tabular-nums; }
+  .mp-roi-plan-price { font-size: 13px; color: #4b5563; font-variant-numeric: tabular-nums; }
   .mp-roi-plan-savings { font-size: 13px; font-weight: 600; color: #059669; }
 `;

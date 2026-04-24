@@ -129,7 +129,7 @@ const aboutStyles = `
   }
   .mp-about-principles p {
     font-size: 15px;
-    color: #6b7280;
+    color: #4b5563;
     line-height: 1.6;
   }
 `;

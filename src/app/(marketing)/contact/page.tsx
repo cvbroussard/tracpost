@@ -76,7 +76,7 @@ const contactStyles = `
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #9ca3af;
+    color: #4b5563;
     margin-bottom: 6px;
   }
   .mp-contact-value {
@@ -85,7 +85,7 @@ const contactStyles = `
     text-decoration: none;
     font-weight: 500;
   }
-  a.mp-contact-value:hover { color: #6b7280; }
+  a.mp-contact-value:hover { color: #4b5563; }
 
   .mp-contact-cta {
     margin-top: 56px;
@@ -95,7 +95,7 @@ const contactStyles = `
   }
   .mp-contact-cta-text {
     font-size: 15px;
-    color: #6b7280;
+    color: #4b5563;
     margin-bottom: 20px;
   }
 `;

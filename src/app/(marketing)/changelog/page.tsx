@@ -80,7 +80,7 @@ const clStyles = `
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #9ca3af;
+    color: #4b5563;
     margin-bottom: 20px;
     padding-bottom: 12px;
     border-bottom: 1px solid #e5e7eb;
@@ -98,7 +98,7 @@ const clStyles = `
   }
   .mp-cl-body {
     font-size: 14px;
-    color: #6b7280;
+    color: #4b5563;
     line-height: 1.6;
   }
 `;

@@ -175,7 +175,7 @@ const indStyles = `
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #9ca3af;
+    color: #4b5563;
     margin-bottom: 12px;
   }
   .mp-ind-body { font-size: 17px; color: #374151; line-height: 1.7; }
@@ -205,7 +205,7 @@ const indStyles = `
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #9ca3af;
+    color: #4b5563;
     margin-bottom: 8px;
   }
   .mp-ind-example-text {

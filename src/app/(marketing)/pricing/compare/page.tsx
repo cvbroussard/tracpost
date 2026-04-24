@@ -243,7 +243,7 @@ const compareStyles = `
   }
   .cp-subtitle {
     font-size: 17px;
-    color: #6b7280;
+    color: #4b5563;
     max-width: 600px;
     margin: 0 auto;
     line-height: 1.6;
@@ -282,10 +282,10 @@ const compareStyles = `
     color: #1a1a1a;
     letter-spacing: -0.02em;
   }
-  .cp-plan-freq { font-size: 14px; font-weight: 400; color: #6b7280; }
+  .cp-plan-freq { font-size: 14px; font-weight: 400; color: #4b5563; }
   .cp-plan-tagline {
     font-size: 13px;
-    color: #6b7280;
+    color: #4b5563;
     font-style: italic;
   }
 
@@ -337,7 +337,7 @@ const compareStyles = `
   }
   .cp-info-icon {
     font-size: 12px;
-    color: #9ca3af;
+    color: #4b5563;
     cursor: help;
   }
   .cp-tooltip {

@@ -60,7 +60,7 @@ const gbpStyles = `
   .mp-gbp-info h3:first-child { margin-top: 0; }
   .mp-gbp-info p {
     font-size: 15px;
-    color: #6b7280;
+    color: #4b5563;
     line-height: 1.6;
   }
 `;

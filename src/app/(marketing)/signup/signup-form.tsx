@@ -162,7 +162,7 @@ const formStyles = `
     color: #374151;
     margin-bottom: 6px;
   }
-  .su-optional { font-weight: 400; color: #9ca3af; }
+  .su-optional { font-weight: 400; color: #4b5563; }
 
   .su-field input,
   .su-field input[type="email"],

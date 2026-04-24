@@ -150,7 +150,7 @@ const pricingStyles = `
   }
   .mp-plan-tagline {
     font-size: 14px;
-    color: #6b7280;
+    color: #4b5563;
     margin-bottom: 24px;
   }
   .mp-plan-amount {
@@ -159,7 +159,7 @@ const pricingStyles = `
     color: #1a1a1a;
     letter-spacing: -0.02em;
   }
-  .mp-plan-period { font-size: 16px; color: #6b7280; }
+  .mp-plan-period { font-size: 16px; color: #4b5563; }
   .mp-plan-price { margin-bottom: 32px; }
   .mp-plan-features {
     list-style: none;

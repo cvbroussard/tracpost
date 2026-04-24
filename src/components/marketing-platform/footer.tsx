@@ -106,12 +106,12 @@ const footerStyles = `
   .mp-footer-logo { display: flex; align-items: center; gap: 8px; }
   .mp-footer-tagline {
     font-size: 14px;
-    color: #6b7280;
+    color: #4b5563;
     font-style: italic;
     max-width: 260px;
     line-height: 1.5;
   }
-  .mp-footer-legal { font-size: 12px; color: #9ca3af; }
+  .mp-footer-legal { font-size: 12px; color: #4b5563; }
   .mp-footer-col-title {
     font-size: 12px;
     font-weight: 600;
@@ -123,7 +123,7 @@ const footerStyles = `
   .mp-footer-col-links { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
   .mp-footer-link {
     font-size: 14px;
-    color: #6b7280;
+    color: #4b5563;
     text-decoration: none;
     transition: color 0.15s;
   }
@@ -131,6 +131,6 @@ const footerStyles = `
   .mp-footer-bottom {
     padding-top: 20px;
     font-size: 12px;
-    color: #9ca3af;
+    color: #4b5563;
   }
 `;

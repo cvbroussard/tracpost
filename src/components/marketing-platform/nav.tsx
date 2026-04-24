@@ -11,7 +11,7 @@ export function MarketingNav() {
   return (
     <header className="mp-header">
       <div className="mp-container mp-header-inner">
-        <Link href="/" className="mp-brand" aria-label="TracPost">
+        <Link href="/" className="mp-brand">
           <img src="/icon.svg" alt="TracPost" className="mp-logo-icon" />
           <span className="mp-brand-name">TRACPOST</span>
         </Link>
@@ -80,7 +80,7 @@ const navStyles = `
   .mp-nav-link {
     font-size: 14px;
     font-weight: 500;
-    color: #6b7280;
+    color: #4b5563;
     text-decoration: none;
     transition: color 0.15s;
   }

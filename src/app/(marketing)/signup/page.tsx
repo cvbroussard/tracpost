@@ -115,7 +115,7 @@ const signupStyles = `
   }
   .su-subtitle {
     font-size: 15px;
-    color: #6b7280;
+    color: #4b5563;
     margin-bottom: 32px;
     line-height: 1.5;
   }
@@ -123,10 +123,10 @@ const signupStyles = `
   .su-legal {
     margin-top: 16px;
     font-size: 11px;
-    color: #9ca3af;
+    color: #4b5563;
     line-height: 1.5;
   }
-  .su-legal a { color: #6b7280; text-decoration: underline; }
+  .su-legal a { color: #4b5563; text-decoration: underline; }
 
   .su-plan-card {
     background: #f9fafb;
@@ -154,7 +154,7 @@ const signupStyles = `
   }
   .su-plan-tagline {
     font-size: 14px;
-    color: #6b7280;
+    color: #4b5563;
     margin-bottom: 20px;
   }
   .su-plan-amount {
@@ -163,7 +163,7 @@ const signupStyles = `
     color: #1a1a1a;
     letter-spacing: -0.02em;
   }
-  .su-plan-freq { font-size: 14px; color: #6b7280; }
+  .su-plan-freq { font-size: 14px; color: #4b5563; }
   .su-plan-price { margin-bottom: 24px; }
 
   .su-plan-features {
@@ -203,7 +203,7 @@ const signupStyles = `
   }
   .su-what-next li {
     font-size: 13px;
-    color: #6b7280;
+    color: #4b5563;
     padding: 4px 0;
     counter-increment: step;
     display: flex;

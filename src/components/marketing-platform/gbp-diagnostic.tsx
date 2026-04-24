@@ -164,7 +164,7 @@ const toolStyles = `
     padding: 2px 8px;
     border-radius: 4px;
     background: #f3f4f6;
-    color: #6b7280;
+    color: #4b5563;
   }
   .mp-gbp-cat-primary .mp-gbp-cat-badge {
     background: #1a1a1a;
@@ -177,14 +177,14 @@ const toolStyles = `
   }
   .mp-gbp-cat-reasoning {
     font-size: 14px;
-    color: #6b7280;
+    color: #4b5563;
     line-height: 1.5;
     font-style: italic;
   }
   .mp-gbp-cta-note {
     margin-top: 24px;
     font-size: 14px;
-    color: #6b7280;
+    color: #4b5563;
   }
   .mp-gbp-cta-note a { color: #1a1a1a; font-weight: 500; text-decoration: none; }
   .mp-gbp-cta-note a:hover { text-decoration: underline; }

@@ -33,7 +33,7 @@ interface NavGroup {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Configure",
+    label: "Site Settings",
     items: [
       { label: "Brand Playbook", path: "/brand" },
       { label: "Copy Generation", path: "/copy-gen" },

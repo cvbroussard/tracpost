@@ -16,6 +16,7 @@ interface Pillar {
 function CopyGenContent({ siteId }: { siteId: string }) {
   const [contentVibe, setContentVibe] = useState("");
   const [pillars, setPillars] = useState<Pillar[]>([]);
+  const [rewardPrompts, setRewardPrompts] = useState<Array<{ category: string; scene: string; prompt: string; visual: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -29,6 +30,8 @@ function CopyGenContent({ siteId }: { siteId: string }) {
         if (d?.site) {
           setContentVibe(d.site.content_vibe || "");
           setPillars((d.site.pillar_config || []) as Pillar[]);
+          const meta = (d.site.metadata || {}) as Record<string, unknown>;
+          setRewardPrompts(((meta.reward_prompts || []) as Array<{ category: string; scene: string; prompt: string; visual: string }>));
         }
       })
       .finally(() => setLoading(false));
@@ -87,6 +90,9 @@ function CopyGenContent({ siteId }: { siteId: string }) {
 
         {/* Context notes */}
         <ContextNotesCard siteId={siteId} />
+
+        {/* Reward prompts */}
+        <RewardPromptsCard prompts={rewardPrompts} />
         </div>
 
         {/* Right column */}
@@ -102,6 +108,78 @@ function CopyGenContent({ siteId }: { siteId: string }) {
         <PillarsEditor siteId={siteId} initial={pillars} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function RewardPromptsCard({ prompts }: { prompts: Array<{ category: string; scene: string; prompt: string; visual: string }> }) {
+  const [filter, setFilter] = useState("all");
+  const [expanded, setExpanded] = useState(false);
+
+  const categories = ["all", "moment", "lifestyle", "social_proof"] as const;
+  const filtered = filter === "all" ? prompts : prompts.filter(p => p.category === filter);
+  const momentCount = prompts.filter(p => p.category === "moment").length;
+  const lifestyleCount = prompts.filter(p => p.category === "lifestyle").length;
+  const socialCount = prompts.filter(p => p.category === "social_proof").length;
+
+  if (prompts.length === 0) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <h3 className="text-sm font-medium mb-1">Reward Prompts</h3>
+        <p className="text-[10px] text-muted">No reward prompts. Generate the brand playbook first.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between"
+      >
+        <h3 className="text-sm font-medium">Reward Prompts ({prompts.length})</h3>
+        <div className="flex items-center gap-2 text-[10px] text-muted">
+          <span>{momentCount} moment</span>
+          <span>{lifestyleCount} lifestyle</span>
+          <span>{socialCount} social</span>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"
+            className={`opacity-40 transition-transform duration-150 ${expanded ? "rotate-90" : ""}`}>
+            <path d="M6 3l5 5-5 5V3z"/>
+          </svg>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="mt-3">
+          <div className="flex gap-1 mb-3">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setFilter(cat)}
+                className={`rounded px-2 py-1 text-[10px] ${filter === cat ? "bg-accent text-white" : "bg-surface-hover text-muted"}`}
+              >
+                {cat === "all" ? "All" : cat === "social_proof" ? "Social Proof" : cat.charAt(0).toUpperCase() + cat.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="max-h-60 overflow-y-auto space-y-2">
+            {filtered.map((p, i) => (
+              <div key={i} className="border-b border-border pb-2 last:border-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                    p.category === "moment" ? "bg-accent/10 text-accent"
+                    : p.category === "lifestyle" ? "bg-success/10 text-success"
+                    : "bg-warning/10 text-warning"
+                  }`}>{p.category}</span>
+                  <span className="rounded bg-surface-hover px-1.5 py-0.5 text-[9px] text-muted">{p.scene}</span>
+                </div>
+                <p className="text-[10px]">{p.prompt}</p>
+                <p className="mt-0.5 text-[9px] text-muted">{p.visual}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

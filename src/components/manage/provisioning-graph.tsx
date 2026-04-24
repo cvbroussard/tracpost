@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 interface Task {
@@ -98,6 +98,8 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
   const [totalCount, setTotalCount] = useState(0);
   const [hovered, setHovered] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ taskKey: string; x: number; y: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
 
   useEffect(() => {
     setLoading(true);
@@ -110,6 +112,16 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
       })
       .finally(() => setLoading(false));
   }, [subscriberId]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) setContainerWidth(entry.contentRect.width);
+    });
+    observer.observe(containerRef.current);
+    setContainerWidth(containerRef.current.clientWidth);
+    return () => observer.disconnect();
+  }, []);
 
   const refreshTasks = useCallback(async () => {
     const res = await fetch(`/api/manage/provisioning?subscriber_id=${subscriberId}`);
@@ -171,23 +183,24 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
       columns.get(col)!.push(t);
     });
 
-    const NODE_W = 120;
-    const NODE_H = 50;
-    const COL_GAP = 60;
-    const ROW_GAP = 30;
-    const PAD_X = 60;
-    const PAD_Y = 40;
-    const RADIUS = 20;
-
     const maxCol = Math.max(...Array.from(columns.keys()));
     const maxRows = Math.max(...Array.from(columns.values()).map(c => c.length));
+
+    const PAD_X = 40;
+    const PAD_Y = 40;
+    const NODE_H = 50;
+    const ROW_GAP = 30;
+
+    // Calculate column spacing from available width
+    const availableWidth = containerWidth - PAD_X * 2;
+    const colSpacing = Math.max(80, availableWidth / (maxCol + 1));
 
     const nodePositions: NodePos[] = [];
     const nodeMap = new Map<string, NodePos>();
 
     for (const [col, colTasks] of columns) {
       colTasks.forEach((task, row) => {
-        const x = PAD_X + col * (NODE_W + COL_GAP) + NODE_W / 2;
+        const x = PAD_X + col * colSpacing + colSpacing / 2;
         const y = PAD_Y + row * (NODE_H + ROW_GAP) + NODE_H / 2;
         const pos: NodePos = { task, x, y, col, row };
         nodePositions.push(pos);
@@ -195,7 +208,6 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
       });
     }
 
-    // Build edges
     const edgeList: Array<{ from: NodePos; to: NodePos }> = [];
     for (const node of nodePositions) {
       for (const dep of node.task.depends_on) {
@@ -204,11 +216,11 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
       }
     }
 
-    const svgWidth = PAD_X * 2 + (maxCol + 1) * (NODE_W + COL_GAP) - COL_GAP;
+    const svgWidth = containerWidth;
     const svgHeight = PAD_Y * 2 + maxRows * (NODE_H + ROW_GAP) - ROW_GAP;
 
     return { nodes: nodePositions, edges: edgeList, width: svgWidth, height: svgHeight };
-  }, [tasks]);
+  }, [tasks, containerWidth]);
 
   if (loading) {
     return (
@@ -245,7 +257,7 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
       </div>
 
       {/* Graph */}
-      <div className="rounded-xl border border-border bg-surface shadow-card overflow-x-auto">
+      <div ref={containerRef} className="rounded-xl border border-border bg-surface shadow-card">
         <svg width={width} height={height} className="block">
           {/* Start / Finish labels */}
           <text x={20} y={height / 2} fill="currentColor" fontSize={11} opacity={0.3} fontWeight={500}>Start</text>

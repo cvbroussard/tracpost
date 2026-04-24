@@ -7,9 +7,10 @@ export function markdownToHtml(md: string): string {
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
       return `<img src="${src}" alt="${alt}" loading="lazy" width="800" height="450" decoding="async" style="aspect-ratio:16/9;object-fit:cover;">`;
     })
-    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+    .replace(/^#### (.+)$/gm, "<h5>$1</h5>")
+    .replace(/^### (.+)$/gm, "<h4>$1</h4>")
+    .replace(/^## (.+)$/gm, "<h3>$1</h3>")
+    .replace(/^# (.+)$/gm, "<h2>$1</h2>")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/\[(.+?)\]\((https?:\/\/.+?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
@@ -41,7 +42,9 @@ export const blogProseStyles = `
     margin-bottom: 0.5em;
   }
   .preview-prose h2 { font-size: 1.3em; }
-  .preview-prose h3 { font-size: 1.1em; }
+  .preview-prose h3 { font-size: 1.15em; }
+  .preview-prose h4 { font-size: 1.05em; }
+  .preview-prose h5 { font-size: 1em; }
   .preview-prose p { margin-bottom: 1.25em; }
   .preview-prose a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
   .preview-prose a:hover { opacity: 0.8; }

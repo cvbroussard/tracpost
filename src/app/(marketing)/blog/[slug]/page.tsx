@@ -112,6 +112,7 @@ export default async function MarketingBlogArticle({ params }: Props) {
               src={String(post.og_image_url)}
               alt={String(post.title)}
               className="mp-article-hero-img"
+              fetchPriority="high"
             />
           )}
 
@@ -161,7 +162,7 @@ const articleStyles = `
   .mp-article-back {
     display: inline-block;
     font-size: 13px;
-    color: #6b7280;
+    color: #4b5563;
     text-decoration: none;
     margin-bottom: 24px;
   }
@@ -172,7 +173,7 @@ const articleStyles = `
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #6b7280;
+    color: #4b5563;
     margin-bottom: 12px;
   }
   .mp-article-title {
@@ -184,7 +185,7 @@ const articleStyles = `
     margin-bottom: 16px;
   }
   @media (max-width: 768px) { .mp-article-title { font-size: 28px; } }
-  .mp-article-date { font-size: 14px; color: #9ca3af; }
+  .mp-article-date { font-size: 14px; color: #4b5563; }
 
   .mp-article-hero-img {
     width: 100%;
@@ -210,8 +211,20 @@ const articleStyles = `
     color: #1a1a1a;
     margin: 1.6em 0 0.6em;
   }
+  .mp-prose h4 {
+    font-size: 17px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 1.4em 0 0.5em;
+  }
+  .mp-prose h5 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 1.2em 0 0.4em;
+  }
   .mp-prose a { color: #1a1a1a; text-decoration: underline; }
-  .mp-prose a:hover { color: #6b7280; }
+  .mp-prose a:hover { color: #4b5563; }
   .mp-prose img {
     border-radius: 8px;
     margin: 2em 0;
@@ -224,7 +237,7 @@ const articleStyles = `
   .mp-prose blockquote {
     border-left: 3px solid #e5e7eb;
     padding-left: 20px;
-    color: #6b7280;
+    color: #4b5563;
     font-style: italic;
     margin: 1.4em 0;
   }

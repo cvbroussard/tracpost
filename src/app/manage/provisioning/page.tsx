@@ -1,12 +1,12 @@
 "use client";
 
 import { ManagePage } from "@/components/manage/manage-page";
-import { ProvisioningPipeline } from "@/components/manage/provisioning-pipeline";
+import { ProvisioningGraph } from "@/components/manage/provisioning-graph";
 
 export default function Page() {
   return (
     <ManagePage title="Provisioning">
-      {({ subscriberId }) => <ProvisioningPipeline subscriberId={subscriberId} />}
+      {({ subscriberId }) => <ProvisioningGraph subscriberId={subscriberId} />}
     </ManagePage>
   );
 }

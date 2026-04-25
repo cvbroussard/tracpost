@@ -98,7 +98,7 @@ export function ManageShell({
     setSelectedSubscriberId(id);
     setSelectedSiteId("all");
     setSubscriberSearch("");
-    if (id === "all") { setExpandedGroup(null); router.push("/manage"); }
+    if (id === "all") { setExpandedGroup(null); router.push(prefix || "/"); }
   }
 
   // Set subscriber when site is selected
@@ -106,7 +106,7 @@ export function ManageShell({
     setSelectedSiteId(siteId);
     if (siteId === "all") {
       setExpandedGroup(null);
-      router.push("/manage");
+      router.push(prefix || "/");
     } else {
       const site = sites.find(s => s.id === siteId);
       if (site) setSelectedSubscriberId(site.subscriptionId);
@@ -175,10 +175,10 @@ export function ManageShell({
           {/* Nav */}
           <nav className="flex flex-col gap-px px-3 pb-4">
             <Link
-              href="/manage"
+              href={prefix || "/"}
               onClick={() => setExpandedGroup(null)}
               className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
-                pathname === "/manage" || pathname === "/manage/"
+                pathname === prefix || pathname === prefix + "/" || pathname === "/"
                   ? "text-foreground font-medium bg-surface-hover"
                   : "text-muted hover:text-foreground"
               }`}
@@ -186,10 +186,10 @@ export function ManageShell({
               Overview
             </Link>
             <Link
-              href="/manage/provisioning"
+              href={`${prefix}/provisioning`}
               onClick={() => setExpandedGroup(null)}
               className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
-                pathname.startsWith("/manage/provisioning")
+                pathname.startsWith(`${prefix}/provisioning`) || (prefix === "" && pathname.startsWith("/provisioning"))
                   ? "text-foreground font-medium bg-surface-hover"
                   : "text-muted hover:text-foreground"
               }`}
@@ -197,10 +197,10 @@ export function ManageShell({
               Provision Pipeline
             </Link>
             <Link
-              href="/manage/site-actions"
+              href={`${prefix}/site-actions`}
               onClick={() => setExpandedGroup(null)}
               className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
-                pathname.startsWith("/manage/site-actions")
+                pathname.startsWith(`${prefix}/site-actions`) || (prefix === "" && pathname.startsWith("/site-actions"))
                   ? "text-foreground font-medium bg-surface-hover"
                   : "text-muted hover:text-foreground"
               }`}

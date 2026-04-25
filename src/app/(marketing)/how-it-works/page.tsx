@@ -262,6 +262,14 @@ export default function HowItWorksPage() {
 }
 
 const hiwStyles = `
+  /* Shared section spacing */
+  .mp-section { padding: 30px 0; }
+  .mp-section-alt { background: #f9fafb; }
+  .mp-section-title { font-size: 36px; font-weight: 700; color: #1a1a1a; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 16px; }
+  .mp-section-subtitle { font-size: 18px; color: #4b5563; line-height: 1.6; max-width: 640px; margin-bottom: 48px; }
+  .mp-text-center { text-align: center; }
+  .mp-text-center .mp-section-subtitle { margin-left: auto; margin-right: auto; }
+
   /* Hero */
   .hiw-hero { padding-top: 80px; }
   .hiw-hero-title {

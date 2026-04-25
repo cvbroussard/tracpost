@@ -188,18 +188,66 @@ export default function ProductPage() {
           <p className="mp-section-subtitle mp-text-center" style={{ margin: "0 auto 48px" }}>
             Stop paying for six different tools that each do one thing. TracPost is the convergence.
           </p>
-          <div className="pp-convergence-list">
-            {CONVERGENCE_ITEMS.map((item) => (
-              <div key={item.replaces} className="pp-convergence-item">
-                <span className="pp-convergence-replaces">{item.replaces}</span>
-                <span className="pp-convergence-arrow">&rarr;</span>
-                <span className="pp-convergence-with">{item.with}</span>
-              </div>
-            ))}
-          </div>
-          <div className="pp-media-placeholder" style={{ marginTop: 48 }}>
-            [PLACEHOLDER: Diagram showing convergence — multiple tool icons on the left converging
-            into a single TracPost icon on the right]
+          <div className="pp-convergence-diagram">
+            <svg viewBox="0 0 960 480" fill="none" xmlns="http://www.w3.org/2000/svg" className="pp-convergence-svg">
+              <defs>
+                <linearGradient id="line-grad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#d1d5db" />
+                  <stop offset="100%" stopColor="#374151" />
+                </linearGradient>
+                <linearGradient id="line-grad-out" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#374151" />
+                  <stop offset="100%" stopColor="#d1d5db" />
+                </linearGradient>
+              </defs>
+
+              {/* Left column — 7 items with icon, label, description */}
+              {[
+                { y: 0, icon: "M8 2v4M4 4h8M3 10h2l1-4h4l1 4h2M5 10v4a2 2 0 002 2h2a2 2 0 002-2v-4", label: "Scheduling Tool", desc: "Publishes across all 8 platforms." },
+                { y: 66, icon: "M12 4a4 4 0 110 8 4 4 0 010-8zM6 20a6 6 0 0112 0", label: "Content Writer", desc: "Derives your Brand DNA, writes in your voice." },
+                { y: 132, icon: "M4 6h16M4 10h16M4 14h10", label: "Blog Platform", desc: "Generates SEO-optimized articles from your work." },
+                { y: 198, icon: "M3 3h18v14H3zM8 21h8M12 17v4", label: "Website / CMS", desc: "Generates and hosts your site." },
+                { y: 264, icon: "M12 2l3 6h6l-5 4 2 6-6-4-6 4 2-6-5-4h6z", label: "Review Manager", desc: "Handles posts, photos, and review responses." },
+                { y: 330, icon: "M3 3v18h18M7 14l4-4 4 4 4-6", label: "SEO Service", desc: "Generates the content that ranks." },
+                { y: 396, icon: "M3 12l5-8h8l5 8-5 8H8z", label: "Ad Campaigns", desc: "Amplifies top-performing content with paid campaigns." },
+              ].map((item, i) => (
+                <g key={i}>
+                  <rect x="16" y={item.y + 8} width="44" height="44" rx="10" fill="#f3f4f6" stroke="#d1d5db" strokeWidth="1.2" />
+                  <g transform={`translate(26, ${item.y + 18})`}>
+                    <path d={item.icon} stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </g>
+                  <text x="72" y={item.y + 30} fill="#1a1a1a" fontSize="15" fontWeight="600" fontFamily="system-ui, sans-serif">{item.label}</text>
+                  <text x="72" y={item.y + 48} fill="#6b7280" fontSize="12" fontFamily="system-ui, sans-serif">{item.desc}</text>
+                  {/* Converging line */}
+                  <line x1="340" y1={item.y + 30} x2="630" y2="240" stroke="url(#line-grad)" strokeWidth="2" />
+                </g>
+              ))}
+
+              {/* Center — TracPost convergence point */}
+              <circle cx="672" cy="240" r="56" fill="#1a1a1a" />
+              <image href="/icon.svg" x="648" y="216" width="48" height="48" />
+              <text x="672" y="316" fill="#1a1a1a" fontSize="18" fontWeight="700" fontFamily="system-ui, sans-serif" textAnchor="middle">TracPost</text>
+
+              {/* Right side — output lines */}
+              <line x1="727" y1="232" x2="840" y2="140" stroke="url(#line-grad-out)" strokeWidth="2" />
+              <line x1="728" y1="237" x2="840" y2="239" stroke="url(#line-grad-out)" strokeWidth="2" />
+              <line x1="728" y1="243" x2="840" y2="310" stroke="url(#line-grad-out)" strokeWidth="2" />
+              <line x1="727" y1="248" x2="840" y2="375" stroke="url(#line-grad-out)" strokeWidth="2" />
+
+              {/* Right labels */}
+              <text x="852" y="144" fill="#1a1a1a" fontSize="14" fontWeight="600" fontFamily="system-ui, sans-serif">8 Platforms</text>
+              <text x="852" y="160" fill="#6b7280" fontSize="11" fontFamily="system-ui, sans-serif">Instagram, TikTok, Facebook, YouTube,</text>
+              <text x="852" y="174" fill="#6b7280" fontSize="11" fontFamily="system-ui, sans-serif">Pinterest, LinkedIn, X, and GBP</text>
+
+              <text x="852" y="239" fill="#1a1a1a" fontSize="14" fontWeight="600" fontFamily="system-ui, sans-serif">Blog + Website</text>
+              <text x="852" y="255" fill="#6b7280" fontSize="11" fontFamily="system-ui, sans-serif">SEO-optimized, generated and hosted</text>
+
+              <text x="852" y="314" fill="#1a1a1a" fontSize="14" fontWeight="600" fontFamily="system-ui, sans-serif">GBP + Reviews</text>
+              <text x="852" y="330" fill="#6b7280" fontSize="11" fontFamily="system-ui, sans-serif">Posts, photos, and AI review responses</text>
+
+              <text x="852" y="374" fill="#1a1a1a" fontSize="14" fontWeight="600" fontFamily="system-ui, sans-serif">Paid Amplification</text>
+              <text x="852" y="390" fill="#6b7280" fontSize="11" fontFamily="system-ui, sans-serif">Boost top-performing content</text>
+            </svg>
           </div>
         </div>
       </section>
@@ -311,9 +359,17 @@ export default function ProductPage() {
 }
 
 const productStyles = `
+  /* Shared section spacing */
+  .mp-section { padding: 30px 0; }
+  .mp-section-alt { background: #f9fafb; }
+  .mp-section-title { font-size: 36px; font-weight: 700; color: #1a1a1a; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 16px; }
+  .mp-section-subtitle { font-size: 18px; color: #4b5563; line-height: 1.6; max-width: 640px; margin-bottom: 48px; }
+  .mp-text-center { text-align: center; }
+  .mp-text-center .mp-section-subtitle { margin-left: auto; margin-right: auto; }
+
   /* Hero */
   .pp-hero {
-    padding: 96px 0 80px;
+    padding: 120px 0 80px;
     text-align: center;
   }
   .pp-hero-inner {
@@ -352,6 +408,16 @@ const productStyles = `
     margin-bottom: 20px;
   }
   .pp-prose p:last-child { margin-bottom: 0; }
+
+  /* Convergence diagram */
+  .pp-convergence-diagram {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .pp-convergence-svg {
+    width: 100%;
+    height: auto;
+  }
 
   /* Comparison image */
   .pp-comparison-img {

@@ -146,9 +146,14 @@ export default function ProductPage() {
               &ldquo;I have photos&rdquo; and &ldquo;my business is visible online&rdquo; never gets closed.
             </p>
           </div>
-          <div className="pp-media-placeholder">
-            [PLACEHOLDER: Side-by-side comparison — left shows a blank Hootsuite-style scheduling
-            interface, right shows a TracPost phone capture screen with project photos]
+          <div className="pp-comparison-img">
+            <img
+              src="https://assets.tracpost.com/marketing/blank-screen-comparison.png"
+              alt="Left: a scheduling tool's empty post interface waiting for content. Right: a contractor on a job site capturing project photos in TracPost, ready to publish."
+              width={1200}
+              height={600}
+              loading="eager"
+            />
           </div>
         </div>
       </section>
@@ -347,6 +352,19 @@ const productStyles = `
     margin-bottom: 20px;
   }
   .pp-prose p:last-child { margin-bottom: 0; }
+
+  /* Comparison image */
+  .pp-comparison-img {
+    margin-top: 40px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+  }
+  .pp-comparison-img img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
 
   /* Media placeholder */
   .pp-media-placeholder {

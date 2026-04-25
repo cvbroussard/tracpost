@@ -7,6 +7,7 @@ import type { PlatformConfig } from "./platform-config";
 
 interface ConnectionStatus {
   connected: boolean;
+  accountId: string | null;
   accountName: string | null;
   status: string | null;
   tokenExpiresAt: string | null;
@@ -38,6 +39,24 @@ export function PlatformDetail({
       .then(d => setConn(d))
       .finally(() => setLoading(false));
   }, [siteId, platform.key]);
+
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+
+  async function handleDisconnect() {
+    if (!conn?.accountId) return;
+    setDisconnecting(true);
+    try {
+      await fetch(`/api/social-accounts/${conn.accountId}`, { method: "DELETE" });
+      // Reload status
+      const res = await fetch(`/api/accounts/platform-status?site_id=${siteId}&platform=${platform.key}`);
+      const data = await res.ok ? await res.json() : { connected: false };
+      setConn(data);
+      setConfirmDisconnect(false);
+    } finally {
+      setDisconnecting(false);
+    }
+  }
 
   async function handleConnect() {
     setConnecting(true);
@@ -187,14 +206,40 @@ export function PlatformDetail({
                   <span className="text-xs font-medium">{conn.scheduled}</span>
                 </div>
 
-                <div className="pt-3 mt-2 border-t border-border">
+                <div className="pt-3 mt-2 border-t border-border flex items-center gap-2">
                   <button
                     onClick={handleConnect}
-                    disabled={connecting}
+                    disabled={connecting || disconnecting}
                     className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground hover:bg-surface-hover disabled:opacity-50"
                   >
                     {connecting ? "Reconnecting..." : "Reconnect"}
                   </button>
+                  {confirmDisconnect ? (
+                    <>
+                      <span className="text-[10px] text-danger">Disconnect?</span>
+                      <button
+                        onClick={handleDisconnect}
+                        disabled={disconnecting}
+                        className="rounded border border-danger/30 px-2 py-1 text-[10px] text-danger hover:bg-danger/10 disabled:opacity-50"
+                      >
+                        {disconnecting ? "..." : "Yes"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDisconnect(false)}
+                        className="rounded border border-border px-2 py-1 text-[10px] text-muted hover:bg-surface-hover"
+                      >
+                        No
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDisconnect(true)}
+                      disabled={connecting || disconnecting}
+                      className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-danger hover:border-danger/30 disabled:opacity-50"
+                    >
+                      Disconnect
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (

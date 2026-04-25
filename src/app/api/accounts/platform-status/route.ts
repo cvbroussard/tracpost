@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     connected: true,
+    accountId: account.id,
     accountName: account.account_name,
     status: account.status,
     tokenExpiresAt: account.token_expires_at ? String(account.token_expires_at) : null,

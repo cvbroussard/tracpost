@@ -65,6 +65,63 @@ function ActionRow({
   );
 }
 
+function TestPublish({ siteId }: { siteId: string }) {
+  const [platform, setPlatform] = useState("facebook");
+  const [running, setRunning] = useState(false);
+  const [response, setResponse] = useState<unknown>(null);
+
+  async function run() {
+    setRunning(true);
+    setResponse(null);
+    try {
+      const res = await fetch(`/api/admin/sites/${siteId}/autopilot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "publish", platform }),
+      });
+      const data = await res.json();
+      setResponse({ httpStatus: res.status, ...data });
+    } catch (err) {
+      setResponse({ error: err instanceof Error ? err.message : "Request failed" });
+    }
+    setRunning(false);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <select
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value)}
+          disabled={running}
+          className="rounded border border-border bg-background px-2 py-1 text-xs"
+        >
+          <option value="instagram">Instagram</option>
+          <option value="facebook">Facebook</option>
+          <option value="linkedin">LinkedIn</option>
+          <option value="twitter">X (Twitter)</option>
+          <option value="tiktok">TikTok</option>
+          <option value="youtube">YouTube</option>
+          <option value="pinterest">Pinterest</option>
+          <option value="gbp">Google Business Profile</option>
+        </select>
+        <button
+          onClick={run}
+          disabled={running}
+          className="rounded bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+        >
+          {running ? "Publishing..." : "Trigger Publish"}
+        </button>
+      </div>
+      {response !== null && (
+        <pre className="rounded border border-border bg-background p-3 text-[10px] text-foreground overflow-x-auto whitespace-pre-wrap break-all">
+{JSON.stringify(response, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function SiteActionsContent({ siteId }: { siteId: string }) {
   const [status, setStatus] = useState<SiteStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -172,6 +229,13 @@ function SiteActionsContent({ siteId }: { siteId: string }) {
             disabled={s.gbp.tokenOk}
           />
         </div>
+      </div>
+
+      {/* Test Publishing */}
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <h3 className="text-sm font-medium mb-1">Test Publishing</h3>
+        <p className="text-[10px] text-muted mb-3">Trigger a single autopilot publish to a specific platform. Useful for verifying connections and debugging.</p>
+        <TestPublish siteId={siteId} />
       </div>
 
       {/* SEO */}

@@ -53,13 +53,19 @@ export async function recordEngagementEvent(input: RecordEventInput): Promise<bo
   let sentiment: "positive" | "neutral" | "negative" | null = input.sentiment || null;
   let sentimentScore: number = sentiment === "positive" ? 0.7 : sentiment === "negative" ? -0.7 : 0;
   let rationale: string | null = null;
+  const sentimentMetadata: Record<string, unknown> = {};
 
-  if (!input.sentiment && input.body) {
+  if (input.sentiment) {
+    sentimentMetadata.sentiment_classifier = "explicit";
+  } else if (input.body) {
     const result = await analyzeSentiment(input.body);
     sentiment = result.sentiment;
     sentimentScore = result.score;
     rationale = result.rationale;
+    sentimentMetadata.sentiment_classifier = result.classifier;
+    if (result.fallbackReason) sentimentMetadata.sentiment_fallback_reason = result.fallbackReason;
   }
+  if (rationale) sentimentMetadata.sentiment_rationale = rationale;
 
   // 3. Auto-archive historical events on insert. First-capture for an active
   //    subscriber typically returns years of past activity; we don't want

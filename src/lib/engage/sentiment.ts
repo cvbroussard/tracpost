@@ -60,6 +60,8 @@ export interface SentimentResult {
   sentiment: "positive" | "neutral" | "negative";
   score: number;            // -1 (very negative) to 1 (very positive)
   rationale: string | null; // one short sentence; null if rule-based fallback
+  classifier: "llm" | "rules"; // explicit source so silent fallbacks are visible in metadata
+  fallbackReason?: string;  // present when classifier='rules' to explain why
 }
 
 /**
@@ -67,18 +69,24 @@ export interface SentimentResult {
  * Falls back to quickSentiment on any failure (missing key, network error,
  * unparseable response). Always resolves — never throws.
  */
+function rulesFallback(text: string, reason: string): SentimentResult {
+  const s = quickSentiment(text);
+  return {
+    sentiment: s,
+    score: s === "positive" ? 0.7 : s === "negative" ? -0.7 : 0,
+    rationale: null,
+    classifier: "rules",
+    fallbackReason: reason,
+  };
+}
+
 export async function analyzeSentiment(text: string): Promise<SentimentResult> {
   if (!text || text.trim().length < 2) {
-    return { sentiment: "neutral", score: 0, rationale: null };
+    return { sentiment: "neutral", score: 0, rationale: null, classifier: "rules", fallbackReason: "empty body" };
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    const s = quickSentiment(text);
-    return {
-      sentiment: s,
-      score: s === "positive" ? 0.7 : s === "negative" ? -0.7 : 0,
-      rationale: null,
-    };
+    return rulesFallback(text, "ANTHROPIC_API_KEY not set");
   }
 
   try {
@@ -89,16 +97,22 @@ export async function analyzeSentiment(text: string): Promise<SentimentResult> {
         role: "user",
         content: `Classify the sentiment of this customer comment toward the business it's directed at. Account for sarcasm, negation, mixed sentiment, and tone.
 
+IMPORTANT: Promotional outreach, influencer/brand-partnership pitches, and spam DMs with friendly enthusiastic language should be classified POSITIVE (judge tonally, not by intent). Reserve "negative" for actual complaints, attacks, criticism, or hostility toward the business.
+
 Comment: "${text.replace(/"/g, '\\"').slice(0, 1000)}"
 
-Return ONLY JSON, no markdown:
+Return ONLY JSON, no markdown, no prose before or after:
 {"sentiment":"positive|neutral|negative","score":<-1 to 1>,"rationale":"<one short sentence>"}`,
       }],
     });
 
     const raw = response.content[0].type === "text" ? response.content[0].text : "";
-    const cleaned = raw.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(cleaned);
+    // Resilient parse: extract first {...} block, tolerant to markdown fences and surrounding prose
+    const match = raw.match(/\{[\s\S]*?\}/);
+    if (!match) {
+      throw new Error(`no JSON object in response: ${raw.slice(0, 100)}`);
+    }
+    const parsed = JSON.parse(match[0]);
 
     const sentiment = parsed.sentiment as string;
     if (sentiment !== "positive" && sentiment !== "neutral" && sentiment !== "negative") {
@@ -106,14 +120,10 @@ Return ONLY JSON, no markdown:
     }
     const score = typeof parsed.score === "number" ? Math.max(-1, Math.min(1, parsed.score)) : 0;
     const rationale = typeof parsed.rationale === "string" ? parsed.rationale.slice(0, 200) : null;
-    return { sentiment, score, rationale };
+    return { sentiment, score, rationale, classifier: "llm" };
   } catch (err) {
-    console.error("analyzeSentiment LLM failed, falling back to rules:", err instanceof Error ? err.message : err);
-    const s = quickSentiment(text);
-    return {
-      sentiment: s,
-      score: s === "positive" ? 0.7 : s === "negative" ? -0.7 : 0,
-      rationale: null,
-    };
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[engage.sentiment] LLM failed, falling back to rules:", msg);
+    return rulesFallback(text, `LLM error: ${msg}`);
   }
 }

@@ -3,6 +3,13 @@ import { decrypt, encrypt } from "@/lib/crypto";
 import { getAdapter } from "./adapters/registry";
 import { socialPostLink } from "@/lib/utm";
 
+/** OAuth provider → adapter key mapping. Mirror of token-refresh.ts. */
+function adapterKeyFor(oauthProvider: string): string {
+  if (oauthProvider === "google") return "gbp";
+  if (oauthProvider === "meta") return "facebook";
+  return oauthProvider;
+}
+
 /**
  * Publish a scheduled social post to its target platform via adapter.
  *
@@ -64,15 +71,7 @@ export async function publishPost(postId: string): Promise<{ success: boolean; e
 
   if (isExpiring && post.refresh_token_encrypted) {
     try {
-      // Map OAuth provider → adapter key. social_accounts.platform stores the
-      // OAuth provider ('meta', 'google'), but adapters are registered under
-      // the publishing platform ('facebook'/'instagram', 'gbp').
-      const oauthProvider = post.platform as string;
-      const refreshAdapterKey =
-        oauthProvider === "google" ? "gbp" :
-        oauthProvider === "meta" ? "facebook" :
-        oauthProvider;
-      const refreshAdapter = getAdapter(refreshAdapterKey);
+      const refreshAdapter = getAdapter(adapterKeyFor(post.platform as string));
       if (refreshAdapter?.refreshToken) {
         const refreshResult = await refreshAdapter.refreshToken(
           decrypt(post.refresh_token_encrypted as string)

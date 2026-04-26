@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "@/components/feedback";
 import { ManagePage } from "@/components/manage/manage-page";
 import {
   PageLayoutEditor,
@@ -117,8 +118,8 @@ function WebsiteContent({ siteId }: { siteId: string }) {
                     });
                     const d = await res.json();
                     if (d.success) setCustomDomain(d.customDomain);
-                    else alert(d.error || "Failed");
-                  } catch { alert("Failed"); }
+                    else toast.error(d.error || "Failed");
+                  } catch { toast.error("Failed"); }
                   setProvisioning(false);
                 }}
                 disabled={provisioning || !domainInput}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ManagePage } from "@/components/manage/manage-page";
 import { PlatformIcon } from "@/components/platform-icon";
+import { confirm, toast } from "@/components/feedback";
 
 interface Event {
   id: string;
@@ -195,9 +196,14 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
 
   async function markSpam(eventId: string, action: "mark" | "unmark") {
     if (action === "mark") {
-      if (!confirm("Mark as spam?\n\nThis will hide the comment on the platform (if applicable), archive it locally, and flag it as spam. Spammer is not notified.")) return;
+      const ok = await confirm({
+        title: "Mark as spam?",
+        body: "This will hide the comment on the platform (if applicable), archive it locally, and flag it as spam. Spammer is not notified.",
+        confirmLabel: "Mark as spam",
+        danger: true,
+      });
+      if (!ok) return;
     }
-    setMessage(null);
     const res = await fetch("/api/admin/engage/mark-spam", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -207,23 +213,27 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
     if (res.ok) {
       if (action === "mark") {
         const platformNote = d.hidOnPlatform ? " · hidden on platform" : d.hideError ? ` · platform hide failed (${d.hideError})` : "";
-        setMessage(`Marked as spam${platformNote}`);
+        toast.success(`Marked as spam${platformNote}`);
         setEvents(prev => showSpam
           ? prev.map(e => e.id === eventId ? { ...e, is_spam: true, review_status: "archived" } : e)
           : prev.filter(e => e.id !== eventId));
       } else {
-        setMessage("Spam mark removed");
+        toast.success("Spam mark removed");
         setEvents(prev => prev.map(e => e.id === eventId ? { ...e, is_spam: false, review_status: "new" } : e));
       }
     } else {
-      setMessage(`Failed: ${d.error || "unknown error"}`);
+      toast.error(`Failed: ${d.error || "unknown error"}`);
     }
   }
 
   async function moderate(eventId: string, action: "hide" | "delete") {
-    const verb = action === "hide" ? "Hide this comment on the platform?" : "Delete this comment on the platform? This cannot be undone.";
-    if (!confirm(verb)) return;
-    setMessage(null);
+    const ok = await confirm({
+      title: action === "hide" ? "Hide this comment on the platform?" : "Delete this comment on the platform?",
+      body: action === "delete" ? "This cannot be undone." : undefined,
+      confirmLabel: action === "hide" ? "Hide" : "Delete",
+      danger: action === "delete",
+    });
+    if (!ok) return;
     const res = await fetch("/api/admin/engage/moderate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

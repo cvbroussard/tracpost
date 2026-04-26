@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { toast } from "@/components/feedback";
 import { TagPicker, type PillarGroup } from "./tag-picker";
 import { FaceOverlay } from "./face-overlay";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
@@ -348,9 +349,9 @@ export function AssetEditModal({
     try {
       const ok = await doSave();
       if (ok) onClose();
-      else alert("Failed to save changes");
+      else toast.error("Failed to save changes");
     } catch {
-      alert("Failed to save changes");
+      toast.error("Failed to save changes");
     } finally {
       setSaving(false);
     }
@@ -363,7 +364,7 @@ export function AssetEditModal({
       await doSave();
       onNext();
     } catch {
-      alert("Failed to save changes");
+      toast.error("Failed to save changes");
     } finally {
       setSaving(false);
     }

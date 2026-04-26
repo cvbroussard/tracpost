@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/feedback";
 import { BlogImport } from "./blog-import";
 
 interface Settings {
@@ -67,7 +68,7 @@ export function BlogDashboard({
         subdomain: subdomain || null,
       }));
     } catch {
-      alert("Failed to save settings");
+      toast.error("Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -93,7 +94,7 @@ export function BlogDashboard({
         )
       );
     } catch {
-      alert("Failed to update post");
+      toast.error("Failed to update post");
     }
   }
 

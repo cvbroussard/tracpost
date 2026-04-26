@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "@/components/feedback";
 import type { PageConfig, WorkContent } from "@/lib/tenant-site";
 import {
   PageLayoutEditor,
@@ -162,10 +163,10 @@ function DomainProvisioning({
         setWwwStatus("unknown");
         onProvisioned(data.customDomain, data.siteSlug, data.dnsRecords);
       } else {
-        alert(data.error || data.message || "Provisioning failed");
+        toast.error(data.error || data.message || "Provisioning failed");
       }
     } catch {
-      alert("Provisioning request failed");
+      toast.error("Provisioning request failed");
     } finally {
       setProvisioning(false);
     }
@@ -187,7 +188,7 @@ function DomainProvisioning({
         data.www?.verified && data.www?.configured ? "active" : "pending"
       );
     } catch {
-      alert("Verification request failed");
+      toast.error("Verification request failed");
     } finally {
       setVerifying(false);
     }
@@ -291,10 +292,10 @@ function DomainProvisioning({
               if (data.sent) {
                 setSent(true);
               } else {
-                alert(data.error || "Failed to send email");
+                toast.error(data.error || "Failed to send email");
               }
             } catch {
-              alert("Failed to send email");
+              toast.error("Failed to send email");
             } finally {
               setSending(false);
             }
@@ -887,11 +888,11 @@ export function SiteControls({
                   const res = await fetch(`/api/blog?site_id=${siteId}&action=generate`, { method: "POST" });
                   const data = await res.json();
                   if (res.ok) {
-                    alert(`Article created: "${data.title || "New article"}" — check the Blog page`);
+                    toast.success(`Article created: "${data.title || "New article"}" — check the Blog page`);
                   } else {
-                    alert(data.error || "Generation failed");
+                    toast.error(data.error || "Generation failed");
                   }
-                } catch { alert("Request failed"); }
+                } catch { toast.error("Request failed"); }
                 setGeneratingEditorial(false);
               }}
               disabled={generatingEditorial || counts.rewardPrompts === 0}
@@ -930,16 +931,16 @@ export function SiteControls({
                         const res2 = await fetch(`/api/projects/${selectedProject}/generate-article`, { method: "POST" });
                         const data2 = await res2.json();
                         if (res2.ok && data2.article) {
-                          alert(`Article created: "${data2.article.title}" — check the Blog page`);
+                          toast.success(`Article created: "${data2.article.title}" — check the Blog page`);
                         } else {
-                          alert(data2.error || "Generation failed");
+                          toast.error(data2.error || "Generation failed");
                         }
                       } else if (res.ok && data.article) {
-                        alert(`Article created: "${data.article.title}" — check the Blog page`);
+                        toast.success(`Article created: "${data.article.title}" — check the Blog page`);
                       } else {
-                        alert(data.error || "Generation failed");
+                        toast.error(data.error || "Generation failed");
                       }
-                    } catch { alert("Request failed"); }
+                    } catch { toast.error("Request failed"); }
                     setGeneratingProject(false);
                   }}
                   disabled={generatingProject}

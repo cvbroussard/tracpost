@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/feedback";
 
 interface Asset {
   id: string;
@@ -41,7 +42,7 @@ export function ContextReview({
       );
       setEditing(null);
     } catch {
-      alert("Save failed");
+      toast.error("Save failed");
     } finally {
       setSaving(false);
     }

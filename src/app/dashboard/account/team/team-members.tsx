@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { PhoneField } from "@/components/phone-input";
+import { confirm, toast } from "@/components/feedback";
 
 interface Member {
   id: string;
@@ -160,7 +161,7 @@ export function TeamMembers({
   }
 
   async function removeMember(memberId: string) {
-    if (!confirm("Remove this team member? They will lose access.")) return;
+    if (!await confirm({ title: "Remove this team member?", body: "They will lose access.", confirmLabel: "Remove", danger: true })) return;
     try {
       const res = await fetch(`/api/account/team/${memberId}`, { method: "DELETE" });
       if (res.ok) {
@@ -182,7 +183,7 @@ export function TeamMembers({
         const parts = [];
         if (data.sent?.email) parts.push("email");
         if (data.sent?.sms) parts.push("SMS");
-        alert(parts.length > 0 ? `Invite sent via ${parts.join(" + ")}` : "No contact info available");
+        parts.length > 0 ? toast.success(`Invite sent via ${parts.join(" + ")}`) : toast.warning("No contact info available");
       }
     } catch { /* ignore */ }
     setSendingInvite(null);

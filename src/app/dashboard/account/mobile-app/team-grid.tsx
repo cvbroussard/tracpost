@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/feedback";
 import { PhoneField } from "@/components/phone-input";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -131,7 +132,7 @@ export function TeamGrid({
       window.location.reload();
     } else {
       const data = await res.json();
-      alert(data.error || "Failed to add member");
+      toast.error(data.error || "Failed to add member");
     }
     setAdding(false);
   }
@@ -157,10 +158,10 @@ export function TeamGrid({
       body: JSON.stringify({ action: "resend-sms" }),
     });
     if (res.ok) {
-      alert("SMS invite sent");
+      toast.success("SMS invite sent");
     } else {
       const data = await res.json();
-      alert(data.error || "Failed to send SMS");
+      toast.error(data.error || "Failed to send SMS");
     }
   }
 

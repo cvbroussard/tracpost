@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/feedback";
 
 export function AccountActions({
   cancelledAt,
@@ -31,7 +32,7 @@ export function AccountActions({
         pollExport(data.export_id);
       }
     } catch {
-      alert("Export request failed");
+      toast.error("Export request failed");
       setExporting(false);
     }
   }
@@ -47,7 +48,7 @@ export function AccountActions({
           setExporting(false);
         } else if (data.status === "failed") {
           clearInterval(interval);
-          alert("Export failed. Please try again.");
+          toast.error("Export failed. Please try again.");
           setExporting(false);
         }
       } catch {
@@ -73,10 +74,10 @@ export function AccountActions({
         setGraceEnd(data.grace_ends);
         setShowCancelConfirm(false);
       } else {
-        alert(data.error || "Cancellation failed");
+        toast.error(data.error || "Cancellation failed");
       }
     } catch {
-      alert("Cancellation request failed");
+      toast.error("Cancellation request failed");
     } finally {
       setCancelling(false);
     }
@@ -91,10 +92,10 @@ export function AccountActions({
         setCancelled(false);
         setGraceEnd(null);
       } else {
-        alert(data.error || "Could not revoke cancellation");
+        toast.error(data.error || "Could not revoke cancellation");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setRevoking(false);
     }

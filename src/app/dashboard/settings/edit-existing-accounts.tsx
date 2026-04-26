@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/feedback";
 
 const PLATFORMS = [
   { id: "instagram", label: "Instagram" },
@@ -42,7 +43,7 @@ export function EditExistingAccounts({
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
-      alert("Failed to save");
+      toast.error("Failed to save");
     } finally {
       setSaving(false);
     }

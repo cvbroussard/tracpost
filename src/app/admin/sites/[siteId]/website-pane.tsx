@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/feedback";
 import type {
   PageConfig,
   PageSlot,
@@ -52,7 +53,7 @@ export function PageLayoutEditor({
         setTimeout(() => setSaved(false), 2000);
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Save failed");
+        toast.error(data.error || "Save failed");
       }
     } finally {
       setSaving(false);
@@ -157,7 +158,7 @@ export function HeroOverridePicker({
         setTimeout(() => setSaved(false), 2000);
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Save failed");
+        toast.error(data.error || "Save failed");
       }
     } finally {
       setSaving(false);
@@ -518,7 +519,7 @@ export function WorkContentEditor({
         setTimeout(() => setSaved(false), 2000);
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Save failed");
+        toast.error(data.error || "Save failed");
       }
     } finally {
       setSaving(false);

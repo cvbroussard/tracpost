@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/feedback";
 import type { PageConfig, WorkContent } from "@/lib/tenant-site";
 import {
   PageLayoutEditor,
@@ -127,9 +128,9 @@ function DomainCard({
                 setDnsRecords(data.dnsRecords);
                 setStatus(data.status === "active" ? "active" : "pending");
               } else {
-                alert(data.error || "Provisioning failed");
+                toast.error(data.error || "Provisioning failed");
               }
-            } catch { alert("Failed"); }
+            } catch { toast.error("Failed"); }
             setProvisioning(false);
           }}
           disabled={provisioning || !domainInput}
@@ -176,7 +177,7 @@ function DomainCard({
             const data = await res.json();
             setStatus(data.root?.verified && data.root?.configured ? "active" : "pending");
             setWwwStatus(data.www?.verified && data.www?.configured ? "active" : "pending");
-          } catch { alert("Verification failed"); }
+          } catch { toast.error("Verification failed"); }
           setVerifying(false);
         }}
         disabled={verifying}

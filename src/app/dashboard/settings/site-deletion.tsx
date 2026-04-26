@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/feedback";
 
 interface SiteDeletionProps {
   siteId: string;
@@ -34,10 +35,10 @@ export function SiteDeletion({
         setShowConfirm(false);
       } else {
         const data = await res.json();
-        alert(data.error || "Request failed");
+        toast.error(data.error || "Request failed");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setSubmitting(false);
     }
@@ -52,10 +53,10 @@ export function SiteDeletion({
         await fetch("/api/auth/refresh-session", { method: "POST" });
         window.location.reload();
       } else {
-        alert(data.error || "Restore failed");
+        toast.error(data.error || "Restore failed");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setSubmitting(false);
     }
@@ -73,10 +74,10 @@ export function SiteDeletion({
         setDeletionStatus(null);
       } else {
         const data = await res.json();
-        alert(data.error || "Request failed");
+        toast.error(data.error || "Request failed");
       }
     } catch {
-      alert("Request failed");
+      toast.error("Request failed");
     } finally {
       setRevoking(false);
     }

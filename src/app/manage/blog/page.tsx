@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "@/components/feedback";
 import { ManagePage } from "@/components/manage/manage-page";
 
 function BlogContent({ siteId }: { siteId: string }) {
@@ -41,12 +42,12 @@ function BlogContent({ siteId }: { siteId: string }) {
       const res = await fetch(`/api/blog?site_id=${siteId}&action=generate`, { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        alert(`Article created: "${data.title || "New article"}"`);
+        toast.success(`Article created: "${data.title || "New article"}"`);
         window.location.reload();
       } else {
-        alert(data.error || "Generation failed");
+        toast.error(data.error || "Generation failed");
       }
-    } catch { alert("Request failed"); }
+    } catch { toast.error("Request failed"); }
     setGeneratingEditorial(false);
   }
 
@@ -60,18 +61,18 @@ function BlogContent({ siteId }: { siteId: string }) {
         const res2 = await fetch(`/api/projects/${selectedProject}/generate-article`, { method: "POST" });
         const data2 = await res2.json();
         if (res2.ok && data2.article) {
-          alert(`Article created: "${data2.article.title}"`);
+          toast.success(`Article created: "${data2.article.title}"`);
           window.location.reload();
         } else {
-          alert(data2.error || "Generation failed");
+          toast.error(data2.error || "Generation failed");
         }
       } else if (res.ok && data.article) {
-        alert(`Article created: "${data.article.title}"`);
+        toast.success(`Article created: "${data.article.title}"`);
         window.location.reload();
       } else {
-        alert(data.error || "Generation failed");
+        toast.error(data.error || "Generation failed");
       }
-    } catch { alert("Request failed"); }
+    } catch { toast.error("Request failed"); }
     setGeneratingProject(false);
   }
 

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { markdownToHtml, blogProseStyles } from "@/lib/blog/markdown";
+import { confirm, toast } from "@/components/feedback";
 
 interface Post {
   id: string;
@@ -84,14 +85,14 @@ export function BlogPostList({
       setPreviewing(null);
       router.refresh();
     } catch {
-      alert("Failed to publish");
+      toast.error("Failed to publish");
     } finally {
       setActing(null);
     }
   }
 
   async function rejectPost(postId: string) {
-    if (!confirm("Delete this post? This cannot be undone.")) return;
+    if (!await confirm({ title: "Delete this post?", body: "This cannot be undone.", confirmLabel: "Delete", danger: true })) return;
     setActing(postId);
     try {
       await fetch("/api/blog", {
@@ -102,7 +103,7 @@ export function BlogPostList({
       setPreviewing(null);
       router.refresh();
     } catch {
-      alert("Failed to delete");
+      toast.error("Failed to delete");
     } finally {
       setActing(null);
     }
@@ -119,7 +120,7 @@ export function BlogPostList({
       setPreviewing(null);
       router.refresh();
     } catch {
-      alert("Failed to unpublish");
+      toast.error("Failed to unpublish");
     } finally {
       setActing(null);
     }
@@ -173,9 +174,9 @@ export function BlogPostList({
         router.refresh();
       } else {
         const err = await res.json();
-        alert(err.error || "Edit failed");
+        toast.error(err.error || "Edit failed");
       }
-    } catch { alert("Edit failed"); }
+    } catch { toast.error("Edit failed"); }
     finally { setReprompting(false); }
   }
 
@@ -185,10 +186,10 @@ export function BlogPostList({
     try {
       const siteMatch = (previewing.og_image_url || "").match(/sites\/([^/]+)/);
       const sid = siteMatch?.[1] || "";
-      if (!sid) { alert("Could not determine site"); return; }
+      if (!sid) { toast.error("Could not determine site"); return; }
 
       const newUrl = await uploadReference(referenceFile, sid);
-      if (!newUrl) { alert("Upload failed"); return; }
+      if (!newUrl) { toast.error("Upload failed"); return; }
 
       await fetch("/api/blog/reprompt", {
         method: "POST",
@@ -208,7 +209,7 @@ export function BlogPostList({
       setReferenceFile(null);
       setReferencePreview(null);
       router.refresh();
-    } catch { alert("Replace failed"); }
+    } catch { toast.error("Replace failed"); }
     finally { setReprompting(false); }
   }
 
@@ -253,10 +254,10 @@ export function BlogPostList({
     try {
       const siteMatch = repromptUrl.match(/sites\/([^/]+)/);
       const siteId = siteMatch?.[1] || "";
-      if (!siteId) { alert("Could not determine site"); return; }
+      if (!siteId) { toast.error("Could not determine site"); return; }
 
       const newUrl = await uploadReference(referenceFile, siteId);
-      if (!newUrl) { alert("Upload failed"); return; }
+      if (!newUrl) { toast.error("Upload failed"); return; }
 
       // Swap URL in post body via API
       const res = await fetch("/api/blog/reprompt", {
@@ -282,9 +283,9 @@ export function BlogPostList({
         router.refresh();
       } else {
         const err = await res.json();
-        alert(err.error || "Replace failed");
+        toast.error(err.error || "Replace failed");
       }
-    } catch { alert("Replace failed"); }
+    } catch { toast.error("Replace failed"); }
     finally { setReprompting(false); }
   }
 
@@ -331,10 +332,10 @@ export function BlogPostList({
         router.refresh();
       } else {
         const err = await res.json();
-        alert(err.error || "Re-prompt failed");
+        toast.error(err.error || "Re-prompt failed");
       }
     } catch {
-      alert("Re-prompt failed");
+      toast.error("Re-prompt failed");
     } finally {
       setReprompting(false);
     }

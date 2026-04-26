@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { confirm } from "@/components/feedback";
 
 interface Photo {
   id: string;
@@ -324,9 +325,9 @@ export function PhotosClient({ siteId, connected, photos, coverUrl, logoUrl, cov
               {/* Synced badge / unsync action */}
               {photo.isSynced && (
                 <button
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (!confirm("Remove this photo from Google?")) return;
+                    if (!await confirm({ title: "Remove this photo from Google?", confirmLabel: "Remove", danger: true })) return;
                     fetch(`/api/admin/sites/${siteId}/photos`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },

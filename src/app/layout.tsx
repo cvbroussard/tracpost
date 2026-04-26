@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeScript } from "@/components/theme-toggle";
 import { GA4 } from "@/components/analytics/ga4";
+import { FeedbackHost } from "@/components/feedback";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -41,6 +42,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         {children}
+        <FeedbackHost />
         <GA4 />
       </body>
     </html>

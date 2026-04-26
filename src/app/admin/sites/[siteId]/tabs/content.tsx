@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/components/feedback";
 import { CorrectionsPanel } from "../website-pane";
 import type { SiteData, Counts, RewardPrompt, ProjectInfo } from "../site-tabs";
 
@@ -194,9 +195,9 @@ function ArticleGeneration({
             try {
               const res = await fetch(`/api/blog?site_id=${siteId}&action=generate`, { method: "POST" });
               const data = await res.json();
-              if (res.ok) alert(`Article created: "${data.title || "New article"}" — check the Blog page`);
-              else alert(data.error || "Generation failed");
-            } catch { alert("Request failed"); }
+              if (res.ok) toast.success(`Article created: "${data.title || "New article"}" — check the Blog page`);
+              else toast.error(data.error || "Generation failed");
+            } catch { toast.error("Request failed"); }
             setGeneratingEditorial(false);
           }}
           disabled={generatingEditorial || rewardPromptCount === 0}
@@ -234,14 +235,14 @@ function ArticleGeneration({
                     if (res.ok && data.status === "prompts_generated") {
                       const res2 = await fetch(`/api/projects/${selectedProject}/generate-article`, { method: "POST" });
                       const data2 = await res2.json();
-                      if (res2.ok && data2.article) alert(`Article created: "${data2.article.title}"`);
-                      else alert(data2.error || "Generation failed");
+                      if (res2.ok && data2.article) toast.success(`Article created: "${data2.article.title}"`);
+                      else toast.error(data2.error || "Generation failed");
                     } else if (res.ok && data.article) {
-                      alert(`Article created: "${data.article.title}"`);
+                      toast.success(`Article created: "${data.article.title}"`);
                     } else {
-                      alert(data.error || "Generation failed");
+                      toast.error(data.error || "Generation failed");
                     }
-                  } catch { alert("Request failed"); }
+                  } catch { toast.error("Request failed"); }
                   setGeneratingProject(false);
                 }}
                 disabled={generatingProject}

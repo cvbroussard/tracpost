@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import { decrypt } from "@/lib/crypto";
+import { decrypt, encrypt } from "@/lib/crypto";
 import { getAdapter } from "./adapters/registry";
 import { socialPostLink } from "@/lib/utm";
 
@@ -13,8 +13,10 @@ export async function publishPost(postId: string): Promise<{ success: boolean; e
   const [post] = await sql`
     SELECT sp.id, sp.caption, sp.hashtags, sp.media_urls, sp.media_type,
            sp.link_url, sp.slot_id, sp.metadata AS post_metadata,
+           sp.account_id AS social_account_id,
            sa.platform, sa.account_id AS platform_account_id,
-           sa.access_token_encrypted, sa.metadata AS account_metadata
+           sa.access_token_encrypted, sa.refresh_token_encrypted,
+           sa.token_expires_at, sa.metadata AS account_metadata
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
     WHERE sp.id = ${postId} AND sp.status = 'scheduled'
@@ -49,12 +51,49 @@ export async function publishPost(postId: string): Promise<{ success: boolean; e
     return { success: false, error: `Unsupported platform: ${adapterPlatform}` };
   }
 
+  // Pre-publish refresh: if the user-level token is expired or expiring within
+  // 5 minutes, refresh it first using the platform adapter. Page-specific tokens
+  // (FB) are derived from a valid user token, so refreshing the user token is
+  // sufficient. Skip refresh entirely when the post uses a page_access_token
+  // (FB pages) — those don't expire the same way.
+  const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+  const expiresAt = post.token_expires_at ? new Date(post.token_expires_at as string).getTime() : null;
+  const isExpiring = expiresAt !== null && expiresAt - Date.now() < REFRESH_BUFFER_MS;
+
+  let userAccessToken = decrypt(post.access_token_encrypted as string);
+
+  if (isExpiring && post.refresh_token_encrypted) {
+    try {
+      const refreshAdapter = getAdapter(post.platform as string);
+      if (refreshAdapter?.refreshToken) {
+        const refreshResult = await refreshAdapter.refreshToken(
+          decrypt(post.refresh_token_encrypted as string)
+        );
+        userAccessToken = refreshResult.accessToken;
+        const newExpiresAt = new Date(Date.now() + refreshResult.expiresIn * 1000).toISOString();
+        await sql`
+          UPDATE social_accounts
+          SET access_token_encrypted = ${encrypt(userAccessToken)},
+              token_expires_at = ${newExpiresAt},
+              status = 'active',
+              updated_at = NOW()
+          WHERE id = ${post.social_account_id as string}
+        `;
+        console.log(`Token refreshed inline for ${post.platform} (${post.social_account_id})`);
+      }
+    } catch (refreshErr) {
+      console.warn("Inline token refresh failed:", refreshErr);
+      // Continue with the (possibly expired) token — let the publish call fail
+      // with the platform's actual error message rather than guessing here.
+    }
+  }
+
   // For Facebook page publishing, the adapter needs the page-specific access token,
   // not the user token. The asset metadata carries it.
   const pageAccessToken = assetMetadata.page_access_token as string | undefined;
   const accessToken = pageAccessToken
     ? pageAccessToken
-    : decrypt(post.access_token_encrypted as string);
+    : userAccessToken;
 
   // Build full caption with hashtags appended
   const hashtags = (post.hashtags || []) as string[];

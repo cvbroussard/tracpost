@@ -332,8 +332,8 @@ function gateAdmin(req: NextRequest, pathname: string): NextResponse | null {
     return null;
   }
 
-  // Only gate admin routes
-  if (!pathname.startsWith("/admin")) {
+  // Only gate admin and manage routes
+  if (!pathname.startsWith("/admin") && !pathname.startsWith("/manage")) {
     return null;
   }
 

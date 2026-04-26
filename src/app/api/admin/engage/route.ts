@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
 
   // Top engagers — most events first, no time filter (historical engagement counts).
   // avatar_url + primary_platform pick the most-recently-seen handle.
+  // Persons whose events are ALL spam are hidden unless include_spam=true.
   const topPersons = await sql`
     SELECT ep.id, ep.display_name, ep.engagement_count,
            ep.positive_engagements, ep.negative_engagements,
@@ -97,6 +98,14 @@ export async function GET(req: NextRequest) {
             ORDER BY last_seen_at DESC LIMIT 1) AS primary_platform
     FROM engaged_persons ep
     WHERE ep.subscription_id = ${subscriptionId}
+      AND (
+        ${includeSpam}
+        OR EXISTS (
+          SELECT 1 FROM engagement_events ee
+          WHERE ee.engaged_person_id = ep.id
+            AND (ee.metadata->>'is_spam') IS DISTINCT FROM 'true'
+        )
+      )
     ORDER BY ep.engagement_count DESC, ep.last_seen_at DESC
     LIMIT 50
   `;

@@ -40,6 +40,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Media Generation", path: "/media-gen" },
       { label: "Blog", path: "/blog-config" },
       { label: "Social", path: "/social-config" },
+      { label: "Connections", path: "/connections" },
       { label: "GBP", path: "/gbp" },
       { label: "Website", path: "/website" },
     ],

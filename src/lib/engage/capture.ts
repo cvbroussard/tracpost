@@ -184,6 +184,90 @@ async function captureInstagramComments(target: AssetWithToken): Promise<{ captu
   return { captured, new: newCount };
 }
 
+// ─── Instagram Mentions (caption @mentions of the brand account) ─────────
+
+async function captureInstagramMentions(target: AssetWithToken): Promise<{ captured: number; new: number }> {
+  const userToken = decrypt(target.access_token_encrypted);
+  const pageToken = (target.asset_metadata?.page_access_token as string) || userToken;
+
+  const url = `https://graph.facebook.com/v23.0/${target.platform_native_id}/mentioned_media?fields=id,permalink,caption,timestamp,username,owner&limit=25&access_token=${encodeURIComponent(pageToken)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`IG mentions fetch failed (${res.status}): ${errText.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const media = (data.data || []) as Array<Record<string, unknown>>;
+
+  let newCount = 0;
+  for (const m of media) {
+    const owner = (m.owner || {}) as Record<string, string>;
+    const username = (m.username as string) || owner.username || "unknown";
+    const ownerId = owner.id || (m.id as string);
+    const wasNew = await recordEngagementEvent({
+      subscriptionId: target.subscription_id,
+      siteId: target.primary_site_id,
+      platformAssetId: target.asset_id,
+      platform: "instagram",
+      eventType: "mention",
+      targetType: "post",
+      platformTargetId: String(m.id),
+      body: (m.caption as string) || null,
+      permalink: (m.permalink as string) || null,
+      occurredAt: (m.timestamp as string) || new Date().toISOString(),
+      personDisplayName: username,
+      personPlatformUserId: ownerId,
+      personHandle: username,
+      metadata: { source: "mentioned_media" },
+    });
+    if (wasNew) newCount++;
+  }
+
+  return { captured: media.length, new: newCount };
+}
+
+// ─── Instagram Tags (account tagged in another user's photo) ──────────────
+
+async function captureInstagramTags(target: AssetWithToken): Promise<{ captured: number; new: number }> {
+  const userToken = decrypt(target.access_token_encrypted);
+  const pageToken = (target.asset_metadata?.page_access_token as string) || userToken;
+
+  const url = `https://graph.facebook.com/v23.0/${target.platform_native_id}/tags?fields=id,permalink,caption,timestamp,username,owner&limit=25&access_token=${encodeURIComponent(pageToken)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`IG tags fetch failed (${res.status}): ${errText.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const media = (data.data || []) as Array<Record<string, unknown>>;
+
+  let newCount = 0;
+  for (const m of media) {
+    const owner = (m.owner || {}) as Record<string, string>;
+    const username = (m.username as string) || owner.username || "unknown";
+    const ownerId = owner.id || (m.id as string);
+    const wasNew = await recordEngagementEvent({
+      subscriptionId: target.subscription_id,
+      siteId: target.primary_site_id,
+      platformAssetId: target.asset_id,
+      platform: "instagram",
+      eventType: "tag",
+      targetType: "post",
+      platformTargetId: String(m.id),
+      body: (m.caption as string) || null,
+      permalink: (m.permalink as string) || null,
+      occurredAt: (m.timestamp as string) || new Date().toISOString(),
+      personDisplayName: username,
+      personPlatformUserId: ownerId,
+      personHandle: username,
+      metadata: { source: "tags" },
+    });
+    if (wasNew) newCount++;
+  }
+
+  return { captured: media.length, new: newCount };
+}
+
 // ─── Facebook Comments on Recent Page Posts ───────────────────────────────
 
 async function captureFacebookComments(target: AssetWithToken): Promise<{ captured: number; new: number }> {
@@ -240,9 +324,22 @@ async function captureFacebookComments(target: AssetWithToken): Promise<{ captur
 
 // ─── Top-Level Runner ─────────────────────────────────────────────────────
 
+type Runner = (t: AssetWithToken) => Promise<{ captured: number; new: number }>;
+
+const PLATFORM_RUNNERS: Record<string, Array<{ type: string; fn: Runner }>> = {
+  gbp: [{ type: "reviews", fn: captureGbpReviews }],
+  instagram: [
+    { type: "comments", fn: captureInstagramComments },
+    { type: "mentions", fn: captureInstagramMentions },
+    { type: "tags", fn: captureInstagramTags },
+  ],
+  facebook: [{ type: "comments", fn: captureFacebookComments }],
+};
+
 /**
  * Run capture across all healthy assets. Called by the pipeline cron.
- * Returns a summary count.
+ * Each asset can run multiple capture types — every type is logged
+ * separately to engagement_capture_runs.
  */
 export async function captureAllEngagements(): Promise<{
   assets_processed: number;
@@ -256,40 +353,29 @@ export async function captureAllEngagements(): Promise<{
   let errors = 0;
 
   for (const target of targets) {
-    let captureType: string;
-    let runner: ((t: AssetWithToken) => Promise<{ captured: number; new: number }>) | null = null;
+    const runners = PLATFORM_RUNNERS[target.platform];
+    if (!runners) continue;
 
-    if (target.platform === "gbp") {
-      captureType = "reviews";
-      runner = captureGbpReviews;
-    } else if (target.platform === "instagram") {
-      captureType = "comments";
-      runner = captureInstagramComments;
-    } else if (target.platform === "facebook") {
-      captureType = "comments";
-      runner = captureFacebookComments;
-    } else {
-      continue; // platform not yet wired
-    }
-
-    const start = Date.now();
-    try {
-      const result = await runner(target);
-      total_captured += result.captured;
-      total_new += result.new;
-      await logRun(target.asset_id, captureType, {
-        captured: result.captured,
-        new: result.new,
-        durationMs: Date.now() - start,
-      });
-    } catch (err) {
-      errors++;
-      await logRun(target.asset_id, captureType, {
-        captured: 0,
-        new: 0,
-        durationMs: Date.now() - start,
-        error: err instanceof Error ? err.message : String(err),
-      });
+    for (const { type, fn } of runners) {
+      const start = Date.now();
+      try {
+        const result = await fn(target);
+        total_captured += result.captured;
+        total_new += result.new;
+        await logRun(target.asset_id, type, {
+          captured: result.captured,
+          new: result.new,
+          durationMs: Date.now() - start,
+        });
+      } catch (err) {
+        errors++;
+        await logRun(target.asset_id, type, {
+          captured: 0,
+          new: 0,
+          durationMs: Date.now() - start,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 

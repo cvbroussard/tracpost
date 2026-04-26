@@ -63,7 +63,11 @@ async function checkMetaAsset(asset: AssetWithToken): Promise<HealthCheckResult>
   if (!matchingScope) {
     return { status: "permission_lost", error: `Token has no ${requiredScope} permission` };
   }
-  if (!matchingScope.target_ids || !matchingScope.target_ids.includes(asset.asset_id)) {
+  // Meta returns target_ids only when the user selected specific assets.
+  // When the user opted in to "all current and future" assets, target_ids
+  // is omitted — meaning the permission applies to everything the user can access.
+  // Absence of target_ids = broader grant, NOT a permission loss.
+  if (matchingScope.target_ids && !matchingScope.target_ids.includes(asset.asset_id)) {
     return { status: "permission_lost", error: `Asset ${asset.asset_id} not in ${requiredScope} target_ids` };
   }
 

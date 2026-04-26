@@ -73,6 +73,9 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
   const [loading, setLoading] = useState(true);
   const [capturing, setCapturing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [replyOpen, setReplyOpen] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState<string>("");
+  const [replying, setReplying] = useState(false);
 
   const load = useCallback(() => {
     const siteParam = siteId !== "all" ? `&site_id=${siteId}` : "";
@@ -102,6 +105,43 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
       setMessage("Capture failed");
     }
     setCapturing(false);
+  }
+
+  async function setStatus(eventId: string, status: "reviewed" | "archived" | "new") {
+    const res = await fetch("/api/admin/engage/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, status }),
+    });
+    if (res.ok) {
+      // Optimistically remove from list (inbox excludes archived; reviewed stays visible but updates badge)
+      setEvents(prev => status === "archived" ? prev.filter(e => e.id !== eventId) : prev.map(e => e.id === eventId ? { ...e, review_status: status } : e));
+    }
+  }
+
+  async function sendReply(eventId: string) {
+    if (!replyText.trim()) return;
+    setReplying(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/engage/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId, body: replyText.trim() }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setMessage("Reply posted");
+        setReplyOpen(null);
+        setReplyText("");
+        setEvents(prev => prev.map(e => e.id === eventId ? { ...e, review_status: "reviewed" } : e));
+      } else {
+        setMessage(`Reply failed: ${d.error || "unknown error"}`);
+      }
+    } catch (err) {
+      setMessage(`Reply failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    setReplying(false);
   }
 
   if (loading) {
@@ -206,10 +246,55 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
                       {e.body && (
                         <p className="mt-1 text-xs text-foreground leading-relaxed">{e.body}</p>
                       )}
-                      {e.permalink && (
-                        <a href={e.permalink} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[10px] text-accent hover:underline">
-                          View on platform →
-                        </a>
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        {e.permalink && (
+                          <a href={e.permalink} target="_blank" rel="noopener noreferrer" className="text-[10px] text-accent hover:underline">
+                            View on platform →
+                          </a>
+                        )}
+                        {(e.platform === "gbp" || e.platform === "instagram" || e.platform === "facebook") && (
+                          <button
+                            onClick={() => { setReplyOpen(replyOpen === e.id ? null : e.id); setReplyText(""); }}
+                            className="text-[10px] text-accent hover:underline"
+                          >
+                            {replyOpen === e.id ? "Cancel reply" : "Reply"}
+                          </button>
+                        )}
+                        {e.review_status !== "reviewed" && (
+                          <button
+                            onClick={() => setStatus(e.id, "reviewed")}
+                            className="text-[10px] text-muted hover:text-foreground"
+                          >
+                            Mark reviewed
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setStatus(e.id, "archived")}
+                          className="text-[10px] text-muted hover:text-foreground"
+                        >
+                          Archive
+                        </button>
+                        {e.review_status === "reviewed" && (
+                          <span className="rounded bg-success/10 text-success px-1.5 py-0.5 text-[9px] font-medium">Reviewed</span>
+                        )}
+                      </div>
+                      {replyOpen === e.id && (
+                        <div className="mt-2 flex gap-2">
+                          <textarea
+                            value={replyText}
+                            onChange={ev => setReplyText(ev.target.value)}
+                            placeholder={`Reply on ${PLATFORM_LABEL[e.platform] || e.platform}…`}
+                            rows={2}
+                            className="flex-1 rounded border border-border bg-background px-2 py-1.5 text-xs focus:border-accent focus:outline-none resize-y"
+                          />
+                          <button
+                            onClick={() => sendReply(e.id)}
+                            disabled={replying || !replyText.trim()}
+                            className="rounded bg-accent px-3 py-1 text-[11px] font-medium text-white hover:bg-accent/90 disabled:opacity-50 self-start"
+                          >
+                            {replying ? "Sending…" : "Send"}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>

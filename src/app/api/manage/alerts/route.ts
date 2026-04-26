@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
     pendingGbp,
     pageScoreAlerts,
     notificationAlerts,
+    engagementAlerts,
   ] = await Promise.all([
     // Provisioning — requested sites
     sql`
@@ -97,6 +98,23 @@ export async function GET(req: NextRequest) {
       FROM notifications
       WHERE created_at >= ${sinceStr}
       ORDER BY created_at DESC
+      LIMIT 50
+    `.catch(() => []),
+
+    // Engagement — unreviewed negative events from the engage module
+    sql`
+      SELECT ee.id, ee.platform, ee.event_type, ee.body,
+             ee.occurred_at AS timestamp, ee.subscription_id,
+             ep.display_name AS person_name,
+             u.name AS subscriber_name
+      FROM engagement_events ee
+      LEFT JOIN engaged_persons ep ON ep.id = ee.engaged_person_id
+      JOIN subscriptions sub ON sub.id = ee.subscription_id
+      LEFT JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+      WHERE ee.sentiment = 'negative'
+        AND ee.review_status = 'new'
+        AND ee.occurred_at >= ${sinceStr}
+      ORDER BY ee.occurred_at DESC
       LIMIT 50
     `.catch(() => []),
   ]);
@@ -182,6 +200,21 @@ export async function GET(req: NextRequest) {
       detail: String(n.body).slice(0, 80),
       href: "/manage/pipeline",
       timestamp: String(n.timestamp),
+    });
+  }
+
+  // Map engagement — unreviewed negative events
+  for (const e of engagementAlerts) {
+    const snippet = e.body ? String(e.body).slice(0, 80) : "";
+    const person = (e.person_name as string) || "Unknown";
+    events.push({
+      id: `engage-${e.id}`,
+      category: "performance",
+      severity: "warning",
+      title: `Negative ${e.event_type} on ${e.platform}`,
+      detail: `${person}${snippet ? ` · "${snippet}"` : ""} · ${e.subscriber_name}`,
+      href: "/manage/engage",
+      timestamp: String(e.timestamp),
     });
   }
 

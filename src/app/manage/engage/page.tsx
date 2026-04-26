@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ManagePage } from "@/components/manage/manage-page";
+import { PlatformIcon } from "@/components/platform-icon";
 
 interface Event {
   id: string;
@@ -13,9 +14,26 @@ interface Event {
   occurred_at: string;
   review_status: string;
   engaged_person_id: string | null;
+  star_rating: string | null;
   person_display_name: string | null;
   person_handle: string | null;
   person_avatar_url: string | null;
+}
+
+const STAR_RATING_VALUE: Record<string, number> = {
+  ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5,
+};
+
+function StarBar({ rating }: { rating: number }) {
+  return (
+    <span className="inline-flex items-center gap-px" aria-label={`${rating} star${rating === 1 ? "" : "s"}`}>
+      {[1, 2, 3, 4, 5].map(n => (
+        <svg key={n} viewBox="0 0 24 24" width="11" height="11" fill={n <= rating ? "#FBBC05" : "#e2e8f0"}>
+          <path d="M12 2l2.9 6.9 7.4.7-5.6 4.9 1.7 7.3L12 17.8 5.6 21.8l1.7-7.3L1.7 9.6l7.4-.7L12 2z" />
+        </svg>
+      ))}
+    </span>
+  );
 }
 
 interface Person {
@@ -259,22 +277,29 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
               {events.map(e => (
                 <div key={e.id} className="p-3 hover:bg-surface-hover">
                   <div className="flex items-start gap-3">
-                    {e.person_avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={e.person_avatar_url} alt="" referrerPolicy="no-referrer" className="w-8 h-8 rounded-full shrink-0" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-surface-hover shrink-0 flex items-center justify-center text-[10px] text-muted">
-                        {(e.person_display_name || "?").charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <div className="relative shrink-0">
+                      {e.person_avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={e.person_avatar_url} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-surface-hover flex items-center justify-center text-[11px] text-muted">
+                          {(e.person_display_name || "?").charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface ring-1 ring-surface" title={PLATFORM_LABEL[e.platform] || e.platform}>
+                        <PlatformIcon platform={e.platform} size={14} />
+                      </span>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="text-xs font-medium">{e.person_display_name || "Unknown"}</span>
                         {e.person_handle && (
                           <span className="text-[10px] text-muted">@{e.person_handle}</span>
                         )}
-                        <span className="text-[10px] text-muted">on {PLATFORM_LABEL[e.platform] || e.platform}</span>
                         <span className="text-[10px] text-muted">{EVENT_TYPE_LABEL[e.event_type] || e.event_type}</span>
+                        {e.event_type === "review" && e.star_rating && STAR_RATING_VALUE[e.star_rating] && (
+                          <StarBar rating={STAR_RATING_VALUE[e.star_rating]} />
+                        )}
                         {e.sentiment && (
                           <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${SENTIMENT_COLOR[e.sentiment]}`}>
                             {e.sentiment}
@@ -395,8 +420,15 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
                       )}
                     </td>
                     <td className="px-4 py-2 font-medium">{p.display_name}</td>
-                    <td className="px-4 py-2 text-[10px] text-muted">
-                      {(p.handles || []).map(h => `${PLATFORM_LABEL[h.platform] || h.platform}${h.handle ? ` @${h.handle}` : ""}`).join(", ")}
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {(p.handles || []).map((h, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 text-[10px] text-muted" title={PLATFORM_LABEL[h.platform] || h.platform}>
+                            <PlatformIcon platform={h.platform} size={14} />
+                            {h.handle ? `@${h.handle}` : ""}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-4 py-2 text-right">{p.engagement_count}</td>
                     <td className="px-4 py-2 text-right text-success">{p.positive_engagements}</td>

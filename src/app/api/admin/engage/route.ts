@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
         SELECT ee.id, ee.platform, ee.event_type, ee.body, ee.sentiment,
                ee.permalink, ee.occurred_at, ee.review_status,
                ee.engaged_person_id,
+               ee.metadata->>'star_rating' AS star_rating,
                ep.display_name AS person_display_name,
                eph.handle AS person_handle,
                eph.avatar_url AS person_avatar_url
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
         SELECT ee.id, ee.platform, ee.event_type, ee.body, ee.sentiment,
                ee.permalink, ee.occurred_at, ee.review_status,
                ee.engaged_person_id,
+               ee.metadata->>'star_rating' AS star_rating,
                ep.display_name AS person_display_name,
                eph.handle AS person_handle,
                eph.avatar_url AS person_avatar_url

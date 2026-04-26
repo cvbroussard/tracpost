@@ -122,6 +122,24 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
     }
   }
 
+  async function moderate(eventId: string, action: "hide" | "delete") {
+    const verb = action === "hide" ? "Hide this comment on the platform?" : "Delete this comment on the platform? This cannot be undone.";
+    if (!confirm(verb)) return;
+    setMessage(null);
+    const res = await fetch("/api/admin/engage/moderate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, action }),
+    });
+    const d = await res.json();
+    if (res.ok) {
+      setMessage(`Comment ${action === "hide" ? "hidden" : "deleted"} on platform`);
+      setEvents(prev => prev.filter(e => e.id !== eventId));
+    } else {
+      setMessage(`Moderation failed: ${d.error || "unknown error"}`);
+    }
+  }
+
   async function sendReply(eventId: string) {
     if (!replyText.trim()) return;
     setReplying(true);
@@ -295,6 +313,24 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
                         >
                           Archive
                         </button>
+                        {(e.platform === "facebook" || e.platform === "instagram") && e.event_type === "comment" && (
+                          <>
+                            <button
+                              onClick={() => moderate(e.id, "hide")}
+                              className="text-[10px] text-muted hover:text-warning"
+                              title="Hide this comment on the platform (visible only to commenter)"
+                            >
+                              Hide on platform
+                            </button>
+                            <button
+                              onClick={() => moderate(e.id, "delete")}
+                              className="text-[10px] text-muted hover:text-danger"
+                              title="Delete this comment on the platform"
+                            >
+                              Delete on platform
+                            </button>
+                          </>
+                        )}
                         {e.review_status === "reviewed" && (
                           <span className="rounded bg-success/10 text-success px-1.5 py-0.5 text-[9px] font-medium">Reviewed</span>
                         )}

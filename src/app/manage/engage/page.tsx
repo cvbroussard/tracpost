@@ -17,6 +17,7 @@ interface Event {
   star_rating: string | null;
   sentiment_rationale: string | null;
   appeal_submitted_at: string | null;
+  is_spam: boolean | null;
   person_display_name: string | null;
   person_handle: string | null;
   person_avatar_url: string | null;
@@ -99,6 +100,7 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
   const [replyText, setReplyText] = useState<string>("");
   const [replying, setReplying] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showSpam, setShowSpam] = useState(false);
   const [appealEvent, setAppealEvent] = useState<Event | null>(null);
   const [appealDraft, setAppealDraft] = useState<{ hasViolation: boolean; category: string | null; rationale: string; appealText: string; evidenceSuggestions: string[]; googleFormUrl: string } | null>(null);
   const [appealLoading, setAppealLoading] = useState(false);
@@ -107,7 +109,8 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
   const load = useCallback(() => {
     const siteParam = siteId !== "all" ? `&site_id=${siteId}` : "";
     const archivedParam = showArchived ? "&include_archived=true" : "";
-    fetch(`/api/admin/engage?subscription_id=${subscriberId}${siteParam}${archivedParam}`)
+    const spamParam = showSpam ? "&include_spam=true" : "";
+    fetch(`/api/admin/engage?subscription_id=${subscriberId}${siteParam}${archivedParam}${spamParam}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d) return;
@@ -116,7 +119,7 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
         setSummary(d.summary || null);
       })
       .finally(() => setLoading(false));
-  }, [subscriberId, siteId, showArchived]);
+  }, [subscriberId, siteId, showArchived, showSpam]);
 
   useEffect(() => { setLoading(true); load(); }, [load]);
 
@@ -188,6 +191,33 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
     setEvents(prev => prev.map(e => e.id === appealEvent.id ? { ...e, appeal_submitted_at: new Date().toISOString() } : e));
     setAppealEvent(null);
     setAppealDraft(null);
+  }
+
+  async function markSpam(eventId: string, action: "mark" | "unmark") {
+    if (action === "mark") {
+      if (!confirm("Mark as spam?\n\nThis will hide the comment on the platform (if applicable), archive it locally, and flag it as spam. Spammer is not notified.")) return;
+    }
+    setMessage(null);
+    const res = await fetch("/api/admin/engage/mark-spam", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, action }),
+    });
+    const d = await res.json();
+    if (res.ok) {
+      if (action === "mark") {
+        const platformNote = d.hidOnPlatform ? " · hidden on platform" : d.hideError ? ` · platform hide failed (${d.hideError})` : "";
+        setMessage(`Marked as spam${platformNote}`);
+        setEvents(prev => showSpam
+          ? prev.map(e => e.id === eventId ? { ...e, is_spam: true, review_status: "archived" } : e)
+          : prev.filter(e => e.id !== eventId));
+      } else {
+        setMessage("Spam mark removed");
+        setEvents(prev => prev.map(e => e.id === eventId ? { ...e, is_spam: false, review_status: "new" } : e));
+      }
+    } else {
+      setMessage(`Failed: ${d.error || "unknown error"}`);
+    }
   }
 
   async function moderate(eventId: string, action: "hide" | "delete") {
@@ -304,17 +334,30 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
         <div className="rounded-xl border border-border bg-surface shadow-card overflow-hidden">
           <div className="flex items-center justify-between border-b border-border px-4 py-2">
             <span className="text-[10px] text-muted">
-              {events.length} {showArchived ? "events (incl. archived)" : "active events"}
+              {events.length} {showArchived || showSpam ? "events" : "active events"}
+              {showArchived ? " · incl. archived" : ""}
+              {showSpam ? " · incl. spam" : ""}
             </span>
-            <label className="flex items-center gap-2 text-[10px] text-muted cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={e => setShowArchived(e.target.checked)}
-                className="h-3 w-3"
-              />
-              Show archived
-            </label>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-[10px] text-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={e => setShowArchived(e.target.checked)}
+                  className="h-3 w-3"
+                />
+                Show archived
+              </label>
+              <label className="flex items-center gap-2 text-[10px] text-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showSpam}
+                  onChange={e => setShowSpam(e.target.checked)}
+                  className="h-3 w-3"
+                />
+                Show spam
+              </label>
+            </div>
           </div>
           {events.length === 0 ? (
             <p className="p-6 text-center text-xs text-muted">
@@ -406,6 +449,29 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
                               title="Delete this comment on the platform"
                             >
                               Delete on platform
+                            </button>
+                          </>
+                        )}
+                        {!e.is_spam && e.event_type !== "review" && (
+                          <button
+                            onClick={() => markSpam(e.id, "mark")}
+                            className="text-[10px] text-muted hover:text-danger"
+                            title="Mark as spam — hides on platform when applicable, archives locally, retains for pattern detection"
+                          >
+                            Mark as spam
+                          </button>
+                        )}
+                        {e.is_spam && (
+                          <>
+                            <span className="rounded bg-danger/10 text-danger px-1.5 py-0.5 text-[9px] font-medium" title="Marked as spam">
+                              Spam
+                            </span>
+                            <button
+                              onClick={() => markSpam(e.id, "unmark")}
+                              className="text-[10px] text-muted hover:text-foreground"
+                              title="Remove the spam flag (does not un-hide on the platform)"
+                            >
+                              Not spam
                             </button>
                           </>
                         )}

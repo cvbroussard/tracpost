@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
   const subscriptionId = url.searchParams.get("subscription_id");
   const siteId = url.searchParams.get("site_id");
   const includeArchived = url.searchParams.get("include_archived") === "true";
+  const includeSpam = url.searchParams.get("include_spam") === "true";
 
   if (!subscriptionId) {
     return NextResponse.json({ error: "subscription_id required" }, { status: 400 });
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
                ee.metadata->>'star_rating' AS star_rating,
                ee.metadata->>'sentiment_rationale' AS sentiment_rationale,
                ee.metadata->'appeal'->>'submittedAt' AS appeal_submitted_at,
+               (ee.metadata->>'is_spam')::boolean AS is_spam,
                ep.display_name AS person_display_name,
                eph.handle AS person_handle,
                eph.avatar_url AS person_avatar_url
@@ -40,6 +42,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN engaged_person_handles eph ON eph.engaged_person_id = ep.id AND eph.platform = ee.platform
         WHERE ee.subscription_id = ${subscriptionId} AND ee.site_id = ${siteId}
           AND (${includeArchived} OR ee.review_status != 'archived')
+          AND (${includeSpam} OR (ee.metadata->>'is_spam') IS DISTINCT FROM 'true')
         ORDER BY ee.occurred_at DESC
         LIMIT 100
       `
@@ -50,6 +53,7 @@ export async function GET(req: NextRequest) {
                ee.metadata->>'star_rating' AS star_rating,
                ee.metadata->>'sentiment_rationale' AS sentiment_rationale,
                ee.metadata->'appeal'->>'submittedAt' AS appeal_submitted_at,
+               (ee.metadata->>'is_spam')::boolean AS is_spam,
                ep.display_name AS person_display_name,
                eph.handle AS person_handle,
                eph.avatar_url AS person_avatar_url
@@ -58,6 +62,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN engaged_person_handles eph ON eph.engaged_person_id = ep.id AND eph.platform = ee.platform
         WHERE ee.subscription_id = ${subscriptionId}
           AND (${includeArchived} OR ee.review_status != 'archived')
+          AND (${includeSpam} OR (ee.metadata->>'is_spam') IS DISTINCT FROM 'true')
         ORDER BY ee.occurred_at DESC
         LIMIT 100
       `;

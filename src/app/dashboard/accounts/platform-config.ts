@@ -10,6 +10,7 @@ export interface PlatformConfig {
   oauthRoute: string;
   oauthReady: boolean;
   helpLinks: { label: string; href: string }[];
+  multiAssetWarning?: string;
 }
 
 export const PLATFORMS: PlatformConfig[] = [
@@ -37,6 +38,7 @@ export const PLATFORMS: PlatformConfig[] = [
       { label: "Convert to Business Account", href: "https://help.instagram.com/502981923235522" },
       { label: "Link Instagram to Facebook Page", href: "https://help.instagram.com/570895513091465" },
     ],
+    multiAssetWarning: "If you manage multiple businesses on Facebook, select ALL Pages and Instagram accounts when Meta asks. Selecting only some can break access to the others. Future Pages can be added by reconnecting later.",
   },
   {
     key: "facebook",
@@ -62,6 +64,7 @@ export const PLATFORMS: PlatformConfig[] = [
       { label: "Create a Facebook Page", href: "https://www.facebook.com/pages/create" },
       { label: "Page Roles and Permissions", href: "https://www.facebook.com/help/187316341316631" },
     ],
+    multiAssetWarning: "If you manage multiple businesses on Facebook, select ALL Pages and Instagram accounts when Meta asks. Selecting only some can break access to the others. Future Pages can be added by reconnecting later.",
   },
   {
     key: "gbp",

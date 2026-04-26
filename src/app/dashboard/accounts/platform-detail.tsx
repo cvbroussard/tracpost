@@ -206,6 +206,12 @@ export function PlatformDetail({
                   <span className="text-xs font-medium">{conn.scheduled}</span>
                 </div>
 
+                {platform.multiAssetWarning && (
+                  <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 p-3">
+                    <p className="text-[10px] font-semibold text-warning uppercase tracking-wider mb-1">Reconnect note</p>
+                    <p className="text-xs text-foreground leading-relaxed">{platform.multiAssetWarning}</p>
+                  </div>
+                )}
                 <div className="pt-3 mt-2 border-t border-border flex items-center gap-2">
                   <button
                     onClick={handleConnect}
@@ -250,6 +256,12 @@ export function PlatformDetail({
                     : "This platform connection is coming soon. We'll notify you when it's available."
                   }
                 </p>
+                {platform.oauthReady && platform.multiAssetWarning && (
+                  <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
+                    <p className="text-[10px] font-semibold text-warning uppercase tracking-wider mb-1">Important</p>
+                    <p className="text-xs text-foreground leading-relaxed">{platform.multiAssetWarning}</p>
+                  </div>
+                )}
                 <button
                   onClick={handleConnect}
                   disabled={connecting || !platform.oauthReady}

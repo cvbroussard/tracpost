@@ -208,6 +208,17 @@ export function ManageShell({
             >
               Site Actions
             </Link>
+            <Link
+              href={`${prefix}/engage`}
+              onClick={() => setExpandedGroup(null)}
+              className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
+                pathname.startsWith(`${prefix}/engage`) || (prefix === "" && pathname.startsWith("/engage"))
+                  ? "text-foreground font-medium bg-surface-hover"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Engage
+            </Link>
             {NAV_GROUPS.map(group => {
               const isExpanded = expandedGroup === group.label;
               const containsActive = groupContainsActive(group);

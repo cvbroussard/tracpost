@@ -268,6 +268,16 @@ export async function GET(req: NextRequest) {
       console.error("Asset health check failed:", err instanceof Error ? err.message : err);
     }
 
+    // ── 2c. Engagement capture (after health, only runs against healthy assets) ──
+    let engageSummary: { assets_processed: number; total_captured: number; total_new: number; errors: number } | null = null;
+    try {
+      const { captureAllEngagements } = await import("@/lib/engage/capture");
+      engageSummary = await captureAllEngagements();
+      console.log("Engagement capture:", engageSummary);
+    } catch (err) {
+      console.error("Engagement capture failed:", err instanceof Error ? err.message : err);
+    }
+
     // ── 3. Autopilot publishing ──
     // Replaces the old slot-based pipeline. For each active site with
     // autopilot enabled, evaluate cadence rules and publish immediately
@@ -308,6 +318,7 @@ export async function GET(req: NextRequest) {
       tokens_refreshed: tokenResult.refreshed,
       tokens_failed: tokenResult.failed,
       asset_health: healthSummary,
+      engagement_capture: engageSummary,
     };
 
     return NextResponse.json({ summary, publishResults });

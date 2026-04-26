@@ -170,6 +170,22 @@ async function fetchIgAccount(
 }
 
 /**
+ * Fetch the authenticated Meta user's basic profile.
+ * Used to identify the OAuth grant owner.
+ */
+export async function getMetaUserInfo(accessToken: string): Promise<{
+  id: string;
+  name: string;
+}> {
+  const res = await fetch(`${GRAPH_BASE}/me?fields=id,name&access_token=${accessToken}`);
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(`Meta user info fetch failed: ${data.error?.message || JSON.stringify(data)}`);
+  }
+  return { id: String(data.id), name: String(data.name) };
+}
+
+/**
  * Discover Facebook Pages the user manages, with their Page access tokens.
  * Page tokens from a long-lived user token are themselves long-lived.
  */

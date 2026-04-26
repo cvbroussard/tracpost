@@ -4,7 +4,7 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import { upsertEngagedPerson, refreshPersonAggregates } from "./persons";
-import { quickSentiment } from "./sentiment";
+import { analyzeSentiment } from "./sentiment";
 import { notifyNegativeEngagement } from "./notify";
 
 export interface RecordEventInput {
@@ -48,9 +48,18 @@ export async function recordEngagementEvent(input: RecordEventInput): Promise<bo
     followerCount: input.personFollowerCount,
   });
 
-  // 2. Compute sentiment if not provided
-  const sentiment = input.sentiment || (input.body ? quickSentiment(input.body) : null);
-  const sentimentScore = sentiment === "positive" ? 0.7 : sentiment === "negative" ? -0.7 : 0;
+  // 2. Compute sentiment if not provided. Explicit override (e.g., GBP star
+  //    rating) wins. Otherwise LLM-classify from the body.
+  let sentiment: "positive" | "neutral" | "negative" | null = input.sentiment || null;
+  let sentimentScore: number = sentiment === "positive" ? 0.7 : sentiment === "negative" ? -0.7 : 0;
+  let rationale: string | null = null;
+
+  if (!input.sentiment && input.body) {
+    const result = await analyzeSentiment(input.body);
+    sentiment = result.sentiment;
+    sentimentScore = result.score;
+    rationale = result.rationale;
+  }
 
   // 3. Auto-archive historical events on insert. First-capture for an active
   //    subscriber typically returns years of past activity; we don't want
@@ -73,7 +82,7 @@ export async function recordEngagementEvent(input: RecordEventInput): Promise<bo
       ${input.body || null}, ${sentiment}, ${sentimentScore}, ${input.permalink || null},
       ${typeof input.occurredAt === "string" ? input.occurredAt : input.occurredAt.toISOString()},
       ${reviewStatus},
-      ${JSON.stringify(input.metadata || {})}
+      ${JSON.stringify({ ...(input.metadata || {}), ...(rationale ? { sentiment_rationale: rationale } : {}) })}
     )
     ON CONFLICT (platform, platform_target_id, event_type) DO NOTHING
     RETURNING id

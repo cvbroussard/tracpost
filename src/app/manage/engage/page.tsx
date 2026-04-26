@@ -15,6 +15,7 @@ interface Event {
   review_status: string;
   engaged_person_id: string | null;
   star_rating: string | null;
+  sentiment_rationale: string | null;
   person_display_name: string | null;
   person_handle: string | null;
   person_avatar_url: string | null;
@@ -302,7 +303,10 @@ function EngageContent({ subscriberId, siteId }: { subscriberId: string; siteId:
                           <StarBar rating={STAR_RATING_VALUE[e.star_rating]} />
                         )}
                         {e.sentiment && (
-                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${SENTIMENT_COLOR[e.sentiment]}`}>
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${SENTIMENT_COLOR[e.sentiment]}`}
+                            title={e.sentiment_rationale || undefined}
+                          >
                             {e.sentiment}
                           </span>
                         )}

@@ -94,7 +94,7 @@ export const PLATFORMS: PlatformConfig[] = [
       { label: "Link Instagram to Facebook Page", href: "https://help.instagram.com/570895513091465" },
       { label: "Page Roles and Permissions", href: "https://www.facebook.com/help/187316341316631" },
     ],
-    multiAssetWarning: "If you manage multiple businesses on Facebook, select ALL Pages and Instagram accounts when Meta asks. Selecting only some can break access to the others. Future Pages can be added by reconnecting later.",
+    multiAssetWarning: "When Meta shows the asset picker, choose 'Opt in to all current and future Pages and Instagram accounts.' This is the simplest path — it covers everything you manage today and any business you add later, with no need to reconnect.",
   },
   {
     key: "gbp",

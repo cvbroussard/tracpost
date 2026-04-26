@@ -51,19 +51,27 @@ export async function recordEngagementEvent(input: RecordEventInput): Promise<bo
   const sentiment = input.sentiment || (input.body ? quickSentiment(input.body) : null);
   const sentimentScore = sentiment === "positive" ? 0.7 : sentiment === "negative" ? -0.7 : 0;
 
-  // 3. Insert the event (idempotent on conflict)
+  // 3. Auto-archive historical events on insert. First-capture for an active
+  //    subscriber typically returns years of past activity; we don't want
+  //    those flooding the inbox or counting as "unreviewed."
+  const occurredAtMs = new Date(input.occurredAt).getTime();
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const reviewStatus = occurredAtMs < thirtyDaysAgo ? "archived" : "new";
+
+  // 4. Insert the event (idempotent on conflict)
   const inserted = await sql`
     INSERT INTO engagement_events (
       subscription_id, site_id, platform_asset_id, engaged_person_id,
       platform, event_type, target_type, platform_target_id,
       body, sentiment, sentiment_score, permalink,
-      occurred_at, metadata
+      occurred_at, review_status, metadata
     )
     VALUES (
       ${input.subscriptionId}, ${input.siteId || null}, ${input.platformAssetId || null}, ${personId},
       ${input.platform}, ${input.eventType}, ${input.targetType || null}, ${input.platformTargetId},
       ${input.body || null}, ${sentiment}, ${sentimentScore}, ${input.permalink || null},
       ${typeof input.occurredAt === "string" ? input.occurredAt : input.occurredAt.toISOString()},
+      ${reviewStatus},
       ${JSON.stringify(input.metadata || {})}
     )
     ON CONFLICT (platform, platform_target_id, event_type) DO NOTHING

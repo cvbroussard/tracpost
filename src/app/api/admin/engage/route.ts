@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN engaged_persons ep ON ep.id = ee.engaged_person_id
         LEFT JOIN engaged_person_handles eph ON eph.engaged_person_id = ep.id AND eph.platform = ee.platform
         WHERE ee.subscription_id = ${subscriptionId} AND ee.site_id = ${siteId}
+          AND ee.review_status != 'archived'
         ORDER BY ee.occurred_at DESC
         LIMIT 100
       `
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN engaged_persons ep ON ep.id = ee.engaged_person_id
         LEFT JOIN engaged_person_handles eph ON eph.engaged_person_id = ep.id AND eph.platform = ee.platform
         WHERE ee.subscription_id = ${subscriptionId}
+          AND ee.review_status != 'archived'
         ORDER BY ee.occurred_at DESC
         LIMIT 100
       `;

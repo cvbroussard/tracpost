@@ -258,6 +258,16 @@ export async function GET(req: NextRequest) {
       console.error("Token recovery failed:", err instanceof Error ? err.message : err);
     }
 
+    // ── 2b. Asset health check (post-refresh, so we use fresh tokens) ──
+    let healthSummary: Record<string, number> | null = null;
+    try {
+      const { checkAllAssetHealth } = await import("@/lib/pipeline/asset-health");
+      healthSummary = await checkAllAssetHealth();
+      console.log("Asset health summary:", healthSummary);
+    } catch (err) {
+      console.error("Asset health check failed:", err instanceof Error ? err.message : err);
+    }
+
     // ── 3. Autopilot publishing ──
     // Replaces the old slot-based pipeline. For each active site with
     // autopilot enabled, evaluate cadence rules and publish immediately
@@ -297,6 +307,7 @@ export async function GET(req: NextRequest) {
       legacy_blogs: results.reduce((n, r) => n + r.blogPostsGenerated, 0),
       tokens_refreshed: tokenResult.refreshed,
       tokens_failed: tokenResult.failed,
+      asset_health: healthSummary,
     };
 
     return NextResponse.json({ summary, publishResults });

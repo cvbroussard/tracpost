@@ -185,43 +185,49 @@ But first, take the user-count rankings and then forget the order. The honest hi
     excerpt: "The right platform for your business isn't the biggest one. It's the one your specific customer opens when they're thinking about what you sell.",
     content_type: "authority_overview",
     content_pillar: "growth",
-    body: `A wedding photographer asked me last year if she should be on TikTok. She had built a strong Instagram presence, was active on Pinterest, and had a Google Business Profile that was bringing in inquiries. TikTok felt like the next thing she "should" be doing.
+    body: `A wedding photographer asked me last year if she needed to be on TikTok. She had a strong Instagram presence, was active on Pinterest, and had a Google Business Profile bringing in inquiries. TikTok felt like the next thing she "should" be doing.
 
 I asked her where her last six clients had found her. Three from Instagram referrals. Two from Google searches. One from a Pinterest board. Zero from TikTok.
 
-She didn't need TikTok. She needed to keep doing what was working and stop feeling guilty about ignoring something that wasn't.
+Then I asked: "If TikTok brought you three more clients next year, could you use the business?"
 
-This is the question every business has to answer: **where do my actual customers live?** Not where they could be. Where they are right now, when they're thinking about what you sell.
+She laughed. Of course she could.
+
+That's the actual question. Not *should I be on this platform?* — every business that wants to grow should be visible everywhere their customers might appear. The honest question is *where should I invest my attention, given that being everywhere is now the default?*
+
+Each platform serves a different slice of your potential customer base. The map below tells you where to put the bulk of your *active* attention — what to capture deliberately, what to engage with personally, what to optimize for. The platforms it deprioritizes for your industry don't disappear; they run automatically in the background as bonus reach, picking up the long-tail customers your primary platforms wouldn't.
 
 ## Local service businesses (contractors, plumbers, electricians, HVAC, landscaping, roofing, cleaners)
 
 Your customer is searching with intent. Something broke, something needs fixing, something needs building. They open Google.
 
-- **Google Business Profile** is non-negotiable. The Local Pack — those three businesses that show up under the map — captures most of the click-through. If you're not in it, you don't exist.
-- **Facebook** matters for the recommendations layer. People ask their neighborhood Facebook group for contractors and your name needs to show up. A Facebook page with photos and current activity supports that.
-- **Instagram** matters for the proof layer. Before-and-after, finished projects, testimonials. Customers vet you here after they find you elsewhere.
+- **Google Business Profile** is your highest-value attention. The Local Pack — those three businesses that show up under the map — captures most of the click-through. If you're not in it, you don't exist.
+- **Facebook** is your second-priority. People ask their neighborhood Facebook group for contractors and your name needs to show up. A Facebook page with photos and current activity supports that.
+- **Instagram** is your proof layer. Before-and-after, finished projects, testimonials. Customers vet you here after they find you elsewhere.
 
-You can ignore TikTok, LinkedIn, and Pinterest. Your customers aren't shopping for service trades there.
+TikTok, LinkedIn, and Pinterest are not where your service-trade customers shop — but they're not zero either. Auto-rendered presence on these picks up the occasional homeowner who's planning a future renovation, the property manager evaluating contractors, the journalist looking for local sources. Bonus reach, not your active investment.
 
 ## Visual businesses (photographers, event venues, retail, interior design, florists, restaurants)
 
 Your customer is browsing for inspiration. They're filling time, building a wedding board, planning a renovation, looking for somewhere to eat tonight.
 
 - **Instagram** is your home court. The platform was built for visual storytelling.
-- **Pinterest** is genuinely undervalued. People come there with planning intent — they're saving things they want, not just things they like. Pinterest converts to action better than most platforms.
-- **Google Business Profile** still matters because the planning eventually becomes searching ("Italian restaurant near me," "wedding venue Pittsburgh").
+- **Pinterest** is genuinely undervalued. People come there with planning intent — saving things they want, not just things they like.
+- **Google Business Profile** matters because the planning eventually becomes searching ("Italian restaurant near me," "wedding venue Pittsburgh").
 - **Facebook** for community proof — events, hours, reviews, local visibility.
-- **TikTok** for younger customer segments, especially in food, retail, and event venues. The discovery mechanic is unmatched.
+- **TikTok** for younger customer segments, especially in food, retail, and event venues. The discovery mechanic is unmatched at the front of the funnel.
+
+This category genuinely benefits from active investment across all five. None of the major platforms are pure background reach for visual businesses — every one of them puts you in front of a different planning moment.
 
 ## B2B services (consultants, agencies, software, professional services, manufacturers)
 
 Your customer is at work, on a desktop, decision-making.
 
-- **LinkedIn** is the only platform that really matters at scale. Decision-makers are there professionally; their attention is in a buying context.
-- **YouTube** matters for credibility content — long-form explanations, demos, talks. Buyers research vendors via long-form before reaching out.
+- **LinkedIn** is your highest-value attention. Decision-makers are there professionally; their attention is in a buying context.
+- **YouTube** is for credibility content — long-form explanations, demos, talks. Buyers research vendors via long-form before reaching out.
 - **Twitter/X** has a niche but real B2B audience for tech, marketing, finance.
 
-You can usually ignore TikTok, Instagram, and Pinterest unless your B2B has a strong consumer crossover.
+TikTok, Instagram, and Pinterest run as automatic background reach — picking up the occasional decision-maker doing personal browsing who happens to remember your brand later. Don't pour your attention there, but don't be absent either.
 
 ## Personal brand and lifestyle businesses (coaches, fitness, beauty, wellness, content creators)
 
@@ -232,13 +238,15 @@ Your customer follows individuals more than businesses.
 - **YouTube** for depth and authority.
 - **Pinterest** if your category is visual (beauty, fashion, recipes).
 
-## Some businesses can't pick one
+Almost every platform is active investment territory for personal brand businesses. The question is which two or three get most of your capture energy — the rest still deserve presence, just less direct attention.
+
+## Some businesses can't deprioritize anything
 
 Wedding venues need Instagram (visual proof), Pinterest (planning), Google (search intent), Facebook (reviews + community), and increasingly TikTok (younger couples). Cutting any of these costs them inquiries.
 
-Retail similarly spans the whole stack. So do most restaurants, especially those with strong takeout/delivery business who need to show up in casual browse mode AND in "I'm hungry now" search mode.
+Retail similarly spans the whole stack. So do most restaurants, especially those with strong takeout/delivery business that need to show up in casual browse mode AND in "I'm hungry now" search mode.
 
-For these businesses, the historical advice — "pick one or two platforms and do them well" — has always been a compromise driven by the cost of being everywhere. Not by what was actually best for the business.
+For these businesses, the historical advice — "pick one or two platforms and do them well" — was always a compromise driven by the cost of being everywhere. Not what was actually best for the business.
 
 That's what changes next.`,
   },

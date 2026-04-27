@@ -13,12 +13,13 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const [post] = await sql`
-    SELECT bp.title, bp.excerpt, bp.og_image_url
+    SELECT bp.title, bp.excerpt, bp.og_image_url, bp.metadata
     FROM blog_posts bp
     JOIN sites s ON s.id = bp.site_id
     WHERE bp.slug = ${slug} AND s.blog_slug = 'tracpost' AND bp.status = 'published'
   `;
   if (!post) return {};
+  const noindex = (post.metadata as { noindex?: boolean } | null)?.noindex === true;
   return {
     title: `${post.title} — TracPost Blog`,
     description: post.excerpt ? String(post.excerpt).slice(0, 160) : undefined,
@@ -30,6 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     alternates: {
       canonical: `https://tracpost.com/blog/${slug}`,
     },
+    robots: noindex ? { index: false, follow: true } : undefined,
   };
 }
 
@@ -131,13 +133,18 @@ export default async function MarketingBlogArticle({ params }: Props) {
             {date && <p className="mp-article-date">{date}</p>}
           </div>
 
-          {post.og_image_url && (
+          {post.og_image_url ? (
             <img
               src={String(post.og_image_url)}
               alt={String(post.title)}
               className="mp-article-hero-img"
               fetchPriority="high"
             />
+          ) : (
+            <div className="mp-article-hero-placeholder" aria-hidden="true">
+              <span className="mp-article-hero-placeholder-eyebrow">Hero placeholder</span>
+              <span className="mp-article-hero-placeholder-title">{String(post.title)}</span>
+            </div>
           )}
 
           {/* Series banner — top */}
@@ -321,6 +328,37 @@ const articleStyles = `
     margin-top: 56px;
     padding-top: 32px;
     border-top: 1px solid #e5e7eb;
+  }
+
+  /* Hero placeholder for articles without og_image_url */
+  .mp-article-hero-placeholder {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    margin: 0 0 40px;
+    background: linear-gradient(135deg, #1a1a1a 0%, #4b5563 100%);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    box-sizing: border-box;
+  }
+  .mp-article-hero-placeholder-eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.45);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+  .mp-article-hero-placeholder-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.92);
+    line-height: 1.2;
+    max-width: 600px;
   }
 
   /* Series banner — top */

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { sql } from "@/lib/db";
+import { WhySocialDropdown } from "./why-social-dropdown";
 
 const NAV_ITEMS = [
   { label: "Product", href: "/product" },
@@ -38,6 +39,9 @@ const WHY_SOCIAL_COPY: Record<string, { headline: string; teaser: string; eyebro
 interface SeriesEntry {
   slug: string;
   index: number;
+  headline: string;
+  teaser: string;
+  eyebrow?: string;
 }
 
 async function getWhySocialEntries(): Promise<SeriesEntry[]> {
@@ -50,12 +54,21 @@ async function getWhySocialEntries(): Promise<SeriesEntry[]> {
         AND bp.status = 'published'
         AND bp.metadata->'series'->>'slug' = 'why-social-matters'
     `;
-    return rows
-      .map((r) => ({
-        slug: r.slug as string,
+    const entries: SeriesEntry[] = [];
+    for (const r of rows) {
+      const slug = r.slug as string;
+      const copy = WHY_SOCIAL_COPY[slug];
+      if (!copy) continue;
+      entries.push({
+        slug,
         index: ((r.metadata as { series?: { index: number } })?.series?.index ?? 999),
-      }))
-      .sort((a, b) => a.index - b.index);
+        headline: copy.headline,
+        teaser: copy.teaser,
+        eyebrow: copy.eyebrow,
+      });
+    }
+    entries.sort((a, b) => a.index - b.index);
+    return entries;
   } catch {
     return [];
   }
@@ -74,43 +87,7 @@ export async function MarketingNav() {
         </Link>
 
         <nav className="mp-nav">
-          {showWhySocial && (
-            <div className="mp-nav-dropdown-wrap">
-              <button className="mp-nav-link mp-nav-trigger" aria-haspopup="true">
-                Why Social?
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                  <path d="M2 4 L5 7 L8 4" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <div className="mp-nav-dropdown" role="menu">
-                <div className="mp-nav-dropdown-head">
-                  <span className="mp-nav-dropdown-eyebrow">A 5-part series</span>
-                  <h3 className="mp-nav-dropdown-title">Why Social Matters</h3>
-                  <p className="mp-nav-dropdown-blurb">
-                    Why your business lives or dies on social presence — and how to be everywhere at once.
-                  </p>
-                </div>
-                <ol className="mp-nav-dropdown-list">
-                  {whySocial.map((entry) => {
-                    const copy = WHY_SOCIAL_COPY[entry.slug];
-                    if (!copy) return null;
-                    return (
-                      <li key={entry.slug} role="menuitem">
-                        <Link href={`/blog/${entry.slug}`} className="mp-nav-dropdown-link">
-                          <span className="mp-nav-dropdown-num">Part {entry.index}</span>
-                          <span className="mp-nav-dropdown-text">
-                            {copy.eyebrow && <span className="mp-nav-dropdown-tag">{copy.eyebrow}</span>}
-                            <span className="mp-nav-dropdown-headline">{copy.headline}</span>
-                            <span className="mp-nav-dropdown-teaser">{copy.teaser}</span>
-                          </span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </div>
-            </div>
-          )}
+          {showWhySocial && <WhySocialDropdown entries={whySocial} />}
           {NAV_ITEMS.map((item) => (
             <Link key={item.label} href={item.href} className="mp-nav-link">
               {item.label}
@@ -205,33 +182,20 @@ const navStyles = `
   }
   .mp-btn-primary:hover { background: #333; }
 
-  /* "Why Social?" dropdown — funnel-shaped, hover-activated */
+  /* "Why Social?" dropdown — JS-managed open state for click-to-close */
   .mp-nav-dropdown-wrap { position: relative; }
-  .mp-nav-trigger svg { transition: transform 0.15s; }
-  .mp-nav-dropdown-wrap:hover .mp-nav-trigger,
-  .mp-nav-dropdown-wrap:focus-within .mp-nav-trigger { color: #1a1a1a; }
-  .mp-nav-dropdown-wrap:hover .mp-nav-trigger svg,
-  .mp-nav-dropdown-wrap:focus-within .mp-nav-trigger svg { transform: rotate(180deg); }
+  .mp-nav-dropdown-wrap:hover .mp-nav-trigger { color: #1a1a1a; }
 
   .mp-nav-dropdown {
     position: absolute;
     top: calc(100% + 14px);
     left: 50%;
-    transform: translateX(-50%) translateY(-4px);
     width: 540px;
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 14px;
     box-shadow: 0 20px 56px rgba(0, 0, 0, 0.14), 0 2px 10px rgba(0, 0, 0, 0.04);
-    opacity: 0;
-    pointer-events: none;
     transition: opacity 0.18s, transform 0.18s;
-  }
-  .mp-nav-dropdown-wrap:hover .mp-nav-dropdown,
-  .mp-nav-dropdown-wrap:focus-within .mp-nav-dropdown {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateX(-50%) translateY(0);
   }
 
   /* Hover bridge so the menu doesn't disappear when crossing the gap */

@@ -378,7 +378,8 @@ const articleStyles = `
     margin-top: 28px;
     padding-top: 20px;
     border-top: 1px solid rgba(255,255,255,0.12);
-    max-width: 640px;
+    max-width: 720px;
+    width: 100%;
   }
   .mp-article-hero-placeholder-comp-label {
     display: block;
@@ -390,11 +391,18 @@ const articleStyles = `
     margin-bottom: 8px;
   }
   .mp-article-hero-placeholder-comp-text {
-    font-size: 14px;
-    color: rgba(255,255,255,0.7);
-    line-height: 1.55;
+    font-size: 13px;
+    color: rgba(255,255,255,0.72);
+    line-height: 1.65;
     font-style: italic;
     margin: 0;
+    white-space: pre-line;
+    text-align: left;
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 14px 16px;
   }
 
   /* Series banner — top */

@@ -42,7 +42,7 @@ Then we built villages. Then market squares. The blacksmith didn't put up a bill
 
 ## The square scaled up
 
-Social platforms aren't replacing the village square. They're the village square at planetary scale. The mechanics are identical:
+Social platforms aren't replacing the village square. They *are* the village square at planetary scale. The mechanics are identical:
 
 - People show up to see what's happening
 - They share what they made

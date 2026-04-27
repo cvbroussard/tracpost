@@ -166,7 +166,7 @@ Two platforms with the same number of users are not equivalent.
 
 What actually matters is **engaged reach for your specific customer**. A photographer doesn't care that Facebook has 3 billion users if her ideal client is on Instagram and Pinterest. A general contractor doesn't care that TikTok has 1.7 billion users if his customer is a 55-year-old homeowner who has never opened the app.
 
-The right question isn't "which platform has the most users?" It's:
+The right question *isn't* "which platform has the most users?" It's:
 
 1. **Where does my specific customer spend time?**
 2. **What kind of content do they engage with there?**

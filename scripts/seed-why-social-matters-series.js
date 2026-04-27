@@ -364,12 +364,12 @@ Show up everywhere. The compounded reach is the real reach. The businesses still
 — Style: minimalist cartography, hand-drawn linework, parchment-cream background with charcoal ink, single accent color (warm red) for platform pins
 — Save to: https://assets.tracpost.com/marketing/blog/why-social/04-platform-fit.jpg`,
 
-    "you-used-to-pick-one-the-new-math-says-all-of-them": `A heavy industrial door — riveted steel, weathered, painted text reading "THE PICK ONE PLATFORM ERA" in old-stencil letters across its face — caught at the exact moment of slamming shut. Dust particles suspended in a beam of golden backlight cutting through the gap. The door is in motion (slight motion blur on the leading edge), still closing. The composition implies someone has just walked through and pulled it shut behind them with finality. The viewer is on the outside, looking at the closed era.
+    "you-used-to-pick-one-the-new-math-says-all-of-them": `Two doors layered in an industrial corridor. The foreground door — heavy steel with "TRACPOST" stenciled in sharp modern typography — is mid-swing closing (slight motion blur on the leading edge). Through the narrowing gap, a second door is visible behind it: older, weathered, with "PICK 1 PLATFORM" in faded painted block letters across its face. The composition creates a layered "eras" feel — the TracPost door closing in the present, the old-era door receding into the past beyond it.
 
 — Aspect ratio: 21:9 (cinematic)
-— Camera: side view, low angle (around 4 feet up), wide lens, motion captured in a single decisive frame
-— Style: cinematic photography, high-contrast moody lighting, golden-amber backlight against deep blue-black foreground
-— Save to: https://assets.tracpost.com/marketing/blog/why-social/05-door-slam.jpg`,
+— Camera: low-mid angle, deep depth of field so both doors stay readable, dramatic side lighting from the right
+— Style: cinematic photography, industrial textures, golden-amber backlight on the TracPost door, cooler dimmer light on the "PICK 1 PLATFORM" door behind to suggest it's receding into the past
+— Save to: https://assets.tracpost.com/marketing/blog/why-social/05-door-slam.png`,
   };
 
   let inserted = 0, skipped = 0;

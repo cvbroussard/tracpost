@@ -31,7 +31,7 @@ const TIER_COLOR: Record<string, string> = {
 export function CompareModal({ siteId, onClose }: { siteId: string; onClose: () => void }) {
   const [data, setData] = useState<CompareResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [pane, setPane] = useState<"signals" | "side" | "baseline" | "v2">("side");
+  const [pane, setPane] = useState<"signals" | "side" | "playbook" | "dna">("side");
   const [promoting, setPromoting] = useState(false);
 
   useEffect(() => {
@@ -49,9 +49,9 @@ export function CompareModal({ siteId, onClose }: { siteId: string; onClose: () 
   async function promote() {
     if (!data) return;
     const ok = await confirm({
-      title: "Promote V2 playbook?",
-      body: "Replaces the current brand playbook with the augmented version. The previous playbook is backed up to brand_wizard_state for reversal.",
-      confirmLabel: "Promote V2",
+      title: "Promote Brand DNA to live?",
+      body: "Replaces the current Brand Playbook with the augmented Brand DNA. The previous playbook is backed up to brand_wizard_state for reversal.",
+      confirmLabel: "Promote Brand DNA",
       danger: true,
     });
     if (!ok) return;
@@ -63,7 +63,7 @@ export function CompareModal({ siteId, onClose }: { siteId: string; onClose: () 
         body: JSON.stringify({ siteId, playbook: data.v2 }),
       });
       if (res.ok) {
-        toast.success("V2 playbook promoted");
+        toast.success("Brand DNA promoted to live");
         onClose();
       } else {
         const d = await res.json();
@@ -81,18 +81,15 @@ export function CompareModal({ siteId, onClose }: { siteId: string; onClose: () 
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3 shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold">Brand DNA Comparison</h2>
+            <h2 className="text-sm font-semibold">Brand Playbook vs Brand DNA</h2>
             {data && (
               <>
                 <span className="text-xs text-muted">{data.site.name}</span>
                 <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${TIER_COLOR[data.score.tier]}`}>
                   {data.score.tier} · score {data.score.score}
                 </span>
-                {data.baselineSource === "existing_db" && (
-                  <span className="text-[10px] text-muted">baseline: existing playbook</span>
-                )}
               </>
             )}
           </div>
@@ -117,7 +114,7 @@ export function CompareModal({ siteId, onClose }: { siteId: string; onClose: () 
         ) : (
           <>
             {/* Score breakdown bar */}
-            <div className="border-b border-border bg-surface px-5 py-3">
+            <div className="border-b border-border bg-surface px-5 py-3 shrink-0">
               <div className="grid grid-cols-4 gap-4 text-[11px]">
                 <ScoreCell
                   label="Quality captions"
@@ -149,9 +146,9 @@ export function CompareModal({ siteId, onClose }: { siteId: string; onClose: () 
             </div>
 
             {/* Tabs */}
-            <div className="border-b border-border px-5">
+            <div className="border-b border-border px-5 shrink-0">
               <div className="flex gap-px">
-                {(["side", "signals", "baseline", "v2"] as const).map(t => (
+                {(["side", "signals", "playbook", "dna"] as const).map(t => (
                   <button
                     key={t}
                     onClick={() => setPane(t)}
@@ -161,19 +158,21 @@ export function CompareModal({ siteId, onClose }: { siteId: string; onClose: () 
                   >
                     {t === "side" ? "Side-by-side"
                       : t === "signals" ? `Signals${data.signals ? "" : " (none)"}`
-                      : t === "baseline" ? "Baseline"
-                      : "V2 (augmented)"}
+                      : t === "playbook" ? "Brand Playbook"
+                      : "Brand DNA"}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Pane content */}
-            <div className="flex-1 overflow-auto">
+            {/* Pane content — explicit min-h-0 lets the inner overflow-auto work
+                inside the parent flex column. Without min-h-0 a flex item refuses
+                to shrink below its content height, which suppresses scrolling. */}
+            <div className="flex-1 overflow-auto min-h-0">
               {pane === "side" && (
-                <div className="grid grid-cols-2 divide-x divide-border min-h-full">
-                  <PlaybookPanel title="Baseline" playbook={data.baseline} />
-                  <PlaybookPanel title={`V2 (${data.score.tier})`} playbook={data.v2} accent />
+                <div className="grid grid-cols-2 divide-x divide-border">
+                  <PlaybookPanel title="Brand Playbook" playbook={data.baseline} />
+                  <PlaybookPanel title={`Brand DNA · ${data.score.tier}`} playbook={data.v2} accent />
                 </div>
               )}
               {pane === "signals" && (
@@ -183,22 +182,22 @@ export function CompareModal({ siteId, onClose }: { siteId: string; onClose: () 
                       {JSON.stringify(data.signals, null, 2)}
                     </pre>
                   ) : (
-                    <p className="text-xs text-muted">No signals extracted — site is in minimal tier (score &lt; 0.3). Augmentation skipped; V2 should be effectively identical to baseline.</p>
+                    <p className="text-xs text-muted">No signals extracted — site is in minimal tier (score &lt; 0.3). Augmentation skipped; Brand DNA should be effectively identical to the Brand Playbook.</p>
                   )}
                 </div>
               )}
-              {pane === "baseline" && (
-                <PlaybookPanel title="Baseline (full width)" playbook={data.baseline} fullWidth />
+              {pane === "playbook" && (
+                <PlaybookPanel title="Brand Playbook (full width)" playbook={data.baseline} fullWidth />
               )}
-              {pane === "v2" && (
-                <PlaybookPanel title={`V2 — ${data.score.tier} (full width)`} playbook={data.v2} fullWidth accent />
+              {pane === "dna" && (
+                <PlaybookPanel title={`Brand DNA · ${data.score.tier} (full width)`} playbook={data.v2} fullWidth accent />
               )}
             </div>
 
             {/* Footer actions */}
-            <div className="border-t border-border bg-surface px-5 py-3 flex items-center justify-between">
+            <div className="border-t border-border bg-surface px-5 py-3 flex items-center justify-between shrink-0">
               <p className="text-[11px] text-muted">
-                Promotion replaces the live playbook. Backup retained in <code>brand_wizard_state</code>.
+                Promotion replaces the live Brand Playbook with this Brand DNA. Previous playbook backed up to <code>brand_wizard_state</code> for reversal.
               </p>
               <div className="flex gap-2">
                 <button onClick={onClose} className="rounded border border-border px-3 py-1.5 text-xs font-medium text-muted hover:text-foreground hover:bg-surface-hover">
@@ -209,7 +208,7 @@ export function CompareModal({ siteId, onClose }: { siteId: string; onClose: () 
                   disabled={promoting}
                   className="rounded bg-accent text-white px-3 py-1.5 text-xs font-medium hover:opacity-90 disabled:opacity-50"
                 >
-                  {promoting ? "Promoting…" : "Promote V2 to live"}
+                  {promoting ? "Promoting…" : "Promote Brand DNA to live"}
                 </button>
               </div>
             </div>

@@ -66,14 +66,14 @@ function BrandContent({ siteId }: { siteId: string }) {
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 pb-12">
       <div className="flex items-center justify-end gap-2">
         <button
           onClick={() => setCompareOpen(true)}
           className="rounded border border-border px-3 py-1.5 text-[11px] font-medium text-muted hover:text-foreground hover:bg-surface-hover"
-          title="Score historical signal, extract observations, generate an augmented V2 playbook, compare side-by-side"
+          title="Score historical signal, extract observations, generate the augmented Brand DNA, compare side-by-side"
         >
-          Compare with augmented
+          Compare with Brand DNA
         </button>
         <GeneratePlaybookButton
           siteId={data.siteId}

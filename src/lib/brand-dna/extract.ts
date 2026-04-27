@@ -145,7 +145,8 @@ Return ONLY JSON, no markdown:
 }
 
 export async function extractBrandSignals(siteId: string): Promise<BrandSignals> {
-  // Quality captions for voice/topic analysis (same filter as scorer)
+  // Quality captions for voice/topic analysis (matches scorer filter).
+  // No engagement floor — engagement is only used for exemplar ranking below.
   const captionRows = await sql`
     SELECT caption,
            COALESCE(like_count, 0) + COALESCE(comment_count, 0) AS engagement,
@@ -154,7 +155,6 @@ export async function extractBrandSignals(siteId: string): Promise<BrandSignals>
     WHERE site_id = ${siteId}
       AND caption IS NOT NULL
       AND length(caption) >= 15
-      AND COALESCE(like_count, 0) + COALESCE(comment_count, 0) >= 3
       AND (posted_at IS NULL OR posted_at >= NOW() - INTERVAL '18 months')
       AND hidden_at IS NULL
     ORDER BY (COALESCE(like_count, 0) + COALESCE(comment_count, 0)) DESC

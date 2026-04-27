@@ -27,7 +27,6 @@ async function score(sql, siteId) {
     WHERE site_id = ${siteId}
       AND caption IS NOT NULL
       AND length(caption) >= 15
-      AND COALESCE(like_count, 0) + COALESCE(comment_count, 0) >= 3
       AND (posted_at IS NULL OR posted_at >= NOW() - INTERVAL '18 months')
       AND hidden_at IS NULL
   `;

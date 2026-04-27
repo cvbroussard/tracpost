@@ -47,7 +47,11 @@ function tierFromScore(score: number): Tier {
 
 export async function scoreBrandSignals(siteId: string): Promise<SignalScore> {
   // ── 1. Quality captions ──────────────────────────────────────────────
-  // historical_posts with caption ≥15 chars, engagement ≥3, posted in last 18mo
+  // historical_posts with caption ≥15 chars, posted within 18mo.
+  // Engagement is NOT a filter here — it's a poor proxy for caption quality
+  // because platform algorithms shift over time and many platforms (FB pages
+  // especially) don't return reliable like/comment counts. Engagement is
+  // used downstream for exemplar selection only.
   const captionRows = await sql`
     SELECT caption,
            COALESCE(like_count, 0) + COALESCE(comment_count, 0) AS engagement
@@ -55,7 +59,6 @@ export async function scoreBrandSignals(siteId: string): Promise<SignalScore> {
     WHERE site_id = ${siteId}
       AND caption IS NOT NULL
       AND length(caption) >= 15
-      AND COALESCE(like_count, 0) + COALESCE(comment_count, 0) >= 3
       AND (posted_at IS NULL OR posted_at >= NOW() - INTERVAL '18 months')
       AND hidden_at IS NULL
   `;

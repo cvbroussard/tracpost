@@ -31,6 +31,35 @@ interface DnaEnvelope {
   score: { score: number; tier: Tier };
   generated_at: string;
   version: string;
+  subscriber_angle?: string;
+}
+
+// GET — read-only state (score + cached envelope if any). No LLM calls.
+export async function GET(req: NextRequest) {
+  const adminCookie = req.cookies.get("tp_admin")?.value;
+  if (adminCookie !== "authenticated") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const siteId = new URL(req.url).searchParams.get("siteId");
+  if (!siteId) return NextResponse.json({ error: "siteId required" }, { status: 400 });
+
+  const [site] = await sql`
+    SELECT business_type, location, brand_playbook, brand_dna,
+           active_brand_source, name
+    FROM sites WHERE id = ${siteId}
+  `;
+  if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
+
+  const score = await scoreBrandSignals(siteId);
+  const cached = site.brand_dna as DnaEnvelope | null;
+
+  return NextResponse.json({
+    site: { id: siteId, name: site.name, businessType: site.business_type, location: site.location },
+    score,
+    baseline: site.brand_playbook,
+    dna: cached,
+    activeSource: site.active_brand_source,
+  });
 }
 
 export async function POST(req: NextRequest) {

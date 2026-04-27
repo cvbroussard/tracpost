@@ -27,6 +27,7 @@ interface GenerateInput {
   websiteUrl?: string;
   tier: Tier;
   signals?: BrandSignals;
+  subscriberAngle?: string;  // explicit strategic differentiator from sharpen
 }
 
 function buildSignalsSection(tier: Tier, signals?: BrandSignals): string {
@@ -83,9 +84,12 @@ For RICH-tier generation: customer voice and topical observations can substantia
  * (compare via A/B harness, promote, store as draft, etc.).
  */
 export async function generatePlaybookV2(input: GenerateInput): Promise<BrandPlaybook> {
-  const { businessType, location, websiteUrl, tier, signals } = input;
+  const { businessType, location, websiteUrl, tier, signals, subscriberAngle } = input;
   const locationStr = location || "nationwide";
   const augmentation = buildSignalsSection(tier, signals);
+  const angleSection = subscriberAngle?.trim()
+    ? `\n\n## SUBSCRIBER'S STATED DIFFERENTIATOR (highest-priority strategic input)\nThe subscriber explicitly stated this is what makes them different from every other ${businessType}:\n"${subscriberAngle.trim()}"\n\nThis angle MUST anchor the playbook. All audience research, brand angles, content hooks, and offer positioning should center on this differentiator. Historical signals shape voice and topical authenticity but do not override this strategic direction.`
+    : "";
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
@@ -172,7 +176,7 @@ Requirements:
 - Generate 3 competitors in the competitive landscape
 - All language should sound like real people talking, not marketing copy
 - Search phrases should be actual queries people type
-- Be specific to ${businessType}${location ? ` in ${locationStr}` : ""} — not generic${augmentation}`,
+- Be specific to ${businessType}${location ? ` in ${locationStr}` : ""} — not generic${angleSection}${augmentation}`,
     }],
   });
 

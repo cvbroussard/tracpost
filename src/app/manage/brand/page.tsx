@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { ManagePage } from "@/components/manage/manage-page";
 import { BrandPlaybookView } from "@/app/dashboard/brand/brand-playbook-view";
 import { GeneratePlaybookButton } from "@/app/dashboard/brand/generate-playbook-button";
+import { CompareModal } from "./compare-modal";
 
 interface BrandData {
   siteId: string;
@@ -22,6 +23,7 @@ interface BrandData {
 function BrandContent({ siteId }: { siteId: string }) {
   const [data, setData] = useState<BrandData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -65,7 +67,14 @@ function BrandContent({ siteId }: { siteId: string }) {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <button
+          onClick={() => setCompareOpen(true)}
+          className="rounded border border-border px-3 py-1.5 text-[11px] font-medium text-muted hover:text-foreground hover:bg-surface-hover"
+          title="Score historical signal, extract observations, generate an augmented V2 playbook, compare side-by-side"
+        >
+          Compare with augmented
+        </button>
         <GeneratePlaybookButton
           siteId={data.siteId}
           businessType={data.businessType || ""}
@@ -79,6 +88,7 @@ function BrandContent({ siteId }: { siteId: string }) {
         playbook={data.playbook}
         subscriberAngle={data.subscriberAngle}
       />
+      {compareOpen && <CompareModal siteId={data.siteId} onClose={() => setCompareOpen(false)} />}
     </div>
   );
 }

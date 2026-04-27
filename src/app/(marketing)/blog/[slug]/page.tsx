@@ -332,7 +332,7 @@ const articleStyles = `
 
   /* Extra breathing room above the pre-footer CTA section */
   .mp-article + .mp-section {
-    padding-top: 120px;
+    padding-top: 60px;
   }
 
   /* Hero placeholder for articles without og_image_url */

@@ -38,7 +38,7 @@ export default async function MarketingBlogArticle({ params }: Props) {
 
   const [post] = await sql`
     SELECT bp.title, bp.body, bp.excerpt, bp.og_image_url, bp.published_at,
-           bp.content_type, bp.content_pillar
+           bp.content_type, bp.content_pillar, bp.metadata
     FROM blog_posts bp
     JOIN sites s ON s.id = bp.site_id
     WHERE bp.slug = ${slug} AND s.blog_slug = 'tracpost' AND bp.status = 'published'
@@ -46,6 +46,30 @@ export default async function MarketingBlogArticle({ params }: Props) {
   if (!post) notFound();
 
   const body = String(post.body || "");
+
+  // Series detection — pulls all published siblings ordered by index
+  const seriesMeta = (post.metadata as { series?: { slug: string; name: string; index: number; total: number } } | null)?.series;
+  type SeriesEntry = { slug: string; title: string; index: number };
+  let seriesEntries: SeriesEntry[] = [];
+  let nextInSeries: SeriesEntry | null = null;
+  if (seriesMeta?.slug) {
+    const siblings = await sql`
+      SELECT bp.slug, bp.title, bp.metadata
+      FROM blog_posts bp
+      JOIN sites s ON s.id = bp.site_id
+      WHERE s.blog_slug = 'tracpost'
+        AND bp.status = 'published'
+        AND bp.metadata->'series'->>'slug' = ${seriesMeta.slug}
+    `;
+    seriesEntries = siblings
+      .map((s) => ({
+        slug: s.slug as string,
+        title: s.title as string,
+        index: ((s.metadata as { series?: { index: number } })?.series?.index ?? 999),
+      }))
+      .sort((a, b) => a.index - b.index);
+    nextInSeries = seriesEntries.find((e) => e.index === seriesMeta.index + 1) || null;
+  }
   const category = (post.content_type as string) || (post.content_pillar as string) || "Insight";
   const date = post.published_at
     ? new Date(String(post.published_at)).toLocaleDateString("en-US", {
@@ -116,12 +140,44 @@ export default async function MarketingBlogArticle({ params }: Props) {
             />
           )}
 
+          {/* Series banner — top */}
+          {seriesMeta && seriesEntries.length > 1 && (
+            <aside className="mp-series-banner" aria-label="Article series">
+              <div className="mp-series-banner-head">
+                <span className="mp-series-eyebrow">A {seriesEntries.length}-part series</span>
+                <h2 className="mp-series-name">{seriesMeta.name}</h2>
+              </div>
+              <ol className="mp-series-list">
+                {seriesEntries.map((e) => (
+                  <li key={e.slug} className={e.slug === slug ? "mp-series-item-current" : "mp-series-item"}>
+                    {e.slug === slug ? (
+                      <span><strong>Part {e.index}</strong> · {e.title}</span>
+                    ) : (
+                      <Link href={`/blog/${e.slug}`}>
+                        <span className="mp-series-num">Part {e.index}</span>
+                        <span className="mp-series-title">{e.title}</span>
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </aside>
+          )}
+
           <div
             className="mp-prose"
             dangerouslySetInnerHTML={{
               __html: markdownToHtml(body),
             }}
           />
+
+          {/* Series next-link — bottom */}
+          {nextInSeries && (
+            <Link href={`/blog/${nextInSeries.slug}`} className="mp-series-next">
+              <span className="mp-series-next-eyebrow">Next in this series →</span>
+              <span className="mp-series-next-title">Part {nextInSeries.index}: {nextInSeries.title}</span>
+            </Link>
+          )}
 
           <div className="mp-article-footer">
             <Link href="/blog" className="mp-btn-outline">
@@ -265,5 +321,112 @@ const articleStyles = `
     margin-top: 56px;
     padding-top: 32px;
     border-top: 1px solid #e5e7eb;
+  }
+
+  /* Series banner — top */
+  .mp-series-banner {
+    margin: 0 0 48px;
+    padding: 24px 28px;
+    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    border: 1px solid #e5e7eb;
+    border-left: 3px solid #1a1a1a;
+    border-radius: 8px;
+  }
+  .mp-series-banner-head {
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .mp-series-eyebrow {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .mp-series-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0;
+    line-height: 1.3;
+  }
+  .mp-series-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .mp-series-list li {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .mp-series-item-current {
+    color: #1a1a1a;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 4px;
+  }
+  .mp-series-item-current strong { font-weight: 700; }
+  .mp-series-item a {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 6px 10px;
+    color: #4b5563;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .mp-series-item a:hover {
+    color: #1a1a1a;
+    background: rgba(0, 0, 0, 0.03);
+  }
+  .mp-series-num {
+    font-size: 11px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+    width: 56px;
+  }
+  .mp-series-title {
+    flex: 1;
+  }
+
+  /* Series next-link — bottom */
+  .mp-series-next {
+    display: block;
+    margin-top: 56px;
+    padding: 24px 28px;
+    background: #1a1a1a;
+    color: #fff;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .mp-series-next:hover {
+    background: #2a2a2a;
+  }
+  .mp-series-next-eyebrow {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9ca3af;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .mp-series-next-title {
+    display: block;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.3;
   }
 `;

@@ -317,8 +317,12 @@ This is the closer of the series. Five articles in, the argument lands here: hum
     process.exit(1);
   }
 
+  const SERIES = { slug: "why-social-matters", name: "Why Social Matters", total: articles.length };
+
   let inserted = 0, skipped = 0;
-  for (const a of articles) {
+  for (let i = 0; i < articles.length; i++) {
+    const a = articles[i];
+    const seriesMeta = { series: { ...SERIES, index: i + 1 } };
     const exists = await sql`SELECT id FROM blog_posts WHERE site_id = ${tracpost.id} AND slug = ${a.slug} LIMIT 1`;
     if (exists.length > 0) {
       console.log(`SKIP (exists): ${a.slug}`);
@@ -327,10 +331,10 @@ This is the closer of the series. Five articles in, the argument lands here: hum
     }
     await sql`
       INSERT INTO blog_posts (
-        site_id, slug, title, meta_title, excerpt, content_type, content_pillar, body, status
+        site_id, slug, title, meta_title, excerpt, content_type, content_pillar, body, status, metadata
       ) VALUES (
         ${tracpost.id}, ${a.slug}, ${a.title}, ${a.meta_title}, ${a.excerpt},
-        ${a.content_type}, ${a.content_pillar}, ${a.body}, 'draft'
+        ${a.content_type}, ${a.content_pillar}, ${a.body}, 'draft', ${JSON.stringify(seriesMeta)}::jsonb
       )
     `;
     console.log(`INSERTED: ${a.title}`);

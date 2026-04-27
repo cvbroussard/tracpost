@@ -274,7 +274,7 @@ const navStyles = `
   .mp-nav-dropdown-list {
     list-style: none;
     margin: 0;
-    padding: 14px 14px 18px;
+    padding: 14px 14px 24px;
     display: flex;
     flex-direction: column;
     gap: 4px;

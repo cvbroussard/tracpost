@@ -56,7 +56,6 @@ const MODULES: Module[] = [
           { label: "Pinterest", path: "/accounts/pinterest" },
         ],
       },
-      { label: "Brand", path: "/brand" },
       { label: "Google Profile", path: "/google/profile" },
       { label: "Entities", path: "/entities" },
       { label: "Settings", path: "/settings" },
@@ -108,7 +107,7 @@ const ACCOUNT_NAV = [
 ];
 
 const MANAGER_SUB_PATHS = new Set([
-  "/brand", "/calendar", "/inbox", "/blog", "/entities", "/media", "/capture",
+  "/calendar", "/inbox", "/blog", "/entities", "/media", "/capture",
   "/account",
 ]);
 

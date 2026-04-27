@@ -1,60 +1,51 @@
 import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { BrandPlaybookView } from "./brand-playbook-view";
-import { GeneratePlaybookButton } from "./generate-playbook-button";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Tenant-facing /brand status page.
+ *
+ * Brand DNA is a TracPost-internal artifact — derived, refined, and
+ * managed entirely on the operator side. Tenants don't sharpen it,
+ * regenerate it, or see its internals. They see the *output* (their
+ * published content) and a status banner here. This route exists only
+ * to give the historical /dashboard/brand URL a graceful destination.
+ *
+ * Operator-side controls live at /manage/brand. The full sharpen +
+ * regenerate flow happens in DNA Staging there.
+ */
 export default async function BrandPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   if (!session.activeSiteId) redirect("/dashboard");
 
-  const siteId = session.activeSiteId;
-
   const [site] = await sql`
-    SELECT brand_playbook, brand_voice, provisioning_status, business_type, location, url
+    SELECT name, brand_playbook
     FROM sites
-    WHERE id = ${siteId} AND subscription_id = ${session.subscriptionId}
+    WHERE id = ${session.activeSiteId} AND subscription_id = ${session.subscriptionId}
   `;
-
   if (!site) redirect("/dashboard");
 
-  const playbook = site.brand_playbook as Record<string, unknown> | null;
-  const hasPlaybook = playbook && playbook.offerCore;
-  const brandVoice = (site.brand_voice || {}) as Record<string, unknown>;
-  const subscriberAngle = (brandVoice._subscriberAngle as string) || null;
-  const isProvisioning = site.provisioning_status === "requested" || site.provisioning_status === "in_progress";
+  const hasPlaybook = site.brand_playbook && Object.keys(site.brand_playbook as object).length > 0;
 
   return (
-    <div className="p-4 space-y-6">
-      {!hasPlaybook && isProvisioning && (
-        <div className="py-16 text-center">
-          <div className="mb-4 mx-auto h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          <h1>Generating Your Brand Playbook</h1>
-          <p className="mt-2 text-muted">
-            Our team is building your brand intelligence. This typically takes a few minutes.
+    <div className="p-4">
+      <div className="max-w-2xl mx-auto py-12">
+        <h1 className="text-2xl font-semibold mb-3">Your brand voice</h1>
+        <p className="text-muted leading-relaxed mb-8">
+          {hasPlaybook
+            ? `Your brand voice is being learned from your social presence and refined as you grow. It drives every caption, blog article, and social hook we create for ${site.name || "your business"}.`
+            : `Your brand voice is being established. As your social presence grows, we refine how we describe and represent your business across every piece of content we create.`}
+        </p>
+        <div className="rounded-xl border border-border bg-surface p-5 shadow-card">
+          <h2 className="text-sm font-semibold mb-2">Managed by your team</h2>
+          <p className="text-xs text-muted leading-relaxed">
+            You don&apos;t need to configure this. Your assigned content team monitors and refines your brand voice continuously. If you want to adjust direction or share specific feedback, contact us through Settings.
           </p>
         </div>
-      )}
-
-      {!hasPlaybook && !isProvisioning && (
-        <GeneratePlaybookButton
-          siteId={siteId}
-          businessType={(site.business_type as string) || ""}
-          location={(site.location as string) || ""}
-          websiteUrl={(site.url as string) || ""}
-        />
-      )}
-
-      {hasPlaybook ? (
-        <BrandPlaybookView
-          siteId={siteId}
-          playbook={playbook as Record<string, unknown>}
-          subscriberAngle={subscriberAngle}
-        />
-      ) : null}
+      </div>
     </div>
   );
 }

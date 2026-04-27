@@ -229,7 +229,7 @@ function BrandContent({ siteId }: { siteId: string }) {
             </div>
           </div>
           {data.hasPlaybook ? (
-            <BrandPlaybookView siteId={data.siteId} playbook={data.playbook} subscriberAngle={data.subscriberAngle} />
+            <BrandPlaybookView siteId={data.siteId} playbook={data.playbook} subscriberAngle={data.subscriberAngle} hideSharpen />
           ) : (
             <div className="rounded-xl border border-border bg-surface p-6 shadow-card text-center text-xs text-muted">
               No playbook yet. Click Generate above.

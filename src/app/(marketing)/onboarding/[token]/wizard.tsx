@@ -1,18 +1,22 @@
 "use client";
 
 /**
- * Onboarding wizard — multi-step shell.
+ * Onboarding wizard — multi-step shell + step routing.
  *
- * Phase 1 ships the SHELL only (navigation + autosave + per-step
- * scaffolding). Step content is filled in Phase 2 — for now each step
- * renders a placeholder telling the operator (or test viewer) which
- * step is active.
+ * Each step component owns its own validation + onSave callback. Wizard
+ * handles autosave through /api/onboarding/[token]/save-step on Continue,
+ * and final submit through /api/onboarding/[token]/submit.
  *
- * Each step's data merges into a single accumulated `data` object,
- * persisted to the server on Continue. Going Back doesn't lose state.
+ * Going Back doesn't lose state — accumulated form data lives in this
+ * component and persists to the server as steps complete.
  */
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Step1Commit, Step2Business, Step3Voice, Step4Brand,
+  Step5Connect, Step6Owner, Step7Review,
+} from "./steps";
 
 const STEPS: { id: number; label: string; title: string }[] = [
   { id: 1, label: "Commit",   title: "Eight platforms, one engine" },
@@ -31,10 +35,12 @@ interface Props {
   platformStatus: Record<string, string>;
 }
 
-export function OnboardingWizard({ token, initialStep, initialData, platformStatus: _platformStatus }: Props) {
+export function OnboardingWizard({ token, initialStep, initialData, platformStatus }: Props) {
+  const router = useRouter();
   const [step, setStep] = useState(Math.min(Math.max(initialStep, 1), STEPS.length));
   const [data, setData] = useState<Record<string, unknown>>(initialData || {});
   const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const saveAndAdvance = useCallback(async (stepData: Record<string, unknown>) => {
@@ -53,6 +59,7 @@ export function OnboardingWizard({ token, initialStep, initialData, platformStat
       const updated = await res.json();
       setData((prev) => ({ ...prev, ...stepData, ...updated.data }));
       setStep((s) => Math.min(s + 1, STEPS.length));
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save your progress");
     } finally {
@@ -60,7 +67,31 @@ export function OnboardingWizard({ token, initialStep, initialData, platformStat
     }
   }, [token, step]);
 
-  const goBack = () => setStep((s) => Math.max(1, s - 1));
+  const submitForm = useCallback(async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/onboarding/${token}/submit`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Submit failed");
+      }
+      // Server-side rendered "thanks, we're working on it" page will
+      // appear on next visit. Reload now to show it.
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not submit");
+      setSubmitting(false);
+    }
+  }, [token, router]);
+
+  const goBack = () => {
+    setStep((s) => Math.max(1, s - 1));
+    setError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const current = STEPS.find((s) => s.id === step) || STEPS[0];
 
@@ -87,30 +118,22 @@ export function OnboardingWizard({ token, initialStep, initialData, platformStat
         <div className="ow-eyebrow">{current.label.toUpperCase()}</div>
         <h1 className="ow-title">{current.title}</h1>
 
-        <div className="ow-step-body">
-          <div className="ow-placeholder">
-            <p className="ow-placeholder-eyebrow">Step {step} content — Phase 2</p>
-            <pre className="ow-data-dump">{JSON.stringify(data, null, 2)}</pre>
-          </div>
-        </div>
-
         {error && <div className="ow-error">{error}</div>}
 
-        <div className="ow-actions">
-          {step > 1 ? (
-            <button onClick={goBack} className="ow-btn-secondary" disabled={saving}>← Back</button>
-          ) : <span />}
-          {step < STEPS.length ? (
-            <button
-              onClick={() => saveAndAdvance({})}
-              className="ow-btn-primary"
-              disabled={saving}
-            >
-              {saving ? "Saving…" : "Continue →"}
-            </button>
-          ) : (
-            <button className="ow-btn-primary" disabled>
-              Submit (Phase 2)
+        <div className="ow-step-body">
+          {step === 1 && <Step1Commit data={data} onSave={saveAndAdvance} saving={saving} />}
+          {step === 2 && <Step2Business data={data} onSave={saveAndAdvance} saving={saving} />}
+          {step === 3 && <Step3Voice data={data} onSave={saveAndAdvance} saving={saving} />}
+          {step === 4 && <Step4Brand data={data} onSave={saveAndAdvance} saving={saving} />}
+          {step === 5 && <Step5Connect data={data} platformStatus={platformStatus} onSave={saveAndAdvance} saving={saving} />}
+          {step === 6 && <Step6Owner data={data} onSave={saveAndAdvance} saving={saving} />}
+          {step === 7 && <Step7Review data={data} platformStatus={platformStatus} onSave={saveAndAdvance} onSubmit={submitForm} saving={saving} submitting={submitting} />}
+        </div>
+
+        <div className="ow-back-row">
+          {step > 1 && (
+            <button onClick={goBack} className="ow-btn-link" disabled={saving || submitting}>
+              ← Back
             </button>
           )}
         </div>
@@ -138,6 +161,9 @@ const wizardStyles = `
     padding: 16px 32px;
     background: #fff;
     border-bottom: 1px solid #e5e7eb;
+    position: sticky;
+    top: 0;
+    z-index: 10;
   }
   .ow-brand { display: flex; align-items: center; gap: 10px; }
   .ow-logo { height: 24px; width: 24px; }
@@ -170,7 +196,7 @@ const wizardStyles = `
     max-width: 680px;
     width: 100%;
     margin: 0 auto;
-    padding: 56px 32px;
+    padding: 56px 32px 80px;
   }
   .ow-eyebrow {
     font-size: 12px;
@@ -194,27 +220,231 @@ const wizardStyles = `
     padding: 32px;
     margin-bottom: 24px;
   }
-  .ow-placeholder {
-    text-align: center;
+
+  .ow-prose {
+    font-size: 15px;
+    color: #1a1a1a;
+    line-height: 1.65;
+    margin: 0 0 16px;
+  }
+  .ow-prose-muted {
+    color: #6b7280;
+    font-size: 14px;
+  }
+
+  .ow-field {
+    margin-bottom: 20px;
+  }
+  .ow-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 6px;
+  }
+  .ow-optional {
+    font-weight: 400;
+    color: #9ca3af;
+  }
+  .ow-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #1a1a1a;
+    background: #fff;
+    transition: border-color 0.15s;
+  }
+  .ow-input:focus {
+    outline: none;
+    border-color: #1a1a1a;
+  }
+  .ow-textarea {
+    resize: vertical;
+    min-height: 200px;
+    font-family: inherit;
+    line-height: 1.5;
+  }
+  .ow-help {
+    margin: 6px 0 0;
+    font-size: 12px;
     color: #6b7280;
   }
-  .ow-placeholder-eyebrow {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #9ca3af;
-    margin-bottom: 12px;
-  }
-  .ow-data-dump {
-    font-family: ui-monospace, monospace;
-    font-size: 11px;
+
+  .ow-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 20px 0 28px;
+    padding: 16px;
     background: #f9fafb;
     border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .ow-checkbox input[type="checkbox"] {
+    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .ow-checkbox span {
+    font-size: 15px;
+    color: #1a1a1a;
+    line-height: 1.5;
+  }
+
+  .ow-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ow-radio {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
     border-radius: 6px;
-    padding: 12px;
-    text-align: left;
-    margin: 0;
-    overflow-x: auto;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.12s;
+  }
+  .ow-radio:hover { background: #f9fafb; }
+  .ow-radio input[type="radio"] {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Color picker */
+  .ow-color-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .ow-color-input {
+    width: 48px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    cursor: pointer;
+    background: transparent;
+  }
+  .ow-color-hex {
+    font-family: ui-monospace, monospace;
+    width: 120px;
+  }
+  .ow-color-presets {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .ow-color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid #e5e7eb;
+    cursor: pointer;
+    transition: transform 0.12s, border-color 0.12s;
+  }
+  .ow-color-swatch:hover { transform: scale(1.1); }
+  .ow-color-swatch.active { border-color: #1a1a1a; transform: scale(1.15); }
+
+  /* Platform list (Phase 3 wires connect buttons) */
+  .ow-platform-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 20px 0;
+  }
+  .ow-platform-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .ow-platform-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .ow-platform-info { flex: 1; }
+  .ow-platform-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+  .ow-platform-note {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 2px;
+  }
+  .ow-platform-status {
+    font-size: 12px;
+    color: #9ca3af;
+    font-weight: 500;
+  }
+
+  /* Review summary */
+  .ow-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 24px 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .ow-summary-row {
+    display: flex;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 14px;
+    align-items: baseline;
+  }
+  .ow-summary-row:last-child { border-bottom: none; }
+  .ow-summary-row-long {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .ow-summary-label {
+    flex: 0 0 200px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    font-weight: 600;
+  }
+  .ow-summary-row-long .ow-summary-label { flex: 0; }
+  .ow-summary-value {
+    flex: 1;
+    color: #1a1a1a;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  .ow-summary-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+  }
+  .ow-summary-swatch {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid #e5e7eb;
   }
 
   .ow-error {
@@ -232,6 +462,10 @@ const wizardStyles = `
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    margin-top: 24px;
+  }
+  .ow-back-row {
+    margin-top: 16px;
   }
   .ow-btn-primary {
     padding: 12px 24px;
@@ -246,16 +480,15 @@ const wizardStyles = `
   }
   .ow-btn-primary:hover:not(:disabled) { background: #333; }
   .ow-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .ow-btn-secondary {
-    padding: 12px 24px;
+  .ow-btn-link {
+    padding: 8px 0;
     background: transparent;
-    color: #4b5563;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
+    color: #6b7280;
+    border: none;
+    font-size: 13px;
     cursor: pointer;
+    text-decoration: underline;
   }
-  .ow-btn-secondary:hover:not(:disabled) { background: #f3f4f6; }
-  .ow-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ow-btn-link:hover:not(:disabled) { color: #1a1a1a; }
+  .ow-btn-link:disabled { opacity: 0.5; cursor: not-allowed; }
 `;

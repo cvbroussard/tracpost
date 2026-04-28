@@ -1,4 +1,5 @@
 import { oauthSuccessUrl, oauthErrorUrl } from "@/lib/oauth-redirect";
+import { markOnboardingPlatformIfNeeded } from "@/lib/onboarding/oauth-helpers";
 import { NextRequest, NextResponse } from "next/server";
 import {
   exchangeCodeForToken,
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(oauthErrorUrl(source, "missing_params"));
   }
 
-  let state: { subscription_id: string; site_id?: string | null; source?: string; page_ids?: string[] };
+  let state: { subscription_id: string; site_id?: string | null; source?: string; onboarding_token?: string; page_ids?: string[] };
   try {
     state = JSON.parse(Buffer.from(stateParam, "base64url").toString());
   } catch {
@@ -131,10 +132,12 @@ export async function GET(req: NextRequest) {
       ...igAccounts.map((a) => `IG:${a.igUsername}`),
       ...fbPages.map((p) => `FB:${p.pageName}`),
     ];
-    return NextResponse.redirect(oauthSuccessUrl(state.source, allNames.join(",")));
+    await markOnboardingPlatformIfNeeded(state, "meta", "connected");
+    return NextResponse.redirect(oauthSuccessUrl(state.source, allNames.join(","), state.onboarding_token, "meta"));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Meta OAuth callback error:", message);
-    return NextResponse.redirect(oauthErrorUrl(state.source, "oauth_failed", message));
+    await markOnboardingPlatformIfNeeded(state, "meta", "failed");
+    return NextResponse.redirect(oauthErrorUrl(state.source, "oauth_failed", message, state.onboarding_token, "meta"));
   }
 }

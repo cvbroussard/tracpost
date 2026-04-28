@@ -3,6 +3,7 @@ import { exchangeGoogleCode, discoverGbpLocations } from "@/lib/google";
 import { sql } from "@/lib/db";
 import { encrypt } from "@/lib/crypto";
 import { oauthErrorUrl, oauthSuccessUrl } from "@/lib/oauth-redirect";
+import { markOnboardingPlatformIfNeeded } from "@/lib/onboarding/oauth-helpers";
 import { recordOAuthGrant, recordAsset } from "@/lib/platform-assets";
 
 /**
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(oauthErrorUrl(source, "missing_params"));
   }
 
-  let state: { subscription_id: string; site_id: string; source?: string };
+  let state: { subscription_id: string; site_id: string; source?: string; onboarding_token?: string };
   try {
     state = JSON.parse(Buffer.from(stateParam, "base64url").toString());
   } catch {
@@ -143,14 +144,16 @@ export async function GET(req: NextRequest) {
       })})
     `;
 
+    await markOnboardingPlatformIfNeeded(state, "gbp", "connected");
     return NextResponse.redirect(
-      oauthSuccessUrl(state.source, `Google (${locations.length} location${locations.length !== 1 ? "s" : ""})`)
+      oauthSuccessUrl(state.source, `Google (${locations.length} location${locations.length !== 1 ? "s" : ""})`, state.onboarding_token, "gbp")
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Google OAuth callback error:", message);
+    await markOnboardingPlatformIfNeeded(state, "gbp", "failed");
     return NextResponse.redirect(
-      oauthErrorUrl(state.source, "google_oauth_failed", message)
+      oauthErrorUrl(state.source, "google_oauth_failed", message, state.onboarding_token, "gbp")
     );
   }
 }

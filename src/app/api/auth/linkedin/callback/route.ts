@@ -1,4 +1,5 @@
 import { oauthSuccessUrl, oauthErrorUrl } from "@/lib/oauth-redirect";
+import { markOnboardingPlatformIfNeeded } from "@/lib/onboarding/oauth-helpers";
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeLinkedInCode, getLinkedInUserInfo, discoverLinkedInOrganizations } from "@/lib/linkedin";
 import { sql } from "@/lib/db";
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(oauthErrorUrl(source, "missing_params"));
   }
 
-  let state: { subscription_id: string; site_id?: string | null; source?: string };
+  let state: { subscription_id: string; site_id?: string | null; source?: string; onboarding_token?: string };
   try {
     state = JSON.parse(Buffer.from(stateParam, "base64url").toString());
   } catch {
@@ -124,14 +125,16 @@ export async function GET(req: NextRequest) {
       `${userName} (personal)`,
       ...organizations.map((o) => o.orgName),
     ];
+    await markOnboardingPlatformIfNeeded(state, "linkedin", "connected");
     return NextResponse.redirect(
-      oauthSuccessUrl(state.source, allNames.join(","))
+      oauthSuccessUrl(state.source, allNames.join(","), state.onboarding_token, "linkedin")
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("LinkedIn OAuth callback error:", message);
+    await markOnboardingPlatformIfNeeded(state, "linkedin", "failed");
     return NextResponse.redirect(
-      oauthErrorUrl(state.source, "linkedin_oauth_failed", message)
+      oauthErrorUrl(state.source, "linkedin_oauth_failed", message, state.onboarding_token, "linkedin")
     );
   }
 }

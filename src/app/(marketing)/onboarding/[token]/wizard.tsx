@@ -125,7 +125,7 @@ export function OnboardingWizard({ token, initialStep, initialData, platformStat
           {step === 2 && <Step2Business data={data} onSave={saveAndAdvance} saving={saving} />}
           {step === 3 && <Step3Voice data={data} onSave={saveAndAdvance} saving={saving} />}
           {step === 4 && <Step4Brand data={data} onSave={saveAndAdvance} saving={saving} />}
-          {step === 5 && <Step5Connect data={data} platformStatus={platformStatus} onSave={saveAndAdvance} saving={saving} />}
+          {step === 5 && <Step5Connect data={data} platformStatus={platformStatus} onSave={saveAndAdvance} saving={saving} token={token} />}
           {step === 6 && <Step6Owner data={data} onSave={saveAndAdvance} saving={saving} />}
           {step === 7 && <Step7Review data={data} platformStatus={platformStatus} onSave={saveAndAdvance} onSubmit={submitForm} saving={saving} submitting={submitting} />}
         </div>
@@ -355,21 +355,38 @@ const wizardStyles = `
   .ow-color-swatch:hover { transform: scale(1.1); }
   .ow-color-swatch.active { border-color: #1a1a1a; transform: scale(1.15); }
 
-  /* Platform list (Phase 3 wires connect buttons) */
+  /* Platform list */
+  .ow-progress-summary {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+    text-align: right;
+    margin-bottom: 12px;
+    padding: 0 4px;
+  }
   .ow-platform-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin: 20px 0;
+    margin: 8px 0 20px;
   }
   .ow-platform-row {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .ow-platform-connected {
+    background: rgba(34, 197, 94, 0.04);
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+  .ow-platform-main {
     display: flex;
     align-items: center;
     gap: 14px;
     padding: 14px;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    background: #fff;
   }
   .ow-platform-swatch {
     width: 32px;
@@ -388,10 +405,66 @@ const wizardStyles = `
     color: #6b7280;
     margin-top: 2px;
   }
-  .ow-platform-status {
+  .ow-platform-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .ow-platform-status-pill {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 4px;
     font-size: 12px;
-    color: #9ca3af;
+    font-weight: 600;
+    border: none;
+    background: transparent;
+  }
+  .ow-status-ok {
+    background: rgba(34, 197, 94, 0.12);
+    color: #15803d;
+  }
+  .ow-status-skip {
+    background: rgba(107, 114, 128, 0.12);
+    color: #6b7280;
+    cursor: pointer;
+  }
+  .ow-platform-error {
+    padding: 8px 14px 14px;
+    color: #dc2626;
+    font-size: 12px;
+  }
+  .ow-platform-setup {
+    padding: 0 14px 14px;
+    border-top: 1px solid #f3f4f6;
+    margin-top: -1px;
+  }
+  .ow-platform-setup .ow-prose {
+    font-size: 13px;
+    margin-top: 12px;
+  }
+  .ow-link {
+    color: #1a1a1a;
+    text-decoration: underline;
     font-weight: 500;
+  }
+  .ow-link:hover { color: #333; }
+  .ow-setup-steps {
+    margin: 12px 0;
+    padding-left: 20px;
+    font-size: 13px;
+    color: #4b5563;
+    line-height: 1.6;
+  }
+  .ow-setup-steps li {
+    margin-bottom: 6px;
+  }
+  .ow-btn-compact {
+    padding: 8px 14px;
+    font-size: 13px;
+    text-decoration: none;
+    display: inline-block;
   }
 
   /* Review summary */

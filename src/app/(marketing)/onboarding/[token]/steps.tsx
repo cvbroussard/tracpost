@@ -305,51 +305,238 @@ export function Step4Brand({ data, onSave, saving }: StepProps) {
   );
 }
 
-// ─── Step 5: Platform Connections (Phase 3 wires OAuth) ─────────────────
+// ─── Step 5: Platform Connections ───────────────────────────────────────
 const PLATFORMS = [
-  { id: "meta", name: "Facebook & Instagram", color: "#1877F2", note: "One connection covers both" },
-  { id: "gbp", name: "Google Business Profile", color: "#4285F4", note: "Critical for local search" },
-  { id: "linkedin", name: "LinkedIn", color: "#0A66C2", note: "Company page, not personal profile" },
-  { id: "youtube", name: "YouTube", color: "#FF0000", note: "Brand channel, not personal" },
-  { id: "pinterest", name: "Pinterest", color: "#E60023", note: "Business account" },
-  { id: "tiktok", name: "TikTok", color: "#000000", note: "Business account" },
-  { id: "twitter", name: "X (Twitter)", color: "#000000", note: "Business account" },
+  {
+    id: "meta",
+    name: "Facebook & Instagram",
+    color: "#1877F2",
+    note: "One connection covers both",
+    setup: {
+      url: "https://www.facebook.com/business/pages/set-up",
+      steps: [
+        "Open the link to Facebook business setup in a new tab.",
+        "Create a Facebook Page for your business (separate from your personal profile). Pick a category that matches your business type.",
+        "Add a profile photo, cover image, and business info.",
+        "Convert your Instagram account to a Business Account, then link it to the Facebook Page (Instagram → Settings → Account → Switch to Professional → Connect to Facebook Page).",
+        "Come back and click Connect Meta below.",
+      ],
+    },
+  },
+  {
+    id: "gbp",
+    name: "Google Business Profile",
+    color: "#4285F4",
+    note: "Critical for local search",
+    setup: {
+      url: "https://business.google.com",
+      steps: [
+        "Open business.google.com in a new tab.",
+        "Click Manage Now → enter your business name.",
+        "Add your address (or service area for mobile businesses).",
+        "Verify ownership — usually a postcard mailed to your address (4-7 days), or phone/email for some businesses.",
+        "Once verified, come back and click Connect GBP below.",
+      ],
+    },
+  },
+  {
+    id: "linkedin",
+    name: "LinkedIn",
+    color: "#0A66C2",
+    note: "Company page (not personal profile)",
+    setup: {
+      url: "https://www.linkedin.com/company/setup/new/",
+      steps: [
+        "Open LinkedIn Company setup in a new tab.",
+        "Pick the appropriate page type (Company, Showcase, etc.) — most businesses pick Company.",
+        "Fill in name, URL, industry, company size, and tagline.",
+        "Add a logo and cover image (LinkedIn requires both for an active page).",
+        "Come back and click Connect LinkedIn below.",
+      ],
+    },
+  },
+  {
+    id: "youtube",
+    name: "YouTube",
+    color: "#FF0000",
+    note: "Brand channel (not personal)",
+    setup: {
+      url: "https://www.youtube.com/account",
+      steps: [
+        "Open YouTube account settings in a new tab.",
+        "Under Your channel, click Add or manage your channel(s).",
+        "Click Create a channel → Use a custom name (this creates a brand channel).",
+        "Set up channel info: name, description, profile photo, banner.",
+        "Come back and click Connect YouTube below.",
+      ],
+    },
+  },
+  {
+    id: "pinterest",
+    name: "Pinterest",
+    color: "#E60023",
+    note: "Business account",
+    setup: {
+      url: "https://business.pinterest.com",
+      steps: [
+        "Open business.pinterest.com in a new tab.",
+        "If you have a personal Pinterest, you can convert it: Settings → Account management → Convert to business account. Or create a new business account.",
+        "Add business name, website URL, country/language.",
+        "Pick the categories that match your business.",
+        "Come back and click Connect Pinterest below.",
+      ],
+    },
+  },
+  {
+    id: "tiktok",
+    name: "TikTok",
+    color: "#000000",
+    note: "Business account",
+    setup: {
+      url: "https://www.tiktok.com/signup",
+      steps: [
+        "Open tiktok.com/signup in a new tab. Create a personal account first (TikTok requires this step).",
+        "Once logged in: Profile → ☰ → Settings and privacy → Manage account → Switch to Business Account.",
+        "Pick a category (Retail, Restaurant, etc.) and complete the business profile.",
+        "Add your business name, website, and bio.",
+        "Come back and click Connect TikTok below.",
+      ],
+    },
+  },
+  {
+    id: "twitter",
+    name: "X (Twitter)",
+    color: "#000000",
+    note: "Business profile",
+    setup: {
+      url: "https://twitter.com/i/flow/signup",
+      steps: [
+        "Open twitter.com signup in a new tab.",
+        "Create an account using your business email.",
+        "Pick a handle (@yourbusinessname).",
+        "Complete the profile: photo, banner, bio, website link.",
+        "Come back and click Connect X below.",
+      ],
+    },
+  },
 ];
 
-export function Step5Connect({ platformStatus = {}, onSave, saving }: StepProps) {
+interface Step5Props extends StepProps {
+  token: string;
+}
+
+export function Step5Connect({ platformStatus = {}, onSave, saving, token }: Step5Props) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState<Set<string>>(new Set(
+    Object.entries(platformStatus).filter(([, s]) => s === "skipped").map(([p]) => p)
+  ));
+
   function submit(e: FormEvent) {
     e.preventDefault();
-    // Phase 3 will gate here based on platform_status. For now, allow advancing.
     onSave({ platforms_acknowledged: true });
   }
+
+  function toggleSkip(id: string) {
+    setSkipped((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    // Persist to server (best-effort)
+    fetch(`/api/onboarding/${token}/save-step`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step: 5, data: {} }),
+    }).catch(() => {});
+  }
+
+  const connectedCount = PLATFORMS.filter((p) => platformStatus[p.id] === "connected").length;
 
   return (
     <form onSubmit={submit}>
       <p className="ow-prose">
-        Connect every platform you have. For platforms you don&apos;t have yet, we&apos;ll show you how
-        to set up a business account, then come back and connect.
+        Connect every platform you have. For platforms you don&apos;t have yet, click <strong>How do I set this up?</strong> for
+        step-by-step instructions, then come back and connect.
       </p>
       <p className="ow-prose ow-prose-muted">
-        <strong>Phase 3 of this build wires up the actual connect buttons</strong> — for now, you&apos;ll
-        see them listed. Click Continue to advance to the next step in this scaffolding.
+        Connections happen in a separate window. After authorizing, you&apos;ll be brought right back to this page —
+        your progress is saved automatically.
       </p>
+
+      <div className="ow-progress-summary">
+        {connectedCount} of {PLATFORMS.length} platforms connected
+      </div>
 
       <div className="ow-platform-list">
         {PLATFORMS.map((p) => {
           const status = platformStatus[p.id] || "pending";
+          const isConnected = status === "connected";
+          const hasFailed = status === "failed";
+          const isSkipped = skipped.has(p.id);
+          const isExpanded = expanded === p.id;
           return (
-            <div key={p.id} className="ow-platform-row">
-              <div className="ow-platform-swatch" style={{ background: p.color }} />
-              <div className="ow-platform-info">
-                <div className="ow-platform-name">{p.name}</div>
-                <div className="ow-platform-note">{p.note}</div>
+            <div key={p.id} className={`ow-platform-row ${isConnected ? "ow-platform-connected" : ""}`}>
+              <div className="ow-platform-main">
+                <div className="ow-platform-swatch" style={{ background: p.color }} />
+                <div className="ow-platform-info">
+                  <div className="ow-platform-name">{p.name}</div>
+                  <div className="ow-platform-note">{p.note}</div>
+                </div>
+                <div className="ow-platform-actions">
+                  {isConnected ? (
+                    <span className="ow-platform-status-pill ow-status-ok">✓ Connected</span>
+                  ) : isSkipped ? (
+                    <button type="button" onClick={() => toggleSkip(p.id)} className="ow-platform-status-pill ow-status-skip">
+                      Marked unavailable · undo
+                    </button>
+                  ) : (
+                    <>
+                      <a
+                        href={`/api/onboarding/${token}/connect/${p.id}`}
+                        className="ow-btn-primary ow-btn-compact"
+                      >
+                        Connect
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(isExpanded ? null : p.id)}
+                        className="ow-btn-link"
+                      >
+                        How do I set this up?
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="ow-platform-status">
-                {status === "connected" ? "✓ Connected" :
-                 status === "creating" ? "⏳ Creating" :
-                 status === "skipped" ? "— Skipped" :
-                 "Phase 3"}
-              </div>
+
+              {hasFailed && !isConnected && (
+                <div className="ow-platform-error">
+                  Connection failed. Try again, or expand the setup guide below if you need to create the account first.
+                </div>
+              )}
+
+              {isExpanded && (
+                <div className="ow-platform-setup">
+                  <p className="ow-prose">
+                    <a href={p.setup.url} target="_blank" rel="noopener noreferrer" className="ow-link">
+                      Open {p.name} setup →
+                    </a>
+                  </p>
+                  <ol className="ow-setup-steps">
+                    {p.setup.steps.map((step, i) => (
+                      <li key={i}>{step}</li>
+                    ))}
+                  </ol>
+                  <p className="ow-prose ow-prose-muted">
+                    Truly can&apos;t set this up?{" "}
+                    <button type="button" onClick={() => toggleSkip(p.id)} className="ow-btn-link">
+                      Mark as unavailable
+                    </button>
+                    {" "}— TracPost will still try, but you won&apos;t see content there.
+                  </p>
+                </div>
+              )}
             </div>
           );
         })}

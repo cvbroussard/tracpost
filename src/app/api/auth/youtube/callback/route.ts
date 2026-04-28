@@ -1,4 +1,5 @@
 import { oauthSuccessUrl, oauthErrorUrl } from "@/lib/oauth-redirect";
+import { markOnboardingPlatformIfNeeded } from "@/lib/onboarding/oauth-helpers";
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeYouTubeCode, discoverYouTubeChannel } from "@/lib/youtube";
 import { sql } from "@/lib/db";
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(oauthErrorUrl(source, "missing_params"));
   }
 
-  let state: { subscription_id: string; site_id?: string | null; source?: string };
+  let state: { subscription_id: string; site_id?: string | null; source?: string; onboarding_token?: string };
   try {
     state = JSON.parse(Buffer.from(stateParam, "base64url").toString());
   } catch {
@@ -119,14 +120,16 @@ export async function GET(req: NextRequest) {
       })})
     `;
 
+    await markOnboardingPlatformIfNeeded(state, "youtube", "connected");
     return NextResponse.redirect(
-      oauthSuccessUrl(state.source, accountName)
+      oauthSuccessUrl(state.source, accountName, state.onboarding_token, "youtube")
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("YouTube OAuth callback error:", message);
+    await markOnboardingPlatformIfNeeded(state, "youtube", "failed");
     return NextResponse.redirect(
-      oauthErrorUrl(state.source, "youtube_oauth_failed", message)
+      oauthErrorUrl(state.source, "youtube_oauth_failed", message, state.onboarding_token, "youtube")
     );
   }
 }

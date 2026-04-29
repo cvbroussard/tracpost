@@ -469,8 +469,8 @@ const wizardStyles = `
   .ow-platform-main {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px;
+    gap: 18px;
+    padding: 14px 16px;
   }
   .ow-platform-swatch {
     width: 32px;
@@ -488,6 +488,7 @@ const wizardStyles = `
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-right: 6px;
   }
   .ow-platform-link {
     background: transparent;

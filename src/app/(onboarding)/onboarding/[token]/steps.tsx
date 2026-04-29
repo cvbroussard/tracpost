@@ -332,6 +332,16 @@ export function Step4Brand({ data, onSave, saving }: StepProps) {
 }
 
 // ─── Step 5: Platform Connections ───────────────────────────────────────
+
+// Display weighting: Meta is one OAuth connection but covers both Facebook
+// and Instagram, so we count it as 2 platforms in progress displays. This
+// keeps the "8 platforms" buyer mental model intact while honoring the
+// "one connection covers both" technical reality.
+const PLATFORM_WEIGHT: Record<string, number> = { meta: 2 };
+function platformWeight(id: string): number {
+  return PLATFORM_WEIGHT[id] || 1;
+}
+
 const PLATFORMS = [
   {
     id: "meta",
@@ -487,7 +497,10 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
     }).catch(() => {});
   }
 
-  const connectedCount = PLATFORMS.filter((p) => platformStatus[p.id] === "connected").length;
+  const totalWeight = PLATFORMS.reduce((sum, p) => sum + platformWeight(p.id), 0);
+  const connectedWeight = PLATFORMS
+    .filter((p) => platformStatus[p.id] === "connected")
+    .reduce((sum, p) => sum + platformWeight(p.id), 0);
 
   return (
     <form onSubmit={submit}>
@@ -502,7 +515,7 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
       </p>
 
       <div className="ow-progress-summary">
-        {connectedCount} of {PLATFORMS.length} platforms connected
+        {connectedWeight} of {totalWeight} platforms connected
       </div>
 
       <div className="ow-platform-list">
@@ -727,23 +740,26 @@ interface ReviewItem {
 const TOTAL_SLOTS = 6;
 
 export function Step7Review({ data, platformStatus = {}, onSubmit, submitting, goToStep }: Step7Props) {
-  const platformsConnected = Object.values(platformStatus).filter((s) => s === "connected").length;
-  const platformsTotal = 7;
+  // Display-weighted counts: Meta counts as 2 (Facebook + Instagram).
+  // 7 cards × weights = 8 platform-slots total to match buyer mental model.
+  const ALL_PLATFORM_IDS = ["meta", "gbp", "linkedin", "youtube", "pinterest", "tiktok", "twitter"];
+  const platformsTotalWeighted = ALL_PLATFORM_IDS.reduce((sum, id) => sum + platformWeight(id), 0); // = 8
+  const platformsConnectedWeighted = ALL_PLATFORM_IDS
+    .filter((id) => platformStatus[id] === "connected")
+    .reduce((sum, id) => sum + platformWeight(id), 0);
+  const platformsCardsTotal = ALL_PLATFORM_IDS.length; // = 7 (raw card count for the gate)
+  const platformsCardsAddressed = ALL_PLATFORM_IDS.filter(
+    (id) => platformStatus[id] === "connected" || platformStatus[id] === "skipped"
+  ).length;
+  const platformsAllAddressed = platformsCardsAddressed === platformsCardsTotal;
+  const platformsSkippedWeighted = ALL_PLATFORM_IDS
+    .filter((id) => platformStatus[id] === "skipped")
+    .reduce((sum, id) => sum + platformWeight(id), 0);
 
   const businessOk = !!(data.business_name && data.business_type && data.business_location);
   const differentiatorOk = typeof data.differentiator === "string" && data.differentiator.length >= 30;
   const brandOk = !!data.brand_color;
   const ownerOk = !!(data.owner_name && data.owner_email);
-
-  // Strict Option B policy: every one of the 7 platforms must be in a
-  // terminal state (connected or skipped/marked-unavailable). No platform
-  // may be in pending/failed/untouched state at submit time. Operator
-  // queue surfaces skipped platforms for follow-up.
-  const ALL_PLATFORM_IDS = ["meta", "gbp", "linkedin", "youtube", "pinterest", "tiktok", "twitter"];
-  const platformsAddressed = ALL_PLATFORM_IDS.filter(
-    (p) => platformStatus[p] === "connected" || platformStatus[p] === "skipped"
-  ).length;
-  const platformsAllAddressed = platformsAddressed === platformsTotal;
 
   const items: ReviewItem[] = [
     {
@@ -777,19 +793,17 @@ export function Step7Review({ data, platformStatus = {}, onSubmit, submitting, g
       step: 5,
       label: "Platform connections",
       status: platformsAllAddressed
-        ? platformsConnected === platformsTotal
-          ? "complete"
-          : "complete" // every platform addressed (connected or marked unavailable)
-        : platformsAddressed > 0
+        ? "complete" // every card addressed (connected or marked unavailable)
+        : platformsCardsAddressed > 0
         ? "in_progress"
         : "incomplete",
       hint:
-        platformsConnected === platformsTotal
-          ? `All ${platformsTotal} connected`
+        platformsConnectedWeighted === platformsTotalWeighted
+          ? `All ${platformsTotalWeighted} connected`
           : platformsAllAddressed
-          ? `${platformsConnected} connected · ${platformsTotal - platformsConnected} marked unavailable`
-          : `${platformsAddressed} of ${platformsTotal} addressed (need to connect or mark unavailable)`,
-      required: true, // Option B: every platform must be explicitly addressed
+          ? `${platformsConnectedWeighted} connected · ${platformsSkippedWeighted} marked unavailable`
+          : `${platformsConnectedWeighted} of ${platformsTotalWeighted} connected (${platformsCardsTotal - platformsCardsAddressed} card${platformsCardsTotal - platformsCardsAddressed === 1 ? "" : "s"} still need to be addressed)`,
+      required: true, // Option B: every card must be explicitly addressed
     },
     {
       step: 6,

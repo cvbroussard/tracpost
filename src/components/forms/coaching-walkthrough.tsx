@@ -8,6 +8,11 @@ import type {
 } from "@/lib/onboarding/coaching/types";
 import { ThinProgressBar } from "./thin-progress-bar";
 
+interface LightboxImage {
+  url: string;
+  alt: string;
+}
+
 interface Props {
   /** Onboarding token (used to authorize API calls) */
   token: string;
@@ -43,6 +48,7 @@ export function CoachingWalkthrough({
   onSkip,
 }: Props) {
   const [confirmingSkip, setConfirmingSkip] = useState(false);
+  const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
   const [walkthrough, setWalkthrough] = useState<PlatformWalkthrough | null>(walkthroughProp || null);
   const [navStack, setNavStack] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -222,6 +228,7 @@ export function CoachingWalkthrough({
               onAdvance={goNext}
               onConnect={handleConnect}
               onDone={onClose}
+              onOpenScreenshot={(url, alt) => setLightbox({ url, alt })}
             />
           )}
         </div>
@@ -290,6 +297,15 @@ export function CoachingWalkthrough({
             </button>
           </div>
         </footer>
+
+        {/* Lightbox overlay for screenshots */}
+        {lightbox && (
+          <ScreenshotLightbox
+            url={lightbox.url}
+            alt={lightbox.alt}
+            onClose={() => setLightbox(null)}
+          />
+        )}
 
         {/* Skip confirmation overlay */}
         {confirmingSkip && (
@@ -375,11 +391,13 @@ function NodeRenderer({
   onAdvance,
   onConnect,
   onDone,
+  onOpenScreenshot,
 }: {
   node: WalkthroughNode;
   onAdvance: (nextId: string) => void;
   onConnect: () => void;
   onDone: () => void;
+  onOpenScreenshot: (url: string, alt: string) => void;
 }) {
   if (node.type === "question") {
     return (
@@ -449,16 +467,52 @@ function NodeRenderer({
           </ul>
         )}
         {node.screenshot && (
-          <div style={{ margin: "14px 0", borderRadius: 10, overflow: "hidden", border: "1px solid #e5e7eb", background: "#fff" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={node.screenshot}
-              alt={node.screenshot_alt || ""}
-              style={{ display: "block", width: "100%", height: "auto" }}
-              onError={(e) => {
-                (e.currentTarget.parentElement as HTMLElement).style.display = "none";
-              }}
-            />
+          <div
+            style={{
+              margin: "14px 0",
+              padding: "14px 16px",
+              border: "1px dashed #d1d5db",
+              borderRadius: 10,
+              background: "#f9fafb",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }} aria-hidden>
+              📷
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <button
+                type="button"
+                onClick={() => onOpenScreenshot(node.screenshot!, node.screenshot_alt || node.title)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#1d4ed8",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  display: "block",
+                  textAlign: "left",
+                }}
+              >
+                View screenshot
+              </button>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9ca3af",
+                  marginTop: 3,
+                  fontFamily: "ui-monospace, 'SF Mono', monospace",
+                  wordBreak: "break-all",
+                }}
+              >
+                {node.screenshot}
+              </div>
+            </div>
           </div>
         )}
         <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
@@ -530,6 +584,148 @@ function NodeRenderer({
         >
           {node.action_label || (node.action === "connect" ? "Connect" : "Done")}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ScreenshotLightbox({
+  url,
+  alt,
+  onClose,
+}: {
+  url: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  const [errored, setErrored] = useState(false);
+  const filePath = `public${url}`;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt}
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.85)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 300,
+        padding: 24,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close screenshot"
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 20,
+          width: 36,
+          height: 36,
+          background: "rgba(255,255,255,0.10)",
+          border: "1px solid rgba(255,255,255,0.20)",
+          borderRadius: 999,
+          color: "#fff",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      </button>
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: "90vw",
+          maxHeight: "85vh",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          alignItems: "center",
+        }}
+      >
+        {!errored ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={url}
+            alt={alt}
+            onError={() => setErrored(true)}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "85vh",
+              objectFit: "contain",
+              borderRadius: 8,
+              background: "#fff",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.40)",
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              padding: "32px 28px",
+              background: "#fff",
+              borderRadius: 14,
+              maxWidth: 460,
+              textAlign: "center",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.40)",
+            }}
+          >
+            <div style={{ fontSize: 32, marginBottom: 12 }} aria-hidden>
+              📷
+            </div>
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>
+              Screenshot pending
+            </h3>
+            <p style={{ fontSize: 13, color: "#4b5563", margin: "0 0 16px", lineHeight: 1.55 }}>
+              This screenshot hasn&apos;t been captured yet. Capture this screen during your next setup walkthrough and upload it to:
+            </p>
+            <code
+              style={{
+                display: "block",
+                padding: "10px 14px",
+                background: "#f3f4f6",
+                color: "#1a1a1a",
+                borderRadius: 8,
+                fontSize: 12,
+                fontFamily: "ui-monospace, 'SF Mono', monospace",
+                wordBreak: "break-all",
+                textAlign: "left",
+                lineHeight: 1.6,
+              }}
+            >
+              {filePath}
+            </code>
+            <p style={{ fontSize: 11, color: "#9ca3af", margin: "14px 0 0" }}>
+              Once dropped into the repo at this exact path, the wizard renders the real image
+              automatically — no code change needed.
+            </p>
+          </div>
+        )}
+
+        {!errored && (
+          <p
+            style={{
+              fontSize: 12,
+              fontFamily: "ui-monospace, 'SF Mono', monospace",
+              color: "rgba(255,255,255,0.6)",
+              margin: 0,
+              textAlign: "center",
+              wordBreak: "break-all",
+            }}
+          >
+            {url}
+          </p>
+        )}
       </div>
     </div>
   );

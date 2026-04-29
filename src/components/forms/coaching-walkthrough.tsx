@@ -736,50 +736,54 @@ function ScreenshotLightbox({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.85)",
+        background: "rgba(0,0,0,0.45)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         zIndex: 300,
         padding: 24,
+        backdropFilter: "blur(2px)",
       }}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close screenshot"
-        style={{
-          position: "absolute",
-          top: 16,
-          right: 20,
-          width: 36,
-          height: 36,
-          background: "rgba(255,255,255,0.10)",
-          border: "1px solid rgba(255,255,255,0.20)",
-          borderRadius: 999,
-          color: "#fff",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      </button>
-
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: "90vw",
-          maxHeight: "85vh",
+          maxWidth: 600,
+          width: "auto",
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 10,
           alignItems: "center",
+          position: "relative",
         }}
       >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close screenshot"
+          style={{
+            position: "absolute",
+            top: -14,
+            right: -14,
+            width: 32,
+            height: 32,
+            background: "#fff",
+            border: "1px solid rgba(0,0,0,0.10)",
+            borderRadius: 999,
+            color: "#1a1a1a",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.20)",
+            zIndex: 1,
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+            <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </button>
+
         {!errored ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
@@ -788,11 +792,11 @@ function ScreenshotLightbox({
             onError={() => setErrored(true)}
             style={{
               maxWidth: "100%",
-              maxHeight: "85vh",
+              maxHeight: "70vh",
               objectFit: "contain",
               borderRadius: 8,
               background: "#fff",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.40)",
+              boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
             }}
           />
         ) : (

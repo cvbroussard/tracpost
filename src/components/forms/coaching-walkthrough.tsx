@@ -85,10 +85,15 @@ export function CoachingWalkthrough({
     }
     initSessionRef.current = sessionKey;
 
+    // Restore full navigation history from path_taken (the DB audit trail
+    // of every forward step). This preserves the resume bookmark behavior
+    // (user lands at their last position) AND keeps Back navigation
+    // working — they can walk back through the actual choices that led
+    // them there. Falls back to [start] if no prior session.
     if (walkthroughProp) {
       setWalkthrough(walkthroughProp);
-      const startNode = progressProp?.last_node_id || walkthroughProp.start;
-      setNavStack([startNode]);
+      const restored = restoreNavStack(walkthroughProp, progressProp?.path_taken);
+      setNavStack(restored);
       return;
     }
     setLoading(true);
@@ -98,8 +103,9 @@ export function CoachingWalkthrough({
       .then((data) => {
         const w = data.walkthrough as PlatformWalkthrough;
         setWalkthrough(w);
-        const resumeNode = (data.progress?.last_node_id as string) || w.start;
-        setNavStack([resumeNode]);
+        const pathTaken = data.progress?.path_taken as string[] | undefined;
+        const restored = restoreNavStack(w, pathTaken);
+        setNavStack(restored);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load coaching"))
       .finally(() => setLoading(false));
@@ -636,6 +642,36 @@ function NodeRenderer({
       </div>
     </div>
   );
+}
+
+/**
+ * Reconstruct a navigation stack from path_taken (the DB audit trail).
+ * Filters to nodes that exist in the current graph, dedupes consecutive
+ * repeats, ensures the start node anchors the stack.
+ *
+ * If a previous session backed out and picked a different option, the
+ * resulting stack may include abandoned-branch nodes — Back will walk
+ * through the actual history. Acceptable for V1; cleaner forward-only
+ * derivation would require traversing edges + likely loses information.
+ */
+function restoreNavStack(
+  walkthrough: PlatformWalkthrough,
+  pathTaken: string[] | undefined
+): string[] {
+  if (!pathTaken || pathTaken.length === 0) {
+    return [walkthrough.start];
+  }
+  const stack: string[] = [];
+  for (const id of pathTaken) {
+    if (!walkthrough.nodes[id]) continue; // ignore nodes that no longer exist
+    if (stack[stack.length - 1] === id) continue; // skip consecutive dupes
+    stack.push(id);
+  }
+  if (stack.length === 0) return [walkthrough.start];
+  if (stack[0] !== walkthrough.start) {
+    return [walkthrough.start, ...stack.filter((id) => id !== walkthrough.start)];
+  }
+  return stack;
 }
 
 /**

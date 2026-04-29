@@ -830,7 +830,7 @@ export function Step7Review({ data, platformStatus = {}, onSubmit, submitting, g
             label={item.label}
             status={item.status}
             hint={item.hint}
-            onClick={item.status === "complete" ? undefined : () => goToStep(item.step)}
+            onClick={() => goToStep(item.step)}
           />
         ))}
       </div>

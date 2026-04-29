@@ -106,9 +106,8 @@ const ACCOUNT_NAV = [
   { label: "Subscription", path: "/account/subscription" },
 ];
 
-const MANAGER_SUB_PATHS = new Set([
-  "/calendar", "/inbox", "/blog", "/entities", "/media", "/capture",
-  "/account",
+const OWNER_ONLY_ACCOUNT_PATHS = new Set([
+  "/account/subscription",
 ]);
 
 interface SidebarProps {
@@ -124,7 +123,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
     typeof window !== "undefined" &&
     window.location.hostname === "studio.tracpost.com";
   const prefix = isSubdomain ? "" : "/dashboard";
-  const isManager = role === "manager";
+  const isOwner = role === "owner";
 
   function isSubActive(subPath: string): boolean {
     const full = prefix + subPath;
@@ -133,11 +132,6 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
 
   function moduleContainsActive(mod: Module): boolean {
     return mod.subs.some((sub) => isSubActive(sub.path));
-  }
-
-  function filteredSubs(mod: Module): SubItem[] {
-    if (!isManager) return mod.subs;
-    return mod.subs.filter((s) => MANAGER_SUB_PATHS.has(s.path));
   }
 
   // Single-expand — only one module open at a time
@@ -188,9 +182,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
             {/* Module links */}
             <div className="flex flex-col gap-px">
               {MODULES.map((mod) => {
-                const subs = filteredSubs(mod);
-                if (subs.length === 0 && isManager) return null;
-
+                const subs = mod.subs;
                 const isExpanded = expanded === mod.label;
                 const containsActive = moduleContainsActive(mod);
 
@@ -277,7 +269,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner" }: Sideb
 
         {/* Account nav */}
         <div className="flex flex-col gap-px">
-          {(isManager ? ACCOUNT_NAV.filter(i => i.path === "/account") : ACCOUNT_NAV).map((item) => {
+          {(isOwner ? ACCOUNT_NAV : ACCOUNT_NAV.filter(i => !OWNER_ONLY_ACCOUNT_PATHS.has(i.path))).map((item) => {
             const href = prefix + item.path;
             const active = pathname === href || pathname === href + "/";
             return (

@@ -1,16 +1,19 @@
 /**
  * POST /api/onboarding/[token]/submit
  *
- * Marks the submission as complete from the subscriber's side
- * (submitted_at = NOW()). Operator picks up from here in the queue
- * (Phase 6) — does provisioning work, then clicks "Send welcome email"
- * which marks completed_at and triggers the studio handoff.
+ * Marks the submission as complete from the subscriber's side and sends
+ * a welcome email with a magic link so they can reach their dashboard
+ * without setting a password.
  *
- * Future: kick off email notification to the operator that a new
- * submission landed. For now, just marks the row.
+ * Operator picks up the submission from the queue (Phase 6) to do
+ * provisioning work (DNS, brand DNA review, etc.) and then marks it
+ * `completed_at` once the studio is ready.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getByToken, isExpired, markSubmitted } from "@/lib/onboarding/queries";
+import { generateMagicToken } from "@/lib/magic-link";
+import { sendWelcomeEmail } from "@/lib/email";
+import { sql } from "@/lib/db";
 
 export async function POST(
   _req: NextRequest,
@@ -29,7 +32,6 @@ export async function POST(
     return NextResponse.json({ error: "Already submitted" }, { status: 409 });
   }
 
-  // Minimum data sanity check — must have business_name + owner_email at least
   const data = submission.data as Record<string, unknown>;
   if (!data.business_name || !data.owner_email) {
     return NextResponse.json({
@@ -42,7 +44,36 @@ export async function POST(
     return NextResponse.json({ error: "Failed to submit" }, { status: 500 });
   }
 
+  const [owner] = await sql`
+    SELECT id, email, name FROM users
+    WHERE subscription_id = ${submission.subscription_id} AND role = 'owner'
+    LIMIT 1
+  `;
+
+  let magicSent = false;
+  if (owner?.id && owner?.email) {
+    try {
+      const magicToken = await generateMagicToken(owner.id as string);
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://tracpost.com";
+      const magicUrl = `${baseUrl}/auth/magic?token=${magicToken}`;
+      magicSent = await sendWelcomeEmail(owner.email as string, magicUrl, true);
+    } catch (err) {
+      console.error("Welcome email send failed (non-fatal):", err);
+    }
+  }
+
   // TODO Phase 6: notify operator queue (email/Slack/in-app)
 
-  return NextResponse.json({ success: true, submitted_at: updated.submitted_at });
+  const response = NextResponse.json({
+    success: true,
+    submitted_at: updated.submitted_at,
+    welcome_sent: magicSent,
+    owner_email: owner?.email || null,
+  });
+
+  // Clear the onboarding-token cookie — visitor is no longer mid-onboarding,
+  // so the marketing-bounce middleware should stop redirecting them.
+  response.cookies.set("tp_onboarding_token", "", { maxAge: 0, path: "/" });
+
+  return response;
 }

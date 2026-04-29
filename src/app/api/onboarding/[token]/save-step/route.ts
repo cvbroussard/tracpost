@@ -11,6 +11,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getByToken, saveStep, isExpired } from "@/lib/onboarding/queries";
+import { sql } from "@/lib/db";
+import { recordConsent, getCurrentConsent } from "@/lib/comms-consent";
 
 export async function POST(
   req: NextRequest,
@@ -43,6 +45,54 @@ export async function POST(
   const updated = await saveStep(token, step, data);
   if (!updated) {
     return NextResponse.json({ error: "Failed to save step" }, { status: 500 });
+  }
+
+  // Step 6 is the comms-preferences step. Record SMS consent state
+  // changes here with full audit fields. Email transactional consent
+  // is implicit (welcome email, etc.) and doesn't need a per-step record.
+  if (step === 6 && typeof data === "object" && data !== null) {
+    const stepData = data as Record<string, unknown>;
+    const notifyVia = stepData.notify_via as string | undefined;
+    const phone = stepData.owner_phone as string | undefined;
+    const consentText = stepData.sms_consent_text as string | undefined;
+
+    if (notifyVia) {
+      const wantsSms = notifyVia === "both";
+      const [owner] = await sql`
+        SELECT id FROM users
+        WHERE subscription_id = ${updated.subscription_id} AND role = 'owner'
+        LIMIT 1
+      `;
+
+      const current = await getCurrentConsent(updated.subscription_id, "sms", "transactional");
+      const desired = wantsSms ? "opt_in" : "opt_out";
+
+      if (current !== desired) {
+        try {
+          await recordConsent({
+            subscriptionId: updated.subscription_id,
+            userId: (owner?.id as string) || null,
+            channel: "sms",
+            consentType: "transactional",
+            action: desired,
+            source: "onboarding_step_6",
+            consentText:
+              consentText ||
+              (wantsSms
+                ? "I agree to receive transactional SMS messages from TracPost about my account, urgent customer engagement (e.g., negative reviews), and security codes. Msg & data rates may apply. Reply STOP to opt out at any time."
+                : "Opted out of SMS during onboarding."),
+            phoneNumber: phone || null,
+            ipAddress:
+              req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+              req.headers.get("x-real-ip") ||
+              null,
+            userAgent: req.headers.get("user-agent") || null,
+          });
+        } catch (err) {
+          console.error("comms_consent record failed (non-fatal):", err);
+        }
+      }
+    }
   }
 
   return NextResponse.json({

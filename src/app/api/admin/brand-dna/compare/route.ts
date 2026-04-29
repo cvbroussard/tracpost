@@ -14,6 +14,7 @@
  * COST when cached: 0
  */
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminRequest } from "@/lib/admin-session";
 import { sql } from "@/lib/db";
 import { scoreBrandSignals } from "@/lib/brand-dna/score";
 import { extractBrandSignals } from "@/lib/brand-dna/extract";
@@ -37,7 +38,7 @@ interface DnaEnvelope {
 // GET — read-only state (score + cached envelope if any). No LLM calls.
 export async function GET(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const siteId = new URL(req.url).searchParams.get("siteId");
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

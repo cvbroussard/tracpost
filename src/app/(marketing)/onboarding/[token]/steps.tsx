@@ -7,12 +7,36 @@
 "use client";
 
 import { useState, FormEvent } from "react";
+import {
+  PhoneE164Field,
+  RadioCardGroup,
+  ValidationHint,
+  ReviewSlot,
+} from "@/components/forms";
 
 interface StepProps {
   data: Record<string, unknown>;
   platformStatus?: Record<string, string>;
   onSave: (stepData: Record<string, unknown>) => void;
   saving: boolean;
+}
+
+// Verbatim consent string shown to user when they pick the SMS-inclusive
+// notification option. Saved alongside the consent record on the backend
+// for 10DLC A2P audit purposes. Must match the version published on
+// /sms-consent-example for reviewers.
+const SMS_CONSENT_TEXT =
+  "I agree to receive transactional SMS messages from TracPost about my account, urgent customer engagement (e.g., negative reviews), and security codes. Msg & data rates may apply. Reply STOP to opt out at any time, HELP for help.";
+
+interface Nudge {
+  id: string;
+  title: string;
+  body: string;
+  severity: string;
+  platform: string | null;
+  template_key: string | null;
+  created_at: string;
+  read_at: string | null;
 }
 
 // ─── Step 1: Commitment Affirm ───────────────────────────────────────────
@@ -423,9 +447,19 @@ const PLATFORMS = [
 
 interface Step5Props extends StepProps {
   token: string;
+  nudges?: Nudge[];
 }
 
-export function Step5Connect({ platformStatus = {}, onSave, saving, token }: Step5Props) {
+// Map nudge.platform to the Step 5 platform card id.
+// Nudge "instagram" or "facebook" both surface on the combined "meta" card.
+function nudgePlatformMatchesCard(nudgePlatform: string | null, cardId: string): boolean {
+  if (!nudgePlatform) return false;
+  if (nudgePlatform === cardId) return true;
+  if (cardId === "meta" && (nudgePlatform === "instagram" || nudgePlatform === "facebook")) return true;
+  return false;
+}
+
+export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudges = [] }: Step5Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [skipped, setSkipped] = useState<Set<string>>(new Set(
     Object.entries(platformStatus).filter(([, s]) => s === "skipped").map(([p]) => p)
@@ -475,6 +509,7 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token }: Ste
           const hasFailed = status === "failed";
           const isSkipped = skipped.has(p.id);
           const isExpanded = expanded === p.id;
+          const platformNudges = nudges.filter((n) => nudgePlatformMatchesCard(n.platform, p.id));
           return (
             <div key={p.id} className={`ow-platform-row ${isConnected ? "ow-platform-connected" : ""}`}>
               <div className="ow-platform-main">
@@ -513,6 +548,13 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token }: Ste
               {hasFailed && !isConnected && (
                 <div className="ow-platform-error">
                   Connection failed. Try again, or expand the setup guide below if you need to create the account first.
+                </div>
+              )}
+
+              {!isConnected && platformNudges.length > 0 && (
+                <div className="ow-platform-nudge">
+                  <div className="ow-platform-nudge-title">{platformNudges[0].title}</div>
+                  <div>{platformNudges[0].body}</div>
                 </div>
               )}
 
@@ -582,6 +624,7 @@ export function Step6Owner({ data, onSave, saving }: StepProps) {
       owner_email: ownerEmail.trim(),
       owner_phone: ownerPhone.trim() || null,
       notify_via: notifyVia,
+      sms_consent_text: notifyVia === "both" ? SMS_CONSENT_TEXT : null,
     });
   }
 
@@ -618,36 +661,49 @@ export function Step6Owner({ data, onSave, saving }: StepProps) {
 
       <div className="ow-field">
         <label className="ow-label">Phone <span className="ow-optional">(optional)</span></label>
-        <input
-          type="tel"
+        <PhoneE164Field
           value={ownerPhone}
-          onChange={(e) => setOwnerPhone(e.target.value)}
-          placeholder="e.g., (412) 555-0123"
-          className="ow-input"
+          onChange={setOwnerPhone}
+          error={touched && !!ownerPhone && !isValidPhone(ownerPhone)}
         />
         <p className="ow-help">Used for SMS notifications about urgent items (negative reviews, etc.) only if you opt in below.</p>
       </div>
 
       <div className="ow-field">
         <label className="ow-label">Notification preference</label>
-        <div className="ow-radio-group">
-          <label className="ow-radio">
-            <input type="radio" name="notify" value="email" checked={notifyVia === "email"} onChange={() => setNotifyVia("email")} />
-            <span>Email only</span>
-          </label>
-          <label className="ow-radio">
-            <input type="radio" name="notify" value="both" checked={notifyVia === "both"} onChange={() => setNotifyVia("both")} />
-            <span>Email + SMS for urgent items</span>
-          </label>
-          <label className="ow-radio">
-            <input type="radio" name="notify" value="push" checked={notifyVia === "push"} onChange={() => setNotifyVia("push")} />
-            <span>Mobile app push only (no email)</span>
-          </label>
-        </div>
+        <RadioCardGroup
+          options={[
+            { value: "email", label: "Email only" },
+            { value: "both", label: "Email + SMS for urgent items", hint: "We'll only text for negative reviews and account-critical items" },
+            { value: "push", label: "Mobile app push only (no email)" },
+          ]}
+          value={notifyVia}
+          onChange={setNotifyVia}
+          layout="column"
+        />
+        {notifyVia === "both" && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: "12px 14px",
+              background: "#f9fafb",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              fontSize: 12,
+              color: "#4b5563",
+              lineHeight: 1.55,
+            }}
+          >
+            <strong style={{ color: "#1a1a1a", display: "block", marginBottom: 4 }}>
+              By selecting this option you agree to receive SMS:
+            </strong>
+            {SMS_CONSENT_TEXT}
+          </div>
+        )}
       </div>
 
       {touched && !valid && (
-        <div className="ow-error">Name and a valid email are required. Phone must be a valid number if entered.</div>
+        <ValidationHint message="Name and a valid email are required. Phone must be a valid number if entered." />
       )}
 
       <div className="ow-actions">
@@ -660,69 +716,139 @@ export function Step6Owner({ data, onSave, saving }: StepProps) {
   );
 }
 
-// ─── Step 7: Review + Submit ─────────────────────────────────────────────
+// ─── Step 7: Almost done — review + submit ──────────────────────────────
 interface Step7Props extends StepProps {
   onSubmit: () => Promise<void>;
   submitting: boolean;
+  goToStep: (n: number) => void;
 }
 
-export function Step7Review({ data, platformStatus = {}, onSubmit, submitting }: Step7Props) {
+type SlotStatus = "incomplete" | "complete" | "in_progress" | "optional";
+
+interface ReviewItem {
+  step: number;
+  label: string;
+  status: SlotStatus;
+  hint?: string;
+  required: boolean;
+}
+
+const TOTAL_SLOTS = 6;
+
+export function Step7Review({ data, platformStatus = {}, onSubmit, submitting, goToStep }: Step7Props) {
   const platformsConnected = Object.values(platformStatus).filter((s) => s === "connected").length;
-  const platformsTotal = 7; // Phase 3 will reflect actual count
+  const platformsTotal = 7;
+
+  const businessOk = !!(data.business_name && data.business_type && data.business_location);
+  const differentiatorOk = typeof data.differentiator === "string" && data.differentiator.length >= 30;
+  const brandOk = !!data.brand_color;
+  const ownerOk = !!(data.owner_name && data.owner_email);
+
+  const items: ReviewItem[] = [
+    {
+      step: 2,
+      label: "Business basics",
+      status: businessOk ? "complete" : "incomplete",
+      hint: businessOk
+        ? `${data.business_name as string} · ${data.business_type as string}`
+        : "Missing business name, type, or location",
+      required: true,
+    },
+    {
+      step: 3,
+      label: "What makes you different",
+      status: differentiatorOk ? "complete" : "incomplete",
+      hint: differentiatorOk
+        ? `${(data.differentiator as string).slice(0, 80)}${(data.differentiator as string).length > 80 ? "…" : ""}`
+        : "Need at least 30 characters of differentiation",
+      required: true,
+    },
+    {
+      step: 4,
+      label: "Brand assets",
+      status: brandOk ? "complete" : "incomplete",
+      hint: brandOk
+        ? `Color ${data.brand_color as string}${data.logo_url ? " · logo provided" : " · logo collected later"}`
+        : "Pick a brand color",
+      required: true,
+    },
+    {
+      step: 5,
+      label: "Platform connections",
+      status:
+        platformsConnected === platformsTotal
+          ? "complete"
+          : platformsConnected > 0
+          ? "in_progress"
+          : "incomplete",
+      hint: `${platformsConnected} of ${platformsTotal} connected`,
+      required: false, // operator may proceed with fewer; full coverage is best-effort
+    },
+    {
+      step: 6,
+      label: "Owner contact",
+      status: ownerOk ? "complete" : "incomplete",
+      hint: ownerOk
+        ? `${data.owner_name as string} · ${data.owner_email as string}`
+        : "Missing name or email",
+      required: true,
+    },
+    {
+      step: 1,
+      label: "Eight-platform commitment",
+      status: data.commit_affirmed === true ? "complete" : "incomplete",
+      hint:
+        data.commit_affirmed === true
+          ? "Confirmed — all 8 platforms"
+          : "Re-confirm the 8-platform commitment",
+      required: true,
+    },
+  ];
+
+  const requiredIncomplete = items.filter((i) => i.required && i.status === "incomplete");
+  const canSubmit = requiredIncomplete.length === 0;
 
   return (
     <div>
       <p className="ow-prose">
-        One last look — everything looks right? Click <strong>Submit</strong> and we&apos;ll start
-        provisioning your dashboard. You&apos;ll receive a welcome email with your login link when
-        everything&apos;s ready, usually within a few hours during business hours.
+        {canSubmit ? (
+          <>
+            Looks good. Submit when ready — we&apos;ll send a sign-in link to your email so you can
+            open your dashboard right away while our team finishes the rest of provisioning.
+          </>
+        ) : (
+          <>Click any incomplete item below to jump back and finish it.</>
+        )}
       </p>
 
-      <div className="ow-summary">
-        <SummaryRow label="Business name" value={data.business_name as string} />
-        <SummaryRow label="Type" value={data.business_type as string} />
-        <SummaryRow label="Location" value={data.business_location as string} />
-        <SummaryRow label="Website" value={(data.business_website as string) || "—"} />
-        <SummaryRow
-          label="What makes you different"
-          value={data.differentiator as string}
-          long
-        />
-        <SummaryRow
-          label="Brand color"
-          value={
-            <span className="ow-summary-color">
-              <span className="ow-summary-swatch" style={{ background: data.brand_color as string }} />
-              {data.brand_color as string}
-            </span>
-          }
-        />
-        <SummaryRow label="Logo" value={(data.logo_url as string) || "Will collect separately"} />
-        <SummaryRow
-          label="Platforms connected"
-          value={`${platformsConnected} of ${platformsTotal}${platformsConnected === platformsTotal ? " ✓" : " (Phase 3 will enforce all 8)"}`}
-        />
-        <SummaryRow label="Owner name" value={data.owner_name as string} />
-        <SummaryRow label="Owner email" value={data.owner_email as string} />
-        <SummaryRow label="Owner phone" value={(data.owner_phone as string) || "—"} />
-        <SummaryRow label="Notify via" value={data.notify_via as string} />
+      <div style={{ marginTop: 24, marginBottom: 24 }}>
+        {items.map((item, i) => (
+          <ReviewSlot
+            key={item.step}
+            index={i + 1}
+            total={TOTAL_SLOTS}
+            label={item.label}
+            status={item.status}
+            hint={item.hint}
+            onClick={item.status === "complete" ? undefined : () => goToStep(item.step)}
+          />
+        ))}
       </div>
 
       <div className="ow-actions">
         <span />
-        <button onClick={onSubmit} className="ow-btn-primary" disabled={submitting}>
-          {submitting ? "Submitting…" : "Submit onboarding →"}
+        <button
+          onClick={onSubmit}
+          className="ow-btn-primary"
+          disabled={submitting || !canSubmit}
+        >
+          {submitting
+            ? "Submitting…"
+            : canSubmit
+            ? "Submit onboarding →"
+            : `${requiredIncomplete.length} item${requiredIncomplete.length === 1 ? "" : "s"} still needed`}
         </button>
       </div>
-    </div>
-  );
-}
-
-function SummaryRow({ label, value, long }: { label: string; value: React.ReactNode; long?: boolean }) {
-  return (
-    <div className={`ow-summary-row ${long ? "ow-summary-row-long" : ""}`}>
-      <span className="ow-summary-label">{label}</span>
-      <span className="ow-summary-value">{value || "—"}</span>
     </div>
   );
 }

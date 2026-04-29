@@ -46,7 +46,7 @@ export async function PATCH(
     await sql`UPDATE users SET site_id = ${body.siteId || null} WHERE id = ${id}`;
   }
 
-  if (body.role !== undefined && ["manager", "capture"].includes(body.role)) {
+  if (body.role !== undefined && ["member", "capture"].includes(body.role)) {
     await sql`UPDATE users SET role = ${body.role} WHERE id = ${id}`;
   }
 
@@ -100,15 +100,11 @@ export async function POST(
     results.email = await sendWelcomeEmail(member.email as string, magicUrl, false);
   }
 
-  // Send SMS
-  if ((channel === "sms" || channel === "both") && member.phone) {
-    const { sendSms } = await import("@/lib/sms");
-    const role = member.role as string;
-    const msg = role === "capture"
-      ? `You've been invited to TracPost. Open this link on your phone to get started: ${magicUrl}`
-      : `Sign in to TracPost: ${magicUrl}`;
-    results.sms = await sendSms(member.phone as string, msg);
-  }
+  // SMS invites disabled — A2P 10DLC compliance prohibits SMS to a recipient
+  // before they've explicitly opted in. Team members can opt into SMS from
+  // their settings page after first sign-in. The "sms" / "both" channel
+  // values stay accepted for forward compatibility but only email is sent.
+  results.sms = false;
 
   return NextResponse.json({ sent: results });
 }

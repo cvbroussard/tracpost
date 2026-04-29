@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { cookieDomain } from "@/lib/subdomains";
+import { signCookie } from "@/lib/cookie-sign";
 
 /**
  * GET /api/auth/session
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
     const updated = { ...session, activeSiteId: null };
     const domain = cookieDomain();
     const response = NextResponse.json({ ok: true, activeSiteId: null });
-    response.cookies.set("tp_session", JSON.stringify(updated), {
+    response.cookies.set("tp_session", signCookie(updated), {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
 
   const domain = cookieDomain();
   const response = NextResponse.json({ ok: true, activeSiteId });
-  response.cookies.set("tp_session", JSON.stringify(updated), {
+  response.cookies.set("tp_session", signCookie(updated), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

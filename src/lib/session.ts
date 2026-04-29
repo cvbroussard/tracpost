@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { verifyCookie } from "./cookie-sign";
 
 export interface Session {
   userId: string;
@@ -13,16 +14,10 @@ export interface Session {
 
 /**
  * Read the user session from the httpOnly cookie.
- * Returns null if not logged in.
+ * Returns null if not logged in or if the cookie HMAC is invalid (tampered/forged).
  */
 export async function getSession(): Promise<Session | null> {
   const cookieStore = await cookies();
   const raw = cookieStore.get("tp_session")?.value;
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as Session;
-  } catch {
-    return null;
-  }
+  return verifyCookie<Session>(raw);
 }

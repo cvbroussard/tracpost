@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminRequest } from "@/lib/admin-session";
 import { sql } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 
@@ -21,7 +22,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -89,7 +90,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -120,7 +121,7 @@ export async function DELETE(req: NextRequest) {
  */
 export async function PUT(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -12,6 +12,7 @@
  * appeal form. Does NOT submit anything to Google.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminRequest } from "@/lib/admin-session";
 import { sql } from "@/lib/db";
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -40,7 +41,7 @@ interface AppealDraft {
 
 export async function POST(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

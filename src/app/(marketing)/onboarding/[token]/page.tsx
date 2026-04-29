@@ -12,10 +12,14 @@
  *   - Otherwise → render the wizard at current_step
  */
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { getByToken, isExpired } from "@/lib/onboarding/queries";
 import { OnboardingWizard } from "./wizard";
 
 export const dynamic = "force-dynamic";
+
+const ONBOARDING_TOKEN_COOKIE = "tp_onboarding_token";
+const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 
 interface Props {
   params: Promise<{ token: string }>;
@@ -26,6 +30,19 @@ export default async function OnboardingPage({ params }: Props) {
 
   const submission = await getByToken(token);
   if (!submission) notFound();
+
+  if (!submission.completed_at && !isExpired(submission)) {
+    const cookieStore = await cookies();
+    cookieStore.set({
+      name: ONBOARDING_TOKEN_COOKIE,
+      value: token,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: COOKIE_MAX_AGE,
+      path: "/",
+    });
+  }
 
   if (isExpired(submission)) {
     return (
@@ -59,14 +76,23 @@ export default async function OnboardingPage({ params }: Props) {
   }
 
   if (submission.submitted_at) {
+    const ownerEmailRaw = (submission.data as Record<string, unknown>).owner_email;
+    const ownerEmail = typeof ownerEmailRaw === "string" ? ownerEmailRaw : null;
     return (
       <div className="op-shell">
         <div className="op-card">
-          <h1 className="op-h1">Thanks — we&apos;re setting up your dashboard</h1>
+          <h1 className="op-h1">Check your inbox</h1>
           <p className="op-body">
-            Your onboarding is submitted. Our team is provisioning your studio now. You&apos;ll receive a
-            welcome email with your login link when everything is ready, usually within a few hours during
-            business hours.
+            Your onboarding is submitted. We sent a sign-in link
+            {ownerEmail ? <> to <strong>{ownerEmail}</strong></> : <> to the email on your account</>}.
+            Click it to open your dashboard while our team finishes provisioning the studio in the background.
+          </p>
+          <p className="op-body op-body-muted">
+            No email after a few minutes? Check spam or{" "}
+            <a href="/onboarding/resend" style={{ color: "#1a1a1a", textDecoration: "underline" }}>
+              request a new link
+            </a>
+            .
           </p>
           <p className="op-body op-body-muted">
             Submitted {new Date(submission.submitted_at).toLocaleString()}

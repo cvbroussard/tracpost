@@ -1,6 +1,14 @@
 import { sql } from "./db";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { verifyCookie } from "./cookie-sign";
+import type { Session } from "./session";
+
+interface AdminPayload {
+  admin: true;
+  issued_at: number;
+  expires_at: number;
+}
 
 export interface AuthContext {
   userId: string;
@@ -41,27 +49,23 @@ export async function authenticateRequest(
 
   // Path 2: Session cookie (dashboard calls)
   const cookieStore = await cookies();
-  const raw = cookieStore.get("tp_session")?.value;
-  if (raw) {
-    try {
-      const session = JSON.parse(raw);
-      if (session.userId) {
-        return {
-          userId: session.userId,
-          userName: session.userName,
-          subscriptionId: session.subscriptionId,
-          plan: session.plan,
-          role: session.role || "owner",
-        };
-      }
-    } catch {
-      // Invalid cookie, fall through
-    }
+  const rawSession = cookieStore.get("tp_session")?.value;
+  const session = verifyCookie<Session>(rawSession);
+  if (session && session.userId) {
+    return {
+      userId: session.userId,
+      userName: session.userName,
+      subscriptionId: session.subscriptionId,
+      plan: session.plan,
+      role: session.role || "owner",
+    };
   }
 
   // Path 3: Admin cookie + subscription_id param (admin acting on behalf)
-  const adminCookie = cookieStore.get("tp_admin")?.value;
-  if (adminCookie === "authenticated") {
+  const rawAdmin = cookieStore.get("tp_admin")?.value;
+  const adminPayload = verifyCookie<AdminPayload>(rawAdmin);
+  const adminValid = adminPayload?.admin === true && adminPayload.expires_at >= Date.now();
+  if (adminValid) {
     const url = new URL(req.url);
     const subscriptionId = url.searchParams.get("subscription_id") || url.searchParams.get("subscriber_id");
     if (subscriptionId) {

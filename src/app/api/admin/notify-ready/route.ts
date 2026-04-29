@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminRequest } from "@/lib/admin-session";
 import { sql } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 
@@ -11,7 +12,7 @@ import { sendEmail } from "@/lib/email";
 export async function POST(req: NextRequest) {
   // Simple admin auth check
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -24,7 +24,7 @@ export default async function TeamPage() {
       WHERE subscription_id = ${session.subscriptionId}
         AND is_active = true
       ORDER BY
-        CASE role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 WHEN 'capture' THEN 2 ELSE 3 END,
+        CASE role WHEN 'owner' THEN 0 WHEN 'member' THEN 1 WHEN 'capture' THEN 2 ELSE 3 END,
         created_at ASC
     `,
     sql`

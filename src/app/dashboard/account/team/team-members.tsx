@@ -25,8 +25,8 @@ interface Site {
 }
 
 const ROLE_LABELS: Record<string, { label: string; description: string }> = {
-  owner: { label: "Owner", description: "Full access to all sites and settings" },
-  manager: { label: "Manager", description: "Dashboard, blog, vendors, calendar" },
+  owner: { label: "Owner", description: "Full access plus billing, plan changes, and team management" },
+  member: { label: "Member", description: "Full studio access — analytics, posts, sites, brand, connections" },
   capture: { label: "Capture", description: "Mobile app only — upload photos and videos" },
 };
 
@@ -57,7 +57,7 @@ export function TeamMembers({
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
-  const [addRole, setAddRole] = useState("manager");
+  const [addRole, setAddRole] = useState("member");
   const [addSiteId, setAddSiteId] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,7 +147,7 @@ export function TeamMembers({
         setShowAdd(false);
         setAddName("");
         setAddEmail("");
-        setAddRole("manager");
+        setAddRole("member");
         setAddSiteId("");
       } else {
         const data = await res.json();
@@ -285,7 +285,7 @@ export function TeamMembers({
                       onChange={(e) => setEditRole(e.target.value)}
                       className="w-full text-sm"
                     >
-                      <option value="manager">Manager — web + mobile</option>
+                      <option value="member">Member — full studio access</option>
                       <option value="capture">Capture — mobile only</option>
                     </select>
                     <p className="mt-1 text-[10px] text-dim">
@@ -451,7 +451,7 @@ export function TeamMembers({
                 onChange={(e) => setAddRole(e.target.value)}
                 className="w-full text-sm"
               >
-                <option value="manager">Manager — web + mobile</option>
+                <option value="member">Member — full studio access</option>
                 <option value="capture">Capture — mobile only</option>
               </select>
             </div>

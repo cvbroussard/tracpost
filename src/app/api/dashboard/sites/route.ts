@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { slugify } from "@/lib/blog";
 import { cookieDomain } from "@/lib/subdomains";
+import { signCookie } from "@/lib/cookie-sign";
 
 /**
  * POST /api/dashboard/sites
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
 
   const dom = cookieDomain();
   const response = NextResponse.json({ site });
-  response.cookies.set("tp_session", JSON.stringify(updated), {
+  response.cookies.set("tp_session", signCookie(updated), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

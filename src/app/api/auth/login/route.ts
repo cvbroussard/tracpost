@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { cookieDomain } from "@/lib/subdomains";
 import { createSessionToken } from "@/lib/auth";
+import { signCookie } from "@/lib/cookie-sign";
 
 /**
  * POST /api/auth/login
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
   });
 
   const domain = cookieDomain();
-  response.cookies.set("tp_session", JSON.stringify(session), {
+  response.cookies.set("tp_session", signCookie(session), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -96,6 +97,10 @@ export async function POST(req: NextRequest) {
     maxAge: 60 * 60 * 24 * 30, // 30 days
     ...(domain && { domain }),
   });
+
+  // Clear onboarding-token cookie — user has authenticated into studio,
+  // marketing pages should render normally for them again.
+  response.cookies.set("tp_onboarding_token", "", { maxAge: 0, path: "/" });
 
   return response;
 }

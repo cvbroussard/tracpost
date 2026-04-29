@@ -10,6 +10,7 @@
  * Stores the angle in the envelope so subsequent regenerates retain it.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminRequest } from "@/lib/admin-session";
 import { sql } from "@/lib/db";
 import { generatePlaybookV2 } from "@/lib/brand-dna/auto-generate-v2";
 import type { BrandSignals } from "@/lib/brand-dna/extract";
@@ -30,7 +31,7 @@ interface DnaEnvelope {
 
 export async function POST(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

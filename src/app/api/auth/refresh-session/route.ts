@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { cookieDomain } from "@/lib/subdomains";
+import { signCookie } from "@/lib/cookie-sign";
 
 /**
  * POST /api/auth/refresh-session
@@ -35,7 +36,7 @@ export async function POST() {
   const response = NextResponse.json({ ok: true });
 
   const domain = cookieDomain();
-  response.cookies.set("tp_session", JSON.stringify(updated), {
+  response.cookies.set("tp_session", signCookie(updated), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

@@ -38,12 +38,34 @@ function extractSlugFromHost(hostname: string, prefix: string): string | null {
  * Development (localhost):
  *   No rewriting — access /dashboard/* and /admin/* directly.
  */
+// Marketing paths that should bounce away while a visitor has an active
+// onboarding session. Once onboarding completes (cookie cleared at submit /
+// at first login), the marketing site renders normally again — active
+// subscribers can still read blog/pricing/etc.
+const BOUNCE_DURING_ONBOARDING = new Set([
+  "/",
+  "/signup",
+  "/login",
+  "/pricing",
+]);
+
 export async function middleware(req: NextRequest) {
   const hostname = req.headers.get("host") || "localhost";
   const subdomain = classifyHost(hostname);
   const { pathname } = req.nextUrl;
 
   const isLocal = hostname.includes("localhost");
+
+  // Mid-onboarding visitors get bounced from marketing pages so they don't
+  // accidentally re-enter the signup funnel. Triggered only by the
+  // tp_onboarding_token cookie, which is cleared on submit + first login.
+  if (
+    (subdomain === "marketing" || isLocal) &&
+    BOUNCE_DURING_ONBOARDING.has(pathname) &&
+    req.cookies.has("tp_onboarding_token")
+  ) {
+    return NextResponse.redirect(new URL("/onboarding", req.url));
+  }
 
   // In development, only enforce admin auth — skip subdomain logic
   if (isLocal) {

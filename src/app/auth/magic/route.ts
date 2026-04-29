@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateMagicToken } from "@/lib/magic-link";
 import { sql } from "@/lib/db";
 import { studioUrl, cookieDomain } from "@/lib/subdomains";
+import { signCookie } from "@/lib/cookie-sign";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
 
   const response = NextResponse.redirect(redirectUrl);
 
-  response.cookies.set("tp_session", JSON.stringify(session), {
+  response.cookies.set("tp_session", signCookie(session), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -64,6 +65,10 @@ export async function GET(req: NextRequest) {
     path: "/",
     domain: cookieDomain(),
   });
+
+  // Clear onboarding-token cookie — visitor has authenticated into studio,
+  // marketing pages should render normally for them again.
+  response.cookies.set("tp_onboarding_token", "", { maxAge: 0, path: "/" });
 
   return response;
 }

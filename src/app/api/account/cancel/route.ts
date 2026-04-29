@@ -1,11 +1,16 @@
 import { sql } from "@/lib/db";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
+import { otpGate } from "@/lib/otp-gate";
 
 /**
  * POST /api/account/cancel — Request account cancellation.
  *
- * Body: { reason?: string, redirect_target?: string }
+ * Body: { reason?: string, redirect_target?: string, otp_code?: string }
+ *
+ * Owner-only protected action — gated by email-OTP step-up. First call
+ * without otp_code returns 401 + sends a 6-digit code to the owner's
+ * email. Caller re-issues the call with otp_code to actually cancel.
  *
  * Sets cancelled_at on subscription. Grace period is 30 days.
  * If redirect_target is provided, sets up departure redirects for blog.
@@ -15,8 +20,16 @@ export async function POST(req: NextRequest) {
   if (authResult instanceof NextResponse) return authResult;
   const auth = authResult as AuthContext;
 
+  if (auth.role !== "owner") {
+    return NextResponse.json({ error: "Owner access required" }, { status: 403 });
+  }
+
   const body = await req.json();
-  const { reason, redirect_target } = body;
+  const { reason, redirect_target, otp_code } = body;
+
+  // Step-up auth: first call (no code) sends OTP; second call (with code) verifies.
+  const otpFailure = await otpGate(auth.userId, "cancel_subscription", otp_code);
+  if (otpFailure) return otpFailure;
 
   // Check if already cancelled
   const [subscriber] = await sql`

@@ -9,10 +9,15 @@
  *
  * Going Back doesn't lose state — accumulated form data lives in this
  * component and persists to the server as steps complete.
+ *
+ * Mercury-style polish: thin progress bar (no step count visible),
+ * SupportChat in the corner, and nudge banner if the operator has
+ * sent any help messages.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ThinProgressBar, SupportChat } from "@/components/forms";
 import {
   Step1Commit, Step2Business, Step3Voice, Step4Brand,
   Step5Connect, Step6Owner, Step7Review,
@@ -25,8 +30,19 @@ const STEPS: { id: number; label: string; title: string }[] = [
   { id: 4, label: "Brand",    title: "Brand assets" },
   { id: 5, label: "Connect",  title: "Connect your accounts" },
   { id: 6, label: "Owner",    title: "How we'll reach you" },
-  { id: 7, label: "Review",   title: "Review and submit" },
+  { id: 7, label: "Review",   title: "Almost done" },
 ];
+
+interface Nudge {
+  id: string;
+  title: string;
+  body: string;
+  severity: string;
+  platform: string | null;
+  template_key: string | null;
+  created_at: string;
+  read_at: string | null;
+}
 
 interface Props {
   token: string;
@@ -42,6 +58,25 @@ export function OnboardingWizard({ token, initialStep, initialData, platformStat
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nudges, setNudges] = useState<Nudge[]>([]);
+
+  // Smooth percent — based on completed steps (step-1 because we're "in" the current step)
+  const progressPercent = Math.round(((step - 1) / STEPS.length) * 100);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/onboarding/${token}/nudges`)
+      .then((r) => (r.ok ? r.json() : { nudges: [] }))
+      .then((d) => {
+        if (!cancelled) setNudges(d.nudges || []);
+      })
+      .catch(() => {
+        /* silent — nudges are non-critical */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const saveAndAdvance = useCallback(async (stepData: Record<string, unknown>) => {
     setSaving(true);
@@ -71,15 +106,11 @@ export function OnboardingWizard({ token, initialStep, initialData, platformStat
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/onboarding/${token}/submit`, {
-        method: "POST",
-      });
+      const res = await fetch(`/api/onboarding/${token}/submit`, { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Submit failed");
       }
-      // Server-side rendered "thanks, we're working on it" page will
-      // appear on next visit. Reload now to show it.
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit");
@@ -93,30 +124,39 @@ export function OnboardingWizard({ token, initialStep, initialData, platformStat
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const goToStep = (n: number) => {
+    setStep(Math.min(Math.max(1, n), STEPS.length));
+    setError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const current = STEPS.find((s) => s.id === step) || STEPS[0];
+  const stepContext = `onboarding/${current.label.toLowerCase()}`;
+
+  // Nudges relevant to the current step (platform match for step 5, all others = global only)
+  const visibleNudges =
+    step === 5
+      ? nudges
+      : nudges.filter((n) => !n.platform);
 
   return (
     <div className="ow-shell">
+      <ThinProgressBar percent={progressPercent} />
+
       <header className="ow-header">
         <div className="ow-brand">
           <img src="/icon.svg" alt="TracPost" className="ow-logo" />
           <span className="ow-brand-name">TRACPOST</span>
-        </div>
-        <div className="ow-progress">
-          {STEPS.map((s) => (
-            <div
-              key={s.id}
-              className={`ow-progress-dot ${s.id < step ? "done" : s.id === step ? "active" : ""}`}
-              title={s.label}
-            />
-          ))}
-          <span className="ow-progress-label">Step {step} of {STEPS.length}</span>
         </div>
       </header>
 
       <main className="ow-main">
         <div className="ow-eyebrow">{current.label.toUpperCase()}</div>
         <h1 className="ow-title">{current.title}</h1>
+
+        {visibleNudges.length > 0 && step !== 5 && (
+          <NudgeBanner nudges={visibleNudges} />
+        )}
 
         {error && <div className="ow-error">{error}</div>}
 
@@ -125,9 +165,28 @@ export function OnboardingWizard({ token, initialStep, initialData, platformStat
           {step === 2 && <Step2Business data={data} onSave={saveAndAdvance} saving={saving} />}
           {step === 3 && <Step3Voice data={data} onSave={saveAndAdvance} saving={saving} />}
           {step === 4 && <Step4Brand data={data} onSave={saveAndAdvance} saving={saving} />}
-          {step === 5 && <Step5Connect data={data} platformStatus={platformStatus} onSave={saveAndAdvance} saving={saving} token={token} />}
+          {step === 5 && (
+            <Step5Connect
+              data={data}
+              platformStatus={platformStatus}
+              onSave={saveAndAdvance}
+              saving={saving}
+              token={token}
+              nudges={nudges}
+            />
+          )}
           {step === 6 && <Step6Owner data={data} onSave={saveAndAdvance} saving={saving} />}
-          {step === 7 && <Step7Review data={data} platformStatus={platformStatus} onSave={saveAndAdvance} onSubmit={submitForm} saving={saving} submitting={submitting} />}
+          {step === 7 && (
+            <Step7Review
+              data={data}
+              platformStatus={platformStatus}
+              onSave={saveAndAdvance}
+              onSubmit={submitForm}
+              saving={saving}
+              submitting={submitting}
+              goToStep={goToStep}
+            />
+          )}
         </div>
 
         <div className="ow-back-row">
@@ -139,7 +198,32 @@ export function OnboardingWizard({ token, initialStep, initialData, platformStat
         </div>
       </main>
 
+      <SupportChat
+        context={stepContext}
+        subscriberName={(data.owner_name as string) || undefined}
+        subscriberEmail={(data.owner_email as string) || undefined}
+      />
+
       <style dangerouslySetInnerHTML={{ __html: wizardStyles }} />
+    </div>
+  );
+}
+
+function NudgeBanner({ nudges }: { nudges: Nudge[] }) {
+  if (nudges.length === 0) return null;
+  const primary = nudges[0];
+  return (
+    <div className="ow-nudge-banner">
+      <div className="ow-nudge-icon" aria-hidden>
+        💡
+      </div>
+      <div className="ow-nudge-body">
+        <div className="ow-nudge-title">{primary.title}</div>
+        <div className="ow-nudge-text">{primary.body}</div>
+        {nudges.length > 1 && (
+          <div className="ow-nudge-more">+ {nudges.length - 1} more</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -157,16 +241,12 @@ const wizardStyles = `
   .ow-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 16px 32px;
-    background: #fff;
-    border-bottom: 1px solid #e5e7eb;
-    position: sticky;
-    top: 0;
-    z-index: 10;
+    justify-content: center;
+    padding: 20px 32px 0;
+    background: transparent;
   }
   .ow-brand { display: flex; align-items: center; gap: 10px; }
-  .ow-logo { height: 24px; width: 24px; }
+  .ow-logo { height: 28px; width: 28px; }
   .ow-brand-name {
     font-size: 14px;
     font-weight: 700;
@@ -174,51 +254,69 @@ const wizardStyles = `
     color: #1a1a1a;
   }
 
-  .ow-progress { display: flex; align-items: center; gap: 8px; }
-  .ow-progress-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #d1d5db;
-    transition: background 0.2s;
-  }
-  .ow-progress-dot.active { background: #1a1a1a; }
-  .ow-progress-dot.done { background: #22c55e; }
-  .ow-progress-label {
-    margin-left: 12px;
-    font-size: 12px;
-    color: #6b7280;
-    font-weight: 500;
-  }
-
   .ow-main {
     flex: 1;
-    max-width: 680px;
+    max-width: 640px;
     width: 100%;
     margin: 0 auto;
-    padding: 56px 32px 80px;
+    padding: 48px 24px 80px;
   }
   .ow-eyebrow {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
-    color: #6b7280;
-    letter-spacing: 0.12em;
-    margin-bottom: 8px;
+    color: #9ca3af;
+    letter-spacing: 0.14em;
+    margin-bottom: 6px;
   }
   .ow-title {
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 700;
     color: #1a1a1a;
-    margin: 0 0 32px;
+    margin: 0 0 28px;
     line-height: 1.2;
+    letter-spacing: -0.01em;
   }
 
   .ow-step-body {
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
-    padding: 32px;
-    margin-bottom: 24px;
+    padding: 28px 26px;
+    margin-bottom: 16px;
+  }
+
+  .ow-nudge-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    background: rgba(59, 130, 246, 0.06);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 10px;
+  }
+  .ow-nudge-icon {
+    font-size: 18px;
+    line-height: 1.2;
+    flex-shrink: 0;
+  }
+  .ow-nudge-body { flex: 1; min-width: 0; }
+  .ow-nudge-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d4ed8;
+    margin-bottom: 2px;
+  }
+  .ow-nudge-text {
+    font-size: 13px;
+    color: #1f2937;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+  .ow-nudge-more {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 4px;
   }
 
   .ow-prose {
@@ -297,29 +395,6 @@ const wizardStyles = `
     line-height: 1.5;
   }
 
-  .ow-radio-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .ow-radio {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background 0.12s;
-  }
-  .ow-radio:hover { background: #f9fafb; }
-  .ow-radio input[type="radio"] {
-    width: 16px;
-    height: 16px;
-  }
-
-  /* Color picker */
   .ow-color-row {
     display: flex;
     gap: 8px;
@@ -355,15 +430,6 @@ const wizardStyles = `
   .ow-color-swatch:hover { transform: scale(1.1); }
   .ow-color-swatch.active { border-color: #1a1a1a; transform: scale(1.15); }
 
-  /* Platform list */
-  .ow-progress-summary {
-    font-size: 13px;
-    font-weight: 600;
-    color: #6b7280;
-    text-align: right;
-    margin-bottom: 12px;
-    padding: 0 4px;
-  }
   .ow-platform-list {
     display: flex;
     flex-direction: column;
@@ -435,6 +501,21 @@ const wizardStyles = `
     color: #dc2626;
     font-size: 12px;
   }
+  .ow-platform-nudge {
+    margin: 0 14px 14px;
+    padding: 10px 12px;
+    background: rgba(59, 130, 246, 0.06);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    font-size: 13px;
+    color: #1f2937;
+    line-height: 1.5;
+  }
+  .ow-platform-nudge-title {
+    font-weight: 600;
+    color: #1d4ed8;
+    margin-bottom: 2px;
+  }
   .ow-platform-setup {
     padding: 0 14px 14px;
     border-top: 1px solid #f3f4f6;
@@ -467,59 +548,6 @@ const wizardStyles = `
     display: inline-block;
   }
 
-  /* Review summary */
-  .ow-summary {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    margin: 24px 0;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .ow-summary-row {
-    display: flex;
-    padding: 12px 16px;
-    border-bottom: 1px solid #f3f4f6;
-    font-size: 14px;
-    align-items: baseline;
-  }
-  .ow-summary-row:last-child { border-bottom: none; }
-  .ow-summary-row-long {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-  }
-  .ow-summary-label {
-    flex: 0 0 200px;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #6b7280;
-    font-weight: 600;
-  }
-  .ow-summary-row-long .ow-summary-label { flex: 0; }
-  .ow-summary-value {
-    flex: 1;
-    color: #1a1a1a;
-    line-height: 1.5;
-    word-break: break-word;
-  }
-  .ow-summary-color {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-family: ui-monospace, monospace;
-    font-size: 13px;
-  }
-  .ow-summary-swatch {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
-    border: 1px solid #e5e7eb;
-  }
-
   .ow-error {
     padding: 12px 16px;
     background: rgba(239, 68, 68, 0.06);
@@ -541,13 +569,13 @@ const wizardStyles = `
     margin-top: 16px;
   }
   .ow-btn-primary {
-    padding: 12px 24px;
+    padding: 10px 22px;
     background: #1a1a1a;
     color: #fff;
     border: none;
-    border-radius: 6px;
+    border-radius: 999px;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition: background 0.15s;
   }

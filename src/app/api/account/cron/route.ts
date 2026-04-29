@@ -1,63 +1,72 @@
 import { sql } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { sendArchiveNoticeEmail } from "@/lib/lifecycle-emails";
 
 /**
  * POST /api/account/cron — Daily lifecycle cron.
  *
- * 1. Suspend subscribers past 30-day grace period (is_active → false)
- * 2. Purge data for subscribers past 120 days (hard delete)
- * 3. Clean up expired departure redirects
- * 4. Clean up expired export downloads
+ * 1. Archive subscribers past 30-day cancellation grace
+ *    (status → 'archived', cancellation grace expired)
+ * 2. Clean up expired departure redirects
+ * 3. Clean up expired export downloads
+ *
+ * NO automated hard delete. Archive is the terminus of the lifecycle.
+ * Hard deletion is operator-only via /admin/compliance/erasure (legal
+ * erasure requests) or /admin/test-subscriptions (synthetic test cleanup).
  */
 export async function POST() {
   const results = {
-    suspended: 0,
-    purged: 0,
+    archived: 0,
     redirects_cleaned: 0,
     exports_cleaned: 0,
   };
 
-  // 1. Suspend: cancelled_at > 30 days ago AND still active
-  const toSuspend = await sql`
+  // 1. Archive: cancellation grace expired (>30 days), status still 'active'
+  const toArchive = await sql`
     SELECT id FROM subscriptions
     WHERE cancelled_at IS NOT NULL
       AND cancelled_at < NOW() - INTERVAL '30 days'
-      AND is_active = true
+      AND status = 'active'
   `;
 
-  for (const sub of toSuspend) {
+  for (const sub of toArchive) {
     await sql`
-      UPDATE subscriptions SET is_active = false, updated_at = NOW()
+      UPDATE subscriptions
+      SET status = 'archived',
+          archived_at = NOW(),
+          archived_by = 'auto_grace_expiry',
+          archive_reason = COALESCE(cancel_reason, 'cancellation grace expired'),
+          is_active = false,
+          updated_at = NOW()
       WHERE id = ${sub.id}
     `;
-    // Disable all sites
+    // Disable autopilot on all sites — archive means no further automation
     await sql`
       UPDATE sites SET autopilot_enabled = false
       WHERE subscription_id = ${sub.id}
     `;
-    results.suspended++;
+
+    // Notify the owner
+    const [owner] = await sql`
+      SELECT email, name FROM users
+      WHERE subscription_id = ${sub.id} AND role = 'owner'
+      LIMIT 1
+    `;
+    if (owner?.email) {
+      try {
+        await sendArchiveNoticeEmail({
+          to: owner.email as string,
+          ownerName: (owner.name as string) || undefined,
+        });
+      } catch (err) {
+        console.error("Archive notice email failed (non-fatal):", err);
+      }
+    }
+
+    results.archived++;
   }
 
-  // 2. Hard delete: cancelled_at > 120 days ago AND inactive
-  const toPurge = await sql`
-    SELECT id FROM subscriptions
-    WHERE cancelled_at IS NOT NULL
-      AND cancelled_at < NOW() - INTERVAL '120 days'
-      AND is_active = false
-  `;
-
-  for (const sub of toPurge) {
-    // CASCADE will handle sites, blog_posts, social_posts, etc.
-    await sql`DELETE FROM subscriptions WHERE id = ${sub.id}`;
-    results.purged++;
-    // Note: R2 assets should be purged separately via a cleanup job
-    // that lists objects by sites/{siteId}/ prefix. The site IDs are
-    // gone after CASCADE, so we'd need to log them before deletion
-    // or use a pre-delete hook. For now, R2 objects become orphaned
-    // and can be cleaned via a separate sweep.
-  }
-
-  // 3. Clean up expired departure redirects
+  // 2. Clean up expired departure redirects
   const expiredRedirects = await sql`
     DELETE FROM departure_redirects
     WHERE active_until < NOW()
@@ -65,7 +74,7 @@ export async function POST() {
   `;
   results.redirects_cleaned = expiredRedirects.length;
 
-  // 4. Clean up expired export downloads
+  // 3. Clean up expired export downloads
   const expiredExports = await sql`
     DELETE FROM data_exports
     WHERE expires_at < NOW()

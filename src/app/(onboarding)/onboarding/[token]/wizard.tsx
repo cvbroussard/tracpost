@@ -505,7 +505,10 @@ const wizardStyles = `
     color: #1a1a1a;
     text-decoration: underline;
   }
-  .ow-platform-info { flex: 1; }
+  .ow-platform-info {
+    flex: 1;
+    padding-left: 10px;
+  }
   .ow-platform-name {
     font-size: 14px;
     font-weight: 600;

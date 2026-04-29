@@ -121,7 +121,9 @@ export async function POST(req: NextRequest) {
         save_default_payment_method: "on_subscription",
         payment_method_types: ["card"],
       },
-      expand: ["latest_invoice.payment_intent", "pending_setup_intent"],
+      // Newer Stripe API uses `latest_invoice.confirmation_secret` for the
+      // no-trial PaymentIntent flow; trials still use `pending_setup_intent`.
+      expand: ["latest_invoice.confirmation_secret", "pending_setup_intent"],
       metadata: {
         product_id: product_id,
         product_name: product.name as string,
@@ -134,26 +136,42 @@ export async function POST(req: NextRequest) {
     }, { status: 502 });
   }
 
-  // Determine the intent: SetupIntent for trial, PaymentIntent for direct
+  // Determine the intent shape: SetupIntent for trials, confirmation_secret for direct billing.
   type ExpandedSub = typeof subscription & {
     pending_setup_intent?: { id: string; client_secret: string | null } | string | null;
-    latest_invoice?: { payment_intent?: { id: string; client_secret: string | null } | string | null } | string | null;
+    latest_invoice?: {
+      confirmation_secret?: { client_secret: string } | null;
+    } | string | null;
   };
   const sub = subscription as ExpandedSub;
   let clientSecret: string | null = null;
   let intentType: "setup" | "payment" = "setup";
-  if (typeof sub.pending_setup_intent === "object" && sub.pending_setup_intent && sub.pending_setup_intent.client_secret) {
+
+  if (
+    typeof sub.pending_setup_intent === "object" &&
+    sub.pending_setup_intent &&
+    sub.pending_setup_intent.client_secret
+  ) {
     clientSecret = sub.pending_setup_intent.client_secret;
     intentType = "setup";
   } else {
     const inv = typeof sub.latest_invoice === "object" ? sub.latest_invoice : null;
-    const pi = inv && typeof inv.payment_intent === "object" ? inv.payment_intent : null;
-    if (pi && pi.client_secret) {
-      clientSecret = pi.client_secret;
+    const cs = inv?.confirmation_secret;
+    if (cs && cs.client_secret) {
+      clientSecret = cs.client_secret;
       intentType = "payment";
     }
   }
+
   if (!clientSecret) {
+    console.error(
+      "No client_secret on subscription. status:",
+      subscription.status,
+      "pending_setup_intent:",
+      typeof sub.pending_setup_intent,
+      "latest_invoice:",
+      typeof sub.latest_invoice
+    );
     return NextResponse.json({ error: "Could not initialize payment intent" }, { status: 502 });
   }
 

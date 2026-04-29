@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type {
   PlatformWalkthrough,
   WalkthroughNode,
@@ -68,9 +68,23 @@ export function CoachingWalkthrough({
     return Math.min(90, Math.round((navStack.length / Math.max(totalNodes - 1, 1)) * 90));
   }, [currentNode, walkthrough, navStack.length, totalNodes]);
 
-  // Load walkthrough + progress when modal opens
+  // Load walkthrough + progress when modal opens.
+  // Tracks initialization per (open, token, platform) session to prevent
+  // re-running on parent re-renders — which previously reset navStack to
+  // a single entry and wiped the user's back history mid-walkthrough.
+  const initSessionRef = useRef<string>("");
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initSessionRef.current = "";
+      return;
+    }
+    const sessionKey = `${token}::${platform}`;
+    if (initSessionRef.current === sessionKey) {
+      // Already initialized for this open session; don't reset navStack
+      return;
+    }
+    initSessionRef.current = sessionKey;
+
     if (walkthroughProp) {
       setWalkthrough(walkthroughProp);
       const startNode = progressProp?.last_node_id || walkthroughProp.start;
@@ -89,7 +103,10 @@ export function CoachingWalkthrough({
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load coaching"))
       .finally(() => setLoading(false));
-  }, [open, token, platform, walkthroughProp, progressProp]);
+    // walkthroughProp and progressProp are intentionally excluded — they
+    // are initialization-only props read on first session-mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, token, platform]);
 
   // Persist progress when current node changes
   const recordProgress = useCallback(

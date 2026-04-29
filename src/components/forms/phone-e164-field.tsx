@@ -99,7 +99,10 @@ export function PhoneE164Field({
           width: 6px;
           height: 6px;
         }
-        .tp-phone-wrap .PhoneInputInput {
+        /* Win specificity against globals.css's flat-input rule:
+           input:not([type="checkbox"]):not([type="radio"]) { ... }
+           Same :not() matchers + a wrapping class beats the global. */
+        .tp-phone-wrap input.PhoneInputInput:not([type="checkbox"]):not([type="radio"]) {
           flex: 1;
           border: none;
           background: transparent;
@@ -108,8 +111,16 @@ export function PhoneE164Field({
           color: #1a1a1a;
           padding: 0;
           font-family: inherit;
+          width: auto;
+          border-radius: 0;
+          line-height: 1.5;
         }
-        .tp-phone-wrap .PhoneInputInput::placeholder {
+        .tp-phone-wrap input.PhoneInputInput:not([type="checkbox"]):not([type="radio"]):hover,
+        .tp-phone-wrap input.PhoneInputInput:not([type="checkbox"]):not([type="radio"]):focus {
+          background: transparent;
+          outline: none;
+        }
+        .tp-phone-wrap input.PhoneInputInput::placeholder {
           color: #b0b8c4;
         }
       `}</style>

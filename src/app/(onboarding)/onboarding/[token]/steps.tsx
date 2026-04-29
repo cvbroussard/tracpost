@@ -12,6 +12,7 @@ import {
   RadioCardGroup,
   ValidationHint,
   ReviewSlot,
+  CoachingWalkthrough,
 } from "@/components/forms";
 
 interface StepProps {
@@ -460,7 +461,7 @@ function nudgePlatformMatchesCard(nudgePlatform: string | null, cardId: string):
 }
 
 export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudges = [] }: Step5Props) {
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [coachingPlatform, setCoachingPlatform] = useState<string | null>(null);
   const [skipped, setSkipped] = useState<Set<string>>(new Set(
     Object.entries(platformStatus).filter(([, s]) => s === "skipped").map(([p]) => p)
   ));
@@ -508,7 +509,6 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
           const isConnected = status === "connected";
           const hasFailed = status === "failed";
           const isSkipped = skipped.has(p.id);
-          const isExpanded = expanded === p.id;
           const platformNudges = nudges.filter((n) => nudgePlatformMatchesCard(n.platform, p.id));
           return (
             <div key={p.id} className={`ow-platform-row ${isConnected ? "ow-platform-connected" : ""}`}>
@@ -535,10 +535,18 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
                       </a>
                       <button
                         type="button"
-                        onClick={() => setExpanded(isExpanded ? null : p.id)}
+                        onClick={() => setCoachingPlatform(p.id)}
                         className="ow-btn-link"
                       >
                         How do I set this up?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleSkip(p.id)}
+                        className="ow-btn-link"
+                        style={{ fontSize: 12, color: "#9ca3af" }}
+                      >
+                        Mark as unavailable
                       </button>
                     </>
                   )}
@@ -547,7 +555,7 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
 
               {hasFailed && !isConnected && (
                 <div className="ow-platform-error">
-                  Connection failed. Try again, or expand the setup guide below if you need to create the account first.
+                  Connection failed. Try again, or open the setup guide if you need to create the account first.
                 </div>
               )}
 
@@ -555,28 +563,6 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
                 <div className="ow-platform-nudge">
                   <div className="ow-platform-nudge-title">{platformNudges[0].title}</div>
                   <div>{platformNudges[0].body}</div>
-                </div>
-              )}
-
-              {isExpanded && (
-                <div className="ow-platform-setup">
-                  <p className="ow-prose">
-                    <a href={p.setup.url} target="_blank" rel="noopener noreferrer" className="ow-link">
-                      Open {p.name} setup →
-                    </a>
-                  </p>
-                  <ol className="ow-setup-steps">
-                    {p.setup.steps.map((step, i) => (
-                      <li key={i}>{step}</li>
-                    ))}
-                  </ol>
-                  <p className="ow-prose ow-prose-muted">
-                    Truly can&apos;t set this up?{" "}
-                    <button type="button" onClick={() => toggleSkip(p.id)} className="ow-btn-link">
-                      Mark as unavailable
-                    </button>
-                    {" "}— TracPost will still try, but you won&apos;t see content there.
-                  </p>
                 </div>
               )}
             </div>
@@ -590,6 +576,18 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
           {saving ? "Saving…" : "Continue →"}
         </button>
       </div>
+
+      {coachingPlatform && (
+        <CoachingWalkthrough
+          token={token}
+          platform={coachingPlatform}
+          open={true}
+          onClose={() => setCoachingPlatform(null)}
+          onConnect={() => {
+            window.location.href = `/api/onboarding/${token}/connect/${coachingPlatform}`;
+          }}
+        />
+      )}
     </form>
   );
 }

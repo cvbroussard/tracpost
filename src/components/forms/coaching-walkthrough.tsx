@@ -1,0 +1,431 @@
+"use client";
+
+import { useState, useEffect, useCallback, useMemo } from "react";
+import type {
+  PlatformWalkthrough,
+  WalkthroughNode,
+  CoachingProgressPayload,
+} from "@/lib/onboarding/coaching/types";
+import { ThinProgressBar } from "./thin-progress-bar";
+
+interface Props {
+  /** Onboarding token (used to authorize API calls) */
+  token: string;
+  /** Platform key (meta, gbp, etc.) */
+  platform: string;
+  /** Pre-loaded walkthrough — if not provided, the modal fetches on open */
+  walkthrough?: PlatformWalkthrough;
+  /** Pre-loaded progress (resume support) */
+  progress?: CoachingProgressPayload | null;
+  /** Open/closed state, controlled by parent */
+  open: boolean;
+  /** Called when user closes the modal (clicks X or backdrop) */
+  onClose: () => void;
+  /** Called when user reaches and clicks the terminal Connect button.
+   *  Parent handles the actual OAuth navigation. */
+  onConnect?: () => void;
+}
+
+export function CoachingWalkthrough({
+  token,
+  platform,
+  walkthrough: walkthroughProp,
+  progress: progressProp,
+  open,
+  onClose,
+  onConnect,
+}: Props) {
+  const [walkthrough, setWalkthrough] = useState<PlatformWalkthrough | null>(walkthroughProp || null);
+  const [navStack, setNavStack] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const currentNodeId = navStack[navStack.length - 1];
+  const currentNode: WalkthroughNode | null = currentNodeId && walkthrough
+    ? walkthrough.nodes[currentNodeId] || null
+    : null;
+
+  // Compute progress percent from stack depth
+  const totalNodes = walkthrough ? Object.keys(walkthrough.nodes).length : 1;
+  const percent = useMemo(() => {
+    if (!currentNode || !walkthrough) return 0;
+    if (currentNode.type === "terminal") return 100;
+    // Use stack depth as a heuristic, capped at 90% pre-terminal
+    return Math.min(90, Math.round((navStack.length / Math.max(totalNodes - 1, 1)) * 90));
+  }, [currentNode, walkthrough, navStack.length, totalNodes]);
+
+  // Load walkthrough + progress when modal opens
+  useEffect(() => {
+    if (!open) return;
+    if (walkthroughProp) {
+      setWalkthrough(walkthroughProp);
+      const startNode = progressProp?.last_node_id || walkthroughProp.start;
+      setNavStack([startNode]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    fetch(`/api/onboarding/${token}/coaching/${platform}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Failed (${r.status})`))))
+      .then((data) => {
+        const w = data.walkthrough as PlatformWalkthrough;
+        setWalkthrough(w);
+        const resumeNode = (data.progress?.last_node_id as string) || w.start;
+        setNavStack([resumeNode]);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load coaching"))
+      .finally(() => setLoading(false));
+  }, [open, token, platform, walkthroughProp, progressProp]);
+
+  // Persist progress when current node changes
+  const recordProgress = useCallback(
+    async (nodeId: string, action: "navigate" | "complete" | "abandon" = "navigate") => {
+      try {
+        await fetch(`/api/onboarding/${token}/coaching/${platform}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ node_id: nodeId, action }),
+        });
+      } catch {
+        /* non-fatal — progress is a nice-to-have */
+      }
+    },
+    [token, platform]
+  );
+
+  const goNext = useCallback(
+    (nextId: string) => {
+      setNavStack((prev) => [...prev, nextId]);
+      recordProgress(nextId, "navigate");
+    },
+    [recordProgress]
+  );
+
+  const goBack = useCallback(() => {
+    setNavStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+  }, []);
+
+  const handleConnect = useCallback(() => {
+    if (currentNodeId) recordProgress(currentNodeId, "complete");
+    onConnect?.();
+    onClose();
+  }, [currentNodeId, recordProgress, onConnect, onClose]);
+
+  const handleClose = useCallback(() => {
+    if (currentNodeId) recordProgress(currentNodeId, "abandon");
+    onClose();
+  }, [currentNodeId, recordProgress, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={walkthrough?.title || "Connection guide"}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 200,
+        padding: 20,
+      }}
+      onClick={handleClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 560,
+          maxHeight: "90vh",
+          background: "#fff",
+          borderRadius: 16,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.30)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        {/* Thin progress bar */}
+        {walkthrough && <ThinProgressBar percent={percent} position="inline" />}
+
+        {/* Header */}
+        <header
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 14,
+            padding: "16px 20px 14px",
+            borderBottom: "1px solid #f3f4f6",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", letterSpacing: 0.14, margin: 0, textTransform: "uppercase" }}>
+              Setup guide
+            </p>
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: "#1a1a1a", margin: "2px 0 0" }}>
+              {walkthrough?.title || "Loading…"}
+            </h2>
+            {walkthrough?.estimated_time && (
+              <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
+                {walkthrough.estimated_time}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close"
+            style={{
+              width: 30,
+              height: 30,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "#6b7280",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 6,
+              flexShrink: 0,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+        </header>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "22px 24px 16px", background: "#fafafa" }}>
+          {loading && <div style={{ color: "#6b7280", fontSize: 14 }}>Loading guide…</div>}
+          {error && (
+            <div style={{ color: "#c53030", fontSize: 14, padding: "8px 10px", background: "rgba(229,62,62,0.06)", borderRadius: 8 }}>
+              {error}
+            </div>
+          )}
+          {currentNode && (
+            <NodeRenderer
+              node={currentNode}
+              onAdvance={goNext}
+              onConnect={handleConnect}
+              onDone={onClose}
+            />
+          )}
+        </div>
+
+        {/* Footer nav */}
+        <footer
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 20px",
+            borderTop: "1px solid #f3f4f6",
+            background: "#fff",
+          }}
+        >
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={navStack.length <= 1}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: navStack.length > 1 ? "#374151" : "#d1d5db",
+              fontSize: 13,
+              fontWeight: 500,
+              padding: "6px 0",
+              cursor: navStack.length > 1 ? "pointer" : "not-allowed",
+            }}
+          >
+            ← Back
+          </button>
+          <button
+            type="button"
+            onClick={handleClose}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#6b7280",
+              fontSize: 12,
+              padding: "6px 0",
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            Close guide
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function NodeRenderer({
+  node,
+  onAdvance,
+  onConnect,
+  onDone,
+}: {
+  node: WalkthroughNode;
+  onAdvance: (nextId: string) => void;
+  onConnect: () => void;
+  onDone: () => void;
+}) {
+  if (node.type === "question") {
+    return (
+      <div>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: "0 0 8px", lineHeight: 1.35 }}>
+          {node.question}
+        </h3>
+        {node.help && (
+          <p style={{ fontSize: 14, color: "#4b5563", margin: "0 0 18px", lineHeight: 1.55 }}>
+            {node.help}
+          </p>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 18 }}>
+          {node.options.map((opt) => (
+            <button
+              key={opt.next + opt.label}
+              type="button"
+              onClick={() => onAdvance(opt.next)}
+              style={{
+                textAlign: "left",
+                padding: "12px 16px",
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 10,
+                cursor: "pointer",
+                fontSize: 14,
+                fontWeight: 500,
+                color: "#1a1a1a",
+                transition: "border-color 120ms, background 120ms",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#1a1a1a";
+                e.currentTarget.style.background = "#f9fafb";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#e5e7eb";
+                e.currentTarget.style.background = "#fff";
+              }}
+            >
+              {opt.label}
+              {opt.hint && (
+                <span style={{ display: "block", fontSize: 12, color: "#6b7280", fontWeight: 400, marginTop: 3 }}>
+                  {opt.hint}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (node.type === "instruction") {
+    return (
+      <div>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px", lineHeight: 1.35 }}>
+          {node.title}
+        </h3>
+        <p style={{ fontSize: 14, color: "#374151", margin: "0 0 14px", lineHeight: 1.6 }}>
+          {node.body}
+        </p>
+        {node.bullets && node.bullets.length > 0 && (
+          <ul style={{ margin: "0 0 16px", paddingLeft: 20, color: "#4b5563", fontSize: 13, lineHeight: 1.65 }}>
+            {node.bullets.map((b, i) => (
+              <li key={i} style={{ marginBottom: 4 }}>{b}</li>
+            ))}
+          </ul>
+        )}
+        {node.screenshot && (
+          <div style={{ margin: "14px 0", borderRadius: 10, overflow: "hidden", border: "1px solid #e5e7eb", background: "#fff" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={node.screenshot}
+              alt={node.screenshot_alt || ""}
+              style={{ display: "block", width: "100%", height: "auto" }}
+              onError={(e) => {
+                (e.currentTarget.parentElement as HTMLElement).style.display = "none";
+              }}
+            />
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+          {node.deep_link && (
+            <a
+              href={node.deep_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-block",
+                padding: "10px 18px",
+                background: "#fff",
+                color: "#1a1a1a",
+                border: "1px solid #1a1a1a",
+                borderRadius: 999,
+                fontSize: 13,
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              {node.deep_link_label || "Open in new tab"} ↗
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => onAdvance(node.next)}
+            style={{
+              padding: "10px 22px",
+              background: "#1a1a1a",
+              color: "#fff",
+              border: "none",
+              borderRadius: 999,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              marginLeft: "auto",
+            }}
+          >
+            I&apos;m done with this step →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // terminal
+  return (
+    <div>
+      <h3 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>
+        {node.title}
+      </h3>
+      <p style={{ fontSize: 14, color: "#374151", margin: "0 0 22px", lineHeight: 1.6 }}>
+        {node.body}
+      </p>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+        <button
+          type="button"
+          onClick={node.action === "connect" ? onConnect : onDone}
+          style={{
+            padding: "11px 26px",
+            background: node.action === "connect" ? "var(--color-accent, #1d4ed8)" : "#1a1a1a",
+            color: "#fff",
+            border: "none",
+            borderRadius: 999,
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          {node.action_label || (node.action === "connect" ? "Connect" : "Done")}
+        </button>
+      </div>
+    </div>
+  );
+}

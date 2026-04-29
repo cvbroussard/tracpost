@@ -9,3 +9,4 @@ export { TagChipInput } from "./tag-chip-input";
 export { ChipMultiSelect } from "./chip-multi-select";
 export { SupportChat } from "./support-chat";
 export { OtpStepUp } from "./otp-step-up";
+export { CoachingWalkthrough } from "./coaching-walkthrough";

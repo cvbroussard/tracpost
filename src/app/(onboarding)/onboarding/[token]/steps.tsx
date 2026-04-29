@@ -14,6 +14,7 @@ import {
   ReviewSlot,
   CoachingWalkthrough,
 } from "@/components/forms";
+import { PlatformIcon } from "@/components/platform-icons";
 
 interface StepProps {
   data: Record<string, unknown>;
@@ -491,12 +492,13 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
   return (
     <form onSubmit={submit}>
       <p className="ow-prose">
-        Connect every platform you have. For platforms you don&apos;t have yet, click <strong>How do I set this up?</strong> for
-        step-by-step instructions, then come back and connect.
+        For each platform, click <strong>Get started</strong> to walk through a quick setup wizard.
+        Whether you already have an account or need to build one from scratch, we&apos;ll guide
+        you through every step before connecting.
       </p>
       <p className="ow-prose ow-prose-muted">
-        Connections happen in a separate window. After authorizing, you&apos;ll be brought right back to this page —
-        your progress is saved automatically.
+        Take your time. You can leave this step and come back. If a platform isn&apos;t available
+        right now, mark it unavailable inside the wizard and our team will follow up later.
       </p>
 
       <div className="ow-progress-summary">
@@ -513,7 +515,9 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
           return (
             <div key={p.id} className={`ow-platform-row ${isConnected ? "ow-platform-connected" : ""}`}>
               <div className="ow-platform-main">
-                <div className="ow-platform-swatch" style={{ background: p.color }} />
+                <div className="ow-platform-logo">
+                  <PlatformIcon platform={p.id} size={28} />
+                </div>
                 <div className="ow-platform-info">
                   <div className="ow-platform-name">{p.name}</div>
                   <div className="ow-platform-note">{p.note}</div>
@@ -529,7 +533,7 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
                     <button
                       type="button"
                       onClick={() => setCoachingPlatform(p.id)}
-                      className="ow-btn-primary ow-btn-compact"
+                      className="ow-platform-link"
                     >
                       Get started →
                     </button>

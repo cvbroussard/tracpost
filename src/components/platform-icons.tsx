@@ -103,6 +103,36 @@ export function PlatformIcon({ platform, size = 18 }: { platform: string; size?:
     case "twitter": return <TwitterIcon size={size} />;
     case "youtube": return <YouTubeIcon size={size} />;
     case "linkedin": return <LinkedInIcon size={size} />;
+    case "meta":
+      // Meta = Facebook + Instagram, shown as overlapping logos to reinforce
+      // the "one connection covers both" message
+      return (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            position: "relative",
+            width: size + 10,
+            height: size,
+          }}
+        >
+          <span style={{ position: "absolute", left: 0, color: "#1877F2", display: "inline-flex" }}>
+            <FacebookIcon size={size} />
+          </span>
+          <span
+            style={{
+              position: "absolute",
+              left: size - 4,
+              color: "#E4405F",
+              display: "inline-flex",
+              filter:
+                "drop-shadow(-1.5px 0 0 #fff) drop-shadow(1.5px 0 0 #fff) drop-shadow(0 -1.5px 0 #fff) drop-shadow(0 1.5px 0 #fff)",
+            }}
+          >
+            <InstagramIcon size={size} />
+          </span>
+        </span>
+      );
     default: return <span style={{ width: size, height: size, display: "inline-block" }}>◉</span>;
   }
 }

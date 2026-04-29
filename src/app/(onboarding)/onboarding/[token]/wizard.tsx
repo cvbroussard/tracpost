@@ -478,6 +478,32 @@ const wizardStyles = `
     border-radius: 6px;
     flex-shrink: 0;
   }
+  .ow-platform-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid #f3f4f6;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ow-platform-link {
+    background: transparent;
+    border: none;
+    padding: 4px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d4ed8;
+    cursor: pointer;
+    text-decoration: none;
+    transition: color 0.12s;
+  }
+  .ow-platform-link:hover {
+    color: #1a1a1a;
+    text-decoration: underline;
+  }
   .ow-platform-info { flex: 1; }
   .ow-platform-name {
     font-size: 14px;

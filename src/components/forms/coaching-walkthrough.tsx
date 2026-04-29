@@ -13,6 +13,8 @@ interface Props {
   token: string;
   /** Platform key (meta, gbp, etc.) */
   platform: string;
+  /** Friendly platform label for confirmation copy (e.g., "Facebook & Instagram") */
+  platformLabel?: string;
   /** Pre-loaded walkthrough — if not provided, the modal fetches on open */
   walkthrough?: PlatformWalkthrough;
   /** Pre-loaded progress (resume support) */
@@ -24,17 +26,23 @@ interface Props {
   /** Called when user reaches and clicks the terminal Connect button.
    *  Parent handles the actual OAuth navigation. */
   onConnect?: () => void;
+  /** Called when user explicitly marks this platform as unavailable.
+   *  Parent updates state and typically closes the modal. */
+  onSkip?: () => void;
 }
 
 export function CoachingWalkthrough({
   token,
   platform,
+  platformLabel,
   walkthrough: walkthroughProp,
   progress: progressProp,
   open,
   onClose,
   onConnect,
+  onSkip,
 }: Props) {
+  const [confirmingSkip, setConfirmingSkip] = useState(false);
   const [walkthrough, setWalkthrough] = useState<PlatformWalkthrough | null>(walkthroughProp || null);
   const [navStack, setNavStack] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -147,6 +155,7 @@ export function CoachingWalkthrough({
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          position: "relative",
         }}
       >
         {/* Thin progress bar */}
@@ -226,6 +235,8 @@ export function CoachingWalkthrough({
             padding: "12px 20px",
             borderTop: "1px solid #f3f4f6",
             background: "#fff",
+            flexWrap: "wrap",
+            gap: 8,
           }}
         >
           <button
@@ -244,22 +255,116 @@ export function CoachingWalkthrough({
           >
             ← Back
           </button>
-          <button
-            type="button"
-            onClick={handleClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#6b7280",
-              fontSize: 12,
-              padding: "6px 0",
-              cursor: "pointer",
-              textDecoration: "underline",
-            }}
-          >
-            Close guide
-          </button>
+          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+            {onSkip && (
+              <button
+                type="button"
+                onClick={() => setConfirmingSkip(true)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#9ca3af",
+                  fontSize: 12,
+                  padding: "6px 0",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+              >
+                Mark unavailable
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleClose}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#6b7280",
+                fontSize: 12,
+                padding: "6px 0",
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              Close guide
+            </button>
+          </div>
         </footer>
+
+        {/* Skip confirmation overlay */}
+        {confirmingSkip && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(255,255,255,0.96)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 24,
+              zIndex: 1,
+            }}
+            onClick={() => setConfirmingSkip(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: 400,
+                width: "100%",
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 14,
+                padding: "22px 24px",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
+                textAlign: "center",
+              }}
+            >
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>
+                Mark {platformLabel || "this platform"} as unavailable?
+              </h3>
+              <p style={{ fontSize: 13, color: "#4b5563", margin: "0 0 18px", lineHeight: 1.55 }}>
+                Your operator will follow up to handle this platform during provisioning. You can come back and connect it later from your dashboard.
+              </p>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingSkip(false)}
+                  style={{
+                    padding: "9px 16px",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    background: "transparent",
+                    color: "#374151",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 999,
+                    cursor: "pointer",
+                  }}
+                >
+                  Keep going
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentNodeId) recordProgress(currentNodeId, "abandon");
+                    onSkip?.();
+                  }}
+                  style={{
+                    padding: "9px 18px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background: "#1a1a1a",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 999,
+                    cursor: "pointer",
+                  }}
+                >
+                  Yes, mark unavailable
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

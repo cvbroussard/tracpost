@@ -34,7 +34,7 @@ const WALKTHROUGHS = [
         type: "question",
         content: {
           question: "Do you have a personal Facebook account?",
-          help: "Facebook Business Pages can only be created and managed from a personal profile. We won't publish anything from your personal account — but you need one to own the Business Page.",
+          help: "Facebook requires a personal account to own and manage a Business Page — that's a Facebook rule, not a TracPost one. TracPost will publish to your Business Page; it will never touch your personal Facebook profile.",
           options: [
             { label: "Yes, I have one", next: "q_business_page" },
             { label: "No, I need to create one", next: "i_create_personal" },
@@ -46,11 +46,12 @@ const WALKTHROUGHS = [
         type: "instruction",
         content: {
           title: "Create your personal Facebook account",
-          body: "Use your business email (or a personal email — doesn't matter). This account is just the owner-of-record for your Business Page; nothing personal will ever be published from it.",
+          body: "Use your business email (or a personal email — doesn't matter). This personal account exists only to be the owner-of-record for your Business Page. TracPost will publish content to your Business Page on your behalf, but it will never publish to, read from, or interact with your personal Facebook profile.",
           bullets: [
             "Use a real name (Facebook flags fake-name accounts)",
             "Verify with phone or email — prevents the new account from being limited",
-            "You don't need to add friends or post anything personal",
+            "You don't need to add friends, post, or use Facebook personally",
+            "TracPost only ever interacts with the Business Page you'll create next — your personal profile stays private and untouched",
           ],
           deep_link: "https://www.facebook.com/r.php",
           deep_link_label: "Open Facebook signup",
@@ -326,7 +327,7 @@ const WALKTHROUGHS = [
         type: "question",
         content: {
           question: "Do you have a personal LinkedIn account?",
-          help: "Required to create or admin a Company Page. We won't post from your personal profile — Company Pages are managed through it.",
+          help: "LinkedIn requires a personal profile to create or admin a Company Page — their rule, not ours. TracPost will publish to your Company Page; it will never publish to your personal LinkedIn profile.",
           options: [
             { label: "Yes", next: "q_company_page" },
             { label: "No, I need to create one", next: "i_create_personal_linkedin" },
@@ -338,7 +339,7 @@ const WALKTHROUGHS = [
         type: "instruction",
         content: {
           title: "Create your personal LinkedIn account",
-          body: "Use your business email. Fill in name, current job (your role at the business is fine), and basic location. You don't need to build out your profile heavily — it's just the owner-of-record for the Company Page.",
+          body: "Use your business email. Fill in name, current job (your role at the business is fine), and basic location. You don't need to build out your profile heavily — it exists only to be the owner-of-record for your Company Page. TracPost only ever publishes to the Company Page; your personal LinkedIn stays private and untouched.",
           deep_link: "https://www.linkedin.com/signup",
           deep_link_label: "Open LinkedIn signup",
           screenshot: "/onboarding/linkedin/01-signup.png",

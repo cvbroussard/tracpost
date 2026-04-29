@@ -526,29 +526,13 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
                       Marked unavailable · undo
                     </button>
                   ) : (
-                    <>
-                      <a
-                        href={`/api/onboarding/${token}/connect/${p.id}`}
-                        className="ow-btn-primary ow-btn-compact"
-                      >
-                        Connect
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => setCoachingPlatform(p.id)}
-                        className="ow-btn-link"
-                      >
-                        How do I set this up?
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleSkip(p.id)}
-                        className="ow-btn-link"
-                        style={{ fontSize: 12, color: "#9ca3af" }}
-                      >
-                        Mark as unavailable
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      onClick={() => setCoachingPlatform(p.id)}
+                      className="ow-btn-primary ow-btn-compact"
+                    >
+                      Get started →
+                    </button>
                   )}
                 </div>
               </div>
@@ -586,6 +570,11 @@ export function Step5Connect({ platformStatus = {}, onSave, saving, token, nudge
           onConnect={() => {
             window.location.href = `/api/onboarding/${token}/connect/${coachingPlatform}`;
           }}
+          onSkip={() => {
+            toggleSkip(coachingPlatform);
+            setCoachingPlatform(null);
+          }}
+          platformLabel={PLATFORMS.find((p) => p.id === coachingPlatform)?.name}
         />
       )}
     </form>

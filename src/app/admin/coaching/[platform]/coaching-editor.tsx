@@ -695,29 +695,25 @@ function GalleryEditor({ platform, nodeId, gallery, onChange }: GalleryEditorPro
   async function uploadFile(file: File) {
     setUploading(true);
     try {
-      const presign = await fetch("/api/admin/coaching/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          platform,
-          nodeId,
-          filename: file.name,
-          contentType: file.type,
-        }),
-      });
-      const presignData = await presign.json();
-      if (!presign.ok) throw new Error(presignData.error || "Presign failed");
+      // Server-proxied upload: browser → /api/admin/coaching/upload →
+      // R2. We don't go direct-to-R2 because the bucket lacks browser
+      // CORS configuration; routing through our API also keeps Cloudflare
+      // cache purge in the same request.
+      const form = new FormData();
+      form.append("platform", platform);
+      form.append("nodeId", nodeId);
+      form.append("file", file);
 
-      const put = await fetch(presignData.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
+      const res = await fetch("/api/admin/coaching/upload", {
+        method: "POST",
+        body: form,
       });
-      if (!put.ok) throw new Error(`R2 upload failed (${put.status})`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
 
       onChange([
         ...gallery,
-        { type: "image", url: presignData.publicUrl, caption: "", alt: "" },
+        { type: "image", url: data.publicUrl, caption: "", alt: "" },
       ]);
       toast.success(`Uploaded ${file.name}`);
     } catch (err) {

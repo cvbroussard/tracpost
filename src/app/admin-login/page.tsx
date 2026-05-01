@@ -27,9 +27,15 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const isSubdomain =
-        window.location.hostname === "platform.tracpost.com";
-      router.push(isSubdomain ? "/" : "/admin");
+      // On a subdomain like platform.tracpost.com or manage.tracpost.com,
+      // the root path is rewritten by middleware to /admin or /manage
+      // respectively. Pushing "/admin" on those hosts double-rewrites to
+      // /admin/admin or /manage/admin → 404. Push "/" and let middleware
+      // route to the correct destination.
+      const host = window.location.hostname;
+      const isAdminSubdomain =
+        host === "platform.tracpost.com" || host === "manage.tracpost.com";
+      router.push(isAdminSubdomain ? "/" : "/admin");
     } catch {
       setError("Network error");
     } finally {

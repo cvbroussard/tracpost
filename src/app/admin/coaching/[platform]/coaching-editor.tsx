@@ -482,8 +482,20 @@ function InstructionEditor({
         <textarea
           value={bullets.join("\n")}
           onChange={(e) => {
-            const lines = e.target.value.split("\n").map((l) => l.trim()).filter(Boolean);
-            update({ bullets: lines.length > 0 ? lines : undefined });
+            // During typing: keep raw lines so newlines and trailing
+            // spaces aren't eaten by the same-tick re-render. The
+            // previous trim+filter inside onChange dropped empty lines
+            // before the cursor could move to them (Enter was a no-op)
+            // and stripped trailing whitespace before the next character
+            // could land (Space was a no-op). Cleanup happens on blur.
+            update({ bullets: e.target.value.split("\n") });
+          }}
+          onBlur={(e) => {
+            const cleaned = e.target.value
+              .split("\n")
+              .map((l) => l.trim())
+              .filter(Boolean);
+            update({ bullets: cleaned.length > 0 ? cleaned : undefined });
           }}
           rows={Math.max(3, bullets.length + 1)}
           className="input"

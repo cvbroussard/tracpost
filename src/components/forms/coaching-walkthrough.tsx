@@ -897,40 +897,36 @@ function GalleryLightbox({
                     position: "relative",
                   }}
                 >
-                  {it.type === "image" && !erroredUrls.has(it.url) ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={it.url}
-                      alt=""
-                      onError={() => markErrored(it.url)}
-                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                    />
-                  ) : (
-                    <span style={{ fontFamily: "ui-monospace, 'SF Mono', monospace" }}>
-                      {idx + 1}
-                    </span>
-                  )}
-                  {/* Tiny corner badge for button-step thumbnails so they're
-                      visually distinguishable from image thumbs at a glance */}
-                  {it.type === "button" && (
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: 2,
-                        right: 2,
-                        fontSize: 8,
-                        background: "rgba(29,78,216,0.85)",
-                        color: "#fff",
-                        padding: "1px 4px",
-                        borderRadius: 4,
-                        letterSpacing: 0.4,
-                        textTransform: "uppercase",
-                        fontWeight: 700,
-                      }}
-                    >
-                      tap
-                    </span>
-                  )}
+                  {/* Numbered tile — image thumbnails at this size are
+                      illegible smears, so the strip is purely sequential
+                      navigation. Type is signaled by a corner badge. */}
+                  <span
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      fontFamily: "ui-monospace, 'SF Mono', monospace",
+                      color: isActive ? "#1d4ed8" : "#1a1a1a",
+                    }}
+                  >
+                    {idx + 1}
+                  </span>
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 2,
+                      right: 2,
+                      fontSize: 8,
+                      background: it.type === "button" ? "rgba(29,78,216,0.85)" : "rgba(107,114,128,0.85)",
+                      color: "#fff",
+                      padding: "1px 4px",
+                      borderRadius: 4,
+                      letterSpacing: 0.4,
+                      textTransform: "uppercase",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {it.type === "button" ? "tap" : "img"}
+                  </span>
                 </button>
               );
             })}
@@ -957,48 +953,50 @@ function GalleryLightbox({
             onImageError={() => active.type === "image" && markErrored(active.url)}
           />
 
-          {active.type === "button" && active.label && (
-            <p
+          {/* Caption + step counter wrapped in a solid card so they don't
+              get lost against the lightbox backdrop or whatever's behind it. */}
+          {(active.caption || total > 1) && (
+            <div
               style={{
-                fontSize: 12,
-                color: "rgba(255,255,255,0.92)",
-                margin: 0,
-                textAlign: "center",
-                textShadow: "0 1px 3px rgba(0,0,0,0.5)",
-                fontWeight: 600,
-              }}
-            >
-              {active.label}
-            </p>
-          )}
-
-          {active.caption && (
-            <p
-              style={{
-                fontSize: 13,
+                background: "rgba(17,24,39,0.88)",
                 color: "#fff",
-                textAlign: "center",
+                padding: "10px 16px",
+                borderRadius: 10,
                 maxWidth: 540,
-                margin: 0,
-                textShadow: "0 1px 3px rgba(0,0,0,0.5)",
-                lineHeight: 1.55,
+                textAlign: "center",
+                backdropFilter: "blur(4px)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.30)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
               }}
             >
-              {active.caption}
-            </p>
-          )}
-
-          {total > 1 && (
-            <p
-              style={{
-                fontSize: 11,
-                color: "rgba(255,255,255,0.85)",
-                margin: 0,
-                textShadow: "0 1px 3px rgba(0,0,0,0.5)",
-              }}
-            >
-              Step {activeIndex + 1} of {total}
-            </p>
+              {active.caption && (
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "#fff",
+                    margin: 0,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {active.caption}
+                </p>
+              )}
+              {total > 1 && (
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: "rgba(255,255,255,0.70)",
+                    margin: 0,
+                    fontWeight: 500,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  Step {activeIndex + 1} of {total}
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>

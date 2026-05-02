@@ -518,7 +518,7 @@ const WALKTHROUGHS = [
           bullets: [
             "Free conversion — no fees, no review",
             "All your existing pins and boards stay",
-            "Adds analytics + ad capabilities (you don't have to use them)",
+            "Unlocks Pinterest analytics — see which pins drive engagement",
           ],
           deep_link: "https://www.pinterest.com/settings/account-settings",
           deep_link_label: "Open Pinterest settings",

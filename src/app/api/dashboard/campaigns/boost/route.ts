@@ -39,6 +39,9 @@ export async function POST(req: NextRequest) {
   const igUsername = String(body.igUsername || "").trim();
   const name = String(body.name || "").trim() || `Boost: ${pageName || igUsername || "post"}`;
   const dailyBudgetDollars = Number(body.dailyBudgetDollars);
+  // Optional: attach this boost to an existing campaign instead of
+  // creating a new campaign for it. Empty string / null = create new.
+  const existingCampaignId = String(body.campaignId || "").trim();
 
   if (platform === "facebook") {
     if (!postId || !pageId) {
@@ -76,16 +79,24 @@ export async function POST(req: NextRequest) {
   const accessToken = decrypt(rows[0].access_token_encrypted as string);
 
   try {
-    const campaign = await createCampaign(
-      adAccountId,
-      { name, objective: "OUTCOME_ENGAGEMENT", status: "PAUSED" },
-      accessToken
-    );
+    // Either reuse the existing campaign or create a new one for this boost.
+    let campaignId: string;
+    if (existingCampaignId) {
+      campaignId = existingCampaignId;
+    } else {
+      const campaign = await createCampaign(
+        adAccountId,
+        { name, objective: "OUTCOME_ENGAGEMENT", status: "PAUSED" },
+        accessToken
+      );
+      campaignId = campaign.id;
+    }
+
     const adSet = await createAdSet(
       adAccountId,
       {
         name: `${name} — ad set`,
-        campaignId: campaign.id,
+        campaignId,
         dailyBudgetCents: Math.round(dailyBudgetDollars * 100),
         optimizationGoal: "POST_ENGAGEMENT",
         status: "PAUSED",
@@ -108,11 +119,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       platform,
-      campaignId: campaign.id,
+      campaignId,
       adSetId: adSet.id,
       adId: ad.adId,
       creativeId: ad.creativeId,
       status: "PAUSED",
+      attachedToExistingCampaign: !!existingCampaignId,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

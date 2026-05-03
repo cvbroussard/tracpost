@@ -158,6 +158,88 @@ export async function listCampaigns(
   }));
 }
 
+// ─── Read: ads under a campaign or account ─────────────────────────
+
+export interface MetaAd {
+  id: string;
+  name: string;
+  status: string;
+  effectiveStatus: string;
+  campaignId: string | null;
+  adSetId: string | null;
+  creativeId: string | null;
+  objectStoryId: string | null;       // {pageId}_{postId} — FB boost
+  effectiveInstagramMediaId: string | null;  // IG media ID — IG boost
+  insights: CampaignInsights;
+  thumbnailUrl: string | null;
+}
+
+/**
+ * List ads under an ad account (optionally filtered to one campaign),
+ * with creative + insights expanded in a single Graph call. Used by the
+ * Campaigns drill-down + the already-promoted badge on the Promote tab.
+ */
+export async function listAds(
+  adAccountId: string,
+  accessToken: string,
+  campaignId?: string
+): Promise<MetaAd[]> {
+  const id = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
+  const fields = [
+    "id",
+    "name",
+    "status",
+    "effective_status",
+    "campaign_id",
+    "adset_id",
+    "creative{id,object_story_id,effective_instagram_media_id,thumbnail_url}",
+    "insights.date_preset(maximum){spend,impressions,clicks,reach,cpc,cpm,ctr}",
+  ].join(",");
+  const params = new URLSearchParams({
+    fields,
+    limit: "200",
+    access_token: accessToken,
+  });
+  if (campaignId) {
+    params.set("filtering", JSON.stringify([{ field: "campaign.id", operator: "EQUAL", value: campaignId }]));
+  }
+  const res = await fetch(`${GRAPH_BASE}/${id}/ads?${params}`);
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`List ads failed: ${JSON.stringify(data.error || data)}`);
+  }
+  if (!Array.isArray(data.data)) return [];
+
+  return data.data.map((row: Record<string, unknown>) => {
+    const creative = (row.creative || {}) as Record<string, unknown>;
+    const insightsArr = ((row.insights || {}) as Record<string, unknown>).data as Array<Record<string, unknown>> | undefined;
+    const insightsRow = insightsArr && insightsArr.length > 0 ? insightsArr[0] : {};
+    return {
+      id: String(row.id),
+      name: String(row.name || ""),
+      status: String(row.status || ""),
+      effectiveStatus: String(row.effective_status || ""),
+      campaignId: row.campaign_id ? String(row.campaign_id) : null,
+      adSetId: row.adset_id ? String(row.adset_id) : null,
+      creativeId: creative.id ? String(creative.id) : null,
+      objectStoryId: creative.object_story_id ? String(creative.object_story_id) : null,
+      effectiveInstagramMediaId: creative.effective_instagram_media_id
+        ? String(creative.effective_instagram_media_id)
+        : null,
+      thumbnailUrl: creative.thumbnail_url ? String(creative.thumbnail_url) : null,
+      insights: {
+        spend: String(insightsRow.spend ?? "0"),
+        impressions: String(insightsRow.impressions ?? "0"),
+        clicks: String(insightsRow.clicks ?? "0"),
+        reach: String(insightsRow.reach ?? "0"),
+        cpc: String(insightsRow.cpc ?? "0"),
+        cpm: String(insightsRow.cpm ?? "0"),
+        ctr: String(insightsRow.ctr ?? "0"),
+      },
+    };
+  });
+}
+
 // ─── Write operations ────────────────────────────────────────────────
 
 export interface CreateCampaignParams {

@@ -54,6 +54,28 @@ interface TopPost {
   engagement: number;
 }
 
+interface MetaAd {
+  id: string;
+  name: string;
+  status: string;
+  effectiveStatus: string;
+  campaignId: string | null;
+  adSetId: string | null;
+  creativeId: string | null;
+  objectStoryId: string | null;
+  effectiveInstagramMediaId: string | null;
+  thumbnailUrl: string | null;
+  insights: {
+    spend: string;
+    impressions: string;
+    clicks: string;
+    reach: string;
+    cpc: string;
+    cpm: string;
+    ctr: string;
+  };
+}
+
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "bg-emerald-100 text-emerald-800",
   PAUSED: "bg-amber-100 text-amber-800",
@@ -80,7 +102,7 @@ function fmtDate(iso: string): string {
 }
 
 export function CampaignsClient(_props: Props) {
-  const [activeTab, setActiveTab] = useState<"campaigns" | "boost">("campaigns");
+  const [activeTab, setActiveTab] = useState<"campaigns" | "promote">("campaigns");
 
   const [adAccount, setAdAccount] = useState<AdAccount | null>(null);
   const [adAccountLoading, setAdAccountLoading] = useState(true);
@@ -108,9 +130,20 @@ export function CampaignsClient(_props: Props) {
   // Boost form state (per-post inline)
   const [boostingPostId, setBoostingPostId] = useState<string | null>(null);
   const [boostBudget, setBoostBudget] = useState("10");
+  // Optional: attach this boost to an existing campaign.
+  // "" = create a new campaign for this boost.
+  const [boostCampaignId, setBoostCampaignId] = useState("");
   const [boosting, setBoosting] = useState(false);
   const [boostError, setBoostError] = useState<string | null>(null);
   const [boostSuccess, setBoostSuccess] = useState<string | null>(null);
+
+  // Drill-down: ads under each expanded campaign (campaignId → ads)
+  const [adsByCampaign, setAdsByCampaign] = useState<Record<string, MetaAd[]>>({});
+  const [loadingAdsForCampaign, setLoadingAdsForCampaign] = useState<string | null>(null);
+
+  // Already-promoted detection: set of object_story_ids and IG media IDs
+  // currently attached to active ads. Used to badge eligible posts.
+  const [promotedRefs, setPromotedRefs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -147,13 +180,42 @@ export function CampaignsClient(_props: Props) {
   }, [adAccount]);
 
   useEffect(() => {
-    if (activeTab !== "boost") return;
+    if (activeTab !== "promote") return;
     setTopPostsLoading(true);
     fetch("/api/dashboard/campaigns/top-posts")
       .then((r) => r.json())
       .then((data) => setTopPosts(data.posts || []))
       .finally(() => setTopPostsLoading(false));
+
+    // Load promoted-refs in parallel so we can badge already-promoted posts
+    fetch("/api/dashboard/campaigns/ads")
+      .then((r) => r.json())
+      .then((data) => {
+        const refs = new Set<string>();
+        for (const ad of (data.ads || []) as MetaAd[]) {
+          // Only count ads that aren't deleted/archived as "currently promoted"
+          if (ad.effectiveStatus === "DELETED" || ad.effectiveStatus === "ARCHIVED") continue;
+          if (ad.objectStoryId) refs.add(ad.objectStoryId);
+          if (ad.effectiveInstagramMediaId) refs.add(ad.effectiveInstagramMediaId);
+        }
+        setPromotedRefs(refs);
+      })
+      .catch(() => { /* badge is non-critical, fail silently */ });
   }, [activeTab]);
+
+  async function loadAdsForCampaign(campaignId: string) {
+    if (adsByCampaign[campaignId]) return; // already loaded
+    setLoadingAdsForCampaign(campaignId);
+    try {
+      const res = await fetch(`/api/dashboard/campaigns/ads?campaignId=${encodeURIComponent(campaignId)}`);
+      const data = await res.json();
+      if (Array.isArray(data.ads)) {
+        setAdsByCampaign((prev) => ({ ...prev, [campaignId]: data.ads }));
+      }
+    } finally {
+      setLoadingAdsForCampaign(null);
+    }
+  }
 
   async function refreshCampaigns() {
     setCampaignsLoading(true);
@@ -222,6 +284,7 @@ export function CampaignsClient(_props: Props) {
           igUsername: post.igUsername ?? "",
           name: `Boost: ${post.caption.slice(0, 50) || post.id}`,
           dailyBudgetDollars: parseFloat(boostBudget),
+          campaignId: boostCampaignId || undefined,
         }),
       });
       const data = await res.json();
@@ -229,10 +292,23 @@ export function CampaignsClient(_props: Props) {
         setBoostError(data.message || data.error || "Boost failed");
         return;
       }
-      setBoostSuccess(`Boost campaign created (paused). Activate in Meta Ads Manager when ready.`);
+      setBoostSuccess(
+        boostCampaignId
+          ? `Promoted post added to existing campaign (paused). Activate in Meta Ads Manager when ready.`
+          : `New boost campaign created (paused). Activate in Meta Ads Manager when ready.`
+      );
       setBoostingPostId(null);
+      setBoostCampaignId("");
       // Pull the campaigns list so the new boost appears
       await refreshCampaigns();
+      // Invalidate ads cache for the affected campaign so drill-down refreshes
+      if (data.campaignId) {
+        setAdsByCampaign((prev) => {
+          const copy = { ...prev };
+          delete copy[data.campaignId];
+          return copy;
+        });
+      }
     } catch (err) {
       setBoostError(err instanceof Error ? err.message : "Network error");
     } finally {
@@ -260,7 +336,7 @@ export function CampaignsClient(_props: Props) {
     return (
       <div className="p-4">
         <div className="mb-4">
-          <h2 className="text-lg font-medium">Campaign Management</h2>
+          <h2 className="text-lg font-medium">Meta Ads</h2>
           <p className="text-xs text-muted">Promote your best content to homeowners in your service area</p>
         </div>
 
@@ -307,7 +383,7 @@ export function CampaignsClient(_props: Props) {
       {/* Ad Account header */}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-medium">Campaign Management</h2>
+          <h2 className="text-lg font-medium">Meta Ads</h2>
           <p className="text-xs text-muted">Promote your best content to homeowners in your service area</p>
         </div>
         <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2">
@@ -335,12 +411,12 @@ export function CampaignsClient(_props: Props) {
           Campaigns
         </button>
         <button
-          onClick={() => setActiveTab("boost")}
+          onClick={() => setActiveTab("promote")}
           className={`px-4 py-2.5 text-sm transition-colors ${
-            activeTab === "boost" ? "border-b-2 border-accent text-accent" : "text-muted hover:text-foreground"
+            activeTab === "promote" ? "border-b-2 border-accent text-accent" : "text-muted hover:text-foreground"
           }`}
         >
-          Boost a Post
+          Promote a Post
         </button>
       </div>
 
@@ -456,10 +532,15 @@ export function CampaignsClient(_props: Props) {
               </div>
               {campaigns.map((c) => {
                 const isExpanded = expandedRow === c.id;
+                const adsForThisCampaign = adsByCampaign[c.id];
                 return (
                   <div key={c.id} className="border-b border-border last:border-0">
                     <button
-                      onClick={() => setExpandedRow(isExpanded ? null : c.id)}
+                      onClick={() => {
+                        const next = isExpanded ? null : c.id;
+                        setExpandedRow(next);
+                        if (next) loadAdsForCampaign(next);
+                      }}
                       className="w-full px-4 py-3 hover:bg-surface-hover transition-colors text-left"
                     >
                       <div className="grid grid-cols-[1fr_90px_100px_90px_90px_90px] items-center">
@@ -480,7 +561,8 @@ export function CampaignsClient(_props: Props) {
                       </div>
                     </button>
                     {isExpanded && (
-                      <div className="border-t border-border bg-background px-4 py-3">
+                      <div className="border-t border-border bg-background px-4 py-3 space-y-4">
+                        {/* Campaign-level rollup metrics */}
                         <div className="grid grid-cols-4 gap-4">
                           <div>
                             <p className="text-[10px] text-muted">Impressions</p>
@@ -499,7 +581,43 @@ export function CampaignsClient(_props: Props) {
                             <p className="text-sm font-medium">{fmtMoney(c.insights.cpm, adAccount.currency)}</p>
                           </div>
                         </div>
-                        <p className="mt-3 text-[10px] text-muted">
+
+                        {/* Per-ad detail (promoted posts inside this campaign) */}
+                        <div>
+                          <h4 className="text-[11px] font-medium text-muted mb-2">Promoted posts in this campaign</h4>
+                          {loadingAdsForCampaign === c.id && (
+                            <p className="text-[11px] text-muted">Loading ads…</p>
+                          )}
+                          {adsForThisCampaign && adsForThisCampaign.length === 0 && (
+                            <p className="text-[11px] text-muted">No ads in this campaign yet. Use the Promote a Post tab to add one.</p>
+                          )}
+                          {adsForThisCampaign && adsForThisCampaign.length > 0 && (
+                            <div className="space-y-2">
+                              {adsForThisCampaign.map((ad) => (
+                                <div key={ad.id} className="flex items-start gap-3 rounded border border-border bg-surface p-2">
+                                  {ad.thumbnailUrl && (
+                                    <img src={ad.thumbnailUrl} alt="" className="h-10 w-10 rounded object-cover flex-shrink-0" />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium truncate">{ad.name || ad.id}</p>
+                                    <p className="text-[10px] text-muted">
+                                      {ad.objectStoryId ? `FB post · ${ad.objectStoryId}` : ad.effectiveInstagramMediaId ? `IG media · ${ad.effectiveInstagramMediaId}` : "no creative ref"}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[10px]">
+                                    <span className={`rounded-full px-2 py-0.5 font-medium ${STATUS_COLORS[ad.effectiveStatus] || "bg-gray-100 text-gray-500"}`}>
+                                      {ad.effectiveStatus.toLowerCase()}
+                                    </span>
+                                    <span>{fmtMoney(ad.insights.spend, adAccount.currency)} spent</span>
+                                    <span>{parseInt(ad.insights.impressions || "0", 10).toLocaleString()} impressions</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <p className="text-[10px] text-muted">
                           Campaign ID: {c.id} · Status: {c.status} · Created {fmtDate(c.createdTime)}
                         </p>
                       </div>
@@ -512,8 +630,9 @@ export function CampaignsClient(_props: Props) {
         </div>
       )}
 
-      {/* Boost Tab — Phase A surfaces real top-engagement organic posts; Phase C wires the boost-flow */}
-      {activeTab === "boost" && (
+      {/* Promote a Post Tab — eligible posts ranked by engagement, with badges
+          on posts already attached to active boost campaigns. */}
+      {activeTab === "promote" && (
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
             <h3 className="text-sm font-medium mb-1">Top Performing Organic Posts</h3>
@@ -537,6 +656,12 @@ export function CampaignsClient(_props: Props) {
             <div className="space-y-3">
               {topPosts.map((post) => {
                 const isBoosting = boostingPostId === post.id;
+                // A post is already-promoted if its identifier appears
+                // in any active ad's creative reference.
+                // FB: post.id is in pageId_postId form (matches object_story_id)
+                // IG: post.igMediaId matches effective_instagram_media_id
+                const ref = post.platform === "instagram" ? (post.igMediaId || "") : post.id;
+                const alreadyPromoted = promotedRefs.has(ref);
                 return (
                   <div
                     key={post.id}
@@ -554,6 +679,11 @@ export function CampaignsClient(_props: Props) {
                           <span className="text-[10px] text-muted">
                             {post.platform === "instagram" ? `@${post.igUsername}` : post.pageName}
                           </span>
+                          {alreadyPromoted && (
+                            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[9px] font-medium text-accent">
+                              Currently promoted
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs line-clamp-2">{post.caption || "(no caption)"}</p>
                         <div className="mt-1.5 flex gap-4 text-[10px] text-muted">
@@ -563,17 +693,37 @@ export function CampaignsClient(_props: Props) {
                       </div>
                       {!isBoosting && (
                         <button
-                          onClick={() => { setBoostingPostId(post.id); setBoostError(null); setBoostSuccess(null); }}
+                          onClick={() => {
+                            setBoostingPostId(post.id);
+                            setBoostError(null);
+                            setBoostSuccess(null);
+                            setBoostCampaignId("");
+                          }}
                           className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90"
                         >
-                          Boost
+                          {alreadyPromoted ? "Promote again" : "Promote"}
                         </button>
                       )}
                     </div>
 
                     {isBoosting && (
-                      <div className="mt-3 pt-3 border-t border-border">
-                        <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+                      <div className="mt-3 pt-3 border-t border-border space-y-3">
+                        <div className="grid grid-cols-[1fr_140px] gap-3">
+                          <div>
+                            <label className="block text-[10px] text-muted mb-0.5">Campaign</label>
+                            <select
+                              value={boostCampaignId}
+                              onChange={(e) => setBoostCampaignId(e.target.value)}
+                              className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
+                            >
+                              <option value="">+ Create a new campaign for this boost</option>
+                              {campaigns.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name || c.id} ({c.effectiveStatus.toLowerCase()})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                           <div>
                             <label className="block text-[10px] text-muted mb-0.5">Daily Budget ($)</label>
                             <input
@@ -582,12 +732,13 @@ export function CampaignsClient(_props: Props) {
                               step="1"
                               value={boostBudget}
                               onChange={(e) => setBoostBudget(e.target.value)}
-                              className="w-32 rounded border border-border bg-background px-2 py-1.5 text-xs"
+                              className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
                             />
                           </div>
-                          <div className="flex items-center gap-2">
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
                             <button
-                              onClick={() => setBoostingPostId(null)}
+                              onClick={() => { setBoostingPostId(null); setBoostCampaignId(""); }}
                               className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:bg-surface-hover"
                             >
                               Cancel
@@ -599,7 +750,6 @@ export function CampaignsClient(_props: Props) {
                             >
                               {boosting ? "Creating…" : "Create Boost (paused)"}
                             </button>
-                          </div>
                         </div>
                         {boostError && (
                           <p className="mt-2 text-xs text-danger">{boostError}</p>

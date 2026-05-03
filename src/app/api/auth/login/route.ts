@@ -60,8 +60,10 @@ export async function POST(req: NextRequest) {
     ORDER BY is_active DESC, created_at ASC
   `;
 
-  // Always start with no active site — subscriber picks from the account portal
-  const activeSiteId = null;
+  // Auto-select on single-site subscriptions: there's no ambiguity, no reason
+  // to make the subscriber click. Multi-site subscribers still pick explicitly
+  // from the dashboard tile or breadcrumb dropdown.
+  const activeSiteId = sites.length === 1 ? (sites[0].id as string) : null;
 
   // Session payload — no API key stored
   const session = {

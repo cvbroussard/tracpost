@@ -99,14 +99,14 @@ export function PageHeader({ siteName, siteIcon, sites, activeSiteId, children }
             <span className="text-dim">/</span>
             <div className="relative" ref={pickerRef}>
               <button
-                onClick={() => setPickerOpen(!pickerOpen)}
-                className="flex items-center gap-1.5 font-medium text-foreground hover:text-accent"
+                onClick={() => sites.length > 1 && setPickerOpen(!pickerOpen)}
+                className={`flex items-center gap-1.5 font-medium text-foreground ${sites.length > 1 ? "hover:text-accent" : "cursor-default"}`}
               >
                 {siteIcon && (
                   <img src={siteIcon} alt="" className="h-5 w-5 rounded-sm object-cover" />
                 )}
                 {siteName}
-                {sites.length > 0 && (
+                {sites.length > 1 && (
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`}>
                     <polyline points="6 9 12 15 18 9" />
                   </svg>

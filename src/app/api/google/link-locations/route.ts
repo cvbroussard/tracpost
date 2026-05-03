@@ -1,3 +1,4 @@
+import { verifyCookie } from "@/lib/cookie-sign";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { encrypt, decrypt } from "@/lib/crypto";
@@ -12,7 +13,7 @@ import { encrypt, decrypt } from "@/lib/crypto";
  */
 export async function GET(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!verifyCookie(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!verifyCookie(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

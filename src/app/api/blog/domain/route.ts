@@ -1,3 +1,4 @@
+import { verifyCookie } from "@/lib/cookie-sign";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { addDomain, removeDomain, verifyDomain } from "@/lib/vercel-domains";
@@ -22,7 +23,7 @@ import { isReservedSlug } from "@/lib/urls";
 export async function POST(req: NextRequest) {
   // Admin-only — check tp_admin cookie
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (adminCookie !== "authenticated") {
+  if (!verifyCookie(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

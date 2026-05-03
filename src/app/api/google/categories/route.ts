@@ -1,3 +1,4 @@
+import { verifyCookie } from "@/lib/cookie-sign";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
   const sessionCookie = req.cookies.get("tp_session")?.value;
-  if (adminCookie !== "authenticated" && !sessionCookie) {
+  if (!verifyCookie(adminCookie) && !sessionCookie) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

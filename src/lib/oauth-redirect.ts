@@ -24,6 +24,9 @@ export function oauthSuccessUrl(
   if (source === "admin") {
     return `${platformUrl("/provisioning")}?connected=${encodeURIComponent(accountName)}`;
   }
+  if (source === "campaigns") {
+    return `${studioUrl("/campaigns")}?connected=${encodeURIComponent(accountName)}`;
+  }
   return `${studioUrl("/accounts")}?connected=${encodeURIComponent(accountName)}`;
 }
 
@@ -44,6 +47,9 @@ export function oauthErrorUrl(
   }
   if (source === "admin") {
     return `${platformUrl("/provisioning")}?error=${error}${detailParam}`;
+  }
+  if (source === "campaigns") {
+    return `${studioUrl("/campaigns")}?error=${error}${detailParam}`;
   }
   return `${studioUrl("/accounts")}?error=${error}${detailParam}`;
 }

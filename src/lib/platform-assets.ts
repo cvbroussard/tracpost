@@ -23,7 +23,8 @@ export type AssetType =
   | "youtube_channel"
   | "tiktok_account"
   | "twitter_account"
-  | "pinterest_account";
+  | "pinterest_account"
+  | "meta_ad_account";
 
 export interface PlatformAsset {
   id: string;

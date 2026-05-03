@@ -19,8 +19,13 @@ export default async function AccountsPage() {
   const activeSiteId = session.activeSiteId;
   const statuses: Record<string, PlatformStatus> = {};
 
+  // A subscription with zero sites has nowhere to publish — gate the
+  // entire connections UI behind site creation.
+  const siteCountRows = await sql`SELECT COUNT(*)::int AS n FROM sites WHERE subscription_id = ${session.subscriptionId}`;
+  const hasNoSites = (siteCountRows[0]?.n as number) === 0;
+
   if (!activeSiteId) {
-    return <ConnectionsOverview statuses={statuses} />;
+    return <ConnectionsOverview statuses={statuses} hasNoSites={hasNoSites} />;
   }
 
   // 1. Assigned platform_assets (new model)
@@ -81,5 +86,5 @@ export default async function AccountsPage() {
     }
   }
 
-  return <ConnectionsOverview statuses={statuses} />;
+  return <ConnectionsOverview statuses={statuses} hasNoSites={hasNoSites} />;
 }

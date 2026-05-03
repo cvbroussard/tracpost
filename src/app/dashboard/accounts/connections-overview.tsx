@@ -16,10 +16,66 @@ function usePrefix() {
   return isSubdomain ? "" : "/dashboard";
 }
 
+function TileBody({
+  platform,
+  status,
+  state,
+  tokenUrgent,
+  daysLeft,
+  dotColor,
+}: {
+  platform: (typeof PLATFORMS)[number];
+  status: PlatformStatus | undefined;
+  state: "connected" | "pending_assignment" | "not_connected";
+  tokenUrgent: boolean;
+  daysLeft: number | null;
+  dotColor: string;
+}) {
+  return (
+    <>
+      <div className="flex items-start gap-3">
+        <div className="flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background shrink-0">
+          <PlatformIcon platform={platform.key} size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium">{platform.label}</h3>
+            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`} />
+          </div>
+          {state === "connected" && status ? (
+            <div className="mt-1 space-y-0.5">
+              <p className="text-[10px] text-success truncate">{status.accountName}</p>
+              {tokenUrgent && (
+                <p className="text-[10px] text-danger">Token expires in {daysLeft}d</p>
+              )}
+            </div>
+          ) : state === "pending_assignment" ? (
+            <div className="mt-1 space-y-0.5">
+              <p className="text-[10px] text-warning">Pending assignment</p>
+              {status?.availableAssets && (
+                <p className="text-[10px] text-muted">{status.availableAssets} asset{status.availableAssets !== 1 ? "s" : ""} available</p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1 text-[10px] text-muted">
+              {platform.oauthReady ? "Not connected" : "Coming soon"}
+            </p>
+          )}
+        </div>
+      </div>
+      <p className="mt-3 text-[10px] text-muted leading-relaxed line-clamp-2">
+        {platform.why.split(".")[0]}.
+      </p>
+    </>
+  );
+}
+
 export function ConnectionsOverview({
   statuses,
+  hasNoSites = false,
 }: {
   statuses: Record<string, PlatformStatus>;
+  hasNoSites?: boolean;
 }) {
   const prefix = usePrefix();
   const visiblePlatforms = PLATFORMS.filter((p) => p.key !== "meta");
@@ -36,6 +92,21 @@ export function ConnectionsOverview({
         </p>
       </div>
 
+      {hasNoSites && (
+        <div className="rounded-xl border border-warning/40 bg-warning/5 p-4">
+          <h2 className="text-sm font-medium mb-1">Create your first site to enable connections</h2>
+          <p className="text-xs text-muted leading-relaxed">
+            A site is where TracPost publishes your content — every platform connection links to a site. Create a site first, then come back here to connect Facebook, Instagram, Google, and the rest.
+          </p>
+          <Link
+            href={`${prefix}/entities`}
+            className="mt-3 inline-flex items-center text-xs font-medium text-accent hover:underline"
+          >
+            Create a site →
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         {visiblePlatforms.map((platform) => {
           const status = statuses[platform.key];
@@ -50,45 +121,43 @@ export function ConnectionsOverview({
             state === "pending_assignment" ? "bg-warning" :
             "bg-border";
 
+          const tileBase = "group rounded-xl border border-border bg-surface p-4 shadow-card transition-colors";
+          const tileInteractive = "hover:border-accent/30";
+          const tileDisabled = "opacity-50 cursor-not-allowed pointer-events-none";
+
+          if (hasNoSites) {
+            return (
+              <div
+                key={platform.key}
+                aria-disabled="true"
+                className={`${tileBase} ${tileDisabled}`}
+              >
+                <TileBody
+                  platform={platform}
+                  status={status}
+                  state={state}
+                  tokenUrgent={tokenUrgent}
+                  daysLeft={daysLeft}
+                  dotColor={dotColor}
+                />
+              </div>
+            );
+          }
+
           return (
             <Link
               key={platform.key}
               href={`${prefix}/accounts/${targetSlug}`}
-              className="group rounded-xl border border-border bg-surface p-4 shadow-card transition-colors hover:border-accent/30"
+              className={`${tileBase} ${tileInteractive}`}
             >
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background shrink-0">
-                  <PlatformIcon platform={platform.key} size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium">{platform.label}</h3>
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`} />
-                  </div>
-                  {state === "connected" && status ? (
-                    <div className="mt-1 space-y-0.5">
-                      <p className="text-[10px] text-success truncate">{status.accountName}</p>
-                      {tokenUrgent && (
-                        <p className="text-[10px] text-danger">Token expires in {daysLeft}d</p>
-                      )}
-                    </div>
-                  ) : state === "pending_assignment" ? (
-                    <div className="mt-1 space-y-0.5">
-                      <p className="text-[10px] text-warning">Pending assignment</p>
-                      {status?.availableAssets && (
-                        <p className="text-[10px] text-muted">{status.availableAssets} asset{status.availableAssets !== 1 ? "s" : ""} available</p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-[10px] text-muted">
-                      {platform.oauthReady ? "Not connected" : "Coming soon"}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <p className="mt-3 text-[10px] text-muted leading-relaxed line-clamp-2">
-                {platform.why.split(".")[0]}.
-              </p>
+              <TileBody
+                platform={platform}
+                status={status}
+                state={state}
+                tokenUrgent={tokenUrgent}
+                daysLeft={daysLeft}
+                dotColor={dotColor}
+              />
             </Link>
           );
         })}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { getMetaAuthUrl } from "@/lib/meta";
+import { sql } from "@/lib/db";
 
 /**
  * GET /api/auth/instagram?page_ids=123,456
@@ -14,6 +15,12 @@ export async function GET(req: NextRequest) {
   const authResult = await authenticateRequest(req);
   if (authResult instanceof NextResponse) return authResult;
   const auth = authResult as AuthContext;
+
+  // Guard: a connection has nowhere to publish without at least one site.
+  const sites = await sql`SELECT 1 FROM sites WHERE subscription_id = ${auth.subscriptionId} LIMIT 1`;
+  if (sites.length === 0) {
+    return NextResponse.json({ error: "no_sites" }, { status: 400 });
+  }
 
   const params = new URL(req.url).searchParams;
   const pageIds = params.get("page_ids");

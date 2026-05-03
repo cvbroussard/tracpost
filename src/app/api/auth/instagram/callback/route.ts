@@ -8,7 +8,7 @@ import {
   getMetaUserInfo,
 } from "@/lib/meta";
 import { sql } from "@/lib/db";
-import { recordOAuthGrant, recordAsset } from "@/lib/platform-assets";
+import { recordOAuthGrant, recordAsset, assignSiteToAsset } from "@/lib/platform-assets";
 
 /**
  * GET /api/auth/instagram/callback?code=xxx&state=xxx
@@ -86,9 +86,10 @@ export async function GET(req: NextRequest) {
       metadata: { user_name: userInfo.name },
     });
 
-    // 4. Record each accessible asset
+    // 4. Record each accessible asset, capturing new asset IDs for auto-assign
+    const newFbAssetIds: string[] = [];
     for (const fb of fbPages) {
-      await recordAsset({
+      const id = await recordAsset({
         socialAccountId,
         platform: "facebook",
         assetType: "facebook_page",
@@ -98,12 +99,14 @@ export async function GET(req: NextRequest) {
           page_access_token: fb.pageAccessToken, // page-specific token for publishing
         },
       });
+      newFbAssetIds.push(id);
     }
 
+    const newIgAssetIds: string[] = [];
     for (const ig of igAccounts) {
       // Find the matching FB page's access token (IG publishing uses Page token)
       const linkedPage = fbPages.find((p) => p.pageId === ig.pageId);
-      await recordAsset({
+      const id = await recordAsset({
         socialAccountId,
         platform: "instagram",
         assetType: "instagram_account",
@@ -115,6 +118,23 @@ export async function GET(req: NextRequest) {
           page_access_token: linkedPage?.pageAccessToken || null,
         },
       });
+      newIgAssetIds.push(id);
+    }
+
+    // 4b. Auto-assign on unambiguous 1-to-1 cases: if the subscription has
+    // exactly one site, and exactly one FB page (or IG account) was just
+    // recorded, link them. Anything else falls back to manual assignment.
+    const siteRows = await sql`
+      SELECT id FROM sites WHERE subscription_id = ${state.subscription_id} LIMIT 2
+    `;
+    if (siteRows.length === 1) {
+      const siteId = siteRows[0].id as string;
+      if (newFbAssetIds.length === 1) {
+        await assignSiteToAsset({ siteId, platformAssetId: newFbAssetIds[0], isPrimary: true });
+      }
+      if (newIgAssetIds.length === 1) {
+        await assignSiteToAsset({ siteId, platformAssetId: newIgAssetIds[0], isPrimary: true });
+      }
     }
 
     // Log usage

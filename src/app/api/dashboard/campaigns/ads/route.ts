@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { decrypt } from "@/lib/crypto";
 import { listAds } from "@/lib/meta-ads";
+import { resolveAdAccount } from "@/lib/meta-ads-resolve";
 
 /**
- * GET /api/dashboard/campaigns/ads?campaignId=xxx
+ * GET /api/dashboard/campaigns/ads?campaignId=xxx&adAccountId=yyy
  *
  * Returns the ads under a campaign with creative info + per-ad
  * insights — drives the campaign drill-down on the Campaigns tab.
  *
- * If no campaignId provided, returns all ads in the connected ad
- * account (used by the already-promoted badge logic on the Promote
- * a Post tab).
+ * If no campaignId provided, returns all ads in the chosen ad account
+ * (used by the already-promoted badge logic on the Promote a Post tab).
  */
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -22,23 +20,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Enterprise tier required" }, { status: 403 });
   }
 
-  const campaignId = new URL(req.url).searchParams.get("campaignId") || undefined;
+  const params = new URL(req.url).searchParams;
+  const campaignId = params.get("campaignId") || undefined;
+  const platformAssetId = params.get("adAccountId");
 
-  const rows = await sql`
-    SELECT pa.asset_id, sa.access_token_encrypted
-    FROM site_platform_assets spa
-    JOIN platform_assets pa ON pa.id = spa.platform_asset_id
-    JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${session.activeSiteId}
-      AND pa.asset_type = 'meta_ad_account'
-      AND sa.subscription_id = ${session.subscriptionId}
-    ORDER BY spa.is_primary DESC
-    LIMIT 1
-  `;
-  if (rows.length === 0) return NextResponse.json({ ads: [] });
+  const resolved = await resolveAdAccount({
+    subscriptionId: session.subscriptionId,
+    activeSiteId: session.activeSiteId,
+    platformAssetId,
+  });
+  if (!resolved) return NextResponse.json({ ads: [] });
 
-  const adAccountId = rows[0].asset_id as string;
-  const accessToken = decrypt(rows[0].access_token_encrypted as string);
+  const { adAccountId, accessToken } = resolved;
 
   try {
     const ads = await listAds(adAccountId, accessToken, campaignId);

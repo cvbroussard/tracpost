@@ -15,6 +15,27 @@ interface AdAccount {
   currency: string;
   status: number | null;
   amountSpent: string;
+  isPrimary?: boolean;
+  isAssigned?: boolean;
+}
+
+const STATUS_LABELS: Record<number, string> = {
+  1: "Active",
+  2: "Disabled",
+  3: "Unsettled",
+  7: "Pending review",
+  8: "Pending settlement",
+  9: "Grace period",
+  100: "Pending closure",
+  101: "Closed",
+};
+
+function statusDotColor(status: number | null): string {
+  if (status === 1) return "bg-success";
+  if (status === 9) return "bg-warning";
+  if (status === 100 || status === 101) return "bg-danger";
+  if (status === null) return "bg-border";
+  return "bg-warning";
 }
 
 interface CampaignRow {
@@ -107,6 +128,11 @@ export function CampaignsClient(_props: Props) {
   const [adAccount, setAdAccount] = useState<AdAccount | null>(null);
   const [adAccountLoading, setAdAccountLoading] = useState(true);
 
+  // Multi-account picker state
+  const [allAdAccounts, setAllAdAccounts] = useState<AdAccount[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [savingDefault, setSavingDefault] = useState(false);
+
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [campaignsError, setCampaignsError] = useState<string | null>(null);
@@ -148,24 +174,61 @@ export function CampaignsClient(_props: Props) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/dashboard/campaigns/ad-account");
+        const res = await fetch("/api/dashboard/campaigns/ad-accounts");
         const data = await res.json();
-        if (data.connected) {
-          setAdAccount(data.adAccount);
-        } else {
-          setAdAccount(null);
-        }
+        const accounts = (data.accounts || []) as AdAccount[];
+        setAllAdAccounts(accounts);
+        // Pick the primary if marked, else the first, else null
+        const primary = accounts.find((a) => a.isPrimary) || accounts[0] || null;
+        setAdAccount(primary);
       } finally {
         setAdAccountLoading(false);
       }
     })();
   }, []);
 
+  async function switchAdAccount(account: AdAccount) {
+    setAdAccount(account);
+    setPickerOpen(false);
+    setExpandedRow(null);
+    // Trigger campaigns refetch immediately
+    setCampaignsLoading(true);
+    setCampaigns([]);
+    fetch(`/api/dashboard/campaigns/list?adAccountId=${encodeURIComponent(account.platformAssetId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) setCampaignsError(data.message || data.error);
+        else setCampaigns(data.campaigns || []);
+      })
+      .finally(() => setCampaignsLoading(false));
+    // Clear ads cache (campaign drill-downs are account-specific)
+    setAdsByCampaign({});
+  }
+
+  async function setAccountAsDefault(account: AdAccount) {
+    setSavingDefault(true);
+    try {
+      const res = await fetch("/api/dashboard/campaigns/set-default-ad-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platformAssetId: account.platformAssetId }),
+      });
+      if (res.ok) {
+        // Update local state — flip primary flags
+        setAllAdAccounts((prev) =>
+          prev.map((a) => ({ ...a, isPrimary: a.platformAssetId === account.platformAssetId, isAssigned: a.platformAssetId === account.platformAssetId ? true : a.isAssigned }))
+        );
+      }
+    } finally {
+      setSavingDefault(false);
+    }
+  }
+
   useEffect(() => {
     if (!adAccount) return;
     setCampaignsLoading(true);
     setCampaignsError(null);
-    fetch("/api/dashboard/campaigns/list")
+    fetch(`/api/dashboard/campaigns/list?adAccountId=${encodeURIComponent(adAccount.platformAssetId)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.error) {
@@ -188,7 +251,10 @@ export function CampaignsClient(_props: Props) {
       .finally(() => setTopPostsLoading(false));
 
     // Load promoted-refs in parallel so we can badge already-promoted posts
-    fetch("/api/dashboard/campaigns/ads")
+    const adsUrl = adAccount
+      ? `/api/dashboard/campaigns/ads?adAccountId=${encodeURIComponent(adAccount.platformAssetId)}`
+      : "/api/dashboard/campaigns/ads";
+    fetch(adsUrl)
       .then((r) => r.json())
       .then((data) => {
         const refs = new Set<string>();
@@ -207,7 +273,8 @@ export function CampaignsClient(_props: Props) {
     if (adsByCampaign[campaignId]) return; // already loaded
     setLoadingAdsForCampaign(campaignId);
     try {
-      const res = await fetch(`/api/dashboard/campaigns/ads?campaignId=${encodeURIComponent(campaignId)}`);
+      const accountParam = adAccount ? `&adAccountId=${encodeURIComponent(adAccount.platformAssetId)}` : "";
+      const res = await fetch(`/api/dashboard/campaigns/ads?campaignId=${encodeURIComponent(campaignId)}${accountParam}`);
       const data = await res.json();
       if (Array.isArray(data.ads)) {
         setAdsByCampaign((prev) => ({ ...prev, [campaignId]: data.ads }));
@@ -220,7 +287,10 @@ export function CampaignsClient(_props: Props) {
   async function refreshCampaigns() {
     setCampaignsLoading(true);
     try {
-      const res = await fetch("/api/dashboard/campaigns/list");
+      const url = adAccount
+        ? `/api/dashboard/campaigns/list?adAccountId=${encodeURIComponent(adAccount.platformAssetId)}`
+        : "/api/dashboard/campaigns/list";
+      const res = await fetch(url);
       const data = await res.json();
       if (data.error) {
         setCampaignsError(data.message || data.error);
@@ -244,6 +314,7 @@ export function CampaignsClient(_props: Props) {
           name: newName,
           objective: newObjective,
           dailyBudgetDollars: parseFloat(newBudget),
+          adAccountId: adAccount?.platformAssetId,
         }),
       });
       const data = await res.json();
@@ -285,6 +356,7 @@ export function CampaignsClient(_props: Props) {
           name: `Boost: ${post.caption.slice(0, 50) || post.id}`,
           dailyBudgetDollars: parseFloat(boostBudget),
           campaignId: boostCampaignId || undefined,
+          adAccountId: adAccount?.platformAssetId,
         }),
       });
       const data = await res.json();
@@ -380,23 +452,92 @@ export function CampaignsClient(_props: Props) {
 
   return (
     <div className="p-4">
-      {/* Ad Account header */}
+      {/* Ad Account header — picker dropdown */}
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-medium">Meta Ads</h2>
           <p className="text-xs text-muted">Promote your best content to homeowners in your service area</p>
         </div>
-        <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2">
-          <div>
-            <p className="text-[10px] text-muted">Ad Account</p>
-            <p className="text-sm font-medium">{adAccount.name}</p>
-          </div>
-          <div className="h-8 w-px bg-border" />
-          <div>
-            <p className="text-[10px] text-muted">Lifetime Spent</p>
-            <p className="text-sm font-medium">{fmtMoney(adAccount.amountSpent, adAccount.currency)}</p>
-          </div>
-          <span className={`h-2 w-2 rounded-full ${adAccount.status === 1 ? "bg-success" : "bg-warning"}`} />
+        <div className="relative">
+          <button
+            onClick={() => setPickerOpen((v) => !v)}
+            className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2 hover:border-accent/40 transition-colors"
+          >
+            <div className="text-left">
+              <p className="text-[10px] text-muted">Ad Account {adAccount.isPrimary && "· default"}</p>
+              <p className="text-sm font-medium">{adAccount.name}</p>
+            </div>
+            <div className="h-8 w-px bg-border" />
+            <div className="text-left">
+              <p className="text-[10px] text-muted">Lifetime Spent</p>
+              <p className="text-sm font-medium">{fmtMoney(adAccount.amountSpent, adAccount.currency)}</p>
+            </div>
+            <span className={`h-2 w-2 rounded-full ${statusDotColor(adAccount.status)}`} />
+            {allAdAccounts.length > 1 && (
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            )}
+          </button>
+
+          {pickerOpen && allAdAccounts.length > 0 && (
+            <div className="absolute right-0 top-full z-50 mt-1 w-96 rounded-lg border border-border bg-surface shadow-xl">
+              <div className="border-b border-border px-3 py-2">
+                <p className="text-[10px] text-muted uppercase tracking-wide">Ad Accounts</p>
+              </div>
+              <div className="max-h-96 overflow-y-auto">
+                {allAdAccounts.map((acct) => {
+                  const isCurrent = acct.platformAssetId === adAccount.platformAssetId;
+                  const statusLabel = acct.status !== null ? STATUS_LABELS[acct.status] || `Status ${acct.status}` : "—";
+                  return (
+                    <div
+                      key={acct.platformAssetId}
+                      className={`flex items-start gap-3 border-b border-border last:border-0 px-3 py-3 transition-colors ${
+                        isCurrent ? "bg-accent/5" : "hover:bg-surface-hover"
+                      }`}
+                    >
+                      <button
+                        onClick={() => switchAdAccount(acct)}
+                        className="flex-1 text-left"
+                      >
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${statusDotColor(acct.status)}`} />
+                          <span className="text-sm font-medium">{acct.name}</span>
+                          {isCurrent && (
+                            <span className="rounded-full bg-accent/10 px-1.5 py-0.5 text-[9px] font-medium text-accent">selected</span>
+                          )}
+                          {acct.isPrimary && (
+                            <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[9px] font-medium text-success">default</span>
+                          )}
+                        </div>
+                        <div className="flex gap-3 text-[10px] text-muted">
+                          <span>{acct.id}</span>
+                          <span>·</span>
+                          <span>{statusLabel}</span>
+                          <span>·</span>
+                          <span>{acct.currency}</span>
+                          <span>·</span>
+                          <span>{fmtMoney(acct.amountSpent, acct.currency)} lifetime</span>
+                        </div>
+                      </button>
+                      {!acct.isPrimary && (
+                        <button
+                          onClick={() => setAccountAsDefault(acct)}
+                          disabled={savingDefault}
+                          className="text-[10px] text-muted hover:text-accent disabled:opacity-50 whitespace-nowrap"
+                        >
+                          Set as default
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="border-t border-border px-3 py-2">
+                <p className="text-[10px] text-muted">{allAdAccounts.length} account{allAdAccounts.length !== 1 ? "s" : ""} accessible to your Meta authorization. Manage at <span className="text-foreground">business.facebook.com</span>.</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

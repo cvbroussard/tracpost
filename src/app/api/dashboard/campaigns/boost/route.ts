@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { decrypt } from "@/lib/crypto";
 import { createCampaign, createAdSet, createBoostedAd } from "@/lib/meta-ads";
+import { resolveAdAccount } from "@/lib/meta-ads-resolve";
 
 /**
  * POST /api/dashboard/campaigns/boost
@@ -42,6 +41,8 @@ export async function POST(req: NextRequest) {
   // Optional: attach this boost to an existing campaign instead of
   // creating a new campaign for it. Empty string / null = create new.
   const existingCampaignId = String(body.campaignId || "").trim();
+  // Optional: explicit ad account choice; falls back to primary if absent
+  const platformAssetId = body.adAccountId ? String(body.adAccountId) : null;
 
   if (platform === "facebook") {
     if (!postId || !pageId) {
@@ -59,24 +60,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Daily budget must be at least $1" }, { status: 400 });
   }
 
-  const rows = await sql`
-    SELECT pa.asset_id, sa.access_token_encrypted
-    FROM site_platform_assets spa
-    JOIN platform_assets pa ON pa.id = spa.platform_asset_id
-    JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${session.activeSiteId}
-      AND pa.asset_type = 'meta_ad_account'
-      AND sa.subscription_id = ${session.subscriptionId}
-    ORDER BY spa.is_primary DESC, pa.created_at DESC
-    LIMIT 1
-  `;
-
-  if (rows.length === 0) {
+  const resolved = await resolveAdAccount({
+    subscriptionId: session.subscriptionId,
+    activeSiteId: session.activeSiteId,
+    platformAssetId,
+  });
+  if (!resolved) {
     return NextResponse.json({ error: "No ad account connected" }, { status: 400 });
   }
 
-  const adAccountId = rows[0].asset_id as string;
-  const accessToken = decrypt(rows[0].access_token_encrypted as string);
+  const { adAccountId, accessToken } = resolved;
 
   try {
     // Either reuse the existing campaign or create a new one for this boost.

@@ -132,6 +132,8 @@ export function CampaignsClient(_props: Props) {
   const [allAdAccounts, setAllAdAccounts] = useState<AdAccount[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [savingDefault, setSavingDefault] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
@@ -203,6 +205,35 @@ export function CampaignsClient(_props: Props) {
       .finally(() => setCampaignsLoading(false));
     // Clear ads cache (campaign drill-downs are account-specific)
     setAdsByCampaign({});
+  }
+
+  async function refreshAdAccounts() {
+    setRefreshing(true);
+    setRefreshMessage(null);
+    try {
+      const res = await fetch("/api/dashboard/campaigns/refresh-ad-accounts", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setRefreshMessage(data.message || data.error || "Refresh failed");
+        return;
+      }
+      // Refetch the accounts list to pick up any newly-discovered ones
+      const listRes = await fetch("/api/dashboard/campaigns/ad-accounts");
+      const listData = await listRes.json();
+      const accounts = (listData.accounts || []) as AdAccount[];
+      const before = allAdAccounts.length;
+      setAllAdAccounts(accounts);
+      const added = accounts.length - before;
+      setRefreshMessage(
+        added > 0
+          ? `${added} new account${added !== 1 ? "s" : ""} discovered`
+          : `No new accounts (${data.discovered} accessible)`
+      );
+    } catch (err) {
+      setRefreshMessage(err instanceof Error ? err.message : "Network error");
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   async function setAccountAsDefault(account: AdAccount) {
@@ -482,9 +513,22 @@ export function CampaignsClient(_props: Props) {
 
           {pickerOpen && allAdAccounts.length > 0 && (
             <div className="absolute right-0 top-full z-50 mt-1 w-96 rounded-lg border border-border bg-surface shadow-xl">
-              <div className="border-b border-border px-3 py-2">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <p className="text-[10px] text-muted uppercase tracking-wide">Ad Accounts</p>
+                <button
+                  onClick={refreshAdAccounts}
+                  disabled={refreshing}
+                  className="text-[10px] text-muted hover:text-accent disabled:opacity-50"
+                  title="Re-discover ad accounts from Meta (no re-authorization required)"
+                >
+                  {refreshing ? "Refreshing…" : "↻ Refresh"}
+                </button>
               </div>
+              {refreshMessage && (
+                <div className="border-b border-border bg-accent/5 px-3 py-1.5 text-[10px] text-muted">
+                  {refreshMessage}
+                </div>
+              )}
               <div className="max-h-96 overflow-y-auto">
                 {allAdAccounts.map((acct) => {
                   const isCurrent = acct.platformAssetId === adAccount.platformAssetId;

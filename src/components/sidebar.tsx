@@ -81,6 +81,10 @@ const MODULES: Module[] = [
     enterpriseOnly: true,
     subs: [
       { label: "Meta", path: "/campaigns" },
+      { label: "Google", path: "/campaigns/google" },
+      { label: "TikTok", path: "/campaigns/tiktok" },
+      { label: "Pinterest", path: "/campaigns/pinterest" },
+      { label: "LinkedIn", path: "/campaigns/linkedin" },
     ],
   },
   {

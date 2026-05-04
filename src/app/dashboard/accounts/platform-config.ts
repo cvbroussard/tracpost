@@ -33,7 +33,7 @@ export const PLATFORMS: PlatformConfig[] = [
       "Apply platform-specific formatting and hashtag strategy",
       "Track engagement and adjust content mix automatically",
     ],
-    oauthRoute: "/api/auth/instagram",
+    oauthRoute: "/api/auth/visual-ig",
     oauthReady: true,
     helpLinks: [
       { label: "Convert to Business Account", href: "https://help.instagram.com/502981923235522" },

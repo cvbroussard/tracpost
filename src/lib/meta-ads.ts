@@ -181,6 +181,43 @@ export async function listCampaigns(
   });
 }
 
+/**
+ * Look up Meta's geo location key for a city. Used to build local-area
+ * targeting from a subscriber's business location (e.g., "Pittsburgh, PA").
+ *
+ * Returns the city key + display info, or null if no match. The result
+ * is stable enough to cache per-site to avoid repeated lookups.
+ */
+export interface CityGeoMatch {
+  key: string;          // Meta's geo location key
+  name: string;
+  region: string;
+  countryCode: string;
+}
+
+export async function lookupCityKey(
+  cityQuery: string,
+  accessToken: string
+): Promise<CityGeoMatch | null> {
+  const params = new URLSearchParams({
+    type: "adgeolocation",
+    q: cityQuery,
+    location_types: JSON.stringify(["city"]),
+    access_token: accessToken,
+  });
+  const res = await fetch(`${GRAPH_BASE}/search?${params}`);
+  const data = await res.json();
+  if (!res.ok) return null;
+  if (!Array.isArray(data.data) || data.data.length === 0) return null;
+  const first = data.data[0] as Record<string, unknown>;
+  return {
+    key: String(first.key),
+    name: String(first.name),
+    region: String(first.region || ""),
+    countryCode: String(first.country_code || "US"),
+  };
+}
+
 // ─── Objective helpers ──────────────────────────────────────────────
 
 /**

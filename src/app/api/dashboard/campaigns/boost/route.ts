@@ -8,6 +8,7 @@ import {
   getFirstAdSetSettings,
   objectiveToOptimizationGoal,
 } from "@/lib/meta-ads";
+import { buildQuickBoostTargeting } from "@/lib/meta-ads-targeting";
 import { resolveAdAccount } from "@/lib/meta-ads-resolve";
 
 /**
@@ -62,6 +63,9 @@ export async function POST(req: NextRequest) {
     : [];
   const durationDays = Number(body.durationDays);
   const runContinuously = body.runContinuously === true;
+  const targetingScope: "local" | "broad" =
+    body.targetingScope === "broad" ? "broad" : "local";
+  const radiusMiles = Number.isFinite(Number(body.radiusMiles)) ? Number(body.radiusMiles) : undefined;
   // Status defaults: Quick Boost defaults to ACTIVE (matches Meta's native UX
   // when subscriber sees disclosure and clicks Create). Subscriber can opt
   // into "Save as paused" via UI toggle. Attach mode defaults to PAUSED for
@@ -143,12 +147,15 @@ export async function POST(req: NextRequest) {
       // Advantage+ defaults via minimal targeting + targeting_optimization
       // expansion_all flag. No specific placements = Advantage+ Placements
       // (Meta picks across FB / IG / Messenger / Audience Network / WhatsApp).
-      const advantagePlusTargeting: Record<string, unknown> = {
-        geo_locations: { countries: ["US"] },
-        targeting_optimization: "expansion_all",
-        age_min: 18,
-        age_max: 65,
-      };
+      // Local targeting is the default for our subscriber profile (mid-market
+      // service businesses with local service areas) — broad-US is wasteful.
+      const targetingResult = await buildQuickBoostTargeting({
+        siteId: session.activeSiteId,
+        scope: targetingScope,
+        accessToken,
+        radiusMiles,
+      });
+      const advantagePlusTargeting = targetingResult.targeting;
 
       adSetParams = {
         name: `${name} — ad set`,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getDeliveryEstimate } from "@/lib/meta-ads";
 import { resolveAdAccount } from "@/lib/meta-ads-resolve";
+import { buildQuickBoostTargeting } from "@/lib/meta-ads-targeting";
 
 /**
  * POST /api/dashboard/campaigns/boost-estimate
@@ -28,6 +29,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const dailyBudgetDollars = Number(body.dailyBudgetDollars);
   const platformAssetId = body.adAccountId ? String(body.adAccountId) : null;
+  const targetingScope: "local" | "broad" =
+    body.targetingScope === "broad" ? "broad" : "local";
+  const radiusMiles = Number.isFinite(Number(body.radiusMiles)) ? Number(body.radiusMiles) : undefined;
 
   if (!Number.isFinite(dailyBudgetDollars) || dailyBudgetDollars < 1) {
     return NextResponse.json({ error: "dailyBudgetDollars must be at least $1" }, { status: 400 });
@@ -42,25 +46,25 @@ export async function POST(req: NextRequest) {
 
   const { adAccountId, accessToken } = resolved;
 
-  // Same Advantage+ defaults the Quick Boost flow uses
-  const targetingSpec = {
-    geo_locations: { countries: ["US"] },
-    targeting_optimization: "expansion_all",
-    age_min: 18,
-    age_max: 65,
-  };
+  // Use the same targeting the Quick Boost will use — local-area by default
+  const targetingResult = await buildQuickBoostTargeting({
+    siteId: session.activeSiteId,
+    scope: targetingScope,
+    accessToken,
+    radiusMiles,
+  });
 
   try {
     const estimate = await getDeliveryEstimate(
       adAccountId,
       {
-        targetingSpec,
+        targetingSpec: targetingResult.targeting,
         optimizationGoal: "POST_ENGAGEMENT",
         dailyBudgetCents: Math.round(dailyBudgetDollars * 100),
       },
       accessToken
     );
-    return NextResponse.json(estimate);
+    return NextResponse.json({ ...estimate, resolvedCityName: targetingResult.resolvedCityName });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: "estimate_failed", message }, { status: 502 });

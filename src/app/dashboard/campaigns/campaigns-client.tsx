@@ -66,6 +66,12 @@ function objectiveLabel(objective: string): string {
   }
 }
 
+function formatAudienceSize(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return n.toLocaleString();
+}
+
 function metaAdsManagerUrl(accountIdWithPrefix: string, campaignId?: string): string {
   // accountIdWithPrefix is "act_xxx" — strip the prefix for the URL
   const accountIdNumeric = accountIdWithPrefix.replace(/^act_/, "");
@@ -235,6 +241,8 @@ export function CampaignsClient(_props: Props) {
   const [boostContinuous, setBoostContinuous] = useState(false);
   const [boostSpecialCategory, setBoostSpecialCategory] = useState("NONE");
   const [boostSaveAsPaused, setBoostSaveAsPaused] = useState(false);
+  const [boostTargetingScope, setBoostTargetingScope] = useState<"local" | "broad">("local");
+  const [boostRadiusMiles, setBoostRadiusMiles] = useState("25");
 
   // Reach estimate state
   interface BoostEstimate {
@@ -245,6 +253,7 @@ export function CampaignsClient(_props: Props) {
     dailyActionsUpper: number | null;
     audienceSizeLower: number | null;
     audienceSizeUpper: number | null;
+    resolvedCityName?: string | null;
   }
   const [estimate, setEstimate] = useState<BoostEstimate | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
@@ -417,6 +426,7 @@ export function CampaignsClient(_props: Props) {
   }, [activeTab]);
 
   // Debounced reach estimate fetch — only when Quick Boost is active and budget is valid.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (boostingPostId === null || boostMode !== "quick") {
       setEstimate(null);
@@ -433,7 +443,12 @@ export function CampaignsClient(_props: Props) {
       fetch("/api/dashboard/campaigns/boost-estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dailyBudgetDollars: budget, adAccountId: adAccount.platformAssetId }),
+        body: JSON.stringify({
+          dailyBudgetDollars: budget,
+          adAccountId: adAccount.platformAssetId,
+          targetingScope: boostTargetingScope,
+          radiusMiles: parseInt(boostRadiusMiles, 10) || 25,
+        }),
       })
         .then((r) => r.json())
         .then((data) => {
@@ -449,7 +464,7 @@ export function CampaignsClient(_props: Props) {
     }, 400);
 
     return () => clearTimeout(handle);
-  }, [boostingPostId, boostMode, boostBudget, adAccount]);
+  }, [boostingPostId, boostMode, boostBudget, adAccount, boostTargetingScope, boostRadiusMiles]);
 
   async function setStatus(entityId: string, status: "ACTIVE" | "PAUSED") {
     setStatusUpdating((prev) => ({ ...prev, [entityId]: true }));
@@ -543,6 +558,11 @@ export function CampaignsClient(_props: Props) {
             ? [boostSpecialCategory]
             : [],
           status: boostMode === "quick" && boostSaveAsPaused ? "PAUSED" : undefined,
+          // Local-area targeting for Quick Boost
+          targetingScope: boostMode === "quick" ? boostTargetingScope : undefined,
+          radiusMiles: boostMode === "quick" && boostTargetingScope === "local"
+            ? parseInt(boostRadiusMiles, 10) || 25
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -1108,8 +1128,51 @@ export function CampaignsClient(_props: Props) {
                         {boostMode === "quick" && (
                           <div className="space-y-2">
                             <p className="text-[10px] text-muted leading-relaxed">
-                              Creates a fresh campaign with Meta&apos;s Advantage+ defaults — smart audience, smart placements, optimized for engagement. Mirrors Facebook&apos;s native &quot;Boost post&quot; button.
+                              Creates a fresh campaign with Meta&apos;s Advantage+ defaults — smart audience, smart placements, optimized for engagement.
                             </p>
+
+                            {/* Targeting scope */}
+                            <div className="rounded border border-border p-2.5 space-y-2">
+                              <p className="text-[10px] text-muted font-medium uppercase tracking-wide">Audience targeting</p>
+                              <label className="flex items-start gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`scope-${post.id}`}
+                                  checked={boostTargetingScope === "local"}
+                                  onChange={() => setBoostTargetingScope("local")}
+                                  className="mt-0.5"
+                                />
+                                <div className="flex-1">
+                                  <p className="text-xs">People near my business</p>
+                                  {boostTargetingScope === "local" && (
+                                    <div className="mt-1 flex items-center gap-2">
+                                      <span className="text-[10px] text-muted">Radius:</span>
+                                      <input
+                                        type="number"
+                                        min="5"
+                                        max="100"
+                                        step="5"
+                                        value={boostRadiusMiles}
+                                        onChange={(e) => setBoostRadiusMiles(e.target.value)}
+                                        className="w-16 rounded border border-border bg-background px-2 py-0.5 text-xs"
+                                      />
+                                      <span className="text-[10px] text-muted">miles</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </label>
+                              <label className="flex items-start gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`scope-${post.id}`}
+                                  checked={boostTargetingScope === "broad"}
+                                  onChange={() => setBoostTargetingScope("broad")}
+                                  className="mt-0.5"
+                                />
+                                <p className="text-xs">Broad — entire United States <span className="text-muted">(usually wasteful for local businesses)</span></p>
+                              </label>
+                            </div>
+
                             <div className="grid grid-cols-[140px_1fr_180px] gap-3">
                               <div>
                                 <label className="block text-[10px] text-muted mb-0.5">Daily Budget ($)</label>
@@ -1175,11 +1238,14 @@ export function CampaignsClient(_props: Props) {
                               )}
                               {!estimateLoading && !estimateError && estimate && estimate.estimateReady && (
                                 <div className="space-y-0.5">
-                                  <p className="text-[11px] text-muted">Audience reach</p>
+                                  <p className="text-[11px] text-muted">
+                                    Audience reach
+                                    {estimate.resolvedCityName && ` near ${estimate.resolvedCityName}`}
+                                  </p>
                                   {estimate.audienceSizeLower !== null && estimate.audienceSizeUpper !== null && (
                                     <p className="text-xs">
                                       <span className="font-medium text-foreground">
-                                        {(estimate.audienceSizeLower / 1_000_000).toFixed(0)}M – {(estimate.audienceSizeUpper / 1_000_000).toFixed(0)}M
+                                        {formatAudienceSize(estimate.audienceSizeLower)} – {formatAudienceSize(estimate.audienceSizeUpper)}
                                       </span>
                                       <span className="text-muted"> people in your targeting</span>
                                     </p>

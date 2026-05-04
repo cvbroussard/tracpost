@@ -234,6 +234,21 @@ export function CampaignsClient(_props: Props) {
   const [boostDuration, setBoostDuration] = useState("7");
   const [boostContinuous, setBoostContinuous] = useState(false);
   const [boostSpecialCategory, setBoostSpecialCategory] = useState("NONE");
+  const [boostSaveAsPaused, setBoostSaveAsPaused] = useState(false);
+
+  // Reach estimate state
+  interface BoostEstimate {
+    estimateReady: boolean;
+    dailyImpressionsLower: number | null;
+    dailyImpressionsUpper: number | null;
+    dailyActionsLower: number | null;
+    dailyActionsUpper: number | null;
+    audienceSizeLower: number | null;
+    audienceSizeUpper: number | null;
+  }
+  const [estimate, setEstimate] = useState<BoostEstimate | null>(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+  const [estimateError, setEstimateError] = useState<string | null>(null);
   const [boostCampaignId, setBoostCampaignId] = useState("");
   const [boosting, setBoosting] = useState(false);
   const [boostError, setBoostError] = useState<string | null>(null);
@@ -242,6 +257,8 @@ export function CampaignsClient(_props: Props) {
   // Drill-down: ads under each expanded campaign (campaignId → ads)
   const [adsByCampaign, setAdsByCampaign] = useState<Record<string, MetaAd[]>>({});
   const [loadingAdsForCampaign, setLoadingAdsForCampaign] = useState<string | null>(null);
+  // Pause/Activate inflight tracking (entityId → boolean)
+  const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
 
   // Already-promoted detection: set of object_story_ids and IG media IDs
   // currently attached to active ads. Used to badge eligible posts.
@@ -399,6 +416,68 @@ export function CampaignsClient(_props: Props) {
       .catch(() => { /* badge is non-critical, fail silently */ });
   }, [activeTab]);
 
+  // Debounced reach estimate fetch — only when Quick Boost is active and budget is valid.
+  useEffect(() => {
+    if (boostingPostId === null || boostMode !== "quick") {
+      setEstimate(null);
+      setEstimateError(null);
+      return;
+    }
+    const budget = parseFloat(boostBudget);
+    if (!Number.isFinite(budget) || budget < 1) return;
+    if (!adAccount) return;
+
+    const handle = setTimeout(() => {
+      setEstimateLoading(true);
+      setEstimateError(null);
+      fetch("/api/dashboard/campaigns/boost-estimate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dailyBudgetDollars: budget, adAccountId: adAccount.platformAssetId }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.error) {
+            setEstimateError(data.message || data.error);
+            setEstimate(null);
+          } else {
+            setEstimate(data);
+          }
+        })
+        .catch((err) => setEstimateError(err.message || "Estimate failed"))
+        .finally(() => setEstimateLoading(false));
+    }, 400);
+
+    return () => clearTimeout(handle);
+  }, [boostingPostId, boostMode, boostBudget, adAccount]);
+
+  async function setStatus(entityId: string, status: "ACTIVE" | "PAUSED") {
+    setStatusUpdating((prev) => ({ ...prev, [entityId]: true }));
+    try {
+      const res = await fetch("/api/dashboard/campaigns/set-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entityId, status }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || data.error || "Status update failed");
+      }
+      // Refresh affected data
+      await refreshCampaigns();
+      setAdsByCampaign({});  // invalidate ads cache so drill-downs refetch
+    } catch (err) {
+      // Surface error briefly via the refresh-message banner
+      setRefreshMessage(err instanceof Error ? err.message : "Status update failed");
+    } finally {
+      setStatusUpdating((prev) => {
+        const copy = { ...prev };
+        delete copy[entityId];
+        return copy;
+      });
+    }
+  }
+
   async function loadAdsForCampaign(campaignId: string) {
     if (adsByCampaign[campaignId]) return; // already loaded
     setLoadingAdsForCampaign(campaignId);
@@ -463,6 +542,7 @@ export function CampaignsClient(_props: Props) {
           specialAdCategories: boostMode === "quick" && boostSpecialCategory !== "NONE"
             ? [boostSpecialCategory]
             : [],
+          status: boostMode === "quick" && boostSaveAsPaused ? "PAUSED" : undefined,
         }),
       });
       const data = await res.json();
@@ -882,9 +962,41 @@ export function CampaignsClient(_props: Props) {
                           )}
                         </div>
 
-                        <p className="text-[10px] text-muted">
-                          Campaign ID: {c.id} · Status: {c.status} · Created {fmtDate(c.createdTime)}
-                        </p>
+                        <div className="flex items-center justify-between pt-1 border-t border-border">
+                          <p className="text-[10px] text-muted">
+                            Campaign ID: {c.id} · Status: {c.status} · Created {fmtDate(c.createdTime)}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {c.status === "ACTIVE" ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setStatus(c.id, "PAUSED"); }}
+                                disabled={statusUpdating[c.id]}
+                                className="rounded border border-border px-2.5 py-1 text-[10px] font-medium text-muted hover:bg-warning/10 hover:text-warning hover:border-warning/40 disabled:opacity-50"
+                              >
+                                {statusUpdating[c.id] ? "…" : "Pause"}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setStatus(c.id, "ACTIVE"); }}
+                                disabled={statusUpdating[c.id]}
+                                className="rounded border border-border px-2.5 py-1 text-[10px] font-medium text-muted hover:bg-success/10 hover:text-success hover:border-success/40 disabled:opacity-50"
+                              >
+                                {statusUpdating[c.id] ? "…" : "Activate"}
+                              </button>
+                            )}
+                            {adAccount && (
+                              <a
+                                href={metaAdsManagerUrl(adAccount.id, c.id)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="rounded border border-border px-2.5 py-1 text-[10px] font-medium text-muted hover:bg-accent/10 hover:text-accent hover:border-accent/40"
+                              >
+                                Open in Meta ↗
+                              </a>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1053,6 +1165,62 @@ export function CampaignsClient(_props: Props) {
                                 </select>
                               </div>
                             </div>
+                            {/* Live reach estimate from Marketing API */}
+                            <div className="rounded-lg border border-accent/20 bg-accent/5 p-3">
+                              {estimateLoading && (
+                                <p className="text-[11px] text-muted">Estimating reach…</p>
+                              )}
+                              {!estimateLoading && estimateError && (
+                                <p className="text-[11px] text-muted">Estimate unavailable: {estimateError}</p>
+                              )}
+                              {!estimateLoading && !estimateError && estimate && estimate.estimateReady && (
+                                <div className="space-y-0.5">
+                                  <p className="text-[11px] text-muted">Predicted daily results</p>
+                                  {estimate.dailyImpressionsLower !== null && (
+                                    <p className="text-xs">
+                                      <span className="font-medium text-foreground">{estimate.dailyImpressionsLower.toLocaleString()}</span>
+                                      {estimate.dailyImpressionsUpper && estimate.dailyImpressionsUpper !== estimate.dailyImpressionsLower && (
+                                        <> – <span className="font-medium text-foreground">{estimate.dailyImpressionsUpper.toLocaleString()}</span></>
+                                      )}
+                                      <span className="text-muted"> impressions</span>
+                                    </p>
+                                  )}
+                                  {estimate.dailyActionsLower !== null && estimate.dailyActionsLower > 0 && (
+                                    <p className="text-xs">
+                                      ~<span className="font-medium text-foreground">{estimate.dailyActionsLower.toLocaleString()}</span>
+                                      {estimate.dailyActionsUpper && estimate.dailyActionsUpper !== estimate.dailyActionsLower && (
+                                        <> – <span className="font-medium text-foreground">{estimate.dailyActionsUpper.toLocaleString()}</span></>
+                                      )}
+                                      <span className="text-muted"> daily engagements</span>
+                                    </p>
+                                  )}
+                                  {(() => {
+                                    const days = boostContinuous ? null : parseInt(boostDuration, 10);
+                                    const daily = parseFloat(boostBudget);
+                                    if (!days || !Number.isFinite(daily)) return null;
+                                    const total = days * daily;
+                                    return (
+                                      <p className="text-[10px] text-muted pt-1">
+                                        Total over {days} day{days !== 1 ? "s" : ""}: <span className="text-foreground font-medium">${total.toFixed(2)}</span>
+                                      </p>
+                                    );
+                                  })()}
+                                </div>
+                              )}
+                              {!estimateLoading && !estimateError && (!estimate || !estimate.estimateReady) && (
+                                <p className="text-[11px] text-muted">Adjust budget to see predicted reach</p>
+                              )}
+                            </div>
+
+                            <label className="inline-flex items-center gap-1.5 text-[10px] text-muted cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={boostSaveAsPaused}
+                                onChange={(e) => setBoostSaveAsPaused(e.target.checked)}
+                                className="h-3 w-3"
+                              />
+                              Save as paused (don&apos;t activate yet — proof in Meta Ads Manager first)
+                            </label>
                           </div>
                         )}
 
@@ -1156,7 +1324,13 @@ export function CampaignsClient(_props: Props) {
                               disabled={boosting || (boostMode === "attach" && !boostCampaignId) || (boostMode === "attach" && campaigns.length === 0)}
                               className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
                             >
-                              {boosting ? "Creating…" : "Create Boost (paused)"}
+                              {boosting
+                                ? "Creating…"
+                                : boostMode === "quick"
+                                ? boostSaveAsPaused
+                                  ? "Save as Paused"
+                                  : "Boost Now (Active)"
+                                : "Add to Campaign (Paused)"}
                             </button>
                         </div>
                         {boostError && (

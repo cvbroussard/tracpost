@@ -62,6 +62,14 @@ export async function POST(req: NextRequest) {
     : [];
   const durationDays = Number(body.durationDays);
   const runContinuously = body.runContinuously === true;
+  // Status defaults: Quick Boost defaults to ACTIVE (matches Meta's native UX
+  // when subscriber sees disclosure and clicks Create). Subscriber can opt
+  // into "Save as paused" via UI toggle. Attach mode defaults to PAUSED for
+  // safety since the boost joins an existing structure.
+  const requestedStatus: "ACTIVE" | "PAUSED" =
+    body.status === "PAUSED" || body.status === "ACTIVE"
+      ? body.status
+      : (quickBoost ? "ACTIVE" : "PAUSED");
 
   if (!quickBoost && !targetCampaignId) {
     return NextResponse.json({
@@ -118,7 +126,7 @@ export async function POST(req: NextRequest) {
         {
           name,
           objective: "OUTCOME_ENGAGEMENT",
-          status: "PAUSED",
+          status: requestedStatus,
           specialAdCategories,
         },
         accessToken
@@ -149,7 +157,7 @@ export async function POST(req: NextRequest) {
         optimizationGoal: "POST_ENGAGEMENT",
         billingEvent: "IMPRESSIONS",
         targeting: advantagePlusTargeting,
-        status: "PAUSED",
+        status: requestedStatus,
         ...(stopTime ? { stopTime } : {}),
       };
     } else {
@@ -182,7 +190,7 @@ export async function POST(req: NextRequest) {
         optimizationGoal,
         billingEvent,
         targeting: inheritedTargeting || undefined,
-        status: "PAUSED",
+        status: requestedStatus,
       };
     }
 
@@ -196,7 +204,7 @@ export async function POST(req: NextRequest) {
         pageId: platform === "facebook" ? pageId : undefined,
         postId: platform === "facebook" ? postId : undefined,
         igMediaId: platform === "instagram" ? igMediaId : undefined,
-        status: "PAUSED",
+        status: requestedStatus,
       },
       accessToken
     );
@@ -208,7 +216,7 @@ export async function POST(req: NextRequest) {
       adSetId: adSet.id,
       adId: ad.adId,
       creativeId: ad.creativeId,
-      status: "PAUSED",
+      status: requestedStatus,
       mode: quickBoost ? "quick_boost" : "attach_existing",
     });
   } catch (err: unknown) {

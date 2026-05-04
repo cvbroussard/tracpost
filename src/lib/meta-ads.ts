@@ -337,6 +337,109 @@ export async function getFirstAdSetSettings(
   };
 }
 
+/**
+ * Update the status (ACTIVE / PAUSED) of any Marketing API entity —
+ * Campaign, AdSet, or Ad. Meta uses the same POST /{entity_id} pattern
+ * for all three. Status cascades downward (PAUSING a campaign
+ * effectively pauses all its ad sets and ads).
+ */
+export async function setEntityStatus(
+  entityId: string,
+  status: "ACTIVE" | "PAUSED",
+  accessToken: string
+): Promise<void> {
+  const body = new URLSearchParams({
+    status,
+    access_token: accessToken,
+  });
+  const res = await fetch(`${GRAPH_BASE}/${entityId}`, {
+    method: "POST",
+    body,
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`Set entity status failed: ${JSON.stringify(data.error || data)}`);
+  }
+}
+
+/**
+ * Fetch a delivery estimate for a given audience + budget + optimization
+ * goal. Mirrors what Meta's native Boost UI shows below the form
+ * ("Estimated daily results: 1,900-3,800 impressions"). Used by Quick
+ * Boost to surface predicted reach as the subscriber adjusts the budget.
+ *
+ * Meta's estimate may take a moment to compute; if estimate_ready is
+ * false on the first call, retry once after a brief delay.
+ */
+export interface DeliveryEstimate {
+  estimateReady: boolean;
+  dailyImpressionsLower: number | null;
+  dailyImpressionsUpper: number | null;
+  dailyActionsLower: number | null;
+  dailyActionsUpper: number | null;
+  dailyReachLower: number | null;
+  dailyReachUpper: number | null;
+  audienceSizeLower: number | null;
+  audienceSizeUpper: number | null;
+}
+
+export async function getDeliveryEstimate(
+  adAccountId: string,
+  args: {
+    targetingSpec: Record<string, unknown>;
+    optimizationGoal: string;
+    dailyBudgetCents: number;
+    currency?: string;
+  },
+  accessToken: string
+): Promise<DeliveryEstimate> {
+  const id = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
+
+  async function fetchOnce(): Promise<DeliveryEstimate> {
+    const params = new URLSearchParams({
+      targeting_spec: JSON.stringify(args.targetingSpec),
+      optimization_goal: args.optimizationGoal,
+      daily_budget: String(args.dailyBudgetCents),
+      currency: args.currency || "USD",
+      access_token: accessToken,
+    });
+    const res = await fetch(`${GRAPH_BASE}/${id}/delivery_estimate?${params}`);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(`Delivery estimate failed: ${JSON.stringify(data.error || data)}`);
+    }
+    const row = (Array.isArray(data.data) && data.data.length > 0 ? data.data[0] : data) as Record<string, unknown>;
+    const curve = (row.daily_outcomes_curve || []) as Array<Record<string, unknown>>;
+    const lastPoint = curve.length > 0 ? curve[curve.length - 1] : {};
+
+    const num = (v: unknown): number | null => {
+      if (v === null || v === undefined) return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    return {
+      estimateReady: row.estimate_ready === true || curve.length > 0,
+      dailyImpressionsLower: num(lastPoint.impressions),
+      dailyImpressionsUpper: num(lastPoint.impressions),
+      dailyActionsLower: num(lastPoint.actions),
+      dailyActionsUpper: num(lastPoint.actions),
+      dailyReachLower: num((row as Record<string, unknown>).estimate_dau ?? lastPoint.reach),
+      dailyReachUpper: num((row as Record<string, unknown>).estimate_mau ?? lastPoint.reach),
+      audienceSizeLower: num((row as Record<string, unknown>).estimate_dau),
+      audienceSizeUpper: num((row as Record<string, unknown>).estimate_mau),
+    };
+  }
+
+  let estimate = await fetchOnce();
+  // Retry once if Meta hasn't computed it yet
+  if (!estimate.estimateReady) {
+    await new Promise((r) => setTimeout(r, 1500));
+    estimate = await fetchOnce();
+  }
+  return estimate;
+}
+
 // ─── Read: ads under a campaign or account ─────────────────────────
 
 export interface MetaAd {

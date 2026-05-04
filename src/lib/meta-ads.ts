@@ -389,18 +389,17 @@ export async function getDeliveryEstimate(
     targetingSpec: Record<string, unknown>;
     optimizationGoal: string;
     dailyBudgetCents: number;
-    currency?: string;
   },
   accessToken: string
 ): Promise<DeliveryEstimate> {
   const id = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
 
   async function fetchOnce(): Promise<DeliveryEstimate> {
+    // Currency is implicit from the ad account; not a valid param here.
     const params = new URLSearchParams({
       targeting_spec: JSON.stringify(args.targetingSpec),
       optimization_goal: args.optimizationGoal,
       daily_budget: String(args.dailyBudgetCents),
-      currency: args.currency || "USD",
       access_token: accessToken,
     });
     const res = await fetch(`${GRAPH_BASE}/${id}/delivery_estimate?${params}`);

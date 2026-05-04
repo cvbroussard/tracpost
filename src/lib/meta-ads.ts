@@ -395,11 +395,12 @@ export async function getDeliveryEstimate(
   const id = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
 
   async function fetchOnce(): Promise<DeliveryEstimate> {
-    // Currency is implicit from the ad account; not a valid param here.
+    // Don't pass daily_budget — when we do, Meta sometimes returns a single
+    // zero-valued curve point. Without it, Meta returns a richer curve we
+    // can interpolate against our requested budget.
     const params = new URLSearchParams({
       targeting_spec: JSON.stringify(args.targetingSpec),
       optimization_goal: args.optimizationGoal,
-      daily_budget: String(args.dailyBudgetCents),
       access_token: accessToken,
     });
     const res = await fetch(`${GRAPH_BASE}/${id}/delivery_estimate?${params}`);
@@ -445,15 +446,17 @@ export async function getDeliveryEstimate(
     const reach = num(point.reach ?? point.estimated_reach);
 
     return {
-      estimateReady: row.estimate_ready === true || curve.length > 0,
+      estimateReady: row.estimate_ready === true,
       dailyImpressionsLower: impressions,
       dailyImpressionsUpper: impressions,
       dailyActionsLower: actions,
       dailyActionsUpper: actions,
       dailyReachLower: reach,
       dailyReachUpper: reach,
-      audienceSizeLower: num(row.estimate_dau),
-      audienceSizeUpper: num(row.estimate_mau),
+      // Meta returns audience as estimate_mau_lower_bound / estimate_mau_upper_bound
+      // (monthly active users in the targeted audience).
+      audienceSizeLower: num(row.estimate_mau_lower_bound),
+      audienceSizeUpper: num(row.estimate_mau_upper_bound),
     };
   }
 

@@ -1175,22 +1175,27 @@ export function CampaignsClient(_props: Props) {
                               )}
                               {!estimateLoading && !estimateError && estimate && estimate.estimateReady && (
                                 <div className="space-y-0.5">
-                                  <p className="text-[11px] text-muted">Predicted daily results</p>
-                                  {estimate.dailyImpressionsLower !== null && (
+                                  <p className="text-[11px] text-muted">Predicted reach</p>
+                                  {estimate.audienceSizeLower !== null && estimate.audienceSizeUpper !== null && (
                                     <p className="text-xs">
-                                      <span className="font-medium text-foreground">{estimate.dailyImpressionsLower.toLocaleString()}</span>
+                                      Total audience: <span className="font-medium text-foreground">
+                                        {(estimate.audienceSizeLower / 1_000_000).toFixed(0)}M – {(estimate.audienceSizeUpper / 1_000_000).toFixed(0)}M
+                                      </span>
+                                      <span className="text-muted"> people in your targeting</span>
+                                    </p>
+                                  )}
+                                  {estimate.dailyImpressionsLower !== null && estimate.dailyImpressionsLower > 0 && (
+                                    <p className="text-xs">
+                                      ~<span className="font-medium text-foreground">{estimate.dailyImpressionsLower.toLocaleString()}</span>
                                       {estimate.dailyImpressionsUpper && estimate.dailyImpressionsUpper !== estimate.dailyImpressionsLower && (
                                         <> – <span className="font-medium text-foreground">{estimate.dailyImpressionsUpper.toLocaleString()}</span></>
                                       )}
-                                      <span className="text-muted"> impressions</span>
+                                      <span className="text-muted"> daily impressions</span>
                                     </p>
                                   )}
                                   {estimate.dailyActionsLower !== null && estimate.dailyActionsLower > 0 && (
                                     <p className="text-xs">
                                       ~<span className="font-medium text-foreground">{estimate.dailyActionsLower.toLocaleString()}</span>
-                                      {estimate.dailyActionsUpper && estimate.dailyActionsUpper !== estimate.dailyActionsLower && (
-                                        <> – <span className="font-medium text-foreground">{estimate.dailyActionsUpper.toLocaleString()}</span></>
-                                      )}
                                       <span className="text-muted"> daily engagements</span>
                                     </p>
                                   )}

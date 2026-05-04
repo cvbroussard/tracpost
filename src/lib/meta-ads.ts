@@ -109,9 +109,13 @@ export interface MetaCampaign {
   effectiveStatus: string; // ACTIVE, PAUSED, IN_PROCESS, etc.
   dailyBudget: string | null;
   lifetimeBudget: string | null;
+  budgetRemaining: string | null;        // For lifetime-budget campaigns
+  specialAdCategories: string[];         // ['HOUSING'], ['EMPLOYMENT'], [] etc.
   createdTime: string;
   startTime: string | null;
   stopTime: string | null;
+  adCount: number | null;                // Total ads in this campaign
+  firstAdSetTargeting: Record<string, unknown> | null;  // For audience summary display
 }
 
 /**
@@ -131,9 +135,13 @@ export async function listCampaigns(
     "effective_status",
     "daily_budget",
     "lifetime_budget",
+    "budget_remaining",
+    "special_ad_categories",
     "created_time",
     "start_time",
     "stop_time",
+    "ads.summary(true).limit(0)",
+    "adsets.limit(1){id,targeting}",
   ].join(",");
   const res = await fetch(
     `${GRAPH_BASE}/${id}/campaigns?fields=${fields}&limit=100&access_token=${accessToken}`
@@ -144,18 +152,33 @@ export async function listCampaigns(
   }
   if (!Array.isArray(data.data)) return [];
 
-  return data.data.map((c: Record<string, unknown>) => ({
-    id: String(c.id),
-    name: String(c.name || ""),
-    objective: String(c.objective || ""),
-    status: String(c.status || ""),
-    effectiveStatus: String(c.effective_status || ""),
-    dailyBudget: c.daily_budget ? String(c.daily_budget) : null,
-    lifetimeBudget: c.lifetime_budget ? String(c.lifetime_budget) : null,
-    createdTime: String(c.created_time || ""),
-    startTime: c.start_time ? String(c.start_time) : null,
-    stopTime: c.stop_time ? String(c.stop_time) : null,
-  }));
+  return data.data.map((c: Record<string, unknown>) => {
+    const adsBlock = (c.ads || {}) as Record<string, unknown>;
+    const adsSummary = (adsBlock.summary || {}) as Record<string, unknown>;
+    const adSetsBlock = (c.adsets || {}) as Record<string, unknown>;
+    const adSetsArr = (adSetsBlock.data || []) as Array<Record<string, unknown>>;
+    const firstAdSet = adSetsArr.length > 0 ? adSetsArr[0] : null;
+    const firstTargeting = firstAdSet && firstAdSet.targeting && typeof firstAdSet.targeting === "object"
+      ? (firstAdSet.targeting as Record<string, unknown>)
+      : null;
+
+    return {
+      id: String(c.id),
+      name: String(c.name || ""),
+      objective: String(c.objective || ""),
+      status: String(c.status || ""),
+      effectiveStatus: String(c.effective_status || ""),
+      dailyBudget: c.daily_budget ? String(c.daily_budget) : null,
+      lifetimeBudget: c.lifetime_budget ? String(c.lifetime_budget) : null,
+      budgetRemaining: c.budget_remaining ? String(c.budget_remaining) : null,
+      specialAdCategories: Array.isArray(c.special_ad_categories) ? c.special_ad_categories.map(String) : [],
+      createdTime: String(c.created_time || ""),
+      startTime: c.start_time ? String(c.start_time) : null,
+      stopTime: c.stop_time ? String(c.stop_time) : null,
+      adCount: typeof adsSummary.total_count === "number" ? adsSummary.total_count : null,
+      firstAdSetTargeting: firstTargeting,
+    };
+  });
 }
 
 // ─── Objective helpers ──────────────────────────────────────────────

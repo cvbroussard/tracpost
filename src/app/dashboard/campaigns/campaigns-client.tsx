@@ -74,9 +74,13 @@ interface CampaignRow {
   effectiveStatus: string;
   dailyBudget: string | null;
   lifetimeBudget: string | null;
+  budgetRemaining: string | null;
+  specialAdCategories: string[];
   createdTime: string;
   startTime: string | null;
   stopTime: string | null;
+  adCount: number | null;
+  firstAdSetTargeting: Record<string, unknown> | null;
   insights: {
     spend: string;
     impressions: string;
@@ -86,6 +90,47 @@ interface CampaignRow {
     cpm: string;
     ctr: string;
   };
+}
+
+function humanizeTargeting(t: Record<string, unknown> | null): string {
+  if (!t) return "";
+  const parts: string[] = [];
+
+  const geo = t.geo_locations as Record<string, unknown> | undefined;
+  if (geo) {
+    const countries = Array.isArray(geo.countries) ? geo.countries.map(String) : [];
+    const regions = Array.isArray(geo.regions) ? geo.regions : [];
+    const cities = Array.isArray(geo.cities) ? geo.cities : [];
+    if (cities.length > 0) parts.push(`${cities.length} ${cities.length === 1 ? "city" : "cities"}`);
+    else if (regions.length > 0) parts.push(`${regions.length} region${regions.length !== 1 ? "s" : ""}`);
+    else if (countries.length === 1) parts.push(countries[0]);
+    else if (countries.length > 1) parts.push(`${countries.length} countries`);
+  }
+
+  const ageMin = typeof t.age_min === "number" ? t.age_min : null;
+  const ageMax = typeof t.age_max === "number" ? t.age_max : null;
+  if (ageMin !== null && ageMax !== null) parts.push(`${ageMin}-${ageMax}`);
+  else if (ageMin !== null) parts.push(`${ageMin}+`);
+
+  const genders = Array.isArray(t.genders) ? t.genders : [];
+  if (genders.length === 1) parts.push(genders[0] === 1 ? "Men" : "Women");
+
+  const flexCount = Array.isArray(t.flexible_spec) ? t.flexible_spec.length : 0;
+  const interests = Array.isArray(t.interests) ? t.interests.length : 0;
+  const totalInterests = flexCount + interests;
+  if (totalInterests > 0) parts.push(`${totalInterests} interest${totalInterests !== 1 ? "s" : ""}`);
+
+  const customAudiences = Array.isArray(t.custom_audiences) ? t.custom_audiences : [];
+  if (customAudiences.length > 0) parts.push(`+${customAudiences.length} custom`);
+
+  return parts.length > 0 ? parts.join(" · ") : "Broad targeting";
+}
+
+function daysRemaining(stopTime: string | null): number | null {
+  if (!stopTime) return null;
+  const ms = new Date(stopTime).getTime();
+  if (isNaN(ms)) return null;
+  return Math.max(0, Math.ceil((ms - Date.now()) / 86400000));
 }
 
 interface TopPost {
@@ -452,8 +497,8 @@ export function CampaignsClient(_props: Props) {
     return (
       <div className="p-4">
         <div className="mb-4">
-          <h2 className="text-lg font-medium">Meta Ads</h2>
-          <p className="text-xs text-muted">Promote your best content to homeowners in your service area</p>
+          <h2 className="text-lg font-medium">Promote on Meta</h2>
+          <p className="text-xs text-muted">Cross-promote your best organic content into your existing Meta campaigns</p>
         </div>
 
         <div className="rounded-xl border border-border bg-surface p-6 shadow-card">
@@ -504,7 +549,7 @@ export function CampaignsClient(_props: Props) {
       )}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-medium">Meta Ads</h2>
+          <h2 className="text-lg font-medium">Promote on Meta</h2>
           <p className="text-xs text-muted">
             TracPost reads from Meta — changes you make in Meta Ads Manager won&apos;t appear here until you refresh.
           </p>
@@ -672,45 +717,85 @@ export function CampaignsClient(_props: Props) {
             </div>
           )}
           {!campaignsLoading && campaigns.length > 0 && (
-            <div className="rounded-xl border border-border bg-surface shadow-card">
-              <div className="border-b border-border px-4 py-3">
-                <div className="grid grid-cols-[1fr_90px_100px_90px_90px_90px] items-center text-[10px] text-muted">
-                  <span>Campaign</span>
-                  <span>Status</span>
-                  <span>Daily Budget</span>
-                  <span>Spent</span>
-                  <span>Reach</span>
-                  <span>Clicks</span>
-                </div>
-              </div>
+            <div className="space-y-2">
               {campaigns.map((c) => {
                 const isExpanded = expandedRow === c.id;
                 const adsForThisCampaign = adsByCampaign[c.id];
+                const targetingSummary = humanizeTargeting(c.firstAdSetTargeting);
+                const daysLeft = daysRemaining(c.stopTime);
                 return (
-                  <div key={c.id} className="border-b border-border last:border-0">
+                  <div key={c.id} className="rounded-xl border border-border bg-surface shadow-card">
                     <button
                       onClick={() => {
                         const next = isExpanded ? null : c.id;
                         setExpandedRow(next);
                         if (next) loadAdsForCampaign(next);
                       }}
-                      className="w-full px-4 py-3 hover:bg-surface-hover transition-colors text-left"
+                      className="w-full px-4 py-3 hover:bg-surface-hover transition-colors text-left rounded-xl"
                     >
-                      <div className="grid grid-cols-[1fr_90px_100px_90px_90px_90px] items-center">
-                        <div className="flex items-center gap-2 min-w-0">
+                      {/* Top row: title + status badges */}
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
                           <PlatformIcon platform="facebook" size={16} />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{c.name || c.id}</p>
-                            <p className="text-[9px] text-muted">{fmtDate(c.startTime || c.createdTime)} · {c.objective.replace("OUTCOME_", "")}</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-medium truncate">{c.name || c.id}</p>
+                              {c.specialAdCategories.length > 0 && (
+                                <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[9px] font-medium text-warning">
+                                  {c.specialAdCategories.join(" · ")}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-muted mt-0.5">{objectiveLabel(c.objective)} · started {fmtDate(c.startTime || c.createdTime)}</p>
                           </div>
                         </div>
-                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${STATUS_COLORS[c.effectiveStatus] || "bg-gray-100 text-gray-500"}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-medium shrink-0 ${STATUS_COLORS[c.effectiveStatus] || "bg-gray-100 text-gray-500"}`}>
                           {c.effectiveStatus.toLowerCase()}
                         </span>
-                        <span className="text-xs">{fmtBudgetCents(c.dailyBudget)}</span>
-                        <span className="text-xs">{fmtMoney(c.insights.spend, adAccount.currency)}</span>
-                        <span className="text-xs">{parseInt(c.insights.reach || "0", 10).toLocaleString()}</span>
-                        <span className="text-xs">{parseInt(c.insights.clicks || "0", 10).toLocaleString()}</span>
+                      </div>
+
+                      {/* Middle row: scope info — ad count, end date, targeting */}
+                      <div className="flex items-center gap-3 text-[10px] text-muted mb-2 flex-wrap">
+                        {typeof c.adCount === "number" && (
+                          <span>{c.adCount} ad{c.adCount !== 1 ? "s" : ""}</span>
+                        )}
+                        {daysLeft !== null && (
+                          <>
+                            <span>·</span>
+                            <span>{daysLeft === 0 ? "ends today" : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left`}</span>
+                          </>
+                        )}
+                        {targetingSummary && (
+                          <>
+                            <span>·</span>
+                            <span className="truncate">{targetingSummary}</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Bottom row: metrics */}
+                      <div className="grid grid-cols-4 gap-3">
+                        <div>
+                          <p className="text-[9px] text-muted">Budget</p>
+                          <p className="text-xs font-medium">
+                            {c.dailyBudget ? fmtBudgetCents(c.dailyBudget) : c.lifetimeBudget ? `$${(parseInt(c.lifetimeBudget, 10) / 100).toFixed(2)} lifetime` : "—"}
+                          </p>
+                          {c.budgetRemaining && c.lifetimeBudget && (
+                            <p className="text-[9px] text-muted">${(parseInt(c.budgetRemaining, 10) / 100).toFixed(2)} left</p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-muted">Spent</p>
+                          <p className="text-xs font-medium">{fmtMoney(c.insights.spend, adAccount.currency)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-muted">Reach</p>
+                          <p className="text-xs font-medium">{parseInt(c.insights.reach || "0", 10).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-muted">Clicks</p>
+                          <p className="text-xs font-medium">{parseInt(c.insights.clicks || "0", 10).toLocaleString()}</p>
+                        </div>
                       </div>
                     </button>
                     {isExpanded && (

@@ -80,7 +80,7 @@ const MODULES: Module[] = [
     icon: ICONS.promote,
     enterpriseOnly: true,
     subs: [
-      { label: "Meta Ads", path: "/campaigns" },
+      { label: "Meta", path: "/campaigns" },
     ],
   },
   {

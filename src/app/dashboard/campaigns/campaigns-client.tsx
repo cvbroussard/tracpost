@@ -570,10 +570,12 @@ export function CampaignsClient(_props: Props) {
         setBoostError(data.message || data.error || "Boost failed");
         return;
       }
+      const actualStatus: string = (data.status as string) || "PAUSED";
+      const isActive = actualStatus === "ACTIVE";
       setBoostSuccess(
-        boostCampaignId
-          ? `Promoted post added to existing campaign (paused). Activate in Meta Ads Manager when ready.`
-          : `New boost campaign created (paused). Activate in Meta Ads Manager when ready.`
+        boostMode === "attach"
+          ? `Promoted post added to existing campaign (${actualStatus.toLowerCase()}). ${isActive ? "Now running." : "Activate in Meta Ads Manager when ready."}`
+          : `New boost campaign created (${actualStatus.toLowerCase()}). ${isActive ? "Now running — pause anytime from the Campaigns tab." : "Activate when ready."}`
       );
       setBoostingPostId(null);
       setBoostCampaignId("");

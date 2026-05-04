@@ -395,12 +395,13 @@ export async function getDeliveryEstimate(
   const id = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
 
   async function fetchOnce(): Promise<DeliveryEstimate> {
-    // Don't pass daily_budget — when we do, Meta sometimes returns a single
-    // zero-valued curve point. Without it, Meta returns a richer curve we
-    // can interpolate against our requested budget.
+    // Try with extra context (bid_strategy + billing_event) — Meta's
+    // predictor sometimes needs these to return meaningful curves.
     const params = new URLSearchParams({
       targeting_spec: JSON.stringify(args.targetingSpec),
       optimization_goal: args.optimizationGoal,
+      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+      billing_event: "IMPRESSIONS",
       access_token: accessToken,
     });
     const res = await fetch(`${GRAPH_BASE}/${id}/delivery_estimate?${params}`);

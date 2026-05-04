@@ -60,19 +60,7 @@ export async function POST(req: NextRequest) {
       },
       accessToken
     );
-    // Diagnostic: also call the endpoint directly and pass raw response
-    // back so we can inspect from browser without server logs. Strip later.
-    const debugRes = await fetch(
-      `https://graph.facebook.com/v21.0/act_${adAccountId.replace(/^act_/, "")}/delivery_estimate?` +
-        new URLSearchParams({
-          targeting_spec: JSON.stringify(targetingSpec),
-          optimization_goal: "POST_ENGAGEMENT",
-          daily_budget: String(Math.round(dailyBudgetDollars * 100)),
-          access_token: accessToken,
-        })
-    );
-    const debugData = await debugRes.json();
-    return NextResponse.json({ ...estimate, _debug: debugData });
+    return NextResponse.json(estimate);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: "estimate_failed", message }, { status: 502 });

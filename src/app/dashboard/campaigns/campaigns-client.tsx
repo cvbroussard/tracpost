@@ -1175,10 +1175,10 @@ export function CampaignsClient(_props: Props) {
                               )}
                               {!estimateLoading && !estimateError && estimate && estimate.estimateReady && (
                                 <div className="space-y-0.5">
-                                  <p className="text-[11px] text-muted">Predicted reach</p>
+                                  <p className="text-[11px] text-muted">Audience reach</p>
                                   {estimate.audienceSizeLower !== null && estimate.audienceSizeUpper !== null && (
                                     <p className="text-xs">
-                                      Total audience: <span className="font-medium text-foreground">
+                                      <span className="font-medium text-foreground">
                                         {(estimate.audienceSizeLower / 1_000_000).toFixed(0)}M – {(estimate.audienceSizeUpper / 1_000_000).toFixed(0)}M
                                       </span>
                                       <span className="text-muted"> people in your targeting</span>

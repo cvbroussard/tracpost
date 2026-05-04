@@ -395,13 +395,14 @@ export async function getDeliveryEstimate(
   const id = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
 
   async function fetchOnce(): Promise<DeliveryEstimate> {
-    // Try with extra context (bid_strategy + billing_event) — Meta's
-    // predictor sometimes needs these to return meaningful curves.
+    // delivery_estimate gives us reliable audience-size data (estimate_mau_*),
+    // but the daily_outcomes_curve returns zeros when called without an
+    // actual creative attached. Meta's native UI predicts impressions
+    // because it has the post in context; we don't replicate that here.
+    // We surface the audience size honestly.
     const params = new URLSearchParams({
       targeting_spec: JSON.stringify(args.targetingSpec),
       optimization_goal: args.optimizationGoal,
-      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
-      billing_event: "IMPRESSIONS",
       access_token: accessToken,
     });
     const res = await fetch(`${GRAPH_BASE}/${id}/delivery_estimate?${params}`);

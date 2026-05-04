@@ -425,46 +425,46 @@ export function CampaignsClient(_props: Props) {
       .catch(() => { /* badge is non-critical, fail silently */ });
   }, [activeTab]);
 
-  // Debounced reach estimate fetch — only when Quick Boost is active and budget is valid.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  function fetchEstimate() {
+    const budget = parseFloat(boostBudget);
+    if (!Number.isFinite(budget) || budget < 1) return;
+    if (!adAccount) return;
+    setEstimateLoading(true);
+    setEstimateError(null);
+    fetch("/api/dashboard/campaigns/boost-estimate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dailyBudgetDollars: budget,
+        adAccountId: adAccount.platformAssetId,
+        targetingScope: boostTargetingScope,
+        radiusMiles: parseInt(boostRadiusMiles, 10) || 25,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) {
+          setEstimateError(data.message || data.error);
+          setEstimate(null);
+        } else {
+          setEstimate(data);
+        }
+      })
+      .catch((err) => setEstimateError(err.message || "Estimate failed"))
+      .finally(() => setEstimateLoading(false));
+  }
+
+  // Initial estimate when boost form opens or fundamental settings change.
+  // Per-keystroke triggering is replaced with onBlur handlers on the inputs.
   useEffect(() => {
     if (boostingPostId === null || boostMode !== "quick") {
       setEstimate(null);
       setEstimateError(null);
       return;
     }
-    const budget = parseFloat(boostBudget);
-    if (!Number.isFinite(budget) || budget < 1) return;
-    if (!adAccount) return;
-
-    const handle = setTimeout(() => {
-      setEstimateLoading(true);
-      setEstimateError(null);
-      fetch("/api/dashboard/campaigns/boost-estimate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dailyBudgetDollars: budget,
-          adAccountId: adAccount.platformAssetId,
-          targetingScope: boostTargetingScope,
-          radiusMiles: parseInt(boostRadiusMiles, 10) || 25,
-        }),
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.error) {
-            setEstimateError(data.message || data.error);
-            setEstimate(null);
-          } else {
-            setEstimate(data);
-          }
-        })
-        .catch((err) => setEstimateError(err.message || "Estimate failed"))
-        .finally(() => setEstimateLoading(false));
-    }, 400);
-
-    return () => clearTimeout(handle);
-  }, [boostingPostId, boostMode, boostBudget, adAccount, boostTargetingScope, boostRadiusMiles]);
+    fetchEstimate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boostingPostId, boostMode, adAccount, boostTargetingScope]);
 
   async function setStatus(entityId: string, status: "ACTIVE" | "PAUSED") {
     setStatusUpdating((prev) => ({ ...prev, [entityId]: true }));
@@ -1154,6 +1154,7 @@ export function CampaignsClient(_props: Props) {
                                         step="5"
                                         value={boostRadiusMiles}
                                         onChange={(e) => setBoostRadiusMiles(e.target.value)}
+                                        onBlur={fetchEstimate}
                                         className="w-16 rounded border border-border bg-background px-2 py-0.5 text-xs"
                                       />
                                       <span className="text-[10px] text-muted">miles</span>
@@ -1182,6 +1183,7 @@ export function CampaignsClient(_props: Props) {
                                   step="1"
                                   value={boostBudget}
                                   onChange={(e) => setBoostBudget(e.target.value)}
+                                  onBlur={fetchEstimate}
                                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
                                 />
                               </div>

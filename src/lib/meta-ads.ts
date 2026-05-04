@@ -260,6 +260,9 @@ export async function getCampaignSettings(
   effectiveStatus: string;
   specialAdCategories: string[];
   buyingType: string | null;
+  dailyBudget: string | null;          // present when campaign uses CBO (campaign-level budget)
+  lifetimeBudget: string | null;       // present when CBO with lifetime budget
+  usesCBO: boolean;                    // derived: true if any budget is set at campaign level
 }> {
   const fields = [
     "id",
@@ -269,12 +272,16 @@ export async function getCampaignSettings(
     "effective_status",
     "special_ad_categories",
     "buying_type",
+    "daily_budget",
+    "lifetime_budget",
   ].join(",");
   const res = await fetch(`${GRAPH_BASE}/${campaignId}?fields=${fields}&access_token=${accessToken}`);
   const data = await res.json();
   if (!res.ok) {
     throw new Error(`Get campaign settings failed: ${JSON.stringify(data.error || data)}`);
   }
+  const dailyBudget = data.daily_budget ? String(data.daily_budget) : null;
+  const lifetimeBudget = data.lifetime_budget ? String(data.lifetime_budget) : null;
   return {
     id: String(data.id),
     name: String(data.name || ""),
@@ -283,6 +290,9 @@ export async function getCampaignSettings(
     effectiveStatus: String(data.effective_status || ""),
     specialAdCategories: Array.isArray(data.special_ad_categories) ? data.special_ad_categories.map(String) : [],
     buyingType: data.buying_type ? String(data.buying_type) : null,
+    dailyBudget,
+    lifetimeBudget,
+    usesCBO: !!(dailyBudget || lifetimeBudget),
   };
 }
 
@@ -451,7 +461,9 @@ export async function createCampaign(
 export interface CreateAdSetParams {
   name: string;
   campaignId: string;
-  dailyBudgetCents: number;        // Meta wants integer cents
+  // Omit when the campaign uses CBO (Campaign Budget Optimization) —
+  // Meta enforces "campaign budget XOR ad set budget", never both.
+  dailyBudgetCents?: number;
   optimizationGoal?: string;       // default LINK_CLICKS
   billingEvent?: string;           // default IMPRESSIONS
   bidStrategy?: string;            // default LOWEST_COST_WITHOUT_CAP
@@ -486,15 +498,21 @@ export async function createAdSet(
   const body = new URLSearchParams({
     name: params.name,
     campaign_id: params.campaignId,
-    daily_budget: String(params.dailyBudgetCents),
     billing_event: params.billingEvent || "IMPRESSIONS",
     optimization_goal: params.optimizationGoal || "LINK_CLICKS",
-    bid_strategy: params.bidStrategy || "LOWEST_COST_WITHOUT_CAP",
     start_time: startTime,
     targeting: JSON.stringify(targeting),
     status: params.status || "PAUSED",
     access_token: accessToken,
   });
+  // Only include daily_budget when not using campaign-level CBO; Meta
+  // enforces budget at one level only.
+  if (typeof params.dailyBudgetCents === "number") {
+    body.set("daily_budget", String(params.dailyBudgetCents));
+    // bid_strategy is meaningful at ad-set level only when ad set
+    // owns the budget. Under CBO, bid_strategy lives at campaign level.
+    body.set("bid_strategy", params.bidStrategy || "LOWEST_COST_WITHOUT_CAP");
+  }
   const res = await fetch(`${GRAPH_BASE}/${id}/adsets`, {
     method: "POST",
     body,

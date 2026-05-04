@@ -752,6 +752,11 @@ export function CampaignsClient(_props: Props) {
                                   {c.specialAdCategories.join(" · ")}
                                 </span>
                               )}
+                              {(c.dailyBudget || c.lifetimeBudget) && (
+                                <span className="rounded-full bg-accent/10 px-1.5 py-0.5 text-[9px] font-medium text-accent" title="Campaign Budget Optimization — budget is set at campaign level and shared across ad sets">
+                                  CBO
+                                </span>
+                              )}
                               {isLegacyObjective(c.objective) && (
                                 <span className="rounded-full bg-muted/20 px-1.5 py-0.5 text-[9px] font-medium text-muted" title="Legacy objective — Meta no longer accepts new ads against this campaign">
                                   legacy
@@ -977,51 +982,69 @@ export function CampaignsClient(_props: Props) {
                           </div>
                         ) : (
                         <>
-                        <div className="grid grid-cols-[1fr_140px] gap-3">
-                          <div>
-                            <label className="block text-[10px] text-muted mb-0.5">Attach to Campaign</label>
-                            <select
-                              value={boostCampaignId}
-                              onChange={(e) => setBoostCampaignId(e.target.value)}
-                              className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
-                            >
-                              <option value="">— Select a campaign —</option>
-                              {campaigns.map((c) => {
-                                const legacy = isLegacyObjective(c.objective);
-                                return (
-                                  <option key={c.id} value={c.id} disabled={legacy}>
-                                    {c.name || c.id} · {objectiveLabel(c.objective)} ({c.effectiveStatus.toLowerCase()}){legacy ? " — legacy, can't add ads" : ""}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                            {boostCampaignId && (() => {
-                              const c = campaigns.find((x) => x.id === boostCampaignId);
-                              if (!c || !adAccount) return null;
-                              return (
-                                <p className="mt-1 text-[10px] text-muted">
-                                  Inheriting <span className="text-foreground">{objectiveLabel(c.objective)}</span> objective + audience targeting from this campaign. <a href={metaAdsManagerUrl(adAccount.id, c.id)} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Edit in Meta Ads Manager →</a>
-                                </p>
-                              );
-                            })()}
-                            {campaigns.length > 0 && campaigns.every((c) => isLegacyObjective(c.objective)) && (
-                              <p className="mt-1 text-[10px] text-warning leading-relaxed">
-                                All campaigns in this account use legacy objectives. Meta no longer accepts new ads against these. Create a new campaign in <a href={adAccount ? metaAdsManagerUrl(adAccount.id) : "#"} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Meta Ads Manager</a> with a current objective (Traffic, Engagement, Leads, Awareness, or Sales) to enable boosts.
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-[10px] text-muted mb-0.5">Daily Budget ($)</label>
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              value={boostBudget}
-                              onChange={(e) => setBoostBudget(e.target.value)}
-                              className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
-                            />
-                          </div>
-                        </div>
+                        {(() => {
+                          const selectedCampaign = boostCampaignId ? campaigns.find((x) => x.id === boostCampaignId) : null;
+                          const usesCBO = !!(selectedCampaign?.dailyBudget || selectedCampaign?.lifetimeBudget);
+                          return (
+                            <>
+                              <div className={usesCBO ? "" : "grid grid-cols-[1fr_140px] gap-3"}>
+                                <div>
+                                  <label className="block text-[10px] text-muted mb-0.5">Attach to Campaign</label>
+                                  <select
+                                    value={boostCampaignId}
+                                    onChange={(e) => setBoostCampaignId(e.target.value)}
+                                    className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
+                                  >
+                                    <option value="">— Select a campaign —</option>
+                                    {campaigns.map((c) => {
+                                      const legacy = isLegacyObjective(c.objective);
+                                      const cboBudget = c.dailyBudget
+                                        ? `· CBO $${(parseInt(c.dailyBudget, 10) / 100).toFixed(2)}/day`
+                                        : c.lifetimeBudget
+                                        ? `· CBO $${(parseInt(c.lifetimeBudget, 10) / 100).toFixed(2)} lifetime`
+                                        : "· ad-set budget";
+                                      return (
+                                        <option key={c.id} value={c.id} disabled={legacy}>
+                                          {c.name || c.id} · {objectiveLabel(c.objective)} {cboBudget} ({c.effectiveStatus.toLowerCase()}){legacy ? " — legacy, can't add ads" : ""}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                  {selectedCampaign && adAccount && (
+                                    <p className="mt-1 text-[10px] text-muted">
+                                      Inheriting <span className="text-foreground">{objectiveLabel(selectedCampaign.objective)}</span> objective + audience targeting from this campaign. <a href={metaAdsManagerUrl(adAccount.id, selectedCampaign.id)} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Edit in Meta Ads Manager →</a>
+                                    </p>
+                                  )}
+                                  {usesCBO && selectedCampaign && (
+                                    <p className="mt-1 text-[10px] text-accent">
+                                      Campaign Budget Optimization: this campaign controls budget at the campaign level
+                                      {selectedCampaign.dailyBudget && ` ($${(parseInt(selectedCampaign.dailyBudget, 10) / 100).toFixed(2)}/day)`}
+                                      . Your boost shares it with other ad sets in this campaign.
+                                    </p>
+                                  )}
+                                  {campaigns.length > 0 && campaigns.every((c) => isLegacyObjective(c.objective)) && (
+                                    <p className="mt-1 text-[10px] text-warning leading-relaxed">
+                                      All campaigns in this account use legacy objectives. Meta no longer accepts new ads against these. Create a new campaign in <a href={adAccount ? metaAdsManagerUrl(adAccount.id) : "#"} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Meta Ads Manager</a> with a current objective (Traffic, Engagement, Leads, Awareness, or Sales) to enable boosts.
+                                    </p>
+                                  )}
+                                </div>
+                                {!usesCBO && (
+                                  <div>
+                                    <label className="block text-[10px] text-muted mb-0.5">Daily Budget ($)</label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      value={boostBudget}
+                                      onChange={(e) => setBoostBudget(e.target.value)}
+                                      className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          );
+                        })()}
                         <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => { setBoostingPostId(null); setBoostCampaignId(""); }}

@@ -73,9 +73,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `unknown platform: ${platform}` }, { status: 400 });
   }
 
-  if (!Number.isFinite(dailyBudgetDollars) || dailyBudgetDollars < 1) {
-    return NextResponse.json({ error: "Daily budget must be at least $1" }, { status: 400 });
-  }
+  // Daily budget is only required when the campaign doesn't use CBO.
+  // We validate it lazily after we've fetched campaign settings below.
 
   const resolved = await resolveAdAccount({
     subscriptionId: session.subscriptionId,
@@ -100,6 +99,17 @@ export async function POST(req: NextRequest) {
     const campaign = await getCampaignSettings(targetCampaignId, accessToken);
     const inheritedAdSet = await getFirstAdSetSettings(targetCampaignId, accessToken);
 
+    // CBO check: when the campaign has a budget set at the campaign
+    // level, Meta enforces "campaign budget XOR ad set budget" — we
+    // must NOT pass daily_budget on the ad set or Meta returns
+    // subcode 1885621.
+    if (!campaign.usesCBO && (!Number.isFinite(dailyBudgetDollars) || dailyBudgetDollars < 1)) {
+      return NextResponse.json({
+        error: "budget_required",
+        message: "This campaign uses ad-set budgets. Daily budget must be at least $1.",
+      }, { status: 400 });
+    }
+
     const optimizationGoal = inheritedAdSet?.optimizationGoal
       || objectiveToOptimizationGoal(campaign.objective);
     const billingEvent = inheritedAdSet?.billingEvent || "IMPRESSIONS";
@@ -110,7 +120,9 @@ export async function POST(req: NextRequest) {
       {
         name: `${name} — ad set`,
         campaignId: targetCampaignId,
-        dailyBudgetCents: Math.round(dailyBudgetDollars * 100),
+        // Omit dailyBudgetCents when campaign uses CBO — Meta enforces
+        // budget at one level only.
+        ...(campaign.usesCBO ? {} : { dailyBudgetCents: Math.round(dailyBudgetDollars * 100) }),
         optimizationGoal,
         billingEvent,
         targeting: inheritedTargeting || undefined,

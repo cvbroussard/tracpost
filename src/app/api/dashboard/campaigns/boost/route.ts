@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import {
   createCampaign,
@@ -66,6 +67,15 @@ export async function POST(req: NextRequest) {
   const targetingScope: "local" | "broad" =
     body.targetingScope === "broad" ? "broad" : "local";
   const radiusMiles = Number.isFinite(Number(body.radiusMiles)) ? Number(body.radiusMiles) : undefined;
+  const ctaType = body.ctaType ? String(body.ctaType).trim().toUpperCase() : "";
+  // Resolve CTA destination URL: subscriber-provided wins; otherwise fall
+  // back to the active site's URL when the CTA needs a link target.
+  let ctaUrl = body.ctaUrl ? String(body.ctaUrl).trim() : "";
+  const ctaNeedsUrl = ctaType && ctaType !== "NONE" && ctaType !== "CALL_NOW" && ctaType !== "MESSAGE_PAGE";
+  if (ctaNeedsUrl && !ctaUrl && session.activeSiteId) {
+    const [site] = await sql`SELECT url FROM sites WHERE id = ${session.activeSiteId} LIMIT 1`;
+    if (site?.url) ctaUrl = String(site.url);
+  }
   // Status defaults: Quick Boost defaults to ACTIVE (matches Meta's native UX
   // when subscriber sees disclosure and clicks Create). Subscriber can opt
   // into "Save as paused" via UI toggle. Attach mode defaults to PAUSED for
@@ -219,6 +229,8 @@ export async function POST(req: NextRequest) {
         postId: platform === "facebook" ? postId : undefined,
         igMediaId: platform === "instagram" ? igMediaId : undefined,
         status: requestedStatus,
+        ...(ctaType && ctaType !== "NONE" ? { ctaType } : {}),
+        ...(ctaType && ctaType !== "NONE" && ctaUrl ? { ctaUrl } : {}),
       },
       accessToken
     );

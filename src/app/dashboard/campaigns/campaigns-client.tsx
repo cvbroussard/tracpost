@@ -243,6 +243,7 @@ export function CampaignsClient(_props: Props) {
   const [boostSaveAsPaused, setBoostSaveAsPaused] = useState(false);
   const [boostTargetingScope, setBoostTargetingScope] = useState<"local" | "broad">("local");
   const [boostRadiusMiles, setBoostRadiusMiles] = useState("25");
+  const [boostCtaType, setBoostCtaType] = useState<string>("NONE");
 
   // Reach estimate state
   interface BoostEstimate {
@@ -563,6 +564,9 @@ export function CampaignsClient(_props: Props) {
           radiusMiles: boostMode === "quick" && boostTargetingScope === "local"
             ? parseInt(boostRadiusMiles, 10) || 25
             : undefined,
+          // CTA override on the boosted ad creative — backend resolves
+          // the destination URL from sites.url when needed
+          ctaType: boostMode === "quick" && boostCtaType !== "NONE" ? boostCtaType : undefined,
         }),
       });
       const data = await res.json();
@@ -1231,6 +1235,36 @@ export function CampaignsClient(_props: Props) {
                                   <option value="ISSUES_ELECTIONS_POLITICS">Politics / Issues</option>
                                 </select>
                               </div>
+                            </div>
+
+                            {/* Call-to-Action picker */}
+                            <div>
+                              <label className="block text-[10px] text-muted mb-0.5">Call-to-Action button</label>
+                              <select
+                                value={boostCtaType}
+                                onChange={(e) => setBoostCtaType(e.target.value)}
+                                className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
+                              >
+                                <option value="NONE">None — keep post as-is</option>
+                                <option value="LEARN_MORE">Learn More</option>
+                                <option value="CONTACT_US">Contact Us</option>
+                                <option value="GET_QUOTE">Get Quote</option>
+                                <option value="SHOP_NOW">Shop Now</option>
+                                <option value="SIGN_UP">Sign Up</option>
+                                <option value="CALL_NOW">Call Now</option>
+                                <option value="MESSAGE_PAGE">Message Us</option>
+                              </select>
+                              {boostCtaType !== "NONE" && boostCtaType !== "CALL_NOW" && boostCtaType !== "MESSAGE_PAGE" && (
+                                <p className="mt-1 text-[10px] text-muted">
+                                  CTA links to your business website. Per Meta, adding a CTA can lower cost per result by ~5-10%.
+                                </p>
+                              )}
+                              {boostCtaType === "CALL_NOW" && (
+                                <p className="mt-1 text-[10px] text-muted">Uses your Page&apos;s phone number.</p>
+                              )}
+                              {boostCtaType === "MESSAGE_PAGE" && (
+                                <p className="mt-1 text-[10px] text-muted">Opens a Messenger conversation with your Page.</p>
+                              )}
                             </div>
                             {/* Live reach estimate from Marketing API */}
                             <div className="rounded-lg border border-accent/20 bg-accent/5 p-3">

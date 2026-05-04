@@ -759,6 +759,11 @@ export interface CreateBoostedAdParams {
   // Instagram fields:
   igMediaId?: string;       // The IG media object ID (from /{ig_user_id}/media)
   status?: "ACTIVE" | "PAUSED";
+  // Optional CTA override on the ad creative — Meta accepts a call_to_action
+  // override even on object_story_id boosts. Common types: LEARN_MORE,
+  // CONTACT_US, SHOP_NOW, SIGN_UP, GET_QUOTE, CALL_NOW, MESSAGE_PAGE.
+  ctaType?: string;
+  ctaUrl?: string;          // Destination URL when CTA needs one
 }
 
 /**
@@ -797,6 +802,15 @@ export async function createBoostedAd(
       throw new Error("Instagram boost requires igMediaId");
     }
     creativeBody.set("effective_instagram_media_id", params.igMediaId);
+  }
+
+  // Optional CTA override on the creative
+  if (params.ctaType) {
+    const ctaSpec: Record<string, unknown> = { type: params.ctaType };
+    if (params.ctaUrl) {
+      ctaSpec.value = { link: params.ctaUrl };
+    }
+    creativeBody.set("call_to_action", JSON.stringify(ctaSpec));
   }
 
   const creativeRes = await fetch(`${GRAPH_BASE}/${id}/adcreatives`, {

@@ -615,6 +615,11 @@ export async function createCampaign(
     objective: params.objective,
     status: params.status || "PAUSED",
     special_ad_categories: JSON.stringify(params.specialAdCategories || []),
+    // Required by Meta when campaign has no CBO budget. False = each
+    // ad set spends its own budget independently (correct for Quick
+    // Boost's 1:1 single-ad-set-per-campaign pattern). True would
+    // enable Advantage+ Budget Sharing across multiple ad sets.
+    is_adset_budget_sharing_enabled: "false",
     access_token: accessToken,
   });
   const res = await fetch(`${GRAPH_BASE}/${id}/campaigns`, {

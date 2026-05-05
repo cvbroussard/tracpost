@@ -2,6 +2,9 @@ import {
   PERMISSIONS,
   APP_LABELS,
   APP_METADATA,
+  STAGE_LABELS,
+  STAGE_DESCRIPTIONS,
+  permissionsByAppAndStage,
   type ReviewerApp,
   type ReviewerPermission,
   anchorId,
@@ -145,7 +148,9 @@ export default function AppGuide({ app }: AppGuideProps) {
       <section className="mt-8" id="index">
         <h2 className="text-xl font-semibold">Permission scope index</h2>
         <p className="mt-2 text-sm text-gray-600">
-          Each row jumps to the test instructions for that scope.
+          Scopes are grouped by workflow stage in the order the reviewer
+          would naturally walk the app. Each row jumps to the test
+          instructions for that scope.
         </p>
         <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
           <table className="w-full text-sm">
@@ -158,23 +163,54 @@ export default function AppGuide({ app }: AppGuideProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {appPermissions.map((p, i) => (
-                <tr key={anchorId(p)} className="bg-white align-top">
-                  <td className="px-4 py-3 text-gray-500">{i + 1}</td>
-                  <td className="px-4 py-3">
-                    <a
-                      href={`#${anchorId(p)}`}
-                      className="font-mono text-blue-700 underline"
+              {(() => {
+                const groups = permissionsByAppAndStage(app);
+                let rowNumber = 0;
+                return groups.flatMap((group) => {
+                  const stageLabel = STAGE_LABELS[group.stage];
+                  const stageDesc = STAGE_DESCRIPTIONS[group.stage];
+                  const stageRow = (
+                    <tr
+                      key={`stage-${group.stage}`}
+                      className="bg-slate-100 align-top"
                     >
-                      {p.scope}
-                    </a>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{p.description}</td>
-                  <td className="px-4 py-3">
-                    <StatusPill status={p.status} />
-                  </td>
-                </tr>
-              ))}
+                      <td colSpan={4} className="px-4 py-2.5">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-700">
+                          {stageLabel}
+                        </div>
+                        <div className="mt-0.5 text-xs font-normal normal-case text-slate-600">
+                          {stageDesc}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                  const permRows = group.permissions.map((p) => {
+                    rowNumber += 1;
+                    return (
+                      <tr key={anchorId(p)} className="bg-white align-top">
+                        <td className="px-4 py-3 text-gray-500">
+                          {rowNumber}
+                        </td>
+                        <td className="px-4 py-3">
+                          <a
+                            href={`#${anchorId(p)}`}
+                            className="font-mono text-blue-700 underline"
+                          >
+                            {p.scope}
+                          </a>
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          {p.description}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusPill status={p.status} />
+                        </td>
+                      </tr>
+                    );
+                  });
+                  return [stageRow, ...permRows];
+                });
+              })()}
             </tbody>
           </table>
         </div>
@@ -260,7 +296,10 @@ function PermissionSection({
     >
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="font-mono text-2xl font-semibold">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {STAGE_LABELS[permission.workflowStage]}
+          </p>
+          <h2 className="mt-0.5 font-mono text-2xl font-semibold">
             {permission.scope}
           </h2>
           {permission.verifiedAt && (

@@ -8,6 +8,7 @@ type StatusFilter = "recent" | "live" | "quarantined" | "all";
 const ALL_PLATFORMS = [
   "instagram", "tiktok", "facebook", "youtube",
   "pinterest", "linkedin", "twitter", "gbp",
+  "blog",
 ];
 
 const STATUS_TABS: Array<{ key: StatusFilter; label: string }> = [

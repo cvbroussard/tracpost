@@ -93,7 +93,11 @@ export default async function UnifeedPage() {
 
       UNION ALL
 
-      -- Blog articles
+      -- Blog articles. platform_post_url points at the internal review
+      -- surface (/dashboard/unifeed/article/[id]) so clicking a card
+      -- opens the long-form proofing view rather than the live URL.
+      -- The review surface itself surfaces a "View live ↗" button when
+      -- the article is published.
       SELECT bp.id::text AS id,
              COALESCE(bp.title, bp.excerpt) AS caption,
              bp.og_image_url AS media_url,
@@ -103,11 +107,7 @@ export default async function UnifeedPage() {
              bp.published_at AS published_at,
              NULL::timestamptz AS scheduled_at,
              bp.created_at AS created_at,
-             CASE
-               WHEN bs.custom_domain IS NOT NULL THEN 'https://' || bs.custom_domain || '/' || bp.slug
-               WHEN bs.subdomain IS NOT NULL THEN 'https://' || bs.subdomain || '.tracpost.com/' || bp.slug
-               ELSE NULL
-             END AS platform_post_url,
+             ('/dashboard/unifeed/article/' || bp.id::text) AS platform_post_url,
              NULL::text AS error_message
       FROM blog_posts bp
       LEFT JOIN blog_settings bs ON bs.site_id = bp.site_id

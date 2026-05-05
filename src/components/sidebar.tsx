@@ -59,7 +59,6 @@ const MODULES: Module[] = [
         ],
       },
       { label: "Google Profile", path: "/google/profile" },
-      { label: "Entities", path: "/entities" },
       { label: "Settings", path: "/settings" },
     ],
   },
@@ -69,10 +68,11 @@ const MODULES: Module[] = [
     subs: [
       { label: "Capture", path: "/capture" },
       { label: "Media", path: "/media" },
-      { label: "Blog", path: "/blog" },
-      { label: "Unipost", path: "/unipost" },
-      { label: "GBP Photos", path: "/google/photos" },
+      { label: "Entities", path: "/entities" },
+      { label: "Compose", path: "/compose" },
       { label: "Calendar", path: "/calendar" },
+      { label: "Unifeed", path: "/unifeed" },
+      { label: "GBP Photos", path: "/google/photos" },
     ],
   },
   {

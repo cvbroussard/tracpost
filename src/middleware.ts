@@ -249,6 +249,12 @@ export async function middleware(req: NextRequest) {
     if (pathname === "/login") {
       return NextResponse.next();
     }
+    // /reviewer/* serves the Meta App Reviewer guide pages directly.
+    // Same-origin with /dashboard so demo deep-links work without
+    // cross-origin cookie/auth gymnastics for reviewers walking through.
+    if (pathname === "/reviewer" || pathname.startsWith("/reviewer/")) {
+      return NextResponse.next();
+    }
     // Already rewritten paths — don't double-rewrite
     if (pathname.startsWith("/dashboard")) {
       return NextResponse.next();

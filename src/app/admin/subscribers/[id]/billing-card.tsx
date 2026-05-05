@@ -21,7 +21,8 @@ interface BillingData {
     id: string;
     name: string;
     price: string;
-    stripePriceId: string;
+    tier: string;
+    stripePriceId: string | null;
   }>;
 }
 
@@ -66,11 +67,56 @@ export function BillingCard({ subscriptionId }: { subscriptionId: string }) {
     );
   }
 
-  if (!billing || !billing.customerId) {
+  if (!billing) {
     return (
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <h2 className="text-sm font-medium mb-2">Billing</h2>
-        <p className="text-xs text-muted">No Stripe subscription linked.</p>
+        <p className="text-xs text-muted">No data.</p>
+      </div>
+    );
+  }
+
+  // Backdoor-onboarded subscribers (Carl Broussard, TracPost) have no Stripe
+  // link. Show a simplified card with current plan + manual override picker.
+  if (!billing.customerId) {
+    const otherPlans = billing.availablePlans.filter(
+      p => p.tier.toLowerCase() !== billing.plan.toLowerCase() && p.name.toLowerCase() !== billing.plan.toLowerCase()
+    );
+    return (
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium">Billing</h2>
+          <span className="rounded bg-muted/10 px-2 py-0.5 text-[10px] font-medium text-muted">
+            no stripe link
+          </span>
+        </div>
+        <p className="text-[10px] text-muted">
+          Backdoor-onboarded subscriber. Plan can be set manually — no Stripe charge or proration applies.
+        </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <p className="text-[10px] text-muted">Current plan</p>
+            <p className="text-xs font-medium capitalize">{billing.plan}</p>
+          </div>
+          {otherPlans.length > 0 && (
+            <select
+              onChange={(e) => {
+                if (e.target.value) action("set_plan_manual", { plan_id: e.target.value });
+                e.target.value = "";
+              }}
+              disabled={acting !== null}
+              className="rounded border border-border bg-background px-2 py-1 text-[10px]"
+            >
+              <option value="">Set plan manually...</option>
+              {otherPlans.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} — {p.price}
+                </option>
+              ))}
+            </select>
+          )}
+          {result && <span className="text-[10px] text-muted">{result}</span>}
+        </div>
       </div>
     );
   }
@@ -147,9 +193,9 @@ export function BillingCard({ subscriptionId }: { subscriptionId: string }) {
           >
             <option value="">Change plan...</option>
             {billing.availablePlans
-              .filter(p => p.name.toLowerCase() !== billing.plan)
+              .filter(p => p.stripePriceId && p.name.toLowerCase() !== billing.plan)
               .map(p => (
-                <option key={p.id} value={p.stripePriceId}>{p.name} — {p.price}</option>
+                <option key={p.id} value={p.stripePriceId!}>{p.name} — {p.price}</option>
               ))}
           </select>
         )}

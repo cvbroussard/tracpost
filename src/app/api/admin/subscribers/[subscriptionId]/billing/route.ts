@@ -9,7 +9,9 @@ interface RouteParams {
 
 /**
  * GET /api/admin/subscribers/[subscriptionId]/billing
- * Returns Stripe subscription details, invoices, and available plans.
+ * Returns Stripe subscription details (when linked), invoices, and the
+ * full set of canonical plans for switching. Subscribers without a Stripe
+ * link still get availablePlans so the UI can offer manual override.
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   const { subscriptionId } = await params;
@@ -24,6 +26,23 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const customerId = stripeMeta.customer_id || null;
   const stripeSubId = stripeMeta.subscription_id || null;
 
+  // Canonical plan set — filter on tier (the load-bearing marker), never on
+  // id or name. Manual-override picker uses these; Stripe-driven picker
+  // additionally requires stripe_price_id on the client side.
+  const plans = await sql`
+    SELECT id, name, price, stripe_price_id, tier
+    FROM plans
+    WHERE is_active = true AND tier IS NOT NULL
+    ORDER BY sort_order ASC
+  `;
+  const availablePlans = plans.map(p => ({
+    id: p.id as string,
+    name: p.name as string,
+    price: p.price as string,
+    tier: p.tier as string,
+    stripePriceId: (p.stripe_price_id as string) || null,
+  }));
+
   if (!customerId || !stripeSubId) {
     return NextResponse.json({
       status: "none",
@@ -34,7 +53,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       trialEnd: null,
       cancelAtPeriodEnd: false,
       invoices: [],
-      availablePlans: [],
+      availablePlans,
     });
   }
 
@@ -61,14 +80,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       url: inv.hosted_invoice_url || null,
     }));
 
-    // Get available plans for switching
-    const plans = await sql`
-      SELECT id, name, price, stripe_price_id
-      FROM plans
-      WHERE is_active = true AND stripe_price_id IS NOT NULL
-      ORDER BY sort_order ASC
-    `;
-
     return NextResponse.json({
       status: stripeSub.status,
       plan: sub.plan,
@@ -82,12 +93,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       customerId,
       subscriptionId: stripeSubId,
       invoices,
-      availablePlans: plans.map(p => ({
-        id: p.id as string,
-        name: p.name as string,
-        price: p.price as string,
-        stripePriceId: p.stripe_price_id as string,
-      })),
+      availablePlans,
     });
   } catch (err) {
     console.error("Stripe billing fetch error:", err);
@@ -100,14 +106,20 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       trialEnd: null,
       cancelAtPeriodEnd: false,
       invoices: [],
-      availablePlans: [],
+      availablePlans,
     });
   }
 }
 
 /**
  * POST /api/admin/subscribers/[subscriptionId]/billing
- * Body: { action: "cancel" | "reactivate" | "change_plan", price_id?: string }
+ * Body: { action, ... }
+ *
+ *   cancel             — Stripe cancel_at_period_end = true
+ *   reactivate         — Stripe cancel_at_period_end = false
+ *   change_plan        — Stripe-side plan switch (requires price_id)
+ *   set_plan_manual    — Direct DB update for backdoor-onboarded subscribers
+ *                        with no Stripe link (requires plan_id of canonical row)
  */
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
@@ -123,6 +135,30 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     SELECT metadata FROM subscriptions WHERE id = ${subscriptionId}
   `;
   if (!sub) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Manual plan override — bypasses Stripe entirely. Used for legacy
+  // subscribers (Carl Broussard, TracPost) onboarded before Stripe wiring.
+  if (action === "set_plan_manual") {
+    const { plan_id } = body;
+    if (!plan_id) return NextResponse.json({ error: "plan_id required" }, { status: 400 });
+
+    // Filter on tier (canonical-row marker) — never accept non-canonical rows.
+    const [target] = await sql`
+      SELECT id, name, tier FROM plans
+      WHERE id = ${plan_id} AND tier IS NOT NULL AND is_active = true
+    `;
+    if (!target) {
+      return NextResponse.json({ error: "Plan not found or not canonical" }, { status: 404 });
+    }
+
+    const newPlanName = String(target.name).toLowerCase();
+    await sql`
+      UPDATE subscriptions
+      SET plan = ${newPlanName}, plan_id = ${target.id as string}, updated_at = NOW()
+      WHERE id = ${subscriptionId}
+    `;
+    return NextResponse.json({ success: true, plan: newPlanName, manual: true });
+  }
 
   const meta = (sub.metadata || {}) as Record<string, unknown>;
   const stripeMeta = (meta.stripe || {}) as Record<string, string>;

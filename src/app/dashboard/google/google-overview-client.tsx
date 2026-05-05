@@ -73,7 +73,7 @@ export function GoogleOverviewClient({ connected, accountName, accountStatus, re
             Link your Google Business Profile to manage reviews, posts, and performance from one place.
           </p>
           <Link
-            href={prefix + "/accounts"}
+            href={prefix + "/integrations"}
             className="inline-block rounded bg-accent px-4 py-2 text-sm text-white hover:bg-accent/90"
           >
             Connect GBP

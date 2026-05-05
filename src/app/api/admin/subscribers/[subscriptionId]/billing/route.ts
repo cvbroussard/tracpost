@@ -62,9 +62,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     }));
 
     // Get available plans for switching
-    const products = await sql`
+    const plans = await sql`
       SELECT id, name, price, stripe_price_id
-      FROM products
+      FROM plans
       WHERE is_active = true AND stripe_price_id IS NOT NULL
       ORDER BY sort_order ASC
     `;
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       customerId,
       subscriptionId: stripeSubId,
       invoices,
-      availablePlans: products.map(p => ({
+      availablePlans: plans.map(p => ({
         id: p.id as string,
         name: p.name as string,
         price: p.price as string,

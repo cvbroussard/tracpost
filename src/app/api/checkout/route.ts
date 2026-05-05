@@ -14,28 +14,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "product_id required" }, { status: 400 });
   }
 
-  const [product] = await sql`
+  const [plan] = await sql`
     SELECT name, stripe_price_id, cta_href, trial_days
-    FROM products
+    FROM plans
     WHERE id = ${product_id} AND is_active = true
   `;
 
-  if (!product) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  if (!plan) {
+    return NextResponse.json({ error: "Plan not found" }, { status: 404 });
   }
 
-  if (!product.stripe_price_id) {
-    return NextResponse.json({ error: "No Stripe price configured for this product" }, { status: 400 });
+  if (!plan.stripe_price_id) {
+    return NextResponse.json({ error: "No Stripe price configured for this plan" }, { status: 400 });
   }
 
   const origin = req.headers.get("origin") || "https://tracpost.com";
 
-  const trialDays = skip_trial ? undefined : ((product.trial_days as number) || 7);
+  const trialDays = skip_trial ? undefined : ((plan.trial_days as number) || 7);
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     payment_method_types: ["card"],
-    line_items: [{ price: product.stripe_price_id as string, quantity: 1 }],
+    line_items: [{ price: plan.stripe_price_id as string, quantity: 1 }],
     ...(trialDays ? { subscription_data: { trial_period_days: trialDays } } : {}),
     ...(customer_email ? { customer_email } : {}),
     success_url: `${origin}/setup?session_id={CHECKOUT_SESSION_ID}`,

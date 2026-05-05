@@ -18,7 +18,7 @@ export function oauthSuccessUrl(
    * land the subscriber on the per-platform connection detail page after
    * OAuth completes — so the post-OAuth picker (when status is
    * pending_assignment) is immediately visible. When omitted, falls back
-   * to the connections hub at /accounts.
+   * to the integrations hub at /integrations.
    */
   redirectSlug?: string,
 ): string {
@@ -37,8 +37,8 @@ export function oauthSuccessUrl(
   }
   // Default web flow — land on the per-platform detail page when slug is
   // known, so the post-OAuth picker is immediately visible. Falls back to
-  // the connections hub when no slug is passed (preserves legacy behavior).
-  const dest = redirectSlug ? `/accounts/${redirectSlug}` : "/accounts";
+  // the integrations hub when no slug is passed (preserves legacy behavior).
+  const dest = redirectSlug ? `/integrations/${redirectSlug}` : "/integrations";
   return `${studioUrl(dest)}?connected=${encodeURIComponent(accountName)}`;
 }
 
@@ -63,5 +63,5 @@ export function oauthErrorUrl(
   if (source === "campaigns") {
     return `${studioUrl("/campaigns")}?error=${error}${detailParam}`;
   }
-  return `${studioUrl("/accounts")}?error=${error}${detailParam}`;
+  return `${studioUrl("/integrations")}?error=${error}${detailParam}`;
 }

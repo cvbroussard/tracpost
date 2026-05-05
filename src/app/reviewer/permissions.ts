@@ -192,11 +192,11 @@ export const PERMISSIONS: ReviewerPermission[] = [
       "Standard scope. Allows the TracPost app to display the connected Facebook account's name in the connection card as confirmation of who is connected — the human OAuth-granting identity, distinct from the connected Page.",
     testSteps: [
       "Complete the OAuth flow in the pages_show_list test.",
-      "On the Facebook connection detail page (/accounts/facebook), observe the 'Connected as {name}' row in the Connection card.",
+      "On the Facebook connection detail page (/integrations/facebook), observe the 'Connected as {name}' row in the Connection card.",
     ],
     expectedOutcome:
       "The connected Facebook account's name appears in the 'Connected as' row of the Connection card, distinct from the 'Connected Page' row.",
-    demoLink: "https://app.tracpost.com/dashboard/accounts/facebook",
+    demoLink: "https://app.tracpost.com/dashboard/integrations/facebook",
     status: "ready",
     verifiedAt: "2026-05-05",
   },
@@ -209,14 +209,14 @@ export const PERMISSIONS: ReviewerPermission[] = [
       "Subscriber businesses operate one or more Facebook Pages. After the subscriber initiates OAuth on their connected Facebook account, the TracPost platform enumerates the Pages that account administers so the subscriber can select which one becomes the connected Page for publishing.",
     testSteps: [
       "Log in at https://app.tracpost.com/login with the credentials at the top of this page (acting as the subscriber).",
-      "Click 'Connections' (or 'Social') in the sidebar.",
+      "Click 'Integrations' in the sidebar.",
       "Click 'Connect Facebook' to initiate OAuth on a Facebook account.",
       "Complete the OAuth flow on the connected Facebook account, granting all requested permissions to the TracPost platform.",
       "Observe the list of Pages the connected Facebook account administers, rendered in the TracPost app for selection.",
     ],
     expectedOutcome:
-      "After OAuth completes, the TracPost app lands on /accounts/facebook with a prominent picker showing each Facebook Page the connected Facebook account administers. (Single-Page case auto-binds to the site without showing the picker.)",
-    demoLink: "https://app.tracpost.com/dashboard/accounts/facebook",
+      "After OAuth completes, the TracPost app lands on /integrations/facebook with a prominent picker showing each Facebook Page the connected Facebook account administers. (Single-Page case auto-binds to the site without showing the picker.)",
+    demoLink: "https://app.tracpost.com/dashboard/integrations/facebook",
     status: "ready",
     verifiedAt: "2026-05-05",
   },
@@ -233,7 +233,7 @@ export const PERMISSIONS: ReviewerPermission[] = [
     ],
     expectedOutcome:
       "Connected Pages owned by a connected Business Manager are discoverable in the post-OAuth picker and bindable to the TracPost site. Verified end-to-end with a BM-owned test Page.",
-    demoLink: "https://app.tracpost.com/dashboard/accounts/facebook",
+    demoLink: "https://app.tracpost.com/dashboard/integrations/facebook",
     status: "ready",
     verifiedAt: "2026-05-05",
   },
@@ -389,7 +389,7 @@ export const PERMISSIONS: ReviewerPermission[] = [
       "Required to identify the connected Instagram account and display it in the TracPost app as a connected publishing target. Foundation for all other Instagram scopes — this is the SELECT step that makes the connected Instagram account available to the rest of the system.",
     testSteps: [
       "Log in at https://app.tracpost.com/login with the credentials at the top of this page (acting as the subscriber).",
-      "Navigate to 'Connections' or 'Social' in the sidebar.",
+      "Navigate to 'Integrations' in the sidebar.",
       "Click 'Connect Instagram' to initiate OAuth on an Instagram Business account.",
       "Complete the OAuth flow at instagram.com, granting all requested permissions to the TracPost platform.",
       "Observe the connected Instagram account info (username, profile picture, follower count) rendered in the TracPost app.",

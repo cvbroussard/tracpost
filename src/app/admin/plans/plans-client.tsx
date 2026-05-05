@@ -8,7 +8,7 @@ interface Feature {
   description: string;
 }
 
-interface Product {
+interface Plan {
   id: string;
   name: string;
   tagline: string | null;
@@ -24,7 +24,7 @@ interface Product {
   is_active: boolean;
 }
 
-const EMPTY_PRODUCT: Omit<Product, "id" | "is_active"> = {
+const EMPTY_PLAN: Omit<Plan, "id" | "is_active"> = {
   name: "",
   tagline: "",
   price: "",
@@ -38,34 +38,34 @@ const EMPTY_PRODUCT: Omit<Product, "id" | "is_active"> = {
   trial_days: 7,
 };
 
-export function ProductsClient() {
-  const [products, setProducts] = useState<Product[]>([]);
+export function PlansClient() {
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<Product | null>(null);
+  const [editing, setEditing] = useState<Plan | null>(null);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [featureInput, setFeatureInput] = useState("");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [stripeAction, setStripeAction] = useState<string | null>(null);
 
-  useEffect(() => { loadProducts(); }, []);
+  useEffect(() => { loadPlans(); }, []);
 
-  async function loadProducts() {
-    const res = await fetch("/api/admin/products");
+  async function loadPlans() {
+    const res = await fetch("/api/admin/plans");
     if (res.ok) {
       const data = await res.json();
-      setProducts(data.products || []);
+      setPlans(data.plans || []);
     }
     setLoading(false);
   }
 
   function startCreate() {
-    setEditing({ id: "", is_active: true, ...EMPTY_PRODUCT });
+    setEditing({ id: "", is_active: true, ...EMPTY_PLAN });
     setCreating(true);
     setFeatureInput("");
   }
 
-  function startEdit(p: Product) {
+  function startEdit(p: Plan) {
     setEditing({ ...p, features: [...p.features] });
     setCreating(false);
     setFeatureInput("");
@@ -122,13 +122,13 @@ export function ProductsClient() {
     if (!editing) return;
     setSaving(true);
     const method = creating ? "POST" : "PATCH";
-    const res = await fetch("/api/admin/products", {
+    const res = await fetch("/api/admin/plans", {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(editing),
     });
     if (res.ok) {
-      await loadProducts();
+      await loadPlans();
       setEditing(null);
       setCreating(false);
     }
@@ -138,14 +138,14 @@ export function ProductsClient() {
   async function stripeSync(id: string, action: "create_stripe" | "sync_stripe") {
     setStripeAction(action);
     try {
-      const res = await fetch("/api/admin/products", {
+      const res = await fetch("/api/admin/plans", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, action }),
       });
       const data = await res.json();
       if (res.ok) {
-        await loadProducts();
+        await loadPlans();
         if (data.stripe_price_id && editing) {
           setEditing({ ...editing, stripe_price_id: data.stripe_price_id });
         }
@@ -155,12 +155,12 @@ export function ProductsClient() {
   }
 
   async function deactivate(id: string) {
-    await fetch("/api/admin/products", {
+    await fetch("/api/admin/plans", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
-    await loadProducts();
+    await loadPlans();
   }
 
   if (loading) {
@@ -178,17 +178,16 @@ export function ProductsClient() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold">Products</h1>
+          <h1 className="text-lg font-semibold">Plans</h1>
           <p className="text-xs text-muted">Pricing plans shown on the marketing site</p>
         </div>
         <button onClick={startCreate} className="rounded bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover">
-          New Product
+          New Plan
         </button>
       </div>
 
-      {/* Product cards */}
       <div className="grid grid-cols-3 gap-4">
-        {products.filter(p => p.is_active).map(p => (
+        {plans.filter(p => p.is_active).map(p => (
           <div
             key={p.id}
             className={`rounded-xl border bg-surface p-5 shadow-card cursor-pointer transition-colors hover:border-accent/30 ${
@@ -225,19 +224,19 @@ export function ProductsClient() {
       </div>
 
       {/* Inactive */}
-      {products.filter(p => !p.is_active).length > 0 && (
+      {plans.filter(p => !p.is_active).length > 0 && (
         <div>
           <p className="text-xs text-muted mb-2">Inactive</p>
-          {products.filter(p => !p.is_active).map(p => (
+          {plans.filter(p => !p.is_active).map(p => (
             <div key={p.id} className="flex items-center justify-between rounded border border-border bg-surface p-3 mb-1 opacity-50">
               <span className="text-sm">{p.name} — {p.price}</span>
               <button
                 onClick={() => {
-                  fetch("/api/admin/products", {
+                  fetch("/api/admin/plans", {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ ...p, is_active: true }),
-                  }).then(() => loadProducts());
+                  }).then(() => loadPlans());
                 }}
                 className="text-[10px] text-accent hover:underline"
               >
@@ -253,7 +252,7 @@ export function ProductsClient() {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-12" onClick={cancelEdit}>
           <div className="w-full max-w-lg rounded-xl border border-border bg-surface p-6 shadow-card" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold">{creating ? "New Product" : `Edit: ${editing.name}`}</h2>
+              <h2 className="text-sm font-semibold">{creating ? "New Plan" : `Edit: ${editing.name}`}</h2>
               <button onClick={cancelEdit} className="text-muted hover:text-foreground">✕</button>
             </div>
 

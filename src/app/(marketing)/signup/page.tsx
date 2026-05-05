@@ -19,15 +19,15 @@ export default async function SignupPage({ searchParams }: Props) {
   const planName = params.plan || "growth";
   const skipTrial = params.subscribe === "true";
 
-  const [product] = await sql`
+  const [plan] = await sql`
     SELECT id, name, tagline, price, frequency, features, trial_days, stripe_price_id
-    FROM products
+    FROM plans
     WHERE LOWER(name) = ${planName.toLowerCase()} AND is_active = true
   `;
 
-  if (!product) notFound();
+  if (!plan) notFound();
 
-  const features = (product.features as Array<{ text: string; visible: boolean }>)
+  const features = (plan.features as Array<{ text: string; visible: boolean }>)
     .filter(f => f.visible)
     .slice(0, 6);
 
@@ -37,18 +37,18 @@ export default async function SignupPage({ searchParams }: Props) {
         {/* Left: form */}
         <div className="su-form-col">
           <h1 className="su-title">
-            {skipTrial ? `Subscribe to ${product.name}` : `Start your ${product.trial_days}-day free trial`}
+            {skipTrial ? `Subscribe to ${plan.name}` : `Start your ${plan.trial_days}-day free trial`}
           </h1>
           <p className="su-subtitle">
             {skipTrial
-              ? `${product.price}${product.frequency} — billed immediately. Cancel anytime.`
-              : `Try ${product.name} free for ${product.trial_days} days. No charge until your trial ends.`
+              ? `${plan.price}${plan.frequency} — billed immediately. Cancel anytime.`
+              : `Try ${plan.name} free for ${plan.trial_days} days. No charge until your trial ends.`
             }
           </p>
 
           <SignupForm
-            productId={product.id as string}
-            productName={product.name as string}
+            productId={plan.id as string}
+            productName={plan.name as string}
             skipTrial={skipTrial}
           />
 
@@ -61,11 +61,11 @@ export default async function SignupPage({ searchParams }: Props) {
         <div className="su-summary-col">
           <div className="su-plan-card">
             <span className="su-plan-badge">{skipTrial ? "Subscribe" : "7-day free trial"}</span>
-            <h2 className="su-plan-name">{product.name as string}</h2>
-            <p className="su-plan-tagline">{product.tagline as string}</p>
+            <h2 className="su-plan-name">{plan.name as string}</h2>
+            <p className="su-plan-tagline">{plan.tagline as string}</p>
             <p className="su-plan-price">
-              <span className="su-plan-amount">{product.price as string}</span>
-              <span className="su-plan-freq">{product.frequency as string}</span>
+              <span className="su-plan-amount">{plan.price as string}</span>
+              <span className="su-plan-freq">{plan.frequency as string}</span>
             </p>
 
             <ul className="su-plan-features">

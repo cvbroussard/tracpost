@@ -13,7 +13,7 @@ export default function DataDeletionPage() {
           <h2 className="mb-2 font-medium text-foreground">Disconnect Your Account</h2>
           <p>
             You can disconnect your Instagram account at any time from your{" "}
-            <a href="/dashboard/accounts" className="text-accent hover:underline">
+            <a href="/dashboard/integrations" className="text-accent hover:underline">
               dashboard
             </a>
             . When you disconnect, Tracpost will:

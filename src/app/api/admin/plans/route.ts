@@ -4,20 +4,20 @@ import { sql } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 
 /**
- * GET /api/admin/products — list all products
- * POST /api/admin/products — create a product
- * PATCH /api/admin/products — update a product
- * DELETE /api/admin/products — deactivate a product
+ * GET /api/admin/plans — list all plans
+ * POST /api/admin/plans — create a plan
+ * PATCH /api/admin/plans — update a plan
+ * DELETE /api/admin/plans — deactivate a plan
  */
 
 export async function GET() {
-  const products = await sql`
+  const plans = await sql`
     SELECT id, name, tagline, price, frequency, features, cta_text, cta_href,
            highlight, sort_order, stripe_price_id, trial_days, is_active, created_at
-    FROM products
+    FROM plans
     ORDER BY sort_order ASC, created_at ASC
   `;
-  return NextResponse.json({ products });
+  return NextResponse.json({ plans });
 }
 
 export async function POST(req: NextRequest) {
@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name and price required" }, { status: 400 });
   }
 
-  const [product] = await sql`
-    INSERT INTO products (name, tagline, price, frequency, features, cta_text, cta_href, highlight, sort_order, stripe_price_id, trial_days)
+  const [plan] = await sql`
+    INSERT INTO plans (name, tagline, price, frequency, features, cta_text, cta_href, highlight, sort_order, stripe_price_id, trial_days)
     VALUES (
       ${name},
       ${tagline || null},
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     RETURNING id, name
   `;
 
-  return NextResponse.json({ product });
+  return NextResponse.json({ plan });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   await sql`
-    UPDATE products SET
+    UPDATE plans SET
       name = ${body.name},
       tagline = ${body.tagline || null},
       price = ${body.price},
@@ -99,13 +99,13 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  await sql`UPDATE products SET is_active = false, updated_at = NOW() WHERE id = ${id}`;
+  await sql`UPDATE plans SET is_active = false, updated_at = NOW() WHERE id = ${id}`;
 
   // Archive in Stripe if linked
-  const [product] = await sql`SELECT stripe_price_id FROM products WHERE id = ${id}`;
-  if (product?.stripe_price_id) {
+  const [plan] = await sql`SELECT stripe_price_id FROM plans WHERE id = ${id}`;
+  if (plan?.stripe_price_id) {
     try {
-      const price = await stripe.prices.retrieve(product.stripe_price_id as string);
+      const price = await stripe.prices.retrieve(plan.stripe_price_id as string);
       if (price.product && typeof price.product === "string") {
         await stripe.products.update(price.product, { active: false });
       }
@@ -116,7 +116,7 @@ export async function DELETE(req: NextRequest) {
 }
 
 /**
- * PUT /api/admin/products — Stripe sync actions
+ * PUT /api/admin/plans — Stripe sync actions
  * Body: { id, action: "create_stripe" | "sync_stripe" }
  */
 export async function PUT(req: NextRequest) {
@@ -130,17 +130,17 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "id and action required" }, { status: 400 });
   }
 
-  const [product] = await sql`
+  const [plan] = await sql`
     SELECT name, tagline, price, frequency, stripe_price_id
-    FROM products WHERE id = ${id}
+    FROM plans WHERE id = ${id}
   `;
-  if (!product) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  if (!plan) {
+    return NextResponse.json({ error: "Plan not found" }, { status: 404 });
   }
 
   if (action === "create_stripe") {
     // Parse price amount (remove $ and convert to cents)
-    const priceStr = (product.price as string).replace(/[^0-9.]/g, "");
+    const priceStr = (plan.price as string).replace(/[^0-9.]/g, "");
     const amountCents = Math.round(parseFloat(priceStr) * 100);
 
     if (!amountCents || isNaN(amountCents)) {
@@ -149,8 +149,8 @@ export async function PUT(req: NextRequest) {
 
     // Create Stripe Product + Price
     const stripeProduct = await stripe.products.create({
-      name: product.name as string,
-      description: (product.tagline as string) || undefined,
+      name: plan.name as string,
+      description: (plan.tagline as string) || undefined,
     });
 
     const stripePrice = await stripe.prices.create({
@@ -160,7 +160,7 @@ export async function PUT(req: NextRequest) {
       recurring: { interval: "month" },
     });
 
-    await sql`UPDATE products SET stripe_price_id = ${stripePrice.id}, updated_at = NOW() WHERE id = ${id}`;
+    await sql`UPDATE plans SET stripe_price_id = ${stripePrice.id}, updated_at = NOW() WHERE id = ${id}`;
 
     return NextResponse.json({
       success: true,
@@ -170,16 +170,16 @@ export async function PUT(req: NextRequest) {
   }
 
   if (action === "sync_stripe") {
-    if (!product.stripe_price_id) {
+    if (!plan.stripe_price_id) {
       return NextResponse.json({ error: "No Stripe price linked" }, { status: 400 });
     }
 
     // Update Stripe product name/description
-    const price = await stripe.prices.retrieve(product.stripe_price_id as string);
+    const price = await stripe.prices.retrieve(plan.stripe_price_id as string);
     if (price.product && typeof price.product === "string") {
       await stripe.products.update(price.product, {
-        name: product.name as string,
-        description: (product.tagline as string) || undefined,
+        name: plan.name as string,
+        description: (plan.tagline as string) || undefined,
       });
     }
 

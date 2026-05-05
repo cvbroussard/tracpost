@@ -12,21 +12,21 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-02-25.clover",
 });
 
-/** Map Stripe Price IDs to TracPost plan tiers — loaded from products table */
+/** Map Stripe Price IDs to TracPost plan tiers — loaded from plans table */
 export async function priceToPlan(priceId: string): Promise<string | null> {
   const { sql } = await import("@/lib/db");
   const [row] = await sql`
-    SELECT LOWER(name) AS plan FROM products
+    SELECT LOWER(name) AS plan FROM plans
     WHERE stripe_price_id = ${priceId} AND is_active = true
   `;
   return (row?.plan as string) || null;
 }
 
-/** Map TracPost plan tiers to Stripe Price IDs — loaded from products table */
+/** Map TracPost plan tiers to Stripe Price IDs — loaded from plans table */
 export async function planToPrice(plan: string): Promise<string | null> {
   const { sql } = await import("@/lib/db");
   const [row] = await sql`
-    SELECT stripe_price_id FROM products
+    SELECT stripe_price_id FROM plans
     WHERE LOWER(name) = ${plan.toLowerCase()} AND is_active = true AND stripe_price_id IS NOT NULL
   `;
   return (row?.stripe_price_id as string) || null;

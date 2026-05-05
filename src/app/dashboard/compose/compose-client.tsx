@@ -1236,10 +1236,10 @@ function NoTemplatesEmpty({ connectedCount }: { connectedCount: number }) {
           : "Templates exist for your connected platforms but couldn't be loaded. Try refreshing."}
       </p>
       <Link
-        href="/dashboard/accounts"
+        href="/dashboard/integrations"
         className="inline-block rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
       >
-        Manage Connections
+        Manage Integrations
       </Link>
     </div>
   );

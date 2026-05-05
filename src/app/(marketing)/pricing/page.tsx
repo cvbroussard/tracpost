@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function PricingPage() {
-  const products = await sql`
+  const plans = await sql`
     SELECT id, name, tagline, price, frequency, features, cta_text, cta_href, highlight, sort_order, stripe_price_id
-    FROM products
+    FROM plans
     WHERE is_active = true
     ORDER BY sort_order ASC
   `;
@@ -31,7 +31,7 @@ export default async function PricingPage() {
           </p>
 
           <div className="mp-pricing-grid">
-            {products.map((plan) => {
+            {plans.map((plan) => {
               const allFeatures = (plan.features as Array<{ text: string; visible: boolean }>) || [];
               const features = allFeatures.filter(f => f.visible);
               const ctaHref = (plan.cta_href as string) || "/signup";

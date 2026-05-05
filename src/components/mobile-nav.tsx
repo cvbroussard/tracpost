@@ -13,7 +13,7 @@ const baseNav = [
   { label: "Calendar", path: "/calendar", icon: "▦" },
   { label: "Inbox", path: "/inbox", icon: "▤" },
   { label: "Spotlight", path: "/spotlight", icon: "✦" },
-  { label: "Connections", path: "/accounts", icon: "◉" },
+  { label: "Integrations", path: "/integrations", icon: "◉" },
   { label: "Settings", path: "/settings", icon: "⚙" },
 ];
 

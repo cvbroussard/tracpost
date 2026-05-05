@@ -17,18 +17,18 @@ interface Feature {
 }
 
 export default async function ComparePage() {
-  const products = await sql`
+  const plans = await sql`
     SELECT id, name, tagline, price, frequency, features, cta_text, cta_href, highlight, stripe_price_id
-    FROM products
+    FROM plans
     WHERE is_active = true
     ORDER BY sort_order ASC
   `;
 
   // Build a unified feature list — all unique feature texts across all plans
   const featureSet = new Map<string, { plans: Record<string, boolean>; description: string }>();
-  const planNames = products.map(p => p.name as string);
+  const planNames = plans.map(p => p.name as string);
 
-  for (const plan of products) {
+  for (const plan of plans) {
     const features = (plan.features as Feature[]) || [];
     for (const f of features) {
       if (!featureSet.has(f.text)) {
@@ -144,7 +144,7 @@ export default async function ComparePage() {
               <thead>
                 <tr>
                   <th className="cp-feature-col"></th>
-                  {products.map(p => (
+                  {plans.map(p => (
                     <th key={p.name as string} className={`cp-plan-col ${p.highlight ? "cp-plan-highlight" : ""}`}>
                       <div className="cp-plan-header">
                         <span className="cp-plan-name">{p.name as string}</span>
@@ -195,7 +195,7 @@ export default async function ComparePage() {
               <tfoot>
                 <tr>
                   <td></td>
-                  {products.map(p => (
+                  {plans.map(p => (
                     <td key={p.name as string} className="cp-cta-cell">
                       {p.stripe_price_id && !p.cta_href ? (
                         <CheckoutButton

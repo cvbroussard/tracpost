@@ -30,7 +30,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/seo": "SEO",
   "/spotlight": "Spotlight",
   "/analytics": "Analytics",
-  "/accounts": "Connections",
+  "/integrations": "Integrations",
   "/account": "My Account",
   "/entities": "Entities",
   "/project-preview": "Project Preview",

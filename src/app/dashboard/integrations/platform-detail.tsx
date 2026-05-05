@@ -134,7 +134,7 @@ export function PlatformDetail({
     <div className="p-4 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-2 text-xs text-muted">
-        <Link href={prefix + "/accounts"} className="hover:text-foreground">Connections</Link>
+        <Link href={prefix + "/integrations"} className="hover:text-foreground">Integrations</Link>
         <span>/</span>
         <span className="text-foreground">{platform.label}</span>
       </div>

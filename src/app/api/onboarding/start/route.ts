@@ -57,18 +57,18 @@ export async function POST(req: NextRequest) {
   const nameClean = name.trim();
   const phoneClean = phone?.trim() || null;
 
-  // ── Product lookup ──────────────────────────────────────────────────
-  const [product] = await sql`
+  // ── Plan lookup ─────────────────────────────────────────────────────
+  const [planRow] = await sql`
     SELECT id, name, stripe_price_id, trial_days
-    FROM products
+    FROM plans
     WHERE id = ${product_id} AND is_active = true
   `;
-  if (!product) return NextResponse.json({ error: "product not found" }, { status: 404 });
-  if (!product.stripe_price_id) {
-    return NextResponse.json({ error: "no Stripe price configured for this product" }, { status: 400 });
+  if (!planRow) return NextResponse.json({ error: "plan not found" }, { status: 404 });
+  if (!planRow.stripe_price_id) {
+    return NextResponse.json({ error: "no Stripe price configured for this plan" }, { status: 400 });
   }
-  const trialDays = skip_trial ? 0 : ((product.trial_days as number) || 7);
-  const plan = PRICE_TO_PLAN[product.stripe_price_id as string] || "starter";
+  const trialDays = skip_trial ? 0 : ((planRow.trial_days as number) || 7);
+  const plan = PRICE_TO_PLAN[planRow.stripe_price_id as string] || "starter";
 
   // ── Lead upsert (best-effort) ──────────────────────────────────────
   try {
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
 
     subscription = await stripe.subscriptions.create({
       customer: customer.id,
-      items: [{ price: product.stripe_price_id as string }],
+      items: [{ price: planRow.stripe_price_id as string }],
       trial_period_days: trialDays > 0 ? trialDays : undefined,
       payment_behavior: "default_incomplete",
       payment_settings: {
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       expand: ["latest_invoice.confirmation_secret", "pending_setup_intent"],
       metadata: {
         product_id: product_id,
-        product_name: product.name as string,
+        product_name: planRow.name as string,
       },
     });
   } catch (err) {

@@ -1,6 +1,7 @@
 import {
   PERMISSIONS,
   APP_LABELS,
+  APP_METADATA,
   type ReviewerApp,
   type ReviewerPermission,
   anchorId,
@@ -18,6 +19,8 @@ export default function AppGuide({ app }: AppGuideProps) {
   const gaps = appPermissions.flatMap((p) =>
     (p.gaps ?? []).map((g) => ({ permission: p, gap: g })),
   );
+  const appMeta = APP_METADATA[app];
+  const appId = process.env[appMeta.appIdEnvVar] ?? "(not configured)";
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10 text-gray-900">
@@ -35,6 +38,58 @@ export default function AppGuide({ app }: AppGuideProps) {
           to the scope you&apos;re reviewing.
         </p>
       </header>
+
+      <section className="mt-8 rounded-lg border border-slate-200 bg-slate-50 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+          Meta Developer information
+        </h2>
+        <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+          <dt className="font-medium text-slate-700">App name</dt>
+          <dd>{appMeta.name}</dd>
+          <dt className="font-medium text-slate-700">App ID</dt>
+          <dd className="font-mono">{appId}</dd>
+          <dt className="font-medium text-slate-700">App mode</dt>
+          <dd>{appMeta.appMode}</dd>
+          <dt className="font-medium text-slate-700">Owner</dt>
+          <dd>{appMeta.ownerEntity}</dd>
+          <dt className="font-medium text-slate-700">Contact</dt>
+          <dd>
+            <a
+              href={`mailto:${appMeta.ownerContact}`}
+              className="text-blue-700 underline"
+            >
+              {appMeta.ownerContact}
+            </a>
+          </dd>
+          <dt className="font-medium text-slate-700">Privacy Policy</dt>
+          <dd>
+            <a
+              href={appMeta.privacyPolicyUrl}
+              className="text-blue-700 underline"
+            >
+              {appMeta.privacyPolicyUrl}
+            </a>
+          </dd>
+          <dt className="font-medium text-slate-700">Terms of Service</dt>
+          <dd>
+            <a
+              href={appMeta.termsOfServiceUrl}
+              className="text-blue-700 underline"
+            >
+              {appMeta.termsOfServiceUrl}
+            </a>
+          </dd>
+          <dt className="font-medium text-slate-700">Data Deletion</dt>
+          <dd>
+            <a
+              href={appMeta.dataDeletionUrl}
+              className="text-blue-700 underline"
+            >
+              {appMeta.dataDeletionUrl}
+            </a>
+          </dd>
+        </dl>
+      </section>
 
       <section className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-amber-900">
@@ -63,6 +118,22 @@ export default function AppGuide({ app }: AppGuideProps) {
               Password
             </dt>
             <dd className="font-mono">{TEST_CREDENTIALS.password}</dd>
+          </div>
+          <div className="flex gap-3">
+            <dt className="w-32 shrink-0 font-medium text-amber-900">
+              2FA recovery codes
+            </dt>
+            <dd>
+              <ul className="space-y-0.5 font-mono">
+                {TEST_CREDENTIALS.recoveryCodes.map((code) => (
+                  <li key={code}>{code}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-900/80">
+                Single-use 2FA backup codes. Use one if you encounter a 2FA
+                prompt during login. Each code consumes only when used.
+              </p>
+            </dd>
           </div>
           <div className="flex gap-3">
             <dt className="w-32 shrink-0 font-medium text-amber-900">Notes</dt>
@@ -188,9 +259,16 @@ function PermissionSection({
       className="scroll-mt-6 border-t border-gray-200 pt-8"
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 className="font-mono text-2xl font-semibold">
-          {permission.scope}
-        </h2>
+        <div>
+          <h2 className="font-mono text-2xl font-semibold">
+            {permission.scope}
+          </h2>
+          {permission.verifiedAt && (
+            <p className="mt-1 text-xs text-gray-500">
+              verified {permission.verifiedAt}
+            </p>
+          )}
+        </div>
         <StatusPill status={permission.status} />
       </div>
 

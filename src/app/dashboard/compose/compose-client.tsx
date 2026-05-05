@@ -40,7 +40,34 @@ interface PublishResponse {
   publishingTarget: string;
 }
 
-type ComposeStep = "select" | "recommend" | "review" | "published";
+type ComposeStep = "select" | "reach" | "recommend" | "review" | "published";
+type ReachMode = "organic" | "paid" | "both";
+
+interface ReachContext {
+  canonical: {
+    placeId: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    placeName: string | null;
+    source: "canonical" | "fb_page" | "site_location" | "none";
+  };
+  defaultRadius: number;
+  isEnterprise: boolean;
+  siteName: string;
+}
+
+interface PlacePrediction {
+  placeId: string;
+  placeName: string;
+}
+
+interface PlaceDetails {
+  placeId: string;
+  latitude: number;
+  longitude: number;
+  formattedAddress: string | null;
+  placeName: string | null;
+}
 
 interface ComposeClientProps {
   siteId: string;
@@ -53,6 +80,15 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<PostTemplate | null>(null);
+
+  // Reach-step state (enterprise tier only — mid-tier skips entirely)
+  const [reachContext, setReachContext] = useState<ReachContext | null>(null);
+  const [reachMode, setReachMode] = useState<ReachMode>("organic");
+  const [reachLat, setReachLat] = useState<number | null>(null);
+  const [reachLon, setReachLon] = useState<number | null>(null);
+  const [reachPlaceName, setReachPlaceName] = useState<string | null>(null);
+  const [reachRadius, setReachRadius] = useState<number>(10);
+  const [reachOverride, setReachOverride] = useState<PlaceDetails | null>(null);
 
   // Recommend-step state
   const [recommendation, setRecommendation] = useState<RecommendResponse | null>(null);
@@ -88,11 +124,43 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
 
   async function selectTemplate(t: PostTemplate) {
     setSelectedTemplate(t);
+    setError("");
+
+    // Fetch reach context — determines whether the Reach step appears
+    // (enterprise tier) and seeds the canonical place + default radius.
+    let ctx: ReachContext | null = null;
+    try {
+      const ctxRes = await fetch("/api/compose/reach-context");
+      if (ctxRes.ok) {
+        ctx = await ctxRes.json();
+        setReachContext(ctx);
+        setReachLat(ctx?.canonical.latitude ?? null);
+        setReachLon(ctx?.canonical.longitude ?? null);
+        setReachPlaceName(ctx?.canonical.placeName ?? null);
+        setReachRadius(ctx?.defaultRadius ?? 10);
+        setReachMode("organic");
+        setReachOverride(null);
+      }
+    } catch {
+      /* non-fatal — proceed without reach context, fall to Recommend */
+    }
+
+    if (ctx?.isEnterprise) {
+      // Enterprise: route to Reach step before Recommend
+      setStep("reach");
+      return;
+    }
+
+    // Mid-tier: skip Reach entirely, go straight to Recommend
+    await loadRecommendation(t.id);
+  }
+
+  async function loadRecommendation(templateId: string) {
     setStep("recommend");
     setRecommendLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/compose/recommend?template_id=${t.id}`);
+      const res = await fetch(`/api/compose/recommend?template_id=${templateId}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to load recommendation");
@@ -109,6 +177,11 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
     }
   }
 
+  async function continueFromReach() {
+    if (!selectedTemplate) return;
+    await loadRecommendation(selectedTemplate.id);
+  }
+
   function backToSelect() {
     setStep("select");
     setSelectedTemplate(null);
@@ -119,6 +192,13 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
     setHashtagsText("");
     setError("");
     setPublishResult(null);
+    setReachContext(null);
+    setReachLat(null);
+    setReachLon(null);
+    setReachPlaceName(null);
+    setReachRadius(10);
+    setReachMode("organic");
+    setReachOverride(null);
   }
 
   function backToRecommend() {
@@ -178,6 +258,7 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
           <h1 className="text-lg font-semibold">Compose</h1>
           <p className="text-xs text-muted mt-0.5">
             {step === "select" && "Pick a template — TracPost will assemble the rest."}
+            {step === "reach" && "Choose how this content will reach your audience."}
             {step === "recommend" && `Reviewing the recommended package for ${selectedTemplate?.name ?? "your template"}.`}
             {step === "review" && "Final review before publishing."}
             {step === "published" && "Your post is queued for publishing."}
@@ -185,7 +266,11 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
         </div>
         {step !== "select" && step !== "published" && (
           <button
-            onClick={step === "review" ? backToRecommend : backToSelect}
+            onClick={
+              step === "review" ? backToRecommend
+              : step === "recommend" && reachContext?.isEnterprise ? () => setStep("reach")
+              : backToSelect
+            }
             className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground hover:bg-surface-hover"
           >
             ← Back
@@ -201,8 +286,8 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
         )}
       </header>
 
-      {/* Step pills (Select → Recommend → Review → Trigger → Published) */}
-      <StepIndicator step={step} />
+      {/* Step pills — include Reach for enterprise tier */}
+      <StepIndicator step={step} includeReach={Boolean(reachContext?.isEnterprise)} />
 
       {loading ? (
         <CenterSpinner />
@@ -214,6 +299,31 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
         ) : (
           <TemplatePicker grouped={grouped} platformsInOrder={platformsInOrder} onSelect={selectTemplate} />
         )
+      ) : step === "reach" && reachContext ? (
+        <ReachPickerView
+          ctx={reachContext}
+          mode={reachMode}
+          lat={reachLat}
+          lon={reachLon}
+          placeName={reachPlaceName}
+          radius={reachRadius}
+          override={reachOverride}
+          onModeChange={setReachMode}
+          onRadiusChange={setReachRadius}
+          onOverride={(p) => {
+            setReachOverride(p);
+            setReachLat(p.latitude);
+            setReachLon(p.longitude);
+            setReachPlaceName(p.placeName || p.formattedAddress);
+          }}
+          onClearOverride={() => {
+            setReachOverride(null);
+            setReachLat(reachContext.canonical.latitude);
+            setReachLon(reachContext.canonical.longitude);
+            setReachPlaceName(reachContext.canonical.placeName);
+          }}
+          onContinue={continueFromReach}
+        />
       ) : step === "recommend" || step === "review" ? (
         recommendLoading ? (
           <CenterSpinner />
@@ -246,13 +356,21 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
   );
 }
 
-function StepIndicator({ step }: { step: ComposeStep }) {
-  const steps: Array<{ key: ComposeStep; label: string }> = [
-    { key: "select", label: "Select" },
-    { key: "recommend", label: "Recommend" },
-    { key: "review", label: "Review" },
-    { key: "published", label: "Trigger" },
-  ];
+function StepIndicator({ step, includeReach }: { step: ComposeStep; includeReach: boolean }) {
+  const steps: Array<{ key: ComposeStep; label: string }> = includeReach
+    ? [
+        { key: "select", label: "Select" },
+        { key: "reach", label: "Reach" },
+        { key: "recommend", label: "Recommend" },
+        { key: "review", label: "Review" },
+        { key: "published", label: "Trigger" },
+      ]
+    : [
+        { key: "select", label: "Select" },
+        { key: "recommend", label: "Recommend" },
+        { key: "review", label: "Review" },
+        { key: "published", label: "Trigger" },
+      ];
   const activeIndex = steps.findIndex((s) => s.key === step);
   return (
     <div className="flex items-center gap-2 text-xs">
@@ -565,6 +683,317 @@ function PublishedView({ result, template }: { result: PublishResponse; template
           View history →
         </Link>
       </div>
+    </div>
+  );
+}
+
+interface ReachPickerProps {
+  ctx: ReachContext;
+  mode: ReachMode;
+  lat: number | null;
+  lon: number | null;
+  placeName: string | null;
+  radius: number;
+  override: PlaceDetails | null;
+  onModeChange: (mode: ReachMode) => void;
+  onRadiusChange: (miles: number) => void;
+  onOverride: (place: PlaceDetails) => void;
+  onClearOverride: () => void;
+  onContinue: () => void;
+}
+
+function ReachPickerView(props: ReachPickerProps) {
+  const { ctx, mode, lat, lon, placeName, radius, override,
+          onModeChange, onRadiusChange, onOverride, onClearOverride, onContinue } = props;
+
+  const hasCoords = lat != null && lon != null;
+  const isPaidMode = mode === "paid" || mode === "both";
+
+  return (
+    <div className="space-y-5">
+      {/* Mode picker — three tabs */}
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+          How will this content reach your audience?
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <ModeTab
+            mode="organic"
+            active={mode === "organic"}
+            label="🌱 Organic"
+            sublabel="Free reach via your followers"
+            onClick={() => onModeChange("organic")}
+          />
+          <ModeTab
+            mode="paid"
+            active={mode === "paid"}
+            label="💰 Paid"
+            sublabel="Reach beyond your followers"
+            onClick={() => onModeChange("paid")}
+          />
+          <ModeTab
+            mode="both"
+            active={mode === "both"}
+            label="✨ Both"
+            sublabel="Permanent on Page + amplified"
+            onClick={() => onModeChange("both")}
+            recommended
+          />
+        </div>
+      </div>
+
+      {/* Map + location override — only relevant for paid/both modes
+          where targeting matters. Organic mode uses the Page's followers
+          regardless of geographic targeting. */}
+      {isPaidMode && (
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-card space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted">
+                Targeting center
+              </div>
+              <div className="mt-1 text-sm font-medium">
+                {placeName || (hasCoords ? `${lat?.toFixed(4)}, ${lon?.toFixed(4)}` : "(no location)")}
+                {override && (
+                  <span className="ml-2 text-[10px] rounded-full bg-warning/15 text-warning px-2 py-0.5">
+                    overridden for this post
+                  </span>
+                )}
+                {!override && ctx.canonical.source === "fb_page" && (
+                  <span className="ml-2 text-[10px] text-muted">
+                    (from your connected Facebook Page)
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              {override && (
+                <button
+                  onClick={onClearOverride}
+                  className="rounded border border-border px-2 py-1 text-[10px] text-muted hover:text-foreground"
+                >
+                  Use canonical
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Static map */}
+          {hasCoords ? (
+            <StaticMap lat={lat as number} lon={lon as number} radiusMiles={radius} />
+          ) : (
+            <div className="rounded border border-border bg-surface-hover p-6 text-center text-xs text-muted">
+              No coordinates resolved for this site yet.
+              {ctx.canonical.source === "site_location" && ctx.canonical.placeName && (
+                <span> Pick a precise location below to render the map.</span>
+              )}
+            </div>
+          )}
+
+          {/* Radius slider */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium">Radius</label>
+              <span className="text-xs font-mono">{radius} mi</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={50}
+              step={1}
+              value={radius}
+              onChange={(e) => onRadiusChange(Number(e.target.value))}
+              className="w-full"
+            />
+          </div>
+
+          {/* Override location autocomplete */}
+          <LocationOverrideInput onPlaceResolved={onOverride} />
+        </div>
+      )}
+
+      {/* Forecast placeholder — full delivery_estimate integration lands
+          in the next chunk (Phase 3 of the Reach build). For now show the
+          structure so subscribers see what's coming. */}
+      {isPaidMode && hasCoords && (
+        <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-accent mb-2">
+            Reach forecast
+          </div>
+          <p className="text-xs text-muted">
+            Live audience size + budget estimate from Meta&apos;s Marketing API
+            wires in next. For now, expect ~1,500–3,500 people reachable in this
+            area at $7/day for 5 days. We&apos;ll plumb the real numbers shortly.
+          </p>
+        </div>
+      )}
+
+      {/* Continue */}
+      <div className="flex justify-end gap-2 pt-2">
+        <button
+          onClick={onContinue}
+          disabled={isPaidMode && !hasCoords}
+          className="rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+        >
+          Continue with {mode === "organic" ? "Organic" : mode === "paid" ? "Paid" : "Both"} →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ModeTab({
+  mode: _mode,
+  active,
+  label,
+  sublabel,
+  recommended,
+  onClick,
+}: {
+  mode: ReachMode;
+  active: boolean;
+  label: string;
+  sublabel: string;
+  recommended?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative rounded-xl border-2 p-4 text-left transition-all ${
+        active
+          ? "border-accent bg-accent/5 shadow-md"
+          : "border-border bg-surface hover:border-accent/40"
+      }`}
+    >
+      {recommended && (
+        <span className="absolute top-2 right-2 rounded-full bg-success/15 text-success text-[10px] px-2 py-0.5">
+          Recommended
+        </span>
+      )}
+      <div className="text-sm font-semibold">{label}</div>
+      <div className="mt-1 text-[11px] text-muted leading-snug">{sublabel}</div>
+    </button>
+  );
+}
+
+function StaticMap({ lat, lon, radiusMiles }: { lat: number; lon: number; radiusMiles: number }) {
+  // Approximate zoom from radius — wider radius = lower zoom
+  const zoom = radiusMiles <= 5 ? 12 : radiusMiles <= 15 ? 11 : radiusMiles <= 30 ? 10 : 9;
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+  const params = new URLSearchParams({
+    center: `${lat},${lon}`,
+    zoom: String(zoom),
+    size: "640x320",
+    scale: "2",
+    maptype: "roadmap",
+    markers: `color:red|${lat},${lon}`,
+  });
+  // Approximate radius as a circle via path with encoded approximation —
+  // Google Static Maps doesn't support true circles, but we can render
+  // a polygon-based circle of N segments. For Phase 1 simplicity we just
+  // show the marker; circle visualization upgrades to interactive map
+  // (Maps JavaScript API or Mapbox) in a follow-up.
+  if (apiKey) params.set("key", apiKey);
+  const url = `https://maps.googleapis.com/maps/api/staticmap?${params}`;
+  return (
+    <div className="overflow-hidden rounded border border-border">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt="Targeting area map"
+        className="w-full h-auto block"
+        loading="lazy"
+      />
+    </div>
+  );
+}
+
+function LocationOverrideInput({ onPlaceResolved }: { onPlaceResolved: (p: PlaceDetails) => void }) {
+  const [query, setQuery] = useState("");
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [showOverride, setShowOverride] = useState(false);
+
+  useEffect(() => {
+    if (!showOverride) return;
+    if (query.length < 3) {
+      setPredictions([]);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/google/places-search?q=${encodeURIComponent(query)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPredictions(data.predictions || []);
+        }
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [query, showOverride]);
+
+  async function pickPrediction(p: PlacePrediction) {
+    setResolving(true);
+    try {
+      const res = await fetch(`/api/google/places-details/${encodeURIComponent(p.placeId)}`);
+      if (res.ok) {
+        const details: PlaceDetails = await res.json();
+        onPlaceResolved(details);
+        setShowOverride(false);
+        setQuery("");
+        setPredictions([]);
+      }
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  if (!showOverride) {
+    return (
+      <button
+        onClick={() => setShowOverride(true)}
+        className="text-xs text-blue-700 hover:underline"
+      >
+        Override location for this post →
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Type a city or ZIP..."
+        autoFocus
+        className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:border-accent focus:outline-none"
+      />
+      {searching && <p className="text-[10px] text-muted">Searching...</p>}
+      {predictions.length > 0 && (
+        <div className="rounded border border-border bg-surface max-h-48 overflow-y-auto">
+          {predictions.map((p) => (
+            <button
+              key={p.placeId}
+              onClick={() => pickPrediction(p)}
+              disabled={resolving}
+              className="block w-full text-left px-3 py-1.5 text-xs hover:bg-surface-hover disabled:opacity-50"
+            >
+              {p.placeName}
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        onClick={() => { setShowOverride(false); setQuery(""); setPredictions([]); }}
+        className="text-[10px] text-muted hover:text-foreground"
+      >
+        Cancel override
+      </button>
     </div>
   );
 }

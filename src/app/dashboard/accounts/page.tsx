@@ -24,8 +24,10 @@ export default async function AccountsPage() {
   const siteCountRows = await sql`SELECT COUNT(*)::int AS n FROM sites WHERE subscription_id = ${session.subscriptionId}`;
   const hasNoSites = (siteCountRows[0]?.n as number) === 0;
 
+  const isEnterprise = session.plan.toLowerCase().includes("enterprise");
+
   if (!activeSiteId) {
-    return <ConnectionsOverview statuses={statuses} hasNoSites={hasNoSites} />;
+    return <ConnectionsOverview statuses={statuses} hasNoSites={hasNoSites} isEnterprise={isEnterprise} />;
   }
 
   // 1. Assigned platform_assets (new model)
@@ -86,5 +88,5 @@ export default async function AccountsPage() {
     }
   }
 
-  return <ConnectionsOverview statuses={statuses} hasNoSites={hasNoSites} />;
+  return <ConnectionsOverview statuses={statuses} hasNoSites={hasNoSites} isEnterprise={isEnterprise} />;
 }

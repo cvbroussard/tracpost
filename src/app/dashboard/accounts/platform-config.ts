@@ -13,6 +13,14 @@ export interface PlatformConfig {
   multiAssetWarning?: string;
   /** When set, the tile in the connections hub links to this slug instead of its own detail page */
   hubTargetSlug?: string;
+  /**
+   * Discriminator for the Integrations hub grouping:
+   *   - "publishing" (default) — organic publishing connections, all tiers
+   *   - "ads" — paid ads/marketing connections, enterprise tier only
+   */
+  category?: "publishing" | "ads";
+  /** Tier gate. Default = visible to all tiers. */
+  tierRequired?: "enterprise";
 }
 
 export const PLATFORMS: PlatformConfig[] = [
@@ -244,6 +252,110 @@ export const PLATFORMS: PlatformConfig[] = [
       { label: "Convert to Business Account", href: "https://help.pinterest.com/en/business/article/get-a-business-account" },
       { label: "Claim your website", href: "https://help.pinterest.com/en/business/article/claim-your-website" },
     ],
+  },
+
+  // ── Ads / paid integrations (enterprise tier only) ──────────────
+  {
+    key: "meta-ads",
+    label: "Meta Ads",
+    slug: "meta-ads",
+    color: "#1877F2",
+    why: "Boost organic posts beyond your followers. Meta Ads (Facebook + Instagram) targets the audience that's most likely to convert, with TracPost handling targeting, budget, and creative attachment so you don't need Ads Manager fluency.",
+    accountType: "Meta Ad Account in your Business Manager",
+    prerequisites: [
+      "An Ad Account in your Meta Business Manager (you may already have one)",
+      "Admin role on the Ad Account (or finance role for budget management)",
+      "Ad Account funded with a payment method (Meta requires this; TracPost never charges your card directly)",
+      "Decide which Ad Account funds this business — you'll select it during the connection step",
+    ],
+    whatWeDoWithIt: [
+      "Boost your best-performing organic posts with one click (Quick Boost)",
+      "Track campaign performance — impressions, clicks, spend, ROI",
+      "Coordinate ad spend with the content engine (post performance feeds boost decisions)",
+      "Run hyperlocal targeting via service-area maps with per-campaign overrides",
+    ],
+    oauthRoute: "/api/auth/meta-ads",
+    oauthReady: true,
+    helpLinks: [
+      { label: "Create a Meta Business Manager", href: "https://business.facebook.com/" },
+      { label: "Add an Ad Account", href: "https://www.facebook.com/business/help/910137316041095" },
+    ],
+    category: "ads",
+    tierRequired: "enterprise",
+  },
+  {
+    key: "tiktok-ads",
+    label: "TikTok Ads",
+    slug: "tiktok-ads",
+    color: "#000000",
+    why: "TikTok's targeting reaches users actively planning purchases — especially for visual service businesses. Smaller budgets go further than on Meta because TikTok's auction is less saturated.",
+    accountType: "TikTok For Business Ad Account",
+    prerequisites: [
+      "A TikTok For Business account",
+      "An Ad Account funded with a payment method",
+      "Admin role on the Ad Account",
+    ],
+    whatWeDoWithIt: [
+      "Boost organic TikTok videos via Spark Ads",
+      "Run direct video ads from your media library",
+      "Track engagement and spend across campaigns",
+    ],
+    oauthRoute: "/api/auth/tiktok-ads",
+    oauthReady: false,
+    helpLinks: [
+      { label: "TikTok For Business", href: "https://www.tiktok.com/business/" },
+    ],
+    category: "ads",
+    tierRequired: "enterprise",
+  },
+  {
+    key: "pinterest-ads",
+    label: "Pinterest Ads",
+    slug: "pinterest-ads",
+    color: "#E60023",
+    why: "Pinterest users are actively planning projects — high commercial intent. Search-driven discovery means well-targeted pins reach buyers in the consideration phase.",
+    accountType: "Pinterest Ad Account (Business)",
+    prerequisites: [
+      "A Pinterest Business account",
+      "An Ad Account funded with a payment method",
+    ],
+    whatWeDoWithIt: [
+      "Promote organic pins to expand reach",
+      "Run direct ad campaigns targeting purchase intent",
+      "Track spend and engagement",
+    ],
+    oauthRoute: "/api/auth/pinterest-ads",
+    oauthReady: false,
+    helpLinks: [
+      { label: "Pinterest Business", href: "https://business.pinterest.com/" },
+    ],
+    category: "ads",
+    tierRequired: "enterprise",
+  },
+  {
+    key: "linkedin-ads",
+    label: "LinkedIn Ads",
+    slug: "linkedin-ads",
+    color: "#0A66C2",
+    why: "LinkedIn ads reach the commercial decision-maker — for B2B referrals, partnerships, and credibility-building at the right buyer level. Premium audience, premium price.",
+    accountType: "LinkedIn Marketing Solutions Ad Account",
+    prerequisites: [
+      "A LinkedIn Company Page",
+      "Access to LinkedIn Campaign Manager",
+      "An Ad Account funded with a payment method",
+    ],
+    whatWeDoWithIt: [
+      "Promote LinkedIn posts to a B2B audience",
+      "Run sponsored content campaigns",
+      "Track engagement and conversions",
+    ],
+    oauthRoute: "/api/auth/linkedin-ads",
+    oauthReady: false,
+    helpLinks: [
+      { label: "LinkedIn Marketing Solutions", href: "https://business.linkedin.com/marketing-solutions" },
+    ],
+    category: "ads",
+    tierRequired: "enterprise",
   },
 ];
 

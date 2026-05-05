@@ -12,7 +12,15 @@ export function oauthSuccessUrl(
   source: string | undefined,
   accountName: string,
   onboardingToken?: string,
-  platform?: string
+  platform?: string,
+  /**
+   * Optional platform-config slug (e.g. "facebook", "instagram") used to
+   * land the subscriber on the per-platform connection detail page after
+   * OAuth completes — so the post-OAuth picker (when status is
+   * pending_assignment) is immediately visible. When omitted, falls back
+   * to the connections hub at /accounts.
+   */
+  redirectSlug?: string,
 ): string {
   if (source === "onboarding" && onboardingToken) {
     const platformParam = platform ? `&completed=${encodeURIComponent(platform)}` : "";
@@ -27,7 +35,11 @@ export function oauthSuccessUrl(
   if (source === "campaigns") {
     return `${studioUrl("/campaigns")}?connected=${encodeURIComponent(accountName)}`;
   }
-  return `${studioUrl("/accounts")}?connected=${encodeURIComponent(accountName)}`;
+  // Default web flow — land on the per-platform detail page when slug is
+  // known, so the post-OAuth picker is immediately visible. Falls back to
+  // the connections hub when no slug is passed (preserves legacy behavior).
+  const dest = redirectSlug ? `/accounts/${redirectSlug}` : "/accounts";
+  return `${studioUrl(dest)}?connected=${encodeURIComponent(accountName)}`;
 }
 
 export function oauthErrorUrl(

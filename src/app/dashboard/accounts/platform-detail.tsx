@@ -151,9 +151,15 @@ export function PlatformDetail({
           <span className={`ml-auto rounded px-2.5 py-1 text-xs font-medium ${
             conn.connected
               ? "bg-success/10 text-success"
+              : conn.status === "pending_assignment"
+              ? "bg-warning/10 text-warning"
               : "bg-surface-hover text-muted"
           }`}>
-            {conn.connected ? "Connected" : "Not connected"}
+            {conn.connected
+              ? "Connected"
+              : conn.status === "pending_assignment"
+              ? "Choose a Page"
+              : "Not connected"}
           </span>
         )}
       </div>

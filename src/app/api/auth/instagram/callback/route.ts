@@ -153,7 +153,9 @@ export async function GET(req: NextRequest) {
       ...fbPages.map((p) => `FB:${p.pageName}`),
     ];
     await markOnboardingPlatformIfNeeded(state, "meta", "connected");
-    return NextResponse.redirect(oauthSuccessUrl(state.source, allNames.join(","), state.onboarding_token, "meta"));
+    // Land on the Facebook detail page so the post-OAuth picker is
+    // immediately visible when status is pending_assignment (multi-Page case).
+    return NextResponse.redirect(oauthSuccessUrl(state.source, allNames.join(","), state.onboarding_token, "meta", "facebook"));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Meta OAuth callback error:", message);

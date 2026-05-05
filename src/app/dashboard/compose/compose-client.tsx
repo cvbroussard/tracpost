@@ -89,6 +89,8 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
   const [reachPlaceName, setReachPlaceName] = useState<string | null>(null);
   const [reachRadius, setReachRadius] = useState<number>(10);
   const [reachOverride, setReachOverride] = useState<PlaceDetails | null>(null);
+  const [reachBudget, setReachBudget] = useState<number>(7);
+  const [reachDuration, setReachDuration] = useState<number>(5);
 
   // Recommend-step state
   const [recommendation, setRecommendation] = useState<RecommendResponse | null>(null);
@@ -199,6 +201,8 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
     setReachRadius(10);
     setReachMode("organic");
     setReachOverride(null);
+    setReachBudget(7);
+    setReachDuration(5);
   }
 
   function backToRecommend() {
@@ -307,9 +311,13 @@ export function ComposeClient({ siteId: _siteId }: ComposeClientProps) {
           lon={reachLon}
           placeName={reachPlaceName}
           radius={reachRadius}
+          budget={reachBudget}
+          duration={reachDuration}
           override={reachOverride}
           onModeChange={setReachMode}
           onRadiusChange={setReachRadius}
+          onBudgetChange={setReachBudget}
+          onDurationChange={setReachDuration}
           onOverride={(p) => {
             setReachOverride(p);
             setReachLat(p.latitude);
@@ -694,20 +702,74 @@ interface ReachPickerProps {
   lon: number | null;
   placeName: string | null;
   radius: number;
+  budget: number;
+  duration: number;
   override: PlaceDetails | null;
   onModeChange: (mode: ReachMode) => void;
   onRadiusChange: (miles: number) => void;
+  onBudgetChange: (dollars: number) => void;
+  onDurationChange: (days: number) => void;
   onOverride: (place: PlaceDetails) => void;
   onClearOverride: () => void;
   onContinue: () => void;
 }
 
+interface ForecastResult {
+  estimateReady: boolean;
+  audienceLower: number | null;
+  audienceUpper: number | null;
+  dailyReachLower: number | null;
+  dailyReachUpper: number | null;
+}
+
 function ReachPickerView(props: ReachPickerProps) {
-  const { ctx, mode, lat, lon, placeName, radius, override,
-          onModeChange, onRadiusChange, onOverride, onClearOverride, onContinue } = props;
+  const { ctx, mode, lat, lon, placeName, radius, budget, duration, override,
+          onModeChange, onRadiusChange, onBudgetChange, onDurationChange,
+          onOverride, onClearOverride, onContinue } = props;
 
   const hasCoords = lat != null && lon != null;
   const isPaidMode = mode === "paid" || mode === "both";
+
+  // Live forecast — re-fetched (debounced) when lat/lon/radius/budget changes.
+  const [forecast, setForecast] = useState<ForecastResult | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isPaidMode || !hasCoords) {
+      setForecast(null);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      setForecastLoading(true);
+      setForecastError(null);
+      try {
+        const res = await fetch("/api/compose/reach-forecast", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            latitude: lat,
+            longitude: lon,
+            radius_miles: radius,
+            daily_budget_dollars: budget,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setForecastError(data.error || data.message || "Forecast unavailable");
+          setForecast(null);
+        } else {
+          setForecast(await res.json());
+        }
+      } catch {
+        setForecastError("Forecast request failed");
+        setForecast(null);
+      } finally {
+        setForecastLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [isPaidMode, hasCoords, lat, lon, radius, budget]);
 
   return (
     <div className="space-y-5">
@@ -790,21 +852,39 @@ function ReachPickerView(props: ReachPickerProps) {
             </div>
           )}
 
-          {/* Radius slider */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium">Radius</label>
-              <span className="text-xs font-mono">{radius} mi</span>
-            </div>
-            <input
-              type="range"
+          {/* Radius / Budget / Duration sliders */}
+          <div className="space-y-3">
+            <SliderRow
+              label="Radius"
+              value={radius}
+              suffix="mi"
               min={1}
               max={50}
               step={1}
-              value={radius}
-              onChange={(e) => onRadiusChange(Number(e.target.value))}
-              className="w-full"
+              onChange={onRadiusChange}
             />
+            <SliderRow
+              label="Daily budget"
+              value={budget}
+              prefix="$"
+              suffix="/day"
+              min={1}
+              max={100}
+              step={1}
+              onChange={onBudgetChange}
+            />
+            <SliderRow
+              label="Duration"
+              value={duration}
+              suffix={` day${duration === 1 ? "" : "s"}`}
+              min={1}
+              max={30}
+              step={1}
+              onChange={onDurationChange}
+            />
+            <div className="text-[11px] text-muted text-right">
+              Total: <span className="font-mono">${budget * duration}</span>
+            </div>
           </div>
 
           {/* Override location autocomplete */}
@@ -812,19 +892,24 @@ function ReachPickerView(props: ReachPickerProps) {
         </div>
       )}
 
-      {/* Forecast placeholder — full delivery_estimate integration lands
-          in the next chunk (Phase 3 of the Reach build). For now show the
-          structure so subscribers see what's coming. */}
+      {/* Live forecast — Meta delivery_estimate response */}
       {isPaidMode && hasCoords && (
         <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-accent mb-2">
-            Reach forecast
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-accent">
+              Reach forecast
+            </div>
+            {forecastLoading && (
+              <span className="text-[10px] text-muted">updating...</span>
+            )}
           </div>
-          <p className="text-xs text-muted">
-            Live audience size + budget estimate from Meta&apos;s Marketing API
-            wires in next. For now, expect ~1,500–3,500 people reachable in this
-            area at $7/day for 5 days. We&apos;ll plumb the real numbers shortly.
-          </p>
+          {forecastError ? (
+            <p className="text-xs text-danger">{forecastError}</p>
+          ) : forecast ? (
+            <ForecastDetail forecast={forecast} budget={budget} duration={duration} mode={mode} />
+          ) : (
+            <p className="text-xs text-muted">Loading...</p>
+          )}
         </div>
       )}
 
@@ -839,6 +924,89 @@ function ReachPickerView(props: ReachPickerProps) {
         </button>
       </div>
     </div>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  prefix,
+  suffix,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  prefix?: string;
+  suffix?: string;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-xs font-medium">{label}</label>
+        <span className="text-xs font-mono">
+          {prefix}{value}{suffix}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full"
+      />
+    </div>
+  );
+}
+
+function ForecastDetail({
+  forecast,
+  budget,
+  duration,
+  mode,
+}: {
+  forecast: ForecastResult;
+  budget: number;
+  duration: number;
+  mode: ReachMode;
+}) {
+  function fmt(n: number | null): string {
+    if (n == null) return "—";
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+    return String(n);
+  }
+  const audienceText = forecast.audienceLower != null && forecast.audienceUpper != null
+    ? `${fmt(forecast.audienceLower)}–${fmt(forecast.audienceUpper)}`
+    : forecast.audienceLower != null
+    ? `~${fmt(forecast.audienceLower)}`
+    : "—";
+  const dailyReachText = forecast.dailyReachLower != null && forecast.dailyReachUpper != null
+    ? `${fmt(forecast.dailyReachLower)}–${fmt(forecast.dailyReachUpper)}`
+    : "—";
+  return (
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+      <dt className="text-muted">Audience size in this area</dt>
+      <dd className="font-medium text-right">{audienceText}</dd>
+      <dt className="text-muted">Estimated daily reach at ${budget}/day</dt>
+      <dd className="font-medium text-right">{dailyReachText}</dd>
+      <dt className="text-muted">Total spend over {duration} day{duration === 1 ? "" : "s"}</dt>
+      <dd className="font-medium text-right">${budget * duration}</dd>
+      {mode === "both" && (
+        <>
+          <dt className="text-muted">Plus organic reach</dt>
+          <dd className="font-medium text-right text-success">+ your followers</dd>
+        </>
+      )}
+    </dl>
   );
 }
 

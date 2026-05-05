@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { getAdapter } from "./adapters/registry";
 import { socialPostLink } from "@/lib/utm";
+import { boostPostAfterPublish, type ReachData } from "./boost-after-publish";
 
 /** OAuth provider → adapter key mapping. Mirror of token-refresh.ts. */
 function adapterKeyFor(oauthProvider: string): string {
@@ -151,6 +152,48 @@ export async function publishPost(postId: string): Promise<{ success: boolean; e
       INSERT INTO social_post_history (post_id, action, old_status, new_status, notes)
       VALUES (${postId}, 'publish', 'scheduled', 'published', ${`Published to ${post.platform}`})
     `;
+
+    // Compose Reach Phase 5 — auto-boost-after-publish chain.
+    // If the post was created with mode='both' via Compose, the reach data
+    // is on metadata.reach. Fire the Quick Boost machinery server-to-server
+    // using the just-returned platform_post_id as object_story_id. Boost
+    // failure is non-fatal — the publish stays successful, the failure
+    // surfaces in the post's metadata.reach.boostFailedReason for the UI.
+    const reach = postMeta.reach as ReachData | undefined;
+    if (
+      reach?.mode === "both" &&
+      result.platformPostId &&
+      (adapterPlatform === "facebook" || adapterPlatform === "instagram")
+    ) {
+      try {
+        const boostResult = await boostPostAfterPublish(
+          {
+            postId,
+            platformPostId: result.platformPostId,
+            platform: adapterPlatform as "facebook" | "instagram",
+            platformAccountId,
+          },
+          reach,
+        );
+        if (boostResult.success) {
+          console.log(`Boost-after-publish OK for post ${postId} → campaign ${boostResult.campaignId}`);
+          await sql`
+            INSERT INTO social_post_history (post_id, action, old_status, new_status, notes)
+            VALUES (${postId}, 'boost_chained', 'published', 'published', ${`Compose mode='both' → campaign ${boostResult.campaignId}`})
+          `;
+        } else {
+          console.warn(`Boost-after-publish failed for post ${postId}: ${boostResult.error}`);
+          await sql`
+            INSERT INTO social_post_history (post_id, action, old_status, new_status, notes)
+            VALUES (${postId}, 'boost_chain_failed', 'published', 'published', ${`Compose mode='both' boost failed: ${boostResult.error}`})
+          `;
+        }
+      } catch (boostErr) {
+        // Defensive — boostPostAfterPublish handles its own errors but a
+        // truly unexpected throw shouldn't fail the publish.
+        console.error("Unexpected error in boost-after-publish:", boostErr);
+      }
+    }
 
     return { success: true };
   } catch (err: unknown) {

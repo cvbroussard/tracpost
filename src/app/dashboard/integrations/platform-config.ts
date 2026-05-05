@@ -256,7 +256,9 @@ export const PLATFORMS: PlatformConfig[] = [
 
   // ── Ads / paid integrations (enterprise tier only) ──────────────
   {
-    key: "meta-ads",
+    // key matches platform_assets.platform written by /api/auth/meta-ads
+    // callback (snake_case). Slug stays kebab for URL convention.
+    key: "meta_ads",
     label: "Meta Ads",
     slug: "meta-ads",
     color: "#1877F2",

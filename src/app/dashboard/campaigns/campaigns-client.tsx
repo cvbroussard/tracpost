@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { PlatformIcon } from "@/components/platform-icons";
 
 interface Props {
@@ -229,8 +230,6 @@ export function CampaignsClient(props: Props) {
 
   const [topPosts, setTopPosts] = useState<TopPost[]>([]);
   const [topPostsLoading, setTopPostsLoading] = useState(false);
-
-  const [connecting, setConnecting] = useState(false);
 
   // Per-row insights expansion
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -612,22 +611,10 @@ export function CampaignsClient(props: Props) {
     }
   }
 
-  async function startConnectFlow() {
-    setConnecting(true);
-    try {
-      const res = await fetch("/api/auth/meta-ads");
-      const data = await res.json();
-      if (data.auth_url) {
-        window.location.href = data.auth_url as string;
-      } else {
-        setConnecting(false);
-      }
-    } catch {
-      setConnecting(false);
-    }
-  }
-
-  // ── No ad account connected: surface the connect CTA ──────────────────
+  // ── No ad account connected: redirect-style empty state ─────────────
+  // Connection lifecycle (Connect / Disconnect / Reconnect) lives on the
+  // Integrations page only. This page is operational — promote, refresh,
+  // status-toggle, etc. — and assumes a token already exists.
   if (!adAccountLoading && !adAccount) {
     return (
       <div className="p-4">
@@ -637,24 +624,16 @@ export function CampaignsClient(props: Props) {
         </div>
 
         <div className="rounded-xl border border-border bg-surface p-6 shadow-card">
-          <h3 className="text-base font-medium mb-2">Authorize Ad Management</h3>
+          <h3 className="text-base font-medium mb-2">Connect your Meta Ad Account first</h3>
           <p className="text-sm text-muted mb-4 leading-relaxed">
-            To create and manage paid campaigns, TracPost needs permission to access your Meta Ad Account.
-            Your ad account, your spend, your billing — TracPost only operates within your account, never owns it,
-            and never holds funds. Every campaign created here remains visible in your own Meta Ads Manager.
+            Promote needs a Meta Ad Account to run paid campaigns. Connect one in Integrations, then come back here to start promoting your best organic posts.
           </p>
-          <ul className="text-xs text-muted space-y-1 mb-5 ml-4 list-disc">
-            <li>Campaigns are created using the Meta Marketing API on your behalf</li>
-            <li>Meta charges your existing payment method directly</li>
-            <li>You can revoke TracPost&apos;s access at any time from your Meta Business settings</li>
-          </ul>
-          <button
-            onClick={startConnectFlow}
-            disabled={connecting}
-            className="rounded bg-accent px-5 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+          <Link
+            href="/dashboard/integrations/meta-ads"
+            className="inline-block rounded bg-accent px-5 py-2 text-sm font-medium text-white hover:bg-accent/90"
           >
-            {connecting ? "Redirecting…" : "Authorize Ad Management"}
-          </button>
+            Connect in Integrations →
+          </Link>
         </div>
       </div>
     );

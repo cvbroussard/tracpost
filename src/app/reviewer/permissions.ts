@@ -187,22 +187,18 @@ export const PERMISSIONS: ReviewerPermission[] = [
     scope: "public_profile",
     app: "pages",
     workflowStage: "connect",
-    description: "Reads the connected Facebook account's name and profile picture for display in the TracPost app.",
+    description: "Reads the connected Facebook account's name for display in the TracPost app.",
     whyWeNeed:
-      "Standard scope. Allows the TracPost app to display the connected Facebook account's name and avatar in account settings as confirmation of who is connected.",
+      "Standard scope. Allows the TracPost app to display the connected Facebook account's name in the connection card as confirmation of who is connected — the human OAuth-granting identity, distinct from the connected Page.",
     testSteps: [
       "Complete the OAuth flow in the pages_show_list test.",
-      "Navigate to 'Settings' → 'Connections' (or click the user avatar top-right).",
-      "Observe the connected Facebook account's name and profile photo displayed in the TracPost app.",
+      "On the Facebook connection detail page (/accounts/facebook), observe the 'Connected as {name}' row in the Connection card.",
     ],
     expectedOutcome:
-      "The connected Facebook account's name and profile picture are visible in the TracPost app.",
-    demoLink: "https://app.tracpost.com/dashboard/settings",
-    status: "partial",
-    gaps: [
-      "VERIFY: connected Facebook account's name + avatar visible somewhere in the post-OAuth subscriber UI (settings page, top nav, or connections page)",
-      "BUILD (only if missing): add a clear surface that displays the connected Facebook account's identity. Connections page typically already shows this — verify before building.",
-    ],
+      "The connected Facebook account's name appears in the 'Connected as' row of the Connection card, distinct from the 'Connected Page' row.",
+    demoLink: "https://app.tracpost.com/dashboard/accounts/facebook",
+    status: "ready",
+    verifiedAt: "2026-05-05",
   },
   {
     scope: "pages_show_list",
@@ -219,14 +215,10 @@ export const PERMISSIONS: ReviewerPermission[] = [
       "Observe the list of Pages the connected Facebook account administers, rendered in the TracPost app for selection.",
     ],
     expectedOutcome:
-      "After OAuth completes, the TracPost app displays a card for each Facebook Page the connected Facebook account administers, with the Page name, ID, and a 'Connect' button.",
-    demoLink: "https://app.tracpost.com/dashboard/social",
-    status: "partial",
-    gaps: [
-      "VERIFY: connection flow at /dashboard/social shows the Page list immediately after OAuth completes (live data from the Pages API, not cached/stub)",
-      "VERIFY: clicking 'Connect' on a specific Page binds it to the active site and reflects in the TracPost app",
-      "TEST DATA: the connected Facebook account must administer at least one Page (provide test FB account credentials in the credentials block — currently missing)",
-    ],
+      "After OAuth completes, the TracPost app lands on /accounts/facebook with a prominent picker showing each Facebook Page the connected Facebook account administers. (Single-Page case auto-binds to the site without showing the picker.)",
+    demoLink: "https://app.tracpost.com/dashboard/accounts/facebook",
+    status: "ready",
+    verifiedAt: "2026-05-05",
   },
   {
     scope: "business_management",
@@ -240,14 +232,10 @@ export const PERMISSIONS: ReviewerPermission[] = [
       "Optional: show the BM relationship in Meta Business Suite (separate tab) — the TracPost platform listed as a partner with publishing permissions on the subscriber business's connected BM.",
     ],
     expectedOutcome:
-      "Connected Pages owned by a connected Business Manager (not just personally-owned Pages) are discoverable and connectable in the TracPost app.",
-    demoLink: "https://app.tracpost.com/dashboard/social",
-    status: "partial",
-    gaps: [
-      "TEST DATA: the connected Facebook account on test2 must administer at least one BM-owned Page (not personal). Confirm in test2 setup before screencast.",
-      "DECISION: implicit demonstration (BM-owned Page appears in list, can be selected, can be published to) is sufficient for v1 review. Explicit BOBO/agency-grant flow not necessary unless Meta specifically requests it.",
-      "VERIFY: connection flow doesn't break for personal-only subscribers (graceful degradation — should still work even without BM-owned Pages, just won't demonstrate this specific scope)",
-    ],
+      "Connected Pages owned by a connected Business Manager are discoverable in the post-OAuth picker and bindable to the TracPost site. Verified end-to-end with a BM-owned test Page.",
+    demoLink: "https://app.tracpost.com/dashboard/accounts/facebook",
+    status: "ready",
+    verifiedAt: "2026-05-05",
   },
 
   // ── Publish ─────────────────────────────────────────────────────────
@@ -706,7 +694,7 @@ export function allGaps(): { permission: ReviewerPermission; gap: string }[] {
 /**
  * Page version + last-updated. Bump on every edit.
  */
-export const PAGE_VERSION = "0.7";
+export const PAGE_VERSION = "0.8";
 export const LAST_UPDATED = "2026-05-05";
 
 /**

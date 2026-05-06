@@ -98,10 +98,37 @@ export async function GET(_req: NextRequest) {
     }
   }
 
+  // Connection flags for the Reach mode gate. Meta Ads can boost FB
+  // Page posts OR IG posts (each requires its own organic token plus the
+  // ads token). The UI uses these to decide whether to enable the Paid
+  // and Both tiles, and to coach which specific connection is missing.
+  const connRows = await sql`
+    SELECT pa.platform, pa.asset_type
+    FROM site_platform_assets spa
+    JOIN platform_assets pa ON pa.id = spa.platform_asset_id
+    JOIN social_accounts sa ON sa.id = pa.social_account_id
+    WHERE spa.site_id = ${siteId}
+      AND spa.is_primary = true
+      AND sa.subscription_id = ${session.subscriptionId}
+  `;
+  let hasFacebookPage = false;
+  let hasInstagram = false;
+  let hasMetaAdsToken = false;
+  for (const row of connRows) {
+    const platform = row.platform as string;
+    const assetType = row.asset_type as string | null;
+    if (platform === "facebook") hasFacebookPage = true;
+    else if (platform === "instagram") hasInstagram = true;
+    else if (assetType === "meta_ad_account") hasMetaAdsToken = true;
+  }
+
   return NextResponse.json({
     canonical,
     defaultRadius: (siteRow.reach_default_radius_miles as number) || 10,
     isEnterprise,
+    hasFacebookPage,
+    hasInstagram,
+    hasMetaAdsToken,
     siteName: siteRow.name as string,
   });
 }

@@ -64,6 +64,12 @@ interface ReachContext {
   };
   defaultRadius: number;
   isEnterprise: boolean;
+  // Connection flags for the Paid/Both gate. Meta Ads needs the ads
+  // token AND at least one of FB Page or IG (organic) to have content
+  // to boost. See feedback memory: paid mode requires (FB || IG) && Ads.
+  hasFacebookPage: boolean;
+  hasInstagram: boolean;
+  hasMetaAdsToken: boolean;
   siteName: string;
 }
 
@@ -790,13 +796,46 @@ function ReachPickerView(props: ReachPickerProps) {
   const hasCoords = lat != null && lon != null;
   const isPaidMode = mode === "paid" || mode === "both";
 
+  // Paid-mode prerequisite gate. Meta Ads can boost FB Page posts OR
+  // IG posts, each requiring its own organic token plus the ads token.
+  // OR (not AND) is correct — IG-only subscribers can run IG ads, FB-only
+  // can run FB ads. See reference_binding_vs_default + the OR logic
+  // discussion in onboarding wizard replan memory.
+  const hasOrganicForAds = ctx.hasFacebookPage || ctx.hasInstagram;
+  const canRunMetaPaid = ctx.hasMetaAdsToken && hasOrganicForAds;
+
+  // Coaching message tailored to which prerequisite is missing. Only
+  // surfaced when paid-mode is unreachable; never shown when canRunMetaPaid.
+  let paidGateCoaching: { message: string; href: string } | null = null;
+  if (!canRunMetaPaid) {
+    if (!hasOrganicForAds && !ctx.hasMetaAdsToken) {
+      paidGateCoaching = {
+        message: "Connect a Facebook Page or Instagram and a Meta Ads account in Integrations to enable paid reach",
+        href: "/dashboard/integrations",
+      };
+    } else if (!hasOrganicForAds) {
+      paidGateCoaching = {
+        message: "Connect a Facebook Page or Instagram in Integrations to enable paid reach",
+        href: "/dashboard/integrations",
+      };
+    } else {
+      paidGateCoaching = {
+        message: "Connect Meta Ads in Integrations to enable paid reach",
+        href: "/dashboard/integrations/meta-ads",
+      };
+    }
+  }
+
   // Live forecast — re-fetched (debounced) when lat/lon/radius/budget changes.
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isPaidMode || !hasCoords) {
+    // Skip the call entirely when paid-mode is gated off — the forecast
+    // endpoint would 400 ("No ad account connected") and there's nothing
+    // useful to show. The disabled tile + coaching banner explains why.
+    if (!isPaidMode || !hasCoords || !canRunMetaPaid) {
       setForecast(null);
       return;
     }
@@ -829,7 +868,7 @@ function ReachPickerView(props: ReachPickerProps) {
       }
     }, 500);
     return () => clearTimeout(handle);
-  }, [isPaidMode, hasCoords, lat, lon, radius, budget]);
+  }, [isPaidMode, hasCoords, canRunMetaPaid, lat, lon, radius, budget]);
 
   return (
     <div className="space-y-5">
@@ -851,6 +890,7 @@ function ReachPickerView(props: ReachPickerProps) {
             active={mode === "paid"}
             label="💰 Paid"
             sublabel="Reach beyond your followers"
+            disabled={!canRunMetaPaid}
             onClick={() => onModeChange("paid")}
           />
           <ModeTab
@@ -858,10 +898,21 @@ function ReachPickerView(props: ReachPickerProps) {
             active={mode === "both"}
             label="✨ Both"
             sublabel="Permanent on Page + amplified"
+            disabled={!canRunMetaPaid}
             onClick={() => onModeChange("both")}
             recommended
           />
         </div>
+        {paidGateCoaching && (
+          <div className="mt-2 text-[11px] text-muted">
+            <a
+              href={paidGateCoaching.href}
+              className="text-accent hover:underline"
+            >
+              {paidGateCoaching.message} →
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Map + location override — only relevant for paid/both modes
@@ -1076,6 +1127,7 @@ function ModeTab({
   label,
   sublabel,
   recommended,
+  disabled,
   onClick,
 }: {
   mode: ReachMode;
@@ -1083,18 +1135,22 @@ function ModeTab({
   label: string;
   sublabel: string;
   recommended?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={`relative rounded-xl border-2 p-4 text-left transition-all ${
-        active
+        disabled
+          ? "border-border bg-surface opacity-50 cursor-not-allowed"
+          : active
           ? "border-accent bg-accent/5 shadow-md"
           : "border-border bg-surface hover:border-accent/40"
       }`}
     >
-      {recommended && (
+      {recommended && !disabled && (
         <span className="absolute top-2 right-2 rounded-full bg-success/15 text-success text-[10px] px-2 py-0.5">
           Recommended
         </span>

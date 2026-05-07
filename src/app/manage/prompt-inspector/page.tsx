@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { ManagePage } from "@/components/manage/manage-page";
 import type { AssembledBlogPrompt } from "@/lib/v2-generator/blog";
-import type { TraceEntry, SkippedBlock } from "@/lib/v2-generator/blog";
+import type {
+  TraceEntry,
+  SkippedBlock,
+  ReadinessReport,
+  ReadinessPrimitive,
+  PrimitiveStatus,
+  VerdictLevel,
+} from "@/lib/v2-generator/blog";
 
 type ArticleType = "blog" | "project_chapter" | "service";
 
@@ -19,6 +26,7 @@ interface InspectorResponse {
   assembled: AssembledBlogPrompt;
   traces: TraceEntry[][];
   skipped: SkippedBlock[];
+  readiness: ReadinessReport;
   heroAssetId: string;
   pillar: string | null;
   bodyAssetCount: number;
@@ -194,6 +202,7 @@ function PromptInspectorContent({ siteId }: { siteId: string }) {
       {/* Result */}
       {result && (
         <>
+          <ReadinessPanel readiness={result.readiness} />
           <SummaryHeader result={result} />
           <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
             <div className="flex items-center justify-between mb-3">
@@ -408,6 +417,148 @@ function SkippedPanel({ skipped }: { skipped: SkippedBlock[] }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ReadinessPanel({ readiness }: { readiness: ReadinessReport }) {
+  const [openPrim, setOpenPrim] = useState<Set<string>>(new Set());
+  const togglePrim = (key: string) => {
+    setOpenPrim((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const verdictStyle: Record<
+    VerdictLevel,
+    { border: string; bg: string; badgeBg: string; badgeText: string; label: string }
+  > = {
+    blocked: {
+      border: "border-red-500/40",
+      bg: "bg-red-500/5",
+      badgeBg: "bg-red-500/20",
+      badgeText: "text-red-400",
+      label: "BLOCKED",
+    },
+    monitor: {
+      border: "border-amber-500/40",
+      bg: "bg-amber-500/5",
+      badgeBg: "bg-amber-500/20",
+      badgeText: "text-amber-400",
+      label: "MONITOR",
+    },
+    ready: {
+      border: "border-emerald-500/40",
+      bg: "bg-emerald-500/5",
+      badgeBg: "bg-emerald-500/20",
+      badgeText: "text-emerald-400",
+      label: "READY",
+    },
+  };
+  const v = verdictStyle[readiness.verdict.level];
+
+  return (
+    <div className={`rounded-xl border ${v.border} ${v.bg} p-4 space-y-3`}>
+      {/* Verdict header */}
+      <div className="flex items-start gap-2">
+        <span
+          className={`px-1.5 py-0.5 rounded text-[9px] font-mono shrink-0 mt-0.5 ${v.badgeBg} ${v.badgeText}`}
+        >
+          {v.label}
+        </span>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-medium">{readiness.verdict.headline}</h3>
+          <ul className="text-[10px] text-muted leading-snug mt-1 space-y-0.5">
+            {readiness.verdict.reasons.map((r, i) => (
+              <li key={i}>• {r}</li>
+            ))}
+          </ul>
+          <div className="text-[10px] leading-snug mt-2">
+            <span className={`font-mono mr-1 ${v.badgeText}`}>recommendation:</span>
+            {readiness.verdict.recommendation}
+          </div>
+        </div>
+      </div>
+
+      {/* Primitive grid */}
+      <div className="space-y-1 pt-2 border-t border-border">
+        <div className="text-[10px] text-muted uppercase tracking-wide mb-1">
+          Provisioning primitives
+        </div>
+        {readiness.primitives.map((p) => (
+          <PrimitiveRow
+            key={p.key}
+            primitive={p}
+            open={openPrim.has(p.key)}
+            onToggle={() => togglePrim(p.key)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PrimitiveRow({
+  primitive: p,
+  open,
+  onToggle,
+}: {
+  primitive: ReadinessPrimitive;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const statusStyle: Record<
+    PrimitiveStatus,
+    { icon: string; color: string }
+  > = {
+    pass: { icon: "✓", color: "text-emerald-400" },
+    warn: { icon: "⚠", color: "text-amber-400" },
+    fail: { icon: "✗", color: "text-red-400" },
+  };
+  const s = statusStyle[p.status];
+
+  return (
+    <div className="rounded border border-border bg-background overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 px-2.5 py-1.5 hover:bg-surface text-left"
+      >
+        <span className={`text-sm font-mono w-4 shrink-0 ${s.color}`}>
+          {s.icon}
+        </span>
+        <span className="text-xs flex-1 truncate">{p.label}</span>
+        <span className="text-[10px] font-mono shrink-0 text-foreground">
+          {p.value}
+        </span>
+        <span className="text-[10px] font-mono shrink-0 text-muted hidden sm:inline">
+          target: {p.target}
+        </span>
+        <span className="text-[10px] text-foreground shrink-0">
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-border bg-surface px-3 py-2 space-y-2">
+          <div>
+            <div className="text-[10px] text-muted uppercase tracking-wide">
+              Why it matters
+            </div>
+            <div className="text-[11px] leading-snug">{p.diagnostic}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-muted uppercase tracking-wide">
+              How to lift it
+            </div>
+            <div className="text-[11px] leading-snug">{p.onboardingHint}</div>
+          </div>
+          <div className="text-[10px] font-mono text-muted sm:hidden">
+            target: {p.target}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

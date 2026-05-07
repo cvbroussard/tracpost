@@ -16,6 +16,7 @@ interface BlogArticle {
   meta_title: string | null;
   meta_description: string | null;
   hero_url: string | null;        // resolved via JOIN to media_assets
+  hero_media_type: string | null; // 'image' | 'image/jpeg' | 'video' etc.
   content_tags: string[];         // v2 array (replaces singular `tags`)
   content_pillars: string[];      // v2 array (replaces singular `content_pillar`)
   status: string;
@@ -59,6 +60,7 @@ export default async function ArticleReviewPage({
     SELECT bp.id, bp.site_id, bp.slug, bp.title, bp.body, bp.excerpt,
            bp.meta_title, bp.meta_description,
            ma.storage_url AS hero_url,
+           ma.media_type AS hero_media_type,
            bp.content_tags, bp.content_pillars, bp.status,
            bp.published_at, bp.created_at, bp.updated_at
     FROM blog_posts_v2 bp
@@ -69,6 +71,32 @@ export default async function ArticleReviewPage({
   `) as BlogArticle[];
 
   if (!article) notFound();
+
+  // Resolve every {{asset:UUID}} placeholder in the body to its
+  // storage_url + media_type. Used by the body renderer below to swap
+  // placeholders for inline <img>/<video> elements.
+  const placeholderIds = Array.from(
+    new Set((article.body.match(/\{\{asset:([0-9a-f-]{36})\}\}/g) || []).map(
+      (m) => m.slice("{{asset:".length, -2),
+    )),
+  );
+  const assetRows = placeholderIds.length > 0
+    ? await sql`
+        SELECT id, storage_url, media_type, context_note
+        FROM media_assets
+        WHERE id = ANY(${placeholderIds}::uuid[])
+      `
+    : [];
+  const assetMap = new Map(
+    assetRows.map((a) => [
+      a.id as string,
+      {
+        url: a.storage_url as string,
+        mediaType: a.media_type as string,
+        alt: (a.context_note as string | null) || article.title,
+      },
+    ]),
+  );
 
   const [settings] = (await sql`
     SELECT blog_title, subdomain, custom_domain
@@ -112,14 +140,10 @@ export default async function ArticleReviewPage({
       </header>
 
       <article className="rounded-xl border border-border bg-surface shadow-card">
-        {article.hero_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={article.hero_url}
-            alt={article.title}
-            className="w-full aspect-[16/9] object-cover rounded-t-xl"
-          />
-        )}
+        {/* Hero is rendered inline as the body's first {{asset:UUID}} placeholder.
+            We deliberately do NOT also render a separate hero element here —
+            that would duplicate the hero (LLM places it at body[0]). The
+            body renderer below resolves the placeholder. */}
         <div className="p-6 space-y-4">
           <div>
             <h1 className="text-2xl font-semibold leading-tight">{article.title}</h1>
@@ -156,18 +180,14 @@ export default async function ArticleReviewPage({
             )}
           </div>
 
-          {/* Body — render the markdown/HTML body. For v1 we do a basic
-              prose render. If body is HTML, dangerouslySetInnerHTML is
-              needed; if markdown, a markdown library renders it. The
-              existing blog management surface handles both — for the
-              review-only view we render as preformatted text to avoid
-              XSS surface area until we know the source format with
-              certainty. Subscribers see the rendered version on the
-              live article.  */}
-          <div className="prose prose-sm max-w-none">
-            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground bg-transparent p-0">
-              {article.body}
-            </pre>
+          {/* Body — split on {{asset:UUID}} placeholders. Each segment
+              between placeholders renders as preformatted text (markdown
+              source, intentionally — operator review surface, not the
+              live render). Each placeholder resolves to an inline
+              <img>/<video> element from media_assets. Unknown placeholders
+              render as a small dim hint. */}
+          <div className="prose prose-sm max-w-none space-y-4">
+            {renderBody(article.body, assetMap)}
           </div>
 
           {(article.meta_title || article.meta_description) && (
@@ -198,6 +218,94 @@ export default async function ArticleReviewPage({
         Article ID: <span className="font-mono">{article.id}</span>
       </footer>
     </div>
+  );
+}
+
+/**
+ * Render the article body with {{asset:UUID}} placeholders replaced by
+ * inline <img> / <video> elements. Splits on the placeholder regex and
+ * renders each segment + asset as siblings so the visual flow matches
+ * what readers will see on the live article surface (once the renderer
+ * cutover lands).
+ */
+function renderBody(
+  body: string,
+  assetMap: Map<string, { url: string; mediaType: string; alt: string }>,
+) {
+  const placeholderRegex = /\{\{asset:([0-9a-f-]{36})\}\}/g;
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = placeholderRegex.exec(body)) !== null) {
+    const text = body.slice(lastIndex, m.index);
+    if (text.trim().length > 0) {
+      nodes.push(
+        <pre
+          key={`t-${key++}`}
+          className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground bg-transparent p-0 m-0"
+        >
+          {text}
+        </pre>,
+      );
+    }
+    const asset = assetMap.get(m[1]);
+    if (asset) {
+      nodes.push(<AssetEmbed key={`a-${key++}`} asset={asset} />);
+    } else {
+      // Unknown placeholder — show a dim hint so the operator can spot orphans
+      nodes.push(
+        <div
+          key={`u-${key++}`}
+          className="text-[11px] text-muted italic border border-dashed border-border rounded p-2"
+        >
+          [unresolved asset {m[1].slice(0, 8)}…]
+        </div>,
+      );
+    }
+    lastIndex = m.index + m[0].length;
+  }
+  // Trailing text after the last placeholder
+  const tail = body.slice(lastIndex);
+  if (tail.trim().length > 0) {
+    nodes.push(
+      <pre
+        key={`t-${key++}`}
+        className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground bg-transparent p-0 m-0"
+      >
+        {tail}
+      </pre>,
+    );
+  }
+  return nodes;
+}
+
+function AssetEmbed({
+  asset,
+}: {
+  asset: { url: string; mediaType: string; alt: string };
+}) {
+  const isVideo = asset.mediaType.startsWith("video");
+  if (isVideo) {
+    return (
+      <video
+        src={asset.url}
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="w-full rounded-lg bg-black"
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={asset.url}
+      alt={asset.alt}
+      className="w-full rounded-lg object-cover"
+    />
   );
 }
 

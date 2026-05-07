@@ -23,6 +23,9 @@ interface PostItem {
   id: string;
   caption: string | null;
   mediaUrl: string | null;
+  /** Hero media_type — 'image', 'image/jpeg', 'video', etc. Used to render
+      the right element on the card (img vs video). */
+  mediaType: string | null;
   platform: string;
   accountName: string;
   status: "published" | "scheduled" | "failed" | "draft" | "held";
@@ -296,10 +299,10 @@ export function UnipostDashboard({ metrics, recentPosts, platforms, campaignGrou
                     onClick={() => setExpandedId(post.id)}
                   >
                     {post.mediaUrl && (
-                      <img
-                        src={post.mediaUrl}
-                        alt=""
-                        className="h-10 w-10 rounded object-cover flex-shrink-0"
+                      <CardThumb
+                        url={post.mediaUrl}
+                        mediaType={post.mediaType}
+                        className="h-10 w-10 rounded flex-shrink-0"
                       />
                     )}
                     <div className="flex-1 min-w-0">
@@ -334,10 +337,10 @@ export function UnipostDashboard({ metrics, recentPosts, platforms, campaignGrou
                     <div className="flex gap-4">
                       {/* Enlarged thumbnail */}
                       {post.mediaUrl && (
-                        <img
-                          src={post.mediaUrl}
-                          alt=""
-                          className="h-24 w-24 rounded-lg object-cover flex-shrink-0"
+                        <CardThumb
+                          url={post.mediaUrl}
+                          mediaType={post.mediaType}
+                          className="h-24 w-24 rounded-lg flex-shrink-0"
                         />
                       )}
 
@@ -463,5 +466,38 @@ export function UnipostDashboard({ metrics, recentPosts, platforms, campaignGrou
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Card thumbnail that branches between <img> and <video> based on
+ * media_type. Video uses preload="metadata" so the browser fetches just
+ * enough bytes to render the first frame as a poster, without playback
+ * (no autoPlay). Looks like a still thumbnail.
+ */
+function CardThumb({
+  url,
+  mediaType,
+  className,
+}: {
+  url: string;
+  mediaType: string | null;
+  className: string;
+}) {
+  const isVideo = (mediaType || "").startsWith("video");
+  if (isVideo) {
+    return (
+      <video
+        src={url}
+        muted
+        playsInline
+        preload="metadata"
+        className={`${className} object-cover bg-black`}
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt="" className={`${className} object-cover`} />
   );
 }

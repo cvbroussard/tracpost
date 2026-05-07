@@ -20,7 +20,20 @@ export interface BodyPromptInput {
   playbook: BrandPlaybook | null;
   brandVoice: Record<string, unknown>;
   /** Available media assets the LLM can reference via {{asset:UUID}}. */
-  availableAssets: Array<{ id: string; type: string; hint?: string }>;
+  availableAssets: Array<{
+    id: string;
+    kind: "image" | "video";
+    mediaType: string;
+    isHero: boolean;
+    contextNote: string | null;
+    description: string | null;
+    sceneType: string | null;
+    detectedVendors: string[];
+    detectedPersonas: string[];
+    transcription: string | null;
+    contentPillars: string[];
+    contentTags: string[];
+  }>;
 }
 
 export function buildBodyPrompt(input: BodyPromptInput): string {
@@ -41,11 +54,21 @@ export function buildBodyPrompt(input: BodyPromptInput): string {
   }
 
   parts.push("");
-  parts.push("## Available assets");
-  parts.push("Use these placeholders inline in body markdown to position assets. Pick the ones that fit; you don't have to use them all.");
+  parts.push("## Available assets — REAL CAPTURED MOMENTS");
+  parts.push("Each asset below is something the subscriber actually photographed/filmed at real job sites with real materials and real people. The article must reference these specifics — vendors by name, materials by name, personas by name. Generic prose that could describe any kitchen is failure.");
+  parts.push("");
+  parts.push("Place assets inline using {{asset:UUID}} placeholders. The first asset listed is the HERO (always present at the top of the article). Pick body assets that reinforce the narrative.");
   for (const a of availableAssets) {
-    const hint = a.hint ? ` — ${a.hint}` : "";
-    parts.push(`  {{asset:${a.id}}}  (${a.type}${hint})`);
+    parts.push("");
+    parts.push(`### {{asset:${a.id}}}  (${a.kind}${a.isHero ? " — HERO" : ""})`);
+    if (a.contextNote) parts.push(`  Caption from creator: "${a.contextNote}"`);
+    if (a.description) parts.push(`  Visual: ${a.description}`);
+    if (a.sceneType) parts.push(`  Scene type: ${a.sceneType}`);
+    if (a.detectedVendors.length) parts.push(`  Vendors visible: ${a.detectedVendors.join(", ")}`);
+    if (a.detectedPersonas.length) parts.push(`  People visible: ${a.detectedPersonas.join(", ")}`);
+    if (a.transcription) parts.push(`  Transcription: ${a.transcription}`);
+    if (a.contentTags.length) parts.push(`  Tags: ${a.contentTags.join(", ")}`);
+    if (a.contentPillars.length) parts.push(`  Pillars: ${a.contentPillars.join(", ")}`);
   }
 
   parts.push("");
@@ -63,13 +86,38 @@ export function buildBodyPrompt(input: BodyPromptInput): string {
 }`);
   parts.push("```");
   parts.push("");
-  parts.push("Rules:");
-  parts.push("- Use the audience's actual language (per playbook), not marketing speak");
-  parts.push("- Body is markdown. Use ## subheads, lists, short paragraphs");
-  parts.push("- Place assets where they reinforce the narrative — not all bunched up");
-  parts.push("- Don't reference assets in prose ('see the image below'); the placeholders speak for themselves");
-  parts.push("- Meta description is the snippet Google shows; make it specific");
-  parts.push("- contentPillars are CATEGORICAL labels, like a taxonomy entry. Examples: \"craft\", \"workflow\", \"renovation\", \"design\", \"proof\". Single words. Lowercase. NEVER sentences or descriptions. If you write a sentence here, you've made a mistake.");
+  parts.push("## The two-zone rule (most important)");
+  parts.push("");
+  parts.push("Your article body has TWO kinds of prose, and the strictness rules differ for each:");
+  parts.push("");
+  parts.push("**Zone A — asset-adjacent prose**: paragraphs immediately preceding or following a `{{asset:UUID}}` placeholder. This prose is describing or contextualizing that specific asset.");
+  parts.push("→ STRICT. Reference ONLY what's in that asset's metadata block above (Caption, Visual, Vendors visible, Tags). Do NOT name materials, brands, models, dimensions, or specs that aren't in that specific asset's data.");
+  parts.push("");
+  parts.push("**Zone B — general / educational prose**: paragraphs not adjacent to a placeholder. Category context, market commentary, design principles, why-it-matters writing.");
+  parts.push("→ LATITUDE. You may use general industry knowledge here. \"Marble varieties like Calacatta and Carrara each carry different vein patterns\" is fine — that's category education, not a claim about any specific asset. \"A bridge faucet from a maker like Brizo or another manufacturer\" is fine here too — it's discussing the category.");
+  parts.push("");
+  parts.push("The placeholder positions tell you which zone you're in. A paragraph immediately before/after a `{{asset:UUID}}` is Zone A. A paragraph between placeholders, far from any placeholder, or in opening/closing sections is Zone B.");
+  parts.push("");
+  parts.push("Examples of Zone A done right (asset metadata says: \"marble countertops with waterfall edge, brass bridge faucet, Lacanche Sully range\"):");
+  parts.push("  ✅ \"The marble waterfall island anchors the prep zone, with the brass bridge faucet rising over it.\"");
+  parts.push("  ❌ \"The Calacatta marble waterfall island…\" (Calacatta not in metadata)");
+  parts.push("  ❌ \"The Brizo bridge faucet…\" (Brizo not in metadata)");
+  parts.push("");
+  parts.push("Examples of Zone B done right (same asset metadata):");
+  parts.push("  ✅ \"Marble has been the work surface for serious kitchens for centuries — Calacatta brings dramatic veining, Carrara a softer pattern, Statuario the most pristine white.\"");
+  parts.push("  ✅ \"Bridge faucets from makers like Brizo, Waterworks, or Watermark each handle the gooseneck reach a little differently.\"");
+  parts.push("");
+  parts.push("## Other rules");
+  parts.push("- **For the HERO**: write the opening section to feature what's actually IN it (Zone A). Reference the actual visual. If it's a video showing motion, describe what happens in that specific video.");
+  parts.push("- **If a specific variety/brand IS named in the asset metadata, use it.** \"Lacanche Sully\" must be \"Lacanche Sully\" in Zone A — never weakened to \"a Lacanche or another European range.\"");
+  parts.push("- **No inventing dimensions, prices, or quantitative specs** (\"1,250 CFM\", \"$5K\", \"40 amps\") in Zone A unless they appear in metadata. Zone B can use rough industry ranges if helpful.");
+  parts.push("- If asset metadata is sparse, write SHORTER and more focused — don't pad Zone A with general material education to compensate (move that content to Zone B if it belongs).");
+  parts.push("- Use the audience's actual language (per playbook), not marketing speak.");
+  parts.push("- Body is markdown. Use ## subheads, lists, short paragraphs.");
+  parts.push("- Place assets where they reinforce the narrative — not all bunched up.");
+  parts.push("- Don't reference assets in prose ('see the image below'); the placeholders speak for themselves.");
+  parts.push("- Meta description is the snippet Google shows; make it specific.");
+  parts.push("- contentPillars are CATEGORICAL labels, like a taxonomy entry. Examples: \"craft\", \"workflow\", \"renovation\", \"design\", \"proof\". Single words. Lowercase. NEVER sentences or descriptions.");
   parts.push("- contentTags are short keywords, 1-3 words each. Lowercase. Examples: \"kitchen design\", \"rift-sawn oak\", \"Pittsburgh remodel\".");
 
   return parts.join("\n");

@@ -51,23 +51,51 @@ export async function generateV2Content(spec: ContentSpec): Promise<GenerateResu
   const playbook = (dna.playbook as BrandPlaybook | null) || null;
   const brandVoice = (dna.signals as Record<string, unknown> | null)?.voice as Record<string, unknown> || {};
 
-  // 2. Resolve available assets (hero + body candidates) with hints
+  // 2. Resolve available assets — pull the FULL context the database
+  // knows, not a one-line hint. The model needs concrete details
+  // (vendors, materials, scene type, personas) to write grounded
+  // prose instead of generic AI filler.
   const assetIds = [spec.heroAssetId, ...(spec.bodyAssetIds || [])].filter(
     (id, i, arr) => arr.indexOf(id) === i,
   );
   const assetRows = await sql`
-    SELECT id, media_type, context_note, content_pillar
+    SELECT id, media_type, context_note, content_pillar, content_pillars,
+           content_tags, ai_analysis, transcription
     FROM media_assets
     WHERE id = ANY(${assetIds}::uuid[])
   `;
   const availableAssets = assetIds
     .map((id) => assetRows.find((r) => r.id === id))
     .filter((r): r is (typeof assetRows)[number] => Boolean(r))
-    .map((r) => ({
-      id: r.id as string,
-      type: (r.media_type as string) || "image",
-      hint: (r.context_note as string | null) || (r.content_pillar as string | null) || undefined,
-    }));
+    .map((r) => {
+      const ai = (r.ai_analysis as Record<string, unknown> | null) || {};
+      const mediaType = String(r.media_type || "image");
+      return {
+        id: r.id as string,
+        kind: mediaType.startsWith("video") ? ("video" as const) : ("image" as const),
+        mediaType,
+        isHero: r.id === spec.heroAssetId,
+        contextNote: (r.context_note as string | null) || null,
+        // ai_analysis fields — coverage varies (image: 310/327 have
+        // description, 174 have detected_vendors; video: 17/21 have
+        // description, none have detected_vendors).
+        description: (ai.description as string | null) || null,
+        sceneType: (ai.scene_type as string | null) || null,
+        detectedVendors: Array.isArray(ai.detected_vendors)
+          ? (ai.detected_vendors as string[])
+          : [],
+        detectedPersonas: Array.isArray(ai.detected_personas)
+          ? (ai.detected_personas as string[])
+          : [],
+        transcription: (r.transcription as string | null) || null,
+        contentPillars: Array.isArray(r.content_pillars)
+          ? (r.content_pillars as string[])
+          : (r.content_pillar ? [r.content_pillar as string] : []),
+        contentTags: Array.isArray(r.content_tags)
+          ? (r.content_tags as string[])
+          : [],
+      };
+    });
 
   // 3. LLM call 1 — body
   const bodyPrompt = buildBodyPrompt({
@@ -205,7 +233,7 @@ async function persistV2(
   body: GeneratedBody,
   kit: ContentKit,
   slug: string,
-  availableAssets: Array<{ id: string; type: string }>,
+  availableAssets: Array<{ id: string }>,
 ): Promise<GenerateResult> {
   // Find which assets the LLM actually placed in the body, filtered to
   // the known-available set so LLM hallucinations (UUIDs that aren't in

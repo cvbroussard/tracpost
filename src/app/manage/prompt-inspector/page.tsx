@@ -603,6 +603,23 @@ function SummaryHeader({ result }: { result: InspectorResponse }) {
           value={`${a.inputs.projectLinks.length}`}
         />
       </div>
+      {/* Hero caption preview — most important input for research yield + Zone A grounding */}
+      {a.inputs.assets[0] && (
+        <div className="mt-3 pt-3 border-t border-border">
+          <div className="text-[10px] text-muted mb-1">
+            Hero caption ({a.inputs.assets[0].kind}
+            {a.inputs.assets[0].contextNote
+              ? ` — ${a.inputs.assets[0].contextNote.length} chars`
+              : " — no caption"}
+            )
+          </div>
+          <div className="text-xs italic leading-snug">
+            {a.inputs.assets[0].contextNote
+              ? `"${a.inputs.assets[0].contextNote}"`
+              : "(no context_note on this asset)"}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

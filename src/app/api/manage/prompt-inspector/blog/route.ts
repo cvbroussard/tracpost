@@ -37,8 +37,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "siteId required" }, { status: 400 });
   }
 
-  // Pick a fresh hero if caller didn't pin one. Same selection logic as
-  // scripts/inspect-prompt.js — favors video + high quality + unused.
+  // Pick a fresh hero if caller didn't pin one. Inspector doesn't persist
+  // articles, so the "unused" filter never updates between clicks —
+  // deterministic ORDER BY would return the same asset forever. Randomize
+  // among the top 20 quality candidates so each Generate Prompt click
+  // rotates while still preferring high-quality + video assets.
   let heroId: string | null = seedAssetId || null;
   if (!heroId) {
     const usedRows = await sql`
@@ -49,7 +52,7 @@ export async function POST(req: NextRequest) {
       ) u
     `;
     const usedIds = usedRows.map((r) => r.id);
-    const [r] = await sql`
+    const candidates = await sql`
       SELECT id FROM media_assets
       WHERE site_id = ${siteId}
         AND (media_type ILIKE 'image%' OR media_type = 'video')
@@ -61,9 +64,10 @@ export async function POST(req: NextRequest) {
         CASE WHEN media_type = 'video' THEN 0 ELSE 1 END,
         quality_score DESC NULLS LAST,
         created_at DESC
-      LIMIT 1
+      LIMIT 20
     `;
-    heroId = r ? (r.id as string) : null;
+    const ids = candidates.map((r) => r.id as string);
+    heroId = ids.length > 0 ? ids[Math.floor(Math.random() * ids.length)] : null;
   }
 
   if (!heroId) {

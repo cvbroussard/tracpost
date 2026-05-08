@@ -156,16 +156,16 @@ export async function POST(req: NextRequest) {
       RETURNING id, site_id, storage_url, media_type, context_note, triage_status, created_at
     `;
 
-    // Trigger default variant render when briefed-on-upload, mirroring the
-    // PATCH-side behavior. waitUntil so the upload response returns
-    // immediately while ffmpeg/sharp rendering runs on the serverless
-    // instance until it completes.
+    // Render ALL applicable templates eagerly when briefed-on-upload.
+    // Per the eager-cheap policy, every connected platform should have a
+    // ready variant by the time orchestrator or Compose looks. waitUntil
+    // ensures the upload response returns immediately.
     if (briefedOnUpload) {
       waitUntil(
         (async () => {
           try {
-            const { renderDefaultVariant } = await import("@/lib/pipeline/variant-render");
-            await renderDefaultVariant(asset.id as string);
+            const { renderAllVariantsForAsset } = await import("@/lib/pipeline/variant-render");
+            await renderAllVariantsForAsset(asset.id as string);
           } catch (err) {
             console.warn(
               "Variant render failed (non-fatal — asset still briefed):",

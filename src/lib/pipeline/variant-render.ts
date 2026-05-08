@@ -61,6 +61,10 @@ export interface VariantRenderResult {
  * variant already exists for that template, returns it unchanged.
  *
  * Returns null on hard failure (asset not found).
+ *
+ * Kept for direct-template-render callers (Tools hub, Compose explicit
+ * trigger). Briefing-time callers should use renderAllVariantsForAsset
+ * to get all 6 template variants populated up front.
  */
 export async function renderDefaultVariant(
   assetId: string,
@@ -74,6 +78,65 @@ export async function renderDefaultVariant(
 
   const templateId = getDefaultTemplate(asset.media_type as string);
   return renderTemplateVariant(assetId, templateId);
+}
+
+/**
+ * Render every applicable template variant for an asset. Called from the
+ * briefing-flip handler so the asset is fully publish-ready across all
+ * platforms the orchestrator might pick from.
+ *
+ * Per the eager-cheap / frugal-expensive policy:
+ * - Image templates render in PARALLEL (sharp is fast, low memory).
+ * - Video templates render SEQUENTIALLY (ffmpeg encoding is memory-heavy;
+ *   serializing prevents Vercel function memory pressure).
+ *
+ * Skips templates that don't apply to the source media type:
+ * - Audio sources only get the audiogram-style feed_square variant.
+ * - Video → image templates (frame extraction) are skipped today; tracked
+ *   as a follow-up. Stills get full coverage.
+ *
+ * Returns the array of successful render results. Failed renders are
+ * captured in their own variant row's render_settings; callers can poll.
+ */
+export async function renderAllVariantsForAsset(
+  assetId: string,
+): Promise<VariantRenderResult[]> {
+  const [asset] = await sql`
+    SELECT id, media_type FROM media_assets WHERE id = ${assetId}
+  `;
+  if (!asset) return [];
+
+  const sourceType = ((asset.media_type as string) || "").toLowerCase();
+  const isAudio = sourceType.startsWith("audio");
+  const isVideo = sourceType.startsWith("video");
+
+  if (isAudio) {
+    const r = await renderTemplateVariant(assetId, "feed_square");
+    return r ? [r] : [];
+  }
+
+  // Image-output templates — sharp-based, parallel-safe
+  const imageTemplates = ["feed_square", "feed_portrait", "pin_2x3"];
+  // Video-output templates — ffmpeg-based, serialize for memory
+  const videoTemplates = ["reel_9x16", "story_9x16", "long_16x9"];
+
+  const results: VariantRenderResult[] = [];
+
+  // Video → image template skipped pending frame extraction work; for
+  // STILL sources we render all six.
+  if (!isVideo) {
+    const imageResults = await Promise.all(
+      imageTemplates.map((t) => renderTemplateVariant(assetId, t)),
+    );
+    for (const r of imageResults) if (r) results.push(r);
+  }
+
+  for (const t of videoTemplates) {
+    const r = await renderTemplateVariant(assetId, t);
+    if (r) results.push(r);
+  }
+
+  return results;
 }
 
 /**

@@ -164,20 +164,21 @@ export async function PATCH(
           WHERE id = ${id} AND triage_status = 'pending_briefing'
         `;
 
-        // Trigger default template variant render (#163, #172). Per the
-        // source-template-variants architecture, briefing flips state to
-        // 'triaged' AND the default template variant becomes available so
-        // the orchestrator (#168) can pick this asset for autopilot.
+        // Render ALL applicable templates eagerly on briefing flip. Per
+        // project_tracpost_render_format_default.md + the eager-cheap policy,
+        // every connected-platform variant should be ready by the time the
+        // orchestrator picks or Compose loads — so subscriber Compose Review
+        // shows the actual file that will publish.
         //
-        // Real ffmpeg/sharp rendering can take 5-15 seconds — we use
+        // Real ffmpeg/sharp rendering takes 5-30 seconds for the full set —
         // waitUntil so the briefing-save response returns immediately and
-        // the render continues running on Vercel's serverless instance
-        // until completion. Render failures don't block the response.
+        // renders continue on the serverless instance until completion.
+        // Render failures don't block the response.
         waitUntil(
           (async () => {
             try {
-              const { renderDefaultVariant } = await import("@/lib/pipeline/variant-render");
-              await renderDefaultVariant(id);
+              const { renderAllVariantsForAsset } = await import("@/lib/pipeline/variant-render");
+              await renderAllVariantsForAsset(id);
             } catch (err) {
               console.warn(
                 "Variant render failed (non-fatal — asset still briefed):",

@@ -21,9 +21,9 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const { context_note, pillar, content_tags, vendor_ids, brand_ids, project_ids, persona_ids, location_ids } = body;
+    const { context_note, pillar, content_tags, vendor_ids, brand_ids, project_ids, persona_ids, location_ids, ai_verifications } = body;
 
-    if (context_note === undefined && pillar === undefined && content_tags === undefined && vendor_ids === undefined && brand_ids === undefined && project_ids === undefined && persona_ids === undefined && location_ids === undefined) {
+    if (context_note === undefined && pillar === undefined && content_tags === undefined && vendor_ids === undefined && brand_ids === undefined && project_ids === undefined && persona_ids === undefined && location_ids === undefined && ai_verifications === undefined) {
       return NextResponse.json(
         { error: "Nothing to update" },
         { status: 400 }
@@ -51,6 +51,37 @@ export async function PATCH(
         ? (asset.metadata as Record<string, unknown>)
         : {};
     const newMeta = pillar !== undefined ? { ...currentMeta, pillar } : currentMeta;
+
+    // AI verification confirm/reject (#167). Subscribers explicitly accept
+    // or reject AI's suggestions (scene_type, content_pillar). Confirmed
+    // values feed Brand DNA signal stronger than auto-applied; rejected
+    // values get downweighted in future generations. No model retraining
+    // happens here — the log is the signal store.
+    if (Array.isArray(ai_verifications) && ai_verifications.length > 0) {
+      const existing = (currentMeta.ai_verifications as Array<Record<string, unknown>>) || [];
+      const merged = [...existing];
+      for (const v of ai_verifications) {
+        if (!v || typeof v !== "object") continue;
+        const field = v.field as string;
+        const status = v.status as string;
+        if (!field || !["confirmed", "rejected"].includes(status)) continue;
+        const idx = merged.findIndex((m) => m.field === field);
+        const entry = {
+          field,
+          value: v.value ?? null,
+          status,
+          verified_at: new Date().toISOString(),
+          verified_by: auth.subscriptionId,
+        };
+        if (idx >= 0) merged[idx] = entry;
+        else merged.push(entry);
+      }
+      await sql`
+        UPDATE media_assets
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ ai_verifications: merged })}::jsonb
+        WHERE id = ${id}
+      `;
+    }
 
     // Update fields individually to avoid type coercion issues
     if (context_note !== undefined) {

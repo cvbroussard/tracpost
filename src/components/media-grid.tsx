@@ -271,6 +271,12 @@ export function MediaGrid({
           source={editing.source}
           qualityScore={Number(editing.quality_score) || null}
           sceneType={(editing.ai_analysis as Record<string, unknown>)?.scene_type as string || null}
+          aiSuggestedPillar={editing.content_pillar || null}
+          aiVerifications={(() => {
+            const meta = (editing.metadata || {}) as Record<string, unknown>;
+            const v = meta.ai_verifications;
+            return Array.isArray(v) ? (v as Array<{ field: string; value: unknown; status: "confirmed" | "rejected"; verified_at?: string }>) : null;
+          })()}
           onClose={() => setEditing(null)}
           onSaved={handleSaved}
           onNext={() => {

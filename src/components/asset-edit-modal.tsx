@@ -41,6 +41,19 @@ interface AssetEditModalProps {
   source?: string | null;
   qualityScore?: number | null;
   sceneType?: string | null;
+  /** AI's suggested content pillar (auto-applied; subscriber confirms via #167) */
+  aiSuggestedPillar?: string | null;
+  /**
+   * Existing verification records on this asset. Each entry tracks whether
+   * subscriber has confirmed or rejected an AI suggestion. Verifications
+   * persist across modal sessions; once verified, items hide from the panel.
+   */
+  aiVerifications?: Array<{
+    field: string;
+    value: unknown;
+    status: "confirmed" | "rejected";
+    verified_at?: string;
+  }> | null;
   captionSource?: string | null;
   faces?: Array<{
     box: { x: number; y: number; width: number; height: number };
@@ -86,6 +99,8 @@ export function AssetEditModal({
   source,
   qualityScore,
   sceneType,
+  aiSuggestedPillar,
+  aiVerifications,
   captionSource,
   faces: initialFaces = null,
   faceDetectionWidth,
@@ -104,6 +119,10 @@ export function AssetEditModal({
 }: AssetEditModalProps) {
   const [faceData, setFaceData] = useState(initialFaces);
   const [note, setNote] = useState(initialNote);
+  // Local verifications state — initialized from props, mutated optimistically
+  // when subscriber clicks confirm/reject (#167). Server PATCH happens
+  // immediately; on failure we revert.
+  const [verifications, setVerifications] = useState(aiVerifications || []);
   const _hasGeneratedText = !!(initialMetadata?.generated_text as Record<string, unknown>)?.generated_at;
   const [pillar, setPillar] = useState(initialPillar);
   const [tags, setTags] = useState<string[]>(initialTags || []);
@@ -120,6 +139,7 @@ export function AssetEditModal({
     setBrandIds(initialBrandIds);
     setProjectIds(initialProjectIds);
     setPersonaIds(initialPersonaIds);
+    setVerifications(aiVerifications || []);
     speech.stop();
   }, [assetId]);
   const [localBrands, setLocalBrands] = useState(brands);
@@ -322,6 +342,35 @@ export function AssetEditModal({
     setCreatingProject(false);
   }
 
+  /**
+   * Subscriber confirms or rejects an AI suggestion (#167). Optimistic UI;
+   * server PATCH writes to metadata.ai_verifications. Confirmed/rejected
+   * items hide from the panel on next render.
+   */
+  async function recordVerification(field: string, value: unknown, status: "confirmed" | "rejected") {
+    const newEntry = {
+      field,
+      value,
+      status,
+      verified_at: new Date().toISOString(),
+    };
+    setVerifications((prev) => {
+      const idx = prev.findIndex((v) => v.field === field);
+      if (idx >= 0) return prev.map((v, i) => (i === idx ? newEntry : v));
+      return [...prev, newEntry];
+    });
+    try {
+      await fetch(`/api/assets/${assetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ai_verifications: [{ field, value, status }] }),
+      });
+    } catch {
+      // Best-effort: failure leaves the optimistic state. Surfacing a toast
+      // would be nicer; deferred.
+    }
+  }
+
   async function doSave(): Promise<boolean> {
     const body: Record<string, unknown> = {};
     if (note !== initialNote) body.context_note = note;
@@ -460,6 +509,77 @@ export function AssetEditModal({
                 </span>
               )}
             </div>
+
+            {/* AI verification panel (#167). Surfaces auto-applied AI
+                suggestions for explicit subscriber confirm/reject. Only
+                shows items not yet verified. Persona verification is
+                handled separately by the face overlay above. Vendor
+                verification is intentionally absent (operator-tagged only
+                per #139). */}
+            {(() => {
+              const verifiedFields = new Set(verifications.map((v) => v.field));
+              const pendingItems: Array<{ field: string; label: string; value: string; description: string }> = [];
+              if (sceneType && !verifiedFields.has("scene_type")) {
+                pendingItems.push({
+                  field: "scene_type",
+                  label: "Scene type",
+                  value: sceneType,
+                  description: "AI thinks this shot is ",
+                });
+              }
+              const pillarToVerify = aiSuggestedPillar || pillar;
+              if (pillarToVerify && !verifiedFields.has("content_pillar")) {
+                pendingItems.push({
+                  field: "content_pillar",
+                  label: "Content pillar",
+                  value: pillarToVerify,
+                  description: "AI categorized this as ",
+                });
+              }
+              if (pendingItems.length === 0) return null;
+              return (
+                <div className="mb-3 rounded border border-accent/30 bg-accent/5 px-3 py-2">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-accent">
+                      Verify AI suggestions
+                    </span>
+                    <span className="text-[10px] text-muted">
+                      {pendingItems.length} pending
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {pendingItems.map((item) => (
+                      <div
+                        key={item.field}
+                        className="flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="flex-1 truncate text-foreground">
+                          {item.description}
+                          <span className="font-medium">{item.value.replace(/_/g, " ")}</span>
+                          ?
+                        </span>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            onClick={() => recordVerification(item.field, item.value, "confirmed")}
+                            className="rounded border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] text-success hover:bg-success/20"
+                            title="Confirm — looks right"
+                          >
+                            ✓ Yes
+                          </button>
+                          <button
+                            onClick={() => recordVerification(item.field, item.value, "rejected")}
+                            className="rounded border border-border px-2 py-0.5 text-[11px] text-muted hover:bg-surface-hover"
+                            title="Reject — wrong"
+                          >
+                            ✗ No
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs text-muted">

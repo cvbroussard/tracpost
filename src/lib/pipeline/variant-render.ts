@@ -1,43 +1,53 @@
 import { sql } from "@/lib/db";
+import sharp from "sharp";
+import { createKenBurnsVideo, reformatVideo } from "@/lib/render/video";
+import { uploadBufferToR2 } from "@/lib/r2";
 
 /**
- * Variant render worker (#163).
+ * Variant render worker (#163, #172).
  *
  * When an asset is briefed (triage_status flips to 'triaged'), trigger
- * default-template variant rendering. The orchestrator (#168) only
- * picks assets that have a ready variant for the target template, so
- * this worker is what makes briefed assets eligible for autopilot.
- *
- * Implementation note (2026-05-08):
- * v1 ships as STUB rendering — variant rows are created with the source
- * URL as storage_url and variant_status='ready'. Meta and most platforms
- * accept the source asset and apply their own crop-for-placement, so
- * subscribers can publish without FFmpeg-based rendering.
- *
- * Real per-template rendering (sharp for images, FFmpeg for video) is a
- * follow-up. Adds storage cost + render time but produces platform-native
- * specs that minimize re-encoding artifacts. Tracked separately.
+ * default-template variant rendering. The orchestrator (#168) only picks
+ * assets that have a ready variant for the target template, so this
+ * worker is what makes briefed assets eligible for autopilot.
  *
  * Architecture rationale:
  * - We render ON briefing (eager), not on publish (lazy). Predictable —
  *   orchestrator never gambles on a render succeeding at publish time.
- * - Only the default template renders automatically. Other templates can
+ * - Default template renders synchronously here. Other templates can
  *   be rendered on subscriber request (Tools hub) or operator action.
- * - Variants gate orchestrator pool eligibility per project_tracpost_source_template_variants.md.
+ * - Variants gate orchestrator pool eligibility per
+ *   project_tracpost_source_template_variants.md.
+ *
+ * Render-format default (per project_tracpost_render_format_default.md):
+ * Reel-first. STILL assets default to reel_9x16 (Ken Burns motion video)
+ * — single image as a Feed post is a ~1% escape hatch, Reel is ~90% of
+ * what subscribers actually want their stills to become on social. The
+ * algorithmic edge from Meta + TikTok prefers vertical motion format.
+ *
+ * Video reframing (16:9 → 9:16) currently uses center-crop via
+ * reformatVideo. Mux Smart Crop upgrade is queued separately per
+ * project_tracpost_video_reframing_mux.md (Layer-1 only — variant_render
+ * stays the sole Mux touchpoint, R2 stays canonical).
  */
 
 /**
  * Determine the default template for an asset based on media type.
- * Per project_tracpost_render_format_default.md, Reel-first is the
- * default for video. Stills default to feed_square (universal); subscribers
- * can request additional templates from the Tools hub.
+ *
+ * Per render-format-default memo:
+ * - VIDEO sources → reel_9x16 (motion format that the algorithm prefers)
+ * - STILL sources → reel_9x16 (Ken Burns motion turns the still into a Reel)
+ * - AUDIO sources → feed_square (audiogram-style format with cover art)
+ *
+ * The single-image-Feed escape hatch is feed_square, but it's NOT the
+ * default — subscribers can request it explicitly via the Tools hub.
  */
 export function getDefaultTemplate(mediaType: string): string {
   const lower = (mediaType || "").toLowerCase();
-  if (lower.startsWith("video") || lower.includes("video/")) return "reel_9x16";
-  if (lower === "audio" || lower.startsWith("audio")) return "feed_square"; // audiogram-format
-  // Default for images: feed_square. Subscribers can request reel_9x16 (Ken Burns) separately.
-  return "feed_square";
+  if (lower === "audio" || lower.startsWith("audio")) return "feed_square";
+  // Both image and video default to reel_9x16. For stills, Ken Burns
+  // motion produces a Reel; for video, the source is reframed to 9:16.
+  return "reel_9x16";
 }
 
 export interface VariantRenderResult {
@@ -47,72 +57,33 @@ export interface VariantRenderResult {
 }
 
 /**
- * Render the default template variant for an asset. Idempotent —
- * if a variant already exists for that template, returns the existing one.
+ * Render the default template variant for an asset. Idempotent — if a
+ * variant already exists for that template, returns it unchanged.
  *
- * Returns null on hard failure (asset not found, template not found).
- *
- * v1 STUB: variant_status='ready' immediately; storage_url = source URL.
- * Real cropping/encoding is a follow-up enhancement.
+ * Returns null on hard failure (asset not found).
  */
 export async function renderDefaultVariant(
   assetId: string,
 ): Promise<VariantRenderResult | null> {
-  // Fetch asset
   const [asset] = await sql`
-    SELECT id, storage_url, media_type, triage_status
+    SELECT id, site_id, storage_url, media_type, triage_status
     FROM media_assets
     WHERE id = ${assetId}
   `;
   if (!asset) return null;
 
   const templateId = getDefaultTemplate(asset.media_type as string);
-
-  // Check if variant already exists for this (asset, template) — idempotent
-  const [existing] = await sql`
-    SELECT id, variant_status FROM asset_variants
-    WHERE source_asset_id = ${assetId} AND template_id = ${templateId}
-  `;
-  if (existing) {
-    return {
-      variantId: existing.id as string,
-      templateId,
-      status: existing.variant_status as "ready" | "failed" | "pending",
-    };
-  }
-
-  // STUB render — record variant with source URL. Real cropping is a follow-up.
-  // Platform-native rendering still advisable later to minimize re-encode artifacts.
-  const renderSettings = {
-    stub_render: true,
-    note: "v1 stub — uses source URL; real per-template render is a follow-up",
-    triggered_at: new Date().toISOString(),
-  };
-
-  const [inserted] = await sql`
-    INSERT INTO asset_variants (
-      source_asset_id, template_id, storage_url, render_settings,
-      variant_status, quality_score, generated_at
-    ) VALUES (
-      ${assetId}, ${templateId}, ${asset.storage_url}, ${JSON.stringify(renderSettings)}::jsonb,
-      'ready', 1.0, NOW()
-    )
-    RETURNING id
-  `;
-
-  return {
-    variantId: inserted.id as string,
-    templateId,
-    status: "ready",
-  };
+  return renderTemplateVariant(assetId, templateId);
 }
 
 /**
- * Render a specific (non-default) template variant for an asset. Used by
- * Tools-hub or operator actions when subscribers want multi-platform
- * coverage beyond the default.
+ * Render a specific template variant for an asset. Validates that the
+ * requested template exists in asset_templates. Idempotent per (asset,
+ * template) — returns the existing row if one is already rendered.
  *
- * Validates that the requested template exists in asset_templates.
+ * Branches by source media type + target template, calling sharp for
+ * image-output transforms and ffmpeg-based helpers (createKenBurnsVideo
+ * / reformatVideo) for video-output transforms.
  */
 export async function renderTemplateVariant(
   assetId: string,
@@ -122,44 +93,245 @@ export async function renderTemplateVariant(
   if (!tpl) return null;
 
   const [asset] = await sql`
-    SELECT id, storage_url FROM media_assets WHERE id = ${assetId}
+    SELECT id, site_id, storage_url, media_type
+    FROM media_assets WHERE id = ${assetId}
   `;
   if (!asset) return null;
 
+  // Idempotency: existing ready variant short-circuits. Stale variants
+  // get re-rendered (caller is markVariantsStale → re-trigger flow).
   const [existing] = await sql`
     SELECT id, variant_status FROM asset_variants
     WHERE source_asset_id = ${assetId} AND template_id = ${templateId}
   `;
-  if (existing) {
+  if (existing && existing.variant_status === "ready") {
     return {
       variantId: existing.id as string,
       templateId,
-      status: existing.variant_status as "ready" | "failed" | "pending",
+      status: "ready",
     };
   }
 
-  const [inserted] = await sql`
-    INSERT INTO asset_variants (
-      source_asset_id, template_id, storage_url, render_settings,
-      variant_status, quality_score, generated_at
-    ) VALUES (
-      ${assetId}, ${templateId}, ${asset.storage_url},
-      ${JSON.stringify({ stub_render: true, requested_at: new Date().toISOString() })}::jsonb,
-      'ready', 1.0, NOW()
-    )
-    RETURNING id
-  `;
+  // Mark in-progress so concurrent triggers don't double-render. If the
+  // render fails, the row stays in 'pending' and the caller can retry.
+  let variantId: string;
+  if (existing) {
+    await sql`
+      UPDATE asset_variants
+      SET variant_status = 'pending', generated_at = NOW()
+      WHERE id = ${existing.id}
+    `;
+    variantId = existing.id as string;
+  } else {
+    const [inserted] = await sql`
+      INSERT INTO asset_variants (
+        source_asset_id, template_id, storage_url, render_settings,
+        variant_status, generated_at
+      ) VALUES (
+        ${assetId}, ${templateId}, ${asset.storage_url}, '{}'::jsonb,
+        'pending', NOW()
+      )
+      RETURNING id
+    `;
+    variantId = inserted.id as string;
+  }
+
+  try {
+    const sourceUrl = asset.storage_url as string;
+    const sourceType = (asset.media_type as string) || "";
+    const siteId = asset.site_id as string;
+    const isVideo = sourceType.startsWith("video");
+
+    let outputUrl: string;
+    let renderNotes: Record<string, unknown>;
+
+    if (isVideo) {
+      ({ outputUrl, renderNotes } = await renderVideoVariant(sourceUrl, templateId, siteId));
+    } else {
+      ({ outputUrl, renderNotes } = await renderImageVariant(sourceUrl, templateId, siteId));
+    }
+
+    await sql`
+      UPDATE asset_variants
+      SET storage_url = ${outputUrl},
+          render_settings = ${JSON.stringify({
+            ...renderNotes,
+            rendered_at: new Date().toISOString(),
+          })}::jsonb,
+          variant_status = 'ready',
+          quality_score = 1.0,
+          generated_at = NOW()
+      WHERE id = ${variantId}
+    `;
+
+    return { variantId, templateId, status: "ready" };
+  } catch (err) {
+    console.error(
+      `Variant render failed (assetId=${assetId}, templateId=${templateId}):`,
+      err instanceof Error ? err.message : err,
+    );
+    await sql`
+      UPDATE asset_variants
+      SET variant_status = 'failed',
+          render_settings = ${JSON.stringify({
+            error: err instanceof Error ? err.message : String(err),
+            failed_at: new Date().toISOString(),
+          })}::jsonb
+      WHERE id = ${variantId}
+    `;
+    return { variantId, templateId, status: "failed" };
+  }
+}
+
+/**
+ * Image source → image-or-video target. Stills always get the Ken Burns
+ * motion treatment for video templates (reel_9x16, story_9x16) and a
+ * sharp-based crop for image templates (feed_square, pin_2x3, etc.).
+ */
+async function renderImageVariant(
+  sourceUrl: string,
+  templateId: string,
+  siteId: string,
+): Promise<{ outputUrl: string; renderNotes: Record<string, unknown> }> {
+  // Video-output templates: Ken Burns motion from the still. The duration
+  // is template-tuned — Reels lean longer, Stories shorter.
+  if (templateId === "reel_9x16" || templateId === "story_9x16" || templateId === "long_16x9") {
+    const aspect = templateId === "long_16x9" ? "16:9" : "9:16";
+    const durationPerImage = templateId === "story_9x16" ? 5 : templateId === "long_16x9" ? 8 : 4;
+    const url = await createKenBurnsVideo({
+      imageUrls: [sourceUrl],
+      outputAspect: aspect,
+      durationPerImage,
+      siteId,
+    });
+    return {
+      outputUrl: url,
+      renderNotes: {
+        method: "ken_burns_motion",
+        aspect,
+        duration_seconds: durationPerImage,
+        from: "image",
+      },
+    };
+  }
+
+  // Image-output templates: sharp-based crop with attention-aware position
+  // selection. Sharp's "attention" strategy picks the most "interesting"
+  // crop region rather than center — better for photos where the subject
+  // isn't perfectly centered.
+  const dims = templateDimensions(templateId);
+  if (!dims) {
+    throw new Error(`Unsupported template for image source: ${templateId}`);
+  }
+
+  const res = await fetch(sourceUrl, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`Source fetch failed: ${res.status}`);
+  const inputBuffer = Buffer.from(await res.arrayBuffer());
+
+  const outputBuffer = await sharp(inputBuffer)
+    .rotate() // Honor EXIF orientation
+    .resize(dims.width, dims.height, {
+      fit: "cover",
+      position: sharp.strategy.attention,
+    })
+    .jpeg({ quality: 88, mozjpeg: true })
+    .toBuffer();
+
+  const date = new Date().toISOString().slice(0, 10);
+  const key = `sites/${siteId}/variants/${date}/${templateId}-${Date.now()}.jpg`;
+  const url = await uploadBufferToR2(key, outputBuffer, "image/jpeg");
 
   return {
-    variantId: inserted.id as string,
-    templateId,
-    status: "ready",
+    outputUrl: url,
+    renderNotes: {
+      method: "sharp_attention_crop",
+      width: dims.width,
+      height: dims.height,
+      from: "image",
+    },
   };
 }
 
 /**
- * Mark variants stale when source asset is modified. Called from the
- * asset PATCH handler when storage_url or critical metadata changes.
+ * Video source → video target. Center-crop reframing today via
+ * reformatVideo; subject-aware smart-crop is queued via Mux Smart Crop
+ * (project_tracpost_video_reframing_mux.md, Layer-1 only).
+ *
+ * If the source aspect already matches the template aspect, the source
+ * URL passes through — no re-encoding needed and no quality loss.
+ */
+async function renderVideoVariant(
+  sourceUrl: string,
+  templateId: string,
+  siteId: string,
+): Promise<{ outputUrl: string; renderNotes: Record<string, unknown> }> {
+  const targetAspect = templateAspect(templateId);
+  if (!targetAspect) {
+    // Image-output template requested for a video source — extract a frame.
+    // Implementation deferred; for now, fall back to source pass-through.
+    return {
+      outputUrl: sourceUrl,
+      renderNotes: {
+        method: "passthrough_video_to_image_template",
+        note: "Frame extraction not yet implemented",
+        from: "video",
+      },
+    };
+  }
+
+  const url = await reformatVideo({
+    videoUrl: sourceUrl,
+    targetAspect,
+    siteId,
+  });
+
+  return {
+    outputUrl: url,
+    renderNotes: {
+      method: "ffmpeg_center_crop",
+      target_aspect: targetAspect,
+      from: "video",
+      // Mux Smart Crop upgrade tracked separately per
+      // project_tracpost_video_reframing_mux.md
+      smart_crop_pending_upgrade: true,
+    },
+  };
+}
+
+/**
+ * Pixel dimensions for image-output templates. Returns null for
+ * video-only templates.
+ */
+function templateDimensions(templateId: string): { width: number; height: number } | null {
+  switch (templateId) {
+    case "feed_square": return { width: 1080, height: 1080 };
+    case "feed_portrait": return { width: 1080, height: 1350 };
+    case "pin_2x3": return { width: 1080, height: 1620 };
+    default: return null;
+  }
+}
+
+/**
+ * Aspect string for video-output templates. Returns null for image-only
+ * templates.
+ */
+function templateAspect(templateId: string): "9:16" | "1:1" | "16:9" | null {
+  switch (templateId) {
+    case "reel_9x16":
+    case "story_9x16":
+      return "9:16";
+    case "long_16x9":
+      return "16:9";
+    case "feed_square":
+      return "1:1";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Mark variants stale when the source asset is modified. Called from
+ * the asset PATCH handler when storage_url or critical metadata changes.
  * Stale variants get re-rendered on next pool query.
  */
 export async function markVariantsStale(assetId: string): Promise<number> {

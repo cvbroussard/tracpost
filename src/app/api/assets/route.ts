@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { uploadBufferToR2 } from "@/lib/r2";
 import { seoFilename } from "@/lib/seo-filename";
 import { readC2paManifest } from "@/lib/c2pa/reader";
+import { waitUntil } from "@vercel/functions";
 
 /**
  * POST /api/assets — Register a new media asset.
@@ -156,18 +157,23 @@ export async function POST(req: NextRequest) {
     `;
 
     // Trigger default variant render when briefed-on-upload, mirroring the
-    // PATCH-side behavior. Fire-and-forget — render failure shouldn't block
-    // the upload response.
+    // PATCH-side behavior. waitUntil so the upload response returns
+    // immediately while ffmpeg/sharp rendering runs on the serverless
+    // instance until it completes.
     if (briefedOnUpload) {
-      try {
-        const { renderDefaultVariant } = await import("@/lib/pipeline/variant-render");
-        await renderDefaultVariant(asset.id as string);
-      } catch (err) {
-        console.warn(
-          "Variant render failed (non-fatal — asset still briefed):",
-          err instanceof Error ? err.message : err,
-        );
-      }
+      waitUntil(
+        (async () => {
+          try {
+            const { renderDefaultVariant } = await import("@/lib/pipeline/variant-render");
+            await renderDefaultVariant(asset.id as string);
+          } catch (err) {
+            console.warn(
+              "Variant render failed (non-fatal — asset still briefed):",
+              err instanceof Error ? err.message : err,
+            );
+          }
+        })(),
+      );
     }
 
     // Log usage

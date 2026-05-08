@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseContextNote } from "@/lib/context-note-parser";
 import { deleteObjectFromR2, keyFromStorageUrl } from "@/lib/r2";
 import { purgeCdnCache } from "@/lib/cdn";
+import { waitUntil } from "@vercel/functions";
 
 /**
  * PATCH /api/assets/:id — Update an asset's context note or pillar.
@@ -163,20 +164,28 @@ export async function PATCH(
           WHERE id = ${id} AND triage_status = 'pending_briefing'
         `;
 
-        // Trigger default template variant render (#163). Per the
+        // Trigger default template variant render (#163, #172). Per the
         // source-template-variants architecture, briefing flips state to
         // 'triaged' AND the default template variant becomes available so
         // the orchestrator (#168) can pick this asset for autopilot.
-        // Fire-and-forget: render failure shouldn't block the briefing save.
-        try {
-          const { renderDefaultVariant } = await import("@/lib/pipeline/variant-render");
-          await renderDefaultVariant(id);
-        } catch (err) {
-          console.warn(
-            "Variant render failed (non-fatal — asset still briefed):",
-            err instanceof Error ? err.message : err,
-          );
-        }
+        //
+        // Real ffmpeg/sharp rendering can take 5-15 seconds — we use
+        // waitUntil so the briefing-save response returns immediately and
+        // the render continues running on Vercel's serverless instance
+        // until completion. Render failures don't block the response.
+        waitUntil(
+          (async () => {
+            try {
+              const { renderDefaultVariant } = await import("@/lib/pipeline/variant-render");
+              await renderDefaultVariant(id);
+            } catch (err) {
+              console.warn(
+                "Variant render failed (non-fatal — asset still briefed):",
+                err instanceof Error ? err.message : err,
+              );
+            }
+          })(),
+        );
       }
     }
 

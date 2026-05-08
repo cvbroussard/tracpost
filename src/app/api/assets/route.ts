@@ -126,18 +126,49 @@ export async function POST(req: NextRequest) {
       ...(c2paResult && { c2pa_manifest: c2paResult.raw, c2pa_claim_generator: c2paResult.claimGenerator }),
     };
 
+    // Briefed-on-upload optimization (#166): when subscriber provides a
+    // substantive context_note (≥40 chars per the readiness floor) at upload,
+    // skip the 'pending_briefing' intermediate state and land directly in
+    // 'triaged'. Mirrors PATCH-time briefing flip but avoids a follow-up
+    // PATCH for the common case of "subscriber types caption then uploads".
+    const briefedOnUpload = (context_note || "").trim().length >= 40;
+    const initialStatus = briefedOnUpload ? "triaged" : "pending_briefing";
+    const briefedMeta = briefedOnUpload
+      ? {
+          briefed_at: new Date().toISOString(),
+          briefed_by_subscription_id: auth.subscriptionId,
+          briefed_at_upload: true,
+        }
+      : {};
+
     const [asset] = await sql`
       INSERT INTO media_assets (
         site_id, storage_url, media_type, context_note,
-        source, triage_status, metadata, sort_order
+        source, triage_status, triaged_at, metadata, sort_order
       )
       VALUES (
         ${site_id}, ${finalUrl}, ${media_type},
-        ${context_note || null}, 'upload', 'pending_briefing',
-        ${JSON.stringify(assetMeta)}, EXTRACT(EPOCH FROM NOW())
+        ${context_note || null}, 'upload', ${initialStatus},
+        ${briefedOnUpload ? new Date() : null},
+        ${JSON.stringify({ ...assetMeta, ...briefedMeta })}, EXTRACT(EPOCH FROM NOW())
       )
       RETURNING id, site_id, storage_url, media_type, context_note, triage_status, created_at
     `;
+
+    // Trigger default variant render when briefed-on-upload, mirroring the
+    // PATCH-side behavior. Fire-and-forget — render failure shouldn't block
+    // the upload response.
+    if (briefedOnUpload) {
+      try {
+        const { renderDefaultVariant } = await import("@/lib/pipeline/variant-render");
+        await renderDefaultVariant(asset.id as string);
+      } catch (err) {
+        console.warn(
+          "Variant render failed (non-fatal — asset still briefed):",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
 
     // Log usage
     await sql`
@@ -145,6 +176,7 @@ export async function POST(req: NextRequest) {
       VALUES (${auth.subscriptionId}, ${site_id}, 'asset_upload', ${JSON.stringify({
         asset_id: asset.id,
         media_type,
+        briefed_on_upload: briefedOnUpload,
       })})
     `;
 

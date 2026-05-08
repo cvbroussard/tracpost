@@ -286,6 +286,30 @@ function CaptureForm() {
                   ✕
                 </button>
               </div>
+              {/* Briefing prompt (per #166). Subscriber types what's happening
+                  in this shot — vendors, project, what makes the moment.
+                  ≥40 chars promotes the asset directly to 'triaged' on upload
+                  (auto-flip in /api/assets POST), making it eligible for the
+                  v2 orchestrator pool without a follow-up PATCH. */}
+              <div className="mb-2">
+                <textarea
+                  value={item.contextNote}
+                  onChange={(e) => setItems((prev) => prev.map((i) =>
+                    i.id === item.id ? { ...i, contextNote: e.target.value } : i,
+                  ))}
+                  placeholder="What's happening here? Vendors, project, what makes this shot worth posting…"
+                  rows={2}
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs leading-relaxed"
+                />
+                <div className="mt-1 flex items-center justify-between text-[10px]">
+                  <span className={item.contextNote.trim().length >= 40 ? "text-success" : "text-muted"}>
+                    {item.contextNote.trim().length >= 40
+                      ? "✓ Ready — eligible for autopilot"
+                      : `${Math.max(0, 40 - item.contextNote.trim().length)} more chars to reach autopilot threshold`}
+                  </span>
+                  <span className="text-muted">{item.contextNote.length} chars</span>
+                </div>
+              </div>
               {/* AI-generated toggle (per #161 Phase 1).
                   Default false; subscriber declares if AI-generated or AI-modified.
                   Wired to media_assets.metadata.ai_generated and propagates to

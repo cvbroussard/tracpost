@@ -79,7 +79,10 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
     async function poll() {
       try {
-        const res = await fetch(`/api/assets?site_id=${siteId}&status=received`);
+        // Per #157: status renamed `received` → `pending_briefing`. Polling
+        // surfaces assets that haven't yet been briefed so the UI can prompt
+        // the subscriber to caption them.
+        const res = await fetch(`/api/assets?site_id=${siteId}&status=pending_briefing`);
         if (res.ok) {
           const data = await res.json();
           const count = data.assets?.length || 0;

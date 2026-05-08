@@ -5,10 +5,13 @@ import { PlatformIcon } from "@/components/platform-icons";
 
 type StatusFilter = "recent" | "live" | "draft" | "quarantined" | "all";
 
+// Platforms include outbound social channels + owned-anchor types
+// (blog/project/service). Anchor types live alongside social platforms in the
+// chip strip because subscribers think of all of them as "places content lives".
 const ALL_PLATFORMS = [
   "instagram", "tiktok", "facebook", "youtube",
   "pinterest", "linkedin", "twitter", "gbp",
-  "blog",
+  "blog", "project", "service",
 ];
 
 const STATUS_TABS: Array<{ key: StatusFilter; label: string }> = [
@@ -73,6 +76,8 @@ const PLATFORM_ICONS: Record<string, string> = {
   linkedin: "💼",
   gbp: "📍",
   blog: "📝",
+  project: "🏗️",
+  service: "🛠️",
 };
 
 type ViewMode = "firehose" | "campaign" | "channel";

@@ -40,9 +40,10 @@ export default async function UnifeedPage() {
 
   const siteId = session.activeSiteId;
 
-  // Aggregated metrics — articles read from blog_posts_v2 only (v2
-  // cutover: no fallback to legacy). Social posts continue from
-  // social_posts since publishing-side hasn't migrated yet.
+  // Aggregated metrics — articles + projects + services read from v2 pools.
+  // Social posts still from social_posts since publishing-side hasn't migrated.
+  // 'posts_this_week' counts new content of any anchor type — projects and
+  // services use created_at since they don't have a separate published_at.
   const [metrics] = await sql`
     SELECT
       (SELECT COALESCE(SUM(
@@ -61,16 +62,31 @@ export default async function UnifeedPage() {
          (SELECT COUNT(*)::int FROM blog_posts_v2
           WHERE site_id = ${siteId} AND status = 'published'
           AND published_at > NOW() - INTERVAL '7 days')
+       +
+         (SELECT COUNT(*)::int FROM projects_v2
+          WHERE site_id = ${siteId} AND status IN ('active','complete')
+          AND created_at > NOW() - INTERVAL '7 days')
+       +
+         (SELECT COUNT(*)::int FROM services_v2
+          WHERE site_id = ${siteId} AND status = 'active'
+          AND created_at > NOW() - INTERVAL '7 days')
       ) AS posts_this_week,
       (SELECT
          (SELECT COUNT(*)::int FROM social_posts WHERE site_id = ${siteId} AND status = 'published')
        +
          (SELECT COUNT(*)::int FROM blog_posts_v2 WHERE site_id = ${siteId} AND status = 'published')
+       +
+         (SELECT COUNT(*)::int FROM projects_v2 WHERE site_id = ${siteId} AND status IN ('active','complete'))
+       +
+         (SELECT COUNT(*)::int FROM services_v2 WHERE site_id = ${siteId} AND status = 'active')
       ) AS total_posts
   `;
 
-  // Recent published items — UNION of social_posts + blog_posts.
-  // Both projected to a normalized shape the dashboard can render uniformly.
+  // Recent published items — UNION of social_posts + all three v2 anchor pools
+  // (blog, project, service). Each anchor pool projects to the same normalized
+  // shape so the dashboard can render uniformly. Project/service status uses
+  // 'active' as canonical visible state — projected to 'published' so feed
+  // filters (live/draft/recent) work consistently across content types.
   const recentPosts = await sql`
     SELECT *
     FROM (
@@ -95,10 +111,9 @@ export default async function UnifeedPage() {
 
       UNION ALL
 
-      -- Blog articles (v2). Hero image now comes via the FK to
-      -- media_assets (no more og_image_url string). platform_post_url
-      -- points at the internal review surface so clicking a card opens
-      -- the long-form proofing view rather than the live URL.
+      -- Blog articles (v2). Hero image comes via FK to media_assets.
+      -- platform_post_url points at the internal review surface so clicking
+      -- a card opens the long-form proofing view rather than the live URL.
       SELECT bp.id::text AS id,
              COALESCE(bp.title, bp.excerpt) AS caption,
              ma.storage_url AS media_url,
@@ -116,6 +131,46 @@ export default async function UnifeedPage() {
       LEFT JOIN blog_settings bs ON bs.site_id = bp.site_id
       WHERE bp.site_id = ${siteId}
         AND bp.status IN ('published', 'draft')
+
+      UNION ALL
+
+      -- Projects (v2). Status mapped: active|complete → published, archived → archived.
+      SELECT pv.id::text AS id,
+             COALESCE(pv.name, pv.description) AS caption,
+             ma.storage_url AS media_url,
+             ma.media_type AS media_type,
+             'project'::text AS platform,
+             ''::text AS account_name,
+             CASE WHEN pv.status IN ('active','complete') THEN 'published' ELSE pv.status END AS status,
+             pv.created_at AS published_at,
+             NULL::timestamptz AS scheduled_at,
+             pv.created_at AS created_at,
+             ('/dashboard/project-preview/' || pv.slug) AS platform_post_url,
+             NULL::text AS error_message
+      FROM projects_v2 pv
+      LEFT JOIN media_assets ma ON ma.id = pv.hero_asset_id
+      WHERE pv.site_id = ${siteId}
+        AND pv.status IN ('active','complete')
+
+      UNION ALL
+
+      -- Services (v2). Status mapped: active → published, archived → archived.
+      SELECT sv.id::text AS id,
+             COALESCE(sv.name, sv.description) AS caption,
+             ma.storage_url AS media_url,
+             ma.media_type AS media_type,
+             'service'::text AS platform,
+             ''::text AS account_name,
+             CASE WHEN sv.status = 'active' THEN 'published' ELSE sv.status END AS status,
+             sv.created_at AS published_at,
+             NULL::timestamptz AS scheduled_at,
+             sv.created_at AS created_at,
+             NULL::text AS platform_post_url,
+             NULL::text AS error_message
+      FROM services_v2 sv
+      LEFT JOIN media_assets ma ON ma.id = sv.hero_asset_id
+      WHERE sv.site_id = ${siteId}
+        AND sv.status = 'active'
     ) feed
     ORDER BY COALESCE(published_at, scheduled_at, created_at) DESC NULLS LAST
     LIMIT 100
@@ -145,15 +200,37 @@ export default async function UnifeedPage() {
     ...legacyPlatforms.filter(p => !platformSet.has(p.platform)),
   ];
 
-  // Add a synthetic "blog" platform tile if any v2 blog content exists
-  const [blogPresence] = await sql`
-    SELECT COUNT(*)::int AS n FROM blog_posts_v2 WHERE site_id = ${siteId}
+  // Synthetic anchor-type tiles (blog/project/service) when v2 content exists.
+  // These represent owned content destinations, not connected platforms — the
+  // anchor-type filter chip lets subscribers slice the feed to only their
+  // articles, only their projects, etc.
+  const [anchorPresence] = await sql`
+    SELECT
+      (SELECT COUNT(*)::int FROM blog_posts_v2 WHERE site_id = ${siteId}) AS blog_count,
+      (SELECT COUNT(*)::int FROM projects_v2 WHERE site_id = ${siteId}) AS project_count,
+      (SELECT COUNT(*)::int FROM services_v2 WHERE site_id = ${siteId}) AS service_count
   `;
-  if ((blogPresence?.n as number) > 0) {
+  if ((anchorPresence?.blog_count as number) > 0) {
     const [bs] = await sql`SELECT blog_title FROM blog_settings WHERE site_id = ${siteId}`;
     platforms.push({
       platform: "blog",
       account_name: (bs?.blog_title as string) || "Blog",
+      status: "active",
+      followers: null,
+    });
+  }
+  if ((anchorPresence?.project_count as number) > 0) {
+    platforms.push({
+      platform: "project",
+      account_name: "Projects",
+      status: "active",
+      followers: null,
+    });
+  }
+  if ((anchorPresence?.service_count as number) > 0) {
+    platforms.push({
+      platform: "service",
+      account_name: "Services",
       status: "active",
       followers: null,
     });

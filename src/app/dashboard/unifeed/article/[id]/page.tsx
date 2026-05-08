@@ -191,25 +191,17 @@ export default async function ArticleReviewPage({
           </div>
 
           {(article.meta_title || article.meta_description) && (
-            <details className="text-xs">
-              <summary className="cursor-pointer text-muted hover:text-foreground">
-                SEO metadata
-              </summary>
-              <dl className="mt-2 space-y-1.5">
-                {article.meta_title && (
-                  <>
-                    <dt className="font-medium text-foreground">Meta title</dt>
-                    <dd className="text-muted">{article.meta_title}</dd>
-                  </>
-                )}
-                {article.meta_description && (
-                  <>
-                    <dt className="font-medium text-foreground">Meta description</dt>
-                    <dd className="text-muted">{article.meta_description}</dd>
-                  </>
-                )}
-              </dl>
-            </details>
+            <SeoPreview
+              metaTitle={article.meta_title || article.title}
+              metaDescription={article.meta_description}
+              displayUrl={
+                settings?.custom_domain
+                  ? `${settings.custom_domain}/${article.slug}`
+                  : settings?.subdomain
+                    ? `${settings.subdomain}.tracpost.com/${article.slug}`
+                    : `tracpost.com/${article.slug}`
+              }
+            />
           )}
         </div>
       </article>
@@ -306,6 +298,53 @@ function AssetEmbed({
       alt={asset.alt}
       className="w-full rounded-lg object-cover"
     />
+  );
+}
+
+/**
+ * Google SERP-style SEO preview. Surfaces what the article will look like in
+ * Google search results so subscribers can verify titles aren't truncated and
+ * descriptions read well. Render hierarchy mirrors a real Google result:
+ * site URL on top, blue title, gray description.
+ */
+function SeoPreview({
+  metaTitle,
+  metaDescription,
+  displayUrl,
+}: {
+  metaTitle: string;
+  metaDescription: string | null;
+  displayUrl: string;
+}) {
+  // Google truncates titles around 60 chars and descriptions around 155.
+  const titleTruncated = metaTitle.length > 60;
+  const descTruncated = (metaDescription?.length || 0) > 155;
+
+  return (
+    <div className="rounded-lg border border-border bg-surface-subtle p-4 space-y-2">
+      <div className="text-[10px] uppercase tracking-wide font-medium text-muted">
+        Google preview
+      </div>
+      <div className="space-y-1">
+        <div className="text-xs text-muted">{displayUrl}</div>
+        <div className="text-base text-blue-600 leading-snug">
+          {metaTitle.length > 60 ? metaTitle.slice(0, 57) + "…" : metaTitle}
+        </div>
+        {metaDescription && (
+          <div className="text-sm text-foreground/70 leading-snug">
+            {metaDescription.length > 155
+              ? metaDescription.slice(0, 152) + "…"
+              : metaDescription}
+          </div>
+        )}
+      </div>
+      {(titleTruncated || descTruncated) && (
+        <div className="text-[11px] text-warning border-t border-border pt-2 mt-2">
+          {titleTruncated && <div>Title exceeds 60 chars — Google may truncate.</div>}
+          {descTruncated && <div>Description exceeds 155 chars — Google may truncate.</div>}
+        </div>
+      )}
+    </div>
   );
 }
 

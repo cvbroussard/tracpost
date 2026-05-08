@@ -8,7 +8,7 @@ def s3_client():
     """Lazy boto3 client. R2 endpoint is the only difference from native S3."""
     return boto3.client(
         "s3",
-        endpoint_url=Config.R2_ENDPOINT,
+        endpoint_url=Config.r2_endpoint(),
         aws_access_key_id=Config.R2_ACCESS_KEY_ID,
         aws_secret_access_key=Config.R2_SECRET_ACCESS_KEY,
         region_name="auto",
@@ -42,7 +42,7 @@ def upload_result(local_path: str, key: str, content_type: str = "video/mp4") ->
     client = s3_client()
     with open(local_path, "rb") as f:
         client.put_object(
-            Bucket=Config.R2_BUCKET,
+            Bucket=Config.R2_BUCKET_NAME,
             Key=key,
             Body=f,
             ContentType=content_type,

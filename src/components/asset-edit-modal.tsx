@@ -461,16 +461,6 @@ export function AssetEditModal({
               )}
             </div>
 
-            {/* Asset Studio — AI tools that produce new pending_briefing assets.
-                Subscriber-only; outputs land in the library for briefing per
-                the briefing-required principle. */}
-            <div className="mb-3">
-              <AssetStudioStrip
-                assetId={assetId}
-                mediaType={mediaType}
-              />
-            </div>
-
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs text-muted">
                 Context Note
@@ -711,6 +701,17 @@ export function AssetEditModal({
             </div>
           </div>
         )}
+
+        {/* Asset Studio — placed just above the action bar.
+            AI tools are intentionally low-prominence per the scaffolding
+            thesis: subscribers with rich captured libraries rarely need
+            them; they exist as utility for sparse-to-mature transition. */}
+        <div className="border-t border-border px-6 py-3">
+          <AssetStudioStrip
+            assetId={assetId}
+            mediaType={mediaType}
+          />
+        </div>
 
         {/* Footer: actions */}
         <div className="flex items-center justify-between border-t border-border px-6 py-3">

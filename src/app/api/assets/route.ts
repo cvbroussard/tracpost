@@ -3,6 +3,7 @@ import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { uploadBufferToR2 } from "@/lib/r2";
 import { seoFilename } from "@/lib/seo-filename";
+import { readC2paManifest } from "@/lib/c2pa/reader";
 
 /**
  * POST /api/assets — Register a new media asset.
@@ -89,17 +90,40 @@ export async function POST(req: NextRequest) {
     // Flag HEIC/HEIF for deferred conversion by the cron
     const isHeic = finalUrl && (finalUrl.endsWith(".heic") || finalUrl.endsWith(".heif"));
 
+    // C2PA manifest detection (Phase 2 of #161). Free, deterministic;
+    // catches AI-generated content from well-behaved generators (Firefly,
+    // OpenAI, Imagen, Midjourney, etc.). Manifest absence isn't proof of
+    // human capture — subscriber declaration carries the rest.
+    // Skip for HEIC pending conversion (cron will handle), and for non-
+    // image/video media types (PDFs handled separately above).
+    let c2paResult: Awaited<ReturnType<typeof readC2paManifest>> = null;
+    if (!isHeic && (media_type === "image" || media_type === "video" || media_type.startsWith("image/") || media_type.startsWith("video/"))) {
+      c2paResult = await readC2paManifest(finalUrl, media_type).catch(() => null);
+    }
+
+    // C2PA wins over subscriber declaration when it positively identifies AI:
+    // a tamper-resistant manifest declaring AI source is more reliable than
+    // a self-reported toggle. Subscriber's NO doesn't override a manifest YES.
+    // Subscriber's YES still wins over manifest absence (silence ≠ refutation).
+    const aiGeneratedFinal = c2paResult?.isAiGenerated || aiGeneratedDeclared;
+    const aiFlagSource = c2paResult?.isAiGenerated
+      ? "c2pa_manifest"
+      : aiGeneratedDeclared
+      ? "subscriber_declared"
+      : "default_false";
+
     // Build metadata — include deferred processing hints
     const assetMeta: Record<string, unknown> = {
       ...(body.metadata || {}),
       ...(isHeic && { needs_conversion: true }),
       ...(project_id && { pending_project_id: project_id }),
       original_filename: storage_url.split("/").pop()?.split("?")[0] || null,
-      // AI-generated flag (#161): subscriber declared at upload.
-      // Phase 2 will add C2PA-driven auto-detection that may override this.
-      ai_generated: aiGeneratedDeclared,
-      ai_flag_source: aiGeneratedDeclared ? "subscriber_declared" : "default_false",
+      // AI-generated flag (#161): C2PA manifest takes priority over subscriber declaration.
+      ai_generated: aiGeneratedFinal,
+      ai_flag_source: aiFlagSource,
       ai_flag_set_at: new Date().toISOString(),
+      // Store full C2PA manifest for audit when present
+      ...(c2paResult && { c2pa_manifest: c2paResult.raw, c2pa_claim_generator: c2paResult.claimGenerator }),
     };
 
     const [asset] = await sql`

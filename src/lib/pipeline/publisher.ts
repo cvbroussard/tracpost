@@ -109,6 +109,28 @@ export async function publishPost(postId: string): Promise<{ success: boolean; e
     ? `${post.caption}\n\n${hashtags.join(" ")}`
     : post.caption;
 
+  // AI disclosure flag (#160): pull ai_generated from the source media asset
+  // and propagate to the adapter. Adapter applies caption-prepend or API flag
+  // per project_tracpost_ai_disclosure_as_asset.md (compliance + positioning).
+  // Source asset id flows via media_urls[0] convention OR explicit metadata.
+  // Falls back to false if not resolvable — we never assume AI without evidence.
+  let aiGenerated = false;
+  const sourceAssetId = (postMeta.source_asset_id as string)
+    || (assetMetadata.source_asset_id as string)
+    || null;
+  if (sourceAssetId) {
+    try {
+      const [asset] = await sql`
+        SELECT (metadata->>'ai_generated')::boolean AS ai_generated
+        FROM media_assets
+        WHERE id = ${sourceAssetId}
+      `;
+      aiGenerated = (asset?.ai_generated as boolean) === true;
+    } catch (err) {
+      console.warn("Could not fetch ai_generated flag for source asset (publishing without disclosure):", err instanceof Error ? err.message : err);
+    }
+  }
+
   try {
     const result = await adapter.publish({
       platformAccountId,
@@ -121,6 +143,7 @@ export async function publishPost(postId: string): Promise<{ success: boolean; e
         ...(post.account_metadata || {}),
         ...assetMetadata,
       } as Record<string, unknown>,
+      aiGenerated,
     });
 
     // Update post as published

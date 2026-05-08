@@ -3,6 +3,7 @@ import type {
   FetchCommentsInput, CommentData, ReplyInput,
 } from "./types";
 import { INSTAGRAM_DEFAULTS } from "./defaults";
+import { applyDisclosurePrefix } from "./ai-disclosure";
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";
 
@@ -18,11 +19,17 @@ export const instagramAdapter: PlatformAdapter = {
   platform: "instagram",
 
   async publish(input: PublishInput): Promise<PublishResult> {
-    const { platformAccountId, accessToken, caption, mediaUrls, mediaType } = input;
+    const { platformAccountId, accessToken, caption, mediaUrls, mediaType, aiGenerated } = input;
     const imageUrl = mediaUrls[0];
     if (!imageUrl) throw new Error("No media URL provided");
 
     const isVideo = mediaType?.startsWith("video") || false;
+
+    // AI disclosure (#160): prepend disclosure language to caption when the
+    // source asset is AI-generated. Meta's Graph API doesn't currently expose
+    // a stable explicit AI-flag at the publish layer, so the visible caption
+    // prefix is our compliance mechanism + positioning signal.
+    const finalCaption = applyDisclosurePrefix(caption, aiGenerated === true);
 
     // Step 1: Create media container.
     // Per project_tracpost_upload_ai_detection.md guideline #1, set every
@@ -30,7 +37,7 @@ export const instagramAdapter: PlatformAdapter = {
     // centralized in adapters/defaults.ts (#159).
     const containerParams: Record<string, string> = {
       access_token: accessToken,
-      caption,
+      caption: finalCaption,
     };
 
     if (isVideo) {

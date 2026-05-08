@@ -31,6 +31,13 @@ export interface PublishInput {
   linkUrl?: string;
   /** Platform-specific metadata from social_accounts.metadata */
   accountMetadata?: Record<string, unknown>;
+  /**
+   * AI-generated flag from media_assets.metadata.ai_generated (per #161).
+   * When true, publisher MUST flag the post as AI-generated per platform
+   * compliance rules (#160). Caption-prepend fallback used where API
+   * doesn't support an explicit flag. Defaults to false if absent.
+   */
+  aiGenerated?: boolean;
 }
 
 // ── Inbox / Engagement types ──

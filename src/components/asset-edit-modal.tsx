@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "@/components/feedback";
 import { TagPicker, type PillarGroup } from "./tag-picker";
 import { FaceOverlay } from "./face-overlay";
+import { AssetStudioStrip } from "./asset-studio-strip";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 interface Brand {
@@ -458,6 +459,16 @@ export function AssetEditModal({
                   {totalTagged} tagged
                 </span>
               )}
+            </div>
+
+            {/* Asset Studio — AI tools that produce new pending_briefing assets.
+                Subscriber-only; outputs land in the library for briefing per
+                the briefing-required principle. */}
+            <div className="mb-3">
+              <AssetStudioStrip
+                assetId={assetId}
+                mediaType={mediaType}
+              />
             </div>
 
             <div className="mb-1 flex items-center justify-between">

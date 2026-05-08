@@ -144,13 +144,21 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner", plan = 
   const isEnterprise = plan.toLowerCase().includes("enterprise");
   const visibleModules = MODULES.filter((m) => !m.enterpriseOnly || isEnterprise);
 
-  function isSubActive(subPath: string): boolean {
-    const full = prefix + subPath;
+  function pathMatches(p: string): boolean {
+    const full = prefix + p;
     return pathname === full || pathname === full + "/" || pathname.startsWith(full + "/");
   }
 
+  function isSubActive(subPath: string, children?: { path: string }[]): boolean {
+    if (pathMatches(subPath)) return true;
+    // A sub with children is also active when the user is on any child path —
+    // ensures Asset Studio stays highlighted on /tools and /documents, etc.
+    if (children?.some((c) => pathMatches(c.path))) return true;
+    return false;
+  }
+
   function moduleContainsActive(mod: Module): boolean {
-    return mod.subs.some((sub) => isSubActive(sub.path));
+    return mod.subs.some((sub) => isSubActive(sub.path, sub.children));
   }
 
   // Single-expand — only one module open at a time
@@ -234,7 +242,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner", plan = 
                     {isExpanded && (
                       <div className="ml-[22px] flex flex-col gap-px py-px border-l border-border/40">
                         {subs.map((sub) => {
-                          const subActive = isSubActive(sub.path);
+                          const subActive = isSubActive(sub.path, sub.children);
                           return (
                             <div key={sub.path}>
                               <Link

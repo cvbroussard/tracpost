@@ -265,24 +265,24 @@ export default async function DashboardOverview() {
         <section className="mb-8">
           <div className="mb-4 flex items-center justify-between">
             <h2>Blog Articles</h2>
-            <Link href="/dashboard/blog" className="text-sm text-accent hover:underline">
+            <Link href="/dashboard/unifeed?platform=blog" className="text-sm text-accent hover:underline">
               View all
             </Link>
           </div>
           <div className="flex gap-6">
             {blogStats[0]?.drafts > 0 && (
-              <Link href="/dashboard/blog?status=draft" className="group">
+              <Link href="/dashboard/unifeed?platform=blog&status=draft" className="group">
                 <p className="text-2xl font-semibold">{blogStats[0].drafts}</p>
                 <p className="text-sm text-muted group-hover:text-accent">Awaiting review</p>
               </Link>
             )}
             {blogStats[0]?.flagged > 0 && (
-              <Link href="/dashboard/blog?status=flagged" className="group">
+              <Link href="/dashboard/unifeed?platform=blog&status=flagged" className="group">
                 <p className="text-2xl font-semibold text-danger">{blogStats[0].flagged}</p>
                 <p className="text-sm text-muted group-hover:text-accent">Flagged</p>
               </Link>
             )}
-            <Link href="/dashboard/blog?status=published" className="group">
+            <Link href="/dashboard/unifeed?platform=blog&status=published" className="group">
               <p className="text-2xl font-semibold text-success">{blogStats[0]?.published || 0}</p>
               <p className="text-sm text-muted group-hover:text-accent">Published</p>
             </Link>

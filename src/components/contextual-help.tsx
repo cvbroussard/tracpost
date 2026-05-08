@@ -9,7 +9,9 @@ interface HelpItem {
 }
 
 const helpContent: Record<string, HelpItem[]> = {
-  "/dashboard/blog": [
+  // Article review tips — keyed off the Unifeed article review surface per #171
+  // (the v1 /dashboard/blog page is retired and redirects here).
+  "/dashboard/unifeed/article": [
     {
       title: "Reviewing drafts",
       content:

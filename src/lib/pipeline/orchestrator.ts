@@ -1,6 +1,8 @@
 import { sql } from "@/lib/db";
 import { triageAsset } from "./triage";
-import { generateMissingBlogPosts } from "./blog-generator";
+// v1 blog-generator import retired per #171 — generateMissingBlogPosts call
+// sites in this file were already neutralized in #155. v2 generator is the
+// article source of truth via the autopilot dispatcher.
 import { sendPushNotification } from "@/lib/notifications";
 import { syncInboxEngagement } from "@/lib/inbox/sync";
 import { syncRssFeeds } from "@/lib/inbox/sync-rss";

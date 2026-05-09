@@ -210,49 +210,23 @@ export function MediaGrid({
                 </span>
               )}
             </div>
-            <div className="px-2.5 py-2">
+            {/* Source-card minimalism (2026-05-09): the card's job in the
+                grid is fast visual identification + click. Full untruncated
+                context note so the subscriber can read what's there at a
+                glance; everything else (pillars, brands, projects, dates,
+                quality, flag reason) lives in the modal. Filtration carries
+                the navigation weight for libraries with thousands of
+                assets. Hover tooltip retains the upload date for the rare
+                "when did I upload this" question. */}
+            <div
+              className="px-2.5 py-2"
+              title={`Uploaded ${new Date(a.created_at).toLocaleDateString()}`}
+            >
               {a.context_note ? (
-                <p className="truncate text-xs">{a.context_note}</p>
+                <p className="text-xs leading-snug">{a.context_note}</p>
               ) : (
-                <p className="truncate text-xs text-muted">No caption</p>
+                <p className="text-xs italic text-muted">No caption</p>
               )}
-              <div
-                className="mt-1 flex flex-wrap items-center gap-1.5"
-                title={`Uploaded ${new Date(a.created_at).toLocaleDateString()}`}
-              >
-                {(a.content_pillars || (a.content_pillar ? [a.content_pillar] : [])).map((p) => {
-                  // Resolve the framework ID (what / how / who / proof / why)
-                  // to the subscriber's customizable label. Fall back to the
-                  // raw ID only if the lookup misses (legacy / malformed).
-                  const label = pillarConfig.find((c) => c.id === p)?.label || p.replace(/_/g, " ");
-                  return (
-                    <span key={p} className="rounded bg-surface-hover px-1.5 py-0.5 text-[10px]">
-                      {label}
-                    </span>
-                  );
-                })}
-                {/* quality_score removed from subscriber view — internal
-                    orchestrator weighting signal, no subscriber affordance.
-                    Still rendered on the operator surface (asset-health). */}
-                {(liveBrandMap[a.id] || []).map((bid) => {
-                  const brand = liveBrands.find((b) => b.id === bid);
-                  return brand ? (
-                    <span key={bid} className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent">
-                      {brand.name}
-                    </span>
-                  ) : null;
-                })}
-                {(liveProjectMap[a.id] || []).map((pid) => {
-                  const project = liveProjects.find((p) => p.id === pid);
-                  return project ? (
-                    <span key={pid} className="rounded bg-success/15 px-1.5 py-0.5 text-[10px] text-success">
-                      {project.name}
-                    </span>
-                  ) : null;
-                })}
-              </div>
-              {/* flag_reason removed from subscriber view — operator-facing
-                  field; subscriber sees the visible status badge instead. */}
             </div>
           </button>
         ))}

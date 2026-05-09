@@ -110,12 +110,25 @@ export async function POST(req: NextRequest) {
           try {
             const { transcribe } = await import("@/lib/transcribe");
             const result = await transcribe(storage_url as string);
+            // Stash time-anchored segments + language detection into
+            // metadata so future surfaces (operator click-to-seek
+            // playback, voice-over caption sync, clip extraction from
+            // spoken vendor moments) can use them. Captured for ALL
+            // sources even though briefing display ignores them — see
+            // project_tracpost_audio_capture_floor.md (capture floor).
+            const segmentsJson = result.segments && result.segments.length > 0
+              ? JSON.stringify({
+                  segments: result.segments,
+                  language: result.language,
+                })
+              : JSON.stringify({});
             await sql`
               UPDATE recordings
               SET transcript = ${result.text},
                   transcribed_at = NOW(),
                   transcribe_provider = ${result.provider},
-                  duration_ms = COALESCE(duration_ms, ${result.duration ? Math.round(result.duration * 1000) : null})
+                  duration_ms = COALESCE(duration_ms, ${result.duration ? Math.round(result.duration * 1000) : null}),
+                  metadata = COALESCE(metadata, '{}'::jsonb) || ${segmentsJson}::jsonb
               WHERE id = ${recording.id}
             `;
             // If asked, append the transcript to the source asset's

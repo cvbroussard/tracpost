@@ -12,6 +12,18 @@ import "server-only";
  * re-transcription jobs) don't change when we swap.
  */
 
+/** Time-anchored segment within a transcript. Maps text to playback
+ * positions for click-to-seek navigation (YouTube-style transcript view).
+ * Captured for ALL transcripts even though we only DISPLAY them for
+ * time-anchored sources (voice_over, captured_ambient) — see
+ * project_tracpost_audio_capture_floor.md.
+ */
+export interface TranscribeSegment {
+  start: number;  // seconds from audio start
+  end: number;
+  text: string;
+}
+
 export interface TranscribeResult {
   /** The transcript text. */
   text: string;
@@ -21,6 +33,9 @@ export interface TranscribeResult {
   duration?: number;
   /** Optional language detection, if the provider returns it. */
   language?: string;
+  /** Time-anchored segments. Stored even for sources that don't display
+   * timestamps so future operator review / clip extraction can use them. */
+  segments?: TranscribeSegment[];
 }
 
 /**
@@ -76,6 +91,14 @@ async function transcribeWithOpenAIWhisper(audioUrl: string): Promise<Transcribe
     text: string;
     duration?: number;
     language?: string;
+    segments?: Array<{
+      start: number;
+      end: number;
+      text: string;
+      // Whisper returns more fields per segment (avg_logprob, no_speech_prob,
+      // tokens, etc.) that we don't need for display. Strip to the three
+      // we use; can revisit if a future use case wants the confidence signals.
+    }>;
   };
 
   return {
@@ -83,6 +106,13 @@ async function transcribeWithOpenAIWhisper(audioUrl: string): Promise<Transcribe
     provider: "openai-whisper-1",
     duration: data.duration,
     language: data.language,
+    segments: Array.isArray(data.segments)
+      ? data.segments.map((s) => ({
+          start: s.start,
+          end: s.end,
+          text: (s.text || "").trim(),
+        }))
+      : undefined,
   };
 }
 

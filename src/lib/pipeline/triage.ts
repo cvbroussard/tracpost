@@ -7,6 +7,35 @@ import type { PersonaDetection } from "@/lib/personas";
 const anthropic = new Anthropic();
 
 /**
+ * Sanitize an AI-generated URL slug. Returns null when the input is
+ * unusable (empty, too short, or no recoverable content).
+ *
+ * Steps: lowercase → strip non-alphanumeric/hyphens → collapse multiple
+ * hyphens → trim leading/trailing hyphens → cap at 80 chars without
+ * cutting mid-word.
+ *
+ * Per the rename architecture (LOCKED 2026-05-08): the AI returns
+ * `url_slug` based on subscriber's full briefing context + visual
+ * analysis. We sanitize defensively because LLM output isn't guaranteed
+ * to be URL-safe.
+ */
+function sanitizeSlug(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  let s = raw.toLowerCase().trim();
+  // Replace any non-alphanumeric run with a single hyphen
+  s = s.replace(/[^a-z0-9]+/g, "-");
+  // Trim leading/trailing hyphens
+  s = s.replace(/^-+|-+$/g, "");
+  if (s.length < 5) return null;
+  // Cap at 80 chars, but don't cut mid-word — find the last hyphen before 80
+  if (s.length > 80) {
+    const lastHyphen = s.lastIndexOf("-", 80);
+    s = lastHyphen > 40 ? s.slice(0, lastHyphen) : s.slice(0, 80);
+  }
+  return s;
+}
+
+/**
  * Triage a media asset — evaluate quality, assign pillar, determine
  * platform fit, and set triage status.
  *
@@ -274,7 +303,8 @@ Respond with ONLY valid JSON (no markdown):
   "pin_headline": "<6-8 word Pinterest headline. Title case. Include one searchable keyword relevant to the business. Example: 'Custom Zellige Backsplash with Floating Shelves'>",
   "display_caption": "<1-2 sentence public-facing caption for the business website. Written in the brand's voice for their audience, not for the project owner.>",
   "alt_text": "<concise image alt text for screen readers. What is literally shown, no interpretation. Under 125 characters.>",
-  "social_hook": "<scroll-stopping first line for social media. Creates curiosity or highlights the most interesting element. Under 15 words. No hashtags.>"
+  "social_hook": "<scroll-stopping first line for social media. Creates curiosity or highlights the most interesting element. Under 15 words. No hashtags.>",
+  "url_slug": "<3-7 hyphen-separated lowercase keywords (40-80 chars total) that capture the most distinguishing concepts in this asset for SEO. Combine subscriber's strategic intent (from context note + pillar + brands + project) with what's visually distinctive. Examples: 'walked-through-carter-foundation-underpinning', 'kitchen-reveal-brizo-faucet-walnut-cabinets', 'demo-day-knob-and-tube-discovery'. No filler words ('the', 'a', 'an'). No repeating keywords. lowercase, alphanumeric and hyphens only.>"
 }
 
 Rules:
@@ -366,6 +396,11 @@ ${personaPrompt || 'If no known characters list is provided, return "detected_pe
       has_text_overlay: parsed.has_text_overlay,
       detected_vendors: parsed.detected_vendors || [],
       detected_personas: parsed.detected_personas || [],
+      // SEO-shaped slug derived from full briefing context + visual
+      // analysis. Used by the source-rename pipeline (next commit) to
+      // generate pretty URLs for source asset + variant + poster keys.
+      // Sanitized to lowercase alphanumeric + hyphens, max 80 chars.
+      url_slug: sanitizeSlug(parsed.url_slug),
     },
     generated_text: (parsed.pin_headline || parsed.display_caption) ? {
       context_note: parsed.context_note || parsed.description || "",

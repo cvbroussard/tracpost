@@ -375,28 +375,36 @@ Pain points: ${painPoints.slice(0, 5).map((p) => p.pain).join("; ")}
 Search phrases: ${lang.searchPhrases.slice(0, 5).join(", ")}
 
 ## The Five-Pillar Framework
-Every business has the same 5 content pillars — only the labels and tags change:
+Every business has the same 5 content pillars — only the labels and tags change.
+Each pillar has a FIXED id (read-only structural slot) and a customizable label:
 
-1. **What we do** — the craft, skill, or service itself (design, technique, methodology)
-2. **How we do it** — the process, tools, infrastructure, and standards behind the work
-3. **Who we work with** — vendors, materials, partners, artisans, suppliers
-4. **Proof it works** — projects, results, case studies, before/after, client stories
-5. **Why it matters** — philosophy, perspective, industry opinions, culture, community
+1. id="what" — **What we do** — the craft, skill, or service itself
+2. id="how" — **How we do it** — the process, tools, infrastructure, and standards behind the work
+3. id="who" — **Who we work with** — vendors, materials, partners, artisans, suppliers
+4. id="proof" — **Proof it works** — projects, results, case studies, before/after, client stories
+5. id="why" — **Why it matters** — philosophy, perspective, industry opinions, culture, community
 
 ## Rules
-- Generate exactly 5 pillars following the framework above
+- Generate exactly 5 pillars in the exact order above
+- The "id" field is FIXED to one of: what, how, who, proof, why. NEVER customize the id.
+- The "label" field is the only ID-equivalent string the subscriber sees — customize this aggressively for the business
 - Use industry-specific labels (NOT "What We Do" — use the business's language, e.g., "Design" for a remodeler, "Menu" for a restaurant, "Method" for a trainer)
-- Each pillar: short ID (snake_case, max 15 chars), clean 2-4 word label
+- Each pillar: 2-4 word label (subscriber's name for that pillar)
 - Each pillar: 1-sentence description the AI reads during content triage
 - Each pillar: 4-6 tags derived from the content themes, pain points, and search phrases
-- Tag IDs: snake_case, max 20 chars. Tag labels: 2-4 words
+- Tag IDs: snake_case, max 20 chars (tag IDs ARE customizable — only pillar IDs are fixed)
+- Tag labels: 2-4 words
 - Each pillar should sustain 20+ unique blog posts — if it can't, it's too narrow
 - Tags should be specific enough to guide AI but reusable across many uploads
-- CRITICAL: Follow the 5-pillar framework exactly. Do NOT create a pillar for a single methodology or process — that belongs as a tag, not a pillar. Pillar 3 MUST be about vendors/materials/partners — not a process.
+- CRITICAL: Pillar 3 MUST be about vendors/materials/partners — not a process. Process belongs as a tag, not a pillar.
 
 Respond with ONLY valid JSON (no markdown fencing):
 [
-  {"id": "...", "label": "...", "description": "...", "tags": [{"id": "...", "label": "..."}]}
+  {"id": "what", "label": "...", "description": "...", "tags": [{"id": "...", "label": "..."}]},
+  {"id": "how", "label": "...", "description": "...", "tags": [{"id": "...", "label": "..."}]},
+  {"id": "who", "label": "...", "description": "...", "tags": [{"id": "...", "label": "..."}]},
+  {"id": "proof", "label": "...", "description": "...", "tags": [{"id": "...", "label": "..."}]},
+  {"id": "why", "label": "...", "description": "...", "tags": [{"id": "...", "label": "..."}]}
 ]`,
     }],
   });

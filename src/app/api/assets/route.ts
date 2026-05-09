@@ -142,12 +142,14 @@ export async function POST(req: NextRequest) {
         }
       : {};
 
-    // briefable_at: stamped at insert iff the asset is immediately viewable.
-    // Non-HEIC images are viewable from the moment R2 has the bytes. HEIC
-    // and videos require waitUntil work (convert / poster) before they're
-    // briefable; their helpers stamp briefable_at when they finish.
+    // briefable_at: stamped at insert unless the bytes are unviewable in
+    // a browser. Only HEIC qualifies — browsers can't decode it. Videos
+    // (including HEVC .mov from iPhones) render via the <video> element's
+    // own first-frame fallback even when our async poster-gen fails (e.g.
+    // ffmpeg-static lacks H.265 codec support). Poster is a thumbnail
+    // enhancement, not a briefing prerequisite.
     const isVideo = media_type.toLowerCase().startsWith("video");
-    const briefableAtInsert = !isHeic && !isVideo ? new Date() : null;
+    const briefableAtInsert = !isHeic ? new Date() : null;
 
     const [asset] = await sql`
       INSERT INTO media_assets (

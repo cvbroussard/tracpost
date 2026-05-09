@@ -391,7 +391,7 @@ Each pillar has a FIXED id (read-only structural slot) and a customizable label:
 - Use industry-specific labels (NOT "What We Do" — use the business's language, e.g., "Design" for a remodeler, "Menu" for a restaurant, "Method" for a trainer)
 - Each pillar: 2-4 word label (subscriber's name for that pillar)
 - Each pillar: 1-sentence description the AI reads during content triage
-- Each pillar: 4-6 tags derived from the content themes, pain points, and search phrases
+- Each pillar: 4-6 tags derived from the content themes, pain points, and search phrases. NEVER more than 6 tags per pillar — this is a hard cap. If you can't think of 4 strong tags, return 3 (the validator allows down to 1, but aim for 4-6).
 - Tag IDs: snake_case, max 20 chars (tag IDs ARE customizable — only pillar IDs are fixed)
 - Tag labels: 2-4 words
 - Each pillar should sustain 20+ unique blog posts — if it can't, it's too narrow

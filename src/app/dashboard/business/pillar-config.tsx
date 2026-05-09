@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MAX_TAGS_PER_PILLAR, COACHING_MIN_TAGS_PER_PILLAR } from "@/lib/pillars/validate";
 
 interface PillarTag {
   id: string;
@@ -68,11 +69,12 @@ export function PillarConfigEditor({
 
   function addTag(pillarId: string) {
     setConfig((prev) =>
-      prev.map((p) =>
-        p.id === pillarId
-          ? { ...p, tags: [...p.tags, { id: `new_${p.tags.length}`, label: "" }] }
-          : p
-      )
+      prev.map((p) => {
+        if (p.id !== pillarId) return p;
+        // Defensive cap (UI button is also disabled at MAX_TAGS_PER_PILLAR)
+        if (p.tags.length >= MAX_TAGS_PER_PILLAR) return p;
+        return { ...p, tags: [...p.tags, { id: `new_${p.tags.length}`, label: "" }] };
+      })
     );
   }
 
@@ -136,7 +138,24 @@ export function PillarConfigEditor({
                   {pillar.label || "Not configured"}
                 </span>
                 {isConfigured && (
-                  <span className="text-xs text-muted">{pillar.tags.length} tags</span>
+                  <span
+                    className={`text-xs ${
+                      pillar.tags.length > MAX_TAGS_PER_PILLAR
+                        ? "text-danger font-medium"
+                        : pillar.tags.length < COACHING_MIN_TAGS_PER_PILLAR
+                        ? "text-warning"
+                        : "text-muted"
+                    }`}
+                    title={
+                      pillar.tags.length > MAX_TAGS_PER_PILLAR
+                        ? `Over the ${MAX_TAGS_PER_PILLAR}-tag cap — trim before saving`
+                        : pillar.tags.length < COACHING_MIN_TAGS_PER_PILLAR
+                        ? `Pillars with fewer than ${COACHING_MIN_TAGS_PER_PILLAR} tags rarely sustain content variety`
+                        : undefined
+                    }
+                  >
+                    {pillar.tags.length} / {MAX_TAGS_PER_PILLAR} tags
+                  </span>
                 )}
               </div>
               <span className="text-xs text-muted">{isOpen ? "▾" : "▸"}</span>
@@ -153,7 +172,9 @@ export function PillarConfigEditor({
                 </p>
 
                 <div className="mb-3">
-                  <label className="mb-1 block text-xs text-muted">Tags</label>
+                  <label className="mb-1 block text-xs text-muted">
+                    Tags ({pillar.tags.length} / {MAX_TAGS_PER_PILLAR})
+                  </label>
                   <div className="flex flex-wrap gap-1.5">
                     {pillar.tags.map((tag, i) => (
                       <div key={tag.id || i} className="flex items-center gap-1 rounded bg-surface-hover px-2 py-1">
@@ -173,11 +194,31 @@ export function PillarConfigEditor({
                     ))}
                     <button
                       onClick={() => addTag(pillar.id)}
-                      className="rounded bg-surface-hover px-2 py-1 text-xs text-muted hover:text-foreground"
+                      disabled={pillar.tags.length >= MAX_TAGS_PER_PILLAR}
+                      className={`rounded bg-surface-hover px-2 py-1 text-xs ${
+                        pillar.tags.length >= MAX_TAGS_PER_PILLAR
+                          ? "cursor-not-allowed text-muted/40"
+                          : "text-muted hover:text-foreground"
+                      }`}
+                      title={
+                        pillar.tags.length >= MAX_TAGS_PER_PILLAR
+                          ? `Reached the ${MAX_TAGS_PER_PILLAR}-tag cap — remove one to add another`
+                          : "Add a tag"
+                      }
                     >
                       + Tag
                     </button>
                   </div>
+                  {pillar.tags.length > MAX_TAGS_PER_PILLAR && (
+                    <p className="mt-2 text-[11px] text-danger">
+                      ⚠ Over the {MAX_TAGS_PER_PILLAR}-tag cap. Remove {pillar.tags.length - MAX_TAGS_PER_PILLAR} to save.
+                    </p>
+                  )}
+                  {pillar.tags.length > 0 && pillar.tags.length < COACHING_MIN_TAGS_PER_PILLAR && (
+                    <p className="mt-2 text-[11px] text-warning">
+                      Pillars with fewer than {COACHING_MIN_TAGS_PER_PILLAR} tags rarely sustain content variety. Consider adding more.
+                    </p>
+                  )}
                 </div>
               </div>
             )}

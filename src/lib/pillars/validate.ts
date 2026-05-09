@@ -17,6 +17,30 @@ import { sql } from "@/lib/db";
 export const FRAMEWORK_IDS = ["what", "how", "who", "proof", "why"] as const;
 export type FrameworkId = typeof FRAMEWORK_IDS[number];
 
+/**
+ * Tag-count bounds per pillar (LOCKED 2026-05-09).
+ *
+ * Asymmetric on purpose:
+ *  - MAX 6 is structural — forces curation, keeps the under-image picker
+ *    layout predictable, matches the AI prompt's "4-6 tags" expressed
+ *    intent. Subscriber-facing layout depends on this bound.
+ *  - MIN 1 is just a token floor to prevent literally-zero-tag pillars
+ *    which would break the picker UI. We deliberately don't enforce a
+ *    higher floor because forcing 3+ would push subscribers to invent
+ *    fluff tags that dilute AI's signal.
+ *
+ * COACHING_MIN (3) drives a soft warning in the editor — "pillars with
+ * fewer than 3 tags rarely sustain content variety" — without blocking
+ * the save.
+ *
+ * Existing data over MAX is grandfathered (not auto-truncated). Any save
+ * through the validator must bring it under; subscriber decides which to
+ * drop in the editor.
+ */
+export const MIN_TAGS_PER_PILLAR = 1;
+export const MAX_TAGS_PER_PILLAR = 6;
+export const COACHING_MIN_TAGS_PER_PILLAR = 3;
+
 export const FRAMEWORK_LABELS: Record<FrameworkId, string> = {
   what: "What We Do",
   how: "How We Do It",
@@ -44,8 +68,9 @@ export interface ValidationResult {
 }
 
 /**
- * Validate that every entry's `id` is a framework slot.
- * Returns ok:true when all 5 framework slots present (extras allowed).
+ * Validate that every entry's `id` is a framework slot AND that tag counts
+ * fall within MIN_TAGS_PER_PILLAR..MAX_TAGS_PER_PILLAR.
+ * Returns ok:true when all 5 framework slots present + tag counts in range.
  */
 export function validatePillarConfig(config: unknown): ValidationResult {
   if (!Array.isArray(config)) {
@@ -53,6 +78,7 @@ export function validatePillarConfig(config: unknown): ValidationResult {
   }
 
   const invalidIds: string[] = [];
+  const tagCountIssues: string[] = [];
   for (const entry of config) {
     if (!entry || typeof entry !== "object") {
       return { ok: false, invalidIds, message: "config entries must be objects" };
@@ -61,6 +87,14 @@ export function validatePillarConfig(config: unknown): ValidationResult {
     if (!isFrameworkId(id)) {
       invalidIds.push(typeof id === "string" ? id : String(id));
     }
+    const tags = (entry as PillarConfigEntry).tags;
+    const tagCount = Array.isArray(tags) ? tags.length : 0;
+    const label = (entry as PillarConfigEntry).label || id || "?";
+    if (tagCount < MIN_TAGS_PER_PILLAR) {
+      tagCountIssues.push(`"${label}" has ${tagCount} tags (min ${MIN_TAGS_PER_PILLAR})`);
+    } else if (tagCount > MAX_TAGS_PER_PILLAR) {
+      tagCountIssues.push(`"${label}" has ${tagCount} tags (max ${MAX_TAGS_PER_PILLAR})`);
+    }
   }
 
   if (invalidIds.length > 0) {
@@ -68,6 +102,14 @@ export function validatePillarConfig(config: unknown): ValidationResult {
       ok: false,
       invalidIds,
       message: `non-framework pillar IDs present: ${invalidIds.join(", ")}. Allowed: ${FRAMEWORK_IDS.join(", ")}`,
+    };
+  }
+
+  if (tagCountIssues.length > 0) {
+    return {
+      ok: false,
+      invalidIds: [],
+      message: `tag count out of range: ${tagCountIssues.join("; ")}`,
     };
   }
 

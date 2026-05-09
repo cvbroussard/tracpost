@@ -1,36 +1,28 @@
-# fly.toml — Smart Rotate service deploy config for Fly.io
+# fly.toml app configuration file generated for tracpost-smart-rotate-rough-overbrook-6160 on 2026-05-08T17:34:05-04:00
 #
-# Deploy: cd services/smart-rotate && fly deploy
-# Set secrets via: fly secrets set KEY=value
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# Required secrets:
-#   SMART_ROTATE_SECRET   — auth token for incoming /reframe requests
-#   R2_ACCESS_KEY_ID      — Cloudflare R2 access key
-#   R2_SECRET_ACCESS_KEY  — Cloudflare R2 secret
-#   R2_ENDPOINT           — e.g. https://<account>.r2.cloudflarestorage.com
-#   R2_BUCKET             — e.g. tracpost-assets
 
-app = "tracpost-smart-rotate"
-primary_region = "iad"  # match Vercel default region for low cross-region latency
+app = 'tracpost-smart-rotate-rough-overbrook-6160'
+primary_region = 'iad'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
 
   [http_service.concurrency]
-    type = "requests"
-    soft_limit = 2
+    type = 'requests'
     hard_limit = 4
+    soft_limit = 2
 
-# CPU-first deploy. Upgrade to GPU dyno when volume justifies (~5-10
-# active enterprise subscribers running steady reframe load).
 [[vm]]
-  cpu_kind = "shared"
+  memory = '2gb'
+  cpu_kind = 'shared'
   cpus = 1
   memory_mb = 2048

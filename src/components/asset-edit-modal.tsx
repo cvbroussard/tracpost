@@ -619,6 +619,19 @@ export function AssetEditModal({
                 style={{ minHeight: 120 }}
                 placeholder="List details: brass bar sink, #BrandName, walnut countertop, https://vendor.com/product..."
               />
+              {/* Char counter + readiness threshold (matches the capture
+                  staging UI from #166). Asset auto-promotes to 'triaged'
+                  when context_note ≥40 chars per /api/assets/[id] PATCH;
+                  the counter mirrors the threshold so subscribers know
+                  when their briefing is autopilot-eligible. */}
+              <div className="mt-1 flex items-center justify-between text-[10px]">
+                <span className={note.trim().length >= 40 ? "text-success" : "text-muted"}>
+                  {note.trim().length >= 40
+                    ? "✓ Ready — eligible for autopilot"
+                    : `${Math.max(0, 40 - note.trim().length)} more chars to reach autopilot threshold`}
+                </span>
+                <span className="text-muted">{note.length} chars</span>
+              </div>
               {hashQuery !== null && hashMatches.length > 0 && (
                 <div className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded border border-border bg-surface shadow-lg">
                   {hashMatches.map((v, i) => (

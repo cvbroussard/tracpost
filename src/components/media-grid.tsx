@@ -215,20 +215,24 @@ export function MediaGrid({
               ) : (
                 <p className="truncate text-xs text-muted">No caption</p>
               )}
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] text-muted">
-                  {new Date(a.created_at).toLocaleDateString()}
-                </span>
-                {(a.content_pillars || (a.content_pillar ? [a.content_pillar] : [])).map((p) => (
-                  <span key={p} className="rounded bg-surface-hover px-1.5 py-0.5 text-[10px]">
-                    {p.replace(/_/g, " ")}
-                  </span>
-                ))}
-                {a.quality_score && (
-                  <span className="text-[10px] text-muted">
-                    {(a.quality_score * 100).toFixed(0)}%
-                  </span>
-                )}
+              <div
+                className="mt-1 flex flex-wrap items-center gap-1.5"
+                title={`Uploaded ${new Date(a.created_at).toLocaleDateString()}`}
+              >
+                {(a.content_pillars || (a.content_pillar ? [a.content_pillar] : [])).map((p) => {
+                  // Resolve the framework ID (what / how / who / proof / why)
+                  // to the subscriber's customizable label. Fall back to the
+                  // raw ID only if the lookup misses (legacy / malformed).
+                  const label = pillarConfig.find((c) => c.id === p)?.label || p.replace(/_/g, " ");
+                  return (
+                    <span key={p} className="rounded bg-surface-hover px-1.5 py-0.5 text-[10px]">
+                      {label}
+                    </span>
+                  );
+                })}
+                {/* quality_score removed from subscriber view — internal
+                    orchestrator weighting signal, no subscriber affordance.
+                    Still rendered on the operator surface (asset-health). */}
                 {(liveBrandMap[a.id] || []).map((bid) => {
                   const brand = liveBrands.find((b) => b.id === bid);
                   return brand ? (
@@ -246,9 +250,8 @@ export function MediaGrid({
                   ) : null;
                 })}
               </div>
-              {a.flag_reason && (
-                <p className="mt-1 text-[10px] text-danger">{a.flag_reason}</p>
-              )}
+              {/* flag_reason removed from subscriber view — operator-facing
+                  field; subscriber sees the visible status badge instead. */}
             </div>
           </button>
         ))}

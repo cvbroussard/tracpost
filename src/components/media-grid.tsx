@@ -128,7 +128,7 @@ export function MediaGrid({
               setLastEdited(a.id);
             }}
             disabled={!a.briefable_at}
-            className={`group relative overflow-hidden rounded-lg border bg-surface text-left transition-colors ${
+            className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface text-left transition-colors ${
               !a.briefable_at
                 ? "cursor-wait border-border opacity-70"
                 : lastEdited === a.id

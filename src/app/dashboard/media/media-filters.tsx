@@ -1,14 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { SCENE_TYPES } from "@/lib/scene-types";
 
 interface Counts {
   total: number;
   uploads: number;
   ai_generated: number;
-  high_quality: number;
-  medium_quality: number;
-  low_quality: number;
   pending_briefing: number;
 }
 
@@ -18,10 +17,10 @@ interface ProjectOption {
 }
 
 export function MediaFilters({
+  search,
   sourceFilter,
   mediaTypeFilter,
   sceneFilter,
-  qualityFilter,
   sortOrder,
   projectFilter,
   briefingFilter,
@@ -29,10 +28,10 @@ export function MediaFilters({
   counts,
   projects = [],
 }: {
+  search: string;
   sourceFilter: string;
   mediaTypeFilter: string;
   sceneFilter: string;
-  qualityFilter: string;
   sortOrder: string;
   projectFilter: string;
   briefingFilter: string;
@@ -40,7 +39,8 @@ export function MediaFilters({
   counts: Counts;
   projects?: ProjectOption[];
 }) {
-  const router = useRouter();
+  const _router = useRouter();
+  const [searchInput, setSearchInput] = useState(search);
 
   // On mount: restore persisted preferences if no explicit URL params
   // Only runs on the media page (check pathname to avoid redirecting wrong pages)
@@ -76,10 +76,10 @@ export function MediaFilters({
     if (updates.project !== undefined) persist("project", updates.project);
     const params = new URLSearchParams();
     const merged = {
+      q: search,
       source: sourceFilter,
       type: mediaTypeFilter,
       scene: sceneFilter,
-      quality: qualityFilter,
       sort: sortOrder,
       project: projectFilter,
       briefing: briefingFilter,
@@ -96,8 +96,46 @@ export function MediaFilters({
     window.location.href = url;
   }
 
+  function submitSearch() {
+    if (searchInput.trim() === search) return;
+    updateParams({ q: searchInput.trim() });
+  }
+
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
+      {/* Search input — primary navigation aid for libraries that scale to
+          thousands of source assets. Matches against context_note (caption).
+          Submit on Enter, clear with Esc. Submission triggers a server
+          re-query so the filter operates on the full library, not the
+          200-asset slice. */}
+      <div className="relative">
+        <input
+          type="search"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submitSearch();
+            if (e.key === "Escape" && searchInput) {
+              setSearchInput("");
+              updateParams({ q: "" });
+            }
+          }}
+          onBlur={submitSearch}
+          placeholder="Search captions…"
+          className="w-48 rounded border border-border bg-surface px-2 py-1 text-[11px] text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
+        />
+        {search && search === searchInput && (
+          <button
+            onClick={() => { setSearchInput(""); updateParams({ q: "" }); }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted hover:text-foreground"
+            title="Clear search"
+            aria-label="Clear search"
+          >
+            ×
+          </button>
+        )}
+      </div>
+
       {/* Archived filter chip per project_tracpost_deletion_policy.md.
           Toggles ?archived=true to reveal soft-deleted assets so subscribers
           can restore them. Off by default. */}
@@ -170,7 +208,10 @@ export function MediaFilters({
         <option value="pdf">PDFs</option>
       </select>
 
-      {/* Scene type filter */}
+      {/* Scene composition filter — uses platform-wide vocabulary
+          (src/lib/scene-types.ts) and queries against the scene_types
+          array column on media_assets, not the legacy ai_analysis.scene_type
+          string. */}
       <select
         key="scene-type"
         value={sceneFilter}
@@ -178,25 +219,13 @@ export function MediaFilters({
         className="bg-surface-hover px-2 py-1 text-[10px] text-muted"
       >
         <option value="all">All scenes</option>
-        <option value="humans">Humans</option>
-        <option value="environment">Environment</option>
-        <option value="product">Product</option>
-        <option value="method">Method</option>
-        <option value="region">Region</option>
+        {SCENE_TYPES.map((s) => (
+          <option key={s.id} value={s.id}>{s.label}</option>
+        ))}
       </select>
 
-      {/* Quality filter */}
-      <select
-        key="quality"
-        value={qualityFilter}
-        onChange={(e) => updateParams({ quality: e.target.value })}
-        className="bg-surface-hover px-2 py-1 text-[10px] text-muted"
-      >
-        <option value="all">All quality</option>
-        <option value="high">High 80%+ ({counts.high_quality})</option>
-        <option value="medium">Medium 50-79% ({counts.medium_quality})</option>
-        <option value="low">Low &lt;50% ({counts.low_quality})</option>
-      </select>
+      {/* Quality filter removed — operator-tier signal, no subscriber
+          affordance. Still visible on /manage/asset-health. */}
 
       {/* Sort */}
       <select
@@ -207,7 +236,6 @@ export function MediaFilters({
       >
         <option value="newest">Newest first</option>
         <option value="oldest">Oldest first</option>
-        <option value="quality">Quality</option>
         <option value="least_used">Least used</option>
       </select>
 

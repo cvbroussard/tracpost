@@ -8,7 +8,7 @@ import { UploadBar } from "@/components/upload-bar";
 export const dynamic = "force-dynamic";
 
 interface Props {
-  searchParams: Promise<{ source?: string; type?: string; scene?: string; quality?: string; sort?: string; project?: string; briefing?: string; archived?: string; projectName?: string }>;
+  searchParams: Promise<{ q?: string; source?: string; type?: string; scene?: string; sort?: string; project?: string; briefing?: string; archived?: string; projectName?: string }>;
 }
 
 export default async function MediaPage({ searchParams }: Props) {
@@ -17,18 +17,18 @@ export default async function MediaPage({ searchParams }: Props) {
   if (!session.activeSiteId) {
     return (
       <div className="p-4 space-y-6">
-        <h1 className="mb-1 text-lg font-semibold">Media Library</h1>
-        <p className="py-12 text-center text-sm text-muted">Add a business first to start uploading media.</p>
+        <h1 className="mb-1 text-lg font-semibold">Source Library</h1>
+        <p className="py-12 text-center text-sm text-muted">Add a business first to start uploading source assets.</p>
       </div>
     );
   }
 
   const siteId = session.activeSiteId;
   const params = await searchParams;
+  const search = (params.q || "").trim();
   const sourceFilter = params.source || "all";
   const mediaTypeFilter = params.type || "all";
   const sceneFilter = params.scene || "all";
-  const qualityFilter = params.quality || "all";
   const sortOrder = params.sort || "newest";
   const projectFilter = params.project || "all";
   const briefingFilter = params.briefing || "all";
@@ -120,6 +120,13 @@ export default async function MediaPage({ searchParams }: Props) {
   // WHERE clause and keeps the SQL path static.
   let filtered = allAssets as Array<Record<string, unknown>>;
 
+  if (search) {
+    const needle = search.toLowerCase();
+    filtered = filtered.filter(a => {
+      const note = ((a.context_note as string) || "").toLowerCase();
+      return note.includes(needle);
+    });
+  }
   if (sourceFilter !== "all") {
     filtered = filtered.filter(a => (a.source || "upload") === sourceFilter);
   }
@@ -127,20 +134,12 @@ export default async function MediaPage({ searchParams }: Props) {
     filtered = filtered.filter(a => a.media_type === mediaTypeFilter);
   }
   if (sceneFilter !== "all") {
+    // Scene_types is the new array column (per migration #104). Match if
+    // the requested scene type appears in the asset's array.
     filtered = filtered.filter(a => {
-      const analysis = (a.ai_analysis || {}) as Record<string, unknown>;
-      return analysis.scene_type === sceneFilter;
+      const types = (a.scene_types || []) as string[];
+      return types.includes(sceneFilter);
     });
-  }
-  if (qualityFilter === "high") {
-    filtered = filtered.filter(a => (a.quality_score as number) >= 0.8);
-  } else if (qualityFilter === "medium") {
-    filtered = filtered.filter(a => {
-      const q = a.quality_score as number;
-      return q >= 0.5 && q < 0.8;
-    });
-  } else if (qualityFilter === "low") {
-    filtered = filtered.filter(a => (a.quality_score as number) < 0.5);
   }
   if (briefingFilter === "pending") {
     filtered = filtered.filter(a => a.triage_status === "pending_briefing");
@@ -148,16 +147,14 @@ export default async function MediaPage({ searchParams }: Props) {
 
   let filteredAssets = filtered.slice(0, 200);
 
-  // Counts for filter badges
+  // Counts for filter badges. Quality buckets retired — operator-tier
+  // signal, no subscriber affordance.
   const counts = await sql`
     SELECT
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE COALESCE(source, 'upload') = 'upload')::int AS uploads,
       COUNT(*) FILTER (WHERE source = 'ai_generated')::int AS ai_generated,
-      COUNT(*) FILTER (WHERE quality_score >= 0.8)::int AS high_quality,
-      COUNT(*) FILTER (WHERE quality_score >= 0.5 AND quality_score < 0.8)::int AS medium_quality,
-      COUNT(*) FILTER (WHERE quality_score < 0.5)::int AS low_quality,
-      COUNT(*) FILTER (WHERE triage_status = 'pending_briefing')::int AS pending_briefing
+      COUNT(*) FILTER (WHERE triage_status = 'pending_briefing' AND archived_at IS NULL)::int AS pending_briefing
     FROM media_assets WHERE site_id = ${siteId}
   `;
 
@@ -224,9 +221,9 @@ export default async function MediaPage({ searchParams }: Props) {
     <div className="p-4 space-y-6">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="mb-1 text-lg font-semibold">Media Library</h1>
+          <h1 className="mb-1 text-lg font-semibold">Source Library</h1>
           <p className="text-sm text-muted">
-            {filteredAssets.length} of {counts[0]?.total || 0} assets
+            {filteredAssets.length} of {counts[0]?.total || 0} source assets
           </p>
         </div>
         <UploadBar
@@ -237,15 +234,15 @@ export default async function MediaPage({ searchParams }: Props) {
       </div>
 
       <MediaFilters
+        search={search}
         sourceFilter={sourceFilter}
         mediaTypeFilter={mediaTypeFilter}
         sceneFilter={sceneFilter}
-        qualityFilter={qualityFilter}
         sortOrder={sortOrder}
         projectFilter={projectFilter}
         briefingFilter={briefingFilter}
         showArchived={showArchived}
-        counts={counts[0] as { total: number; uploads: number; ai_generated: number; high_quality: number; medium_quality: number; low_quality: number; pending_briefing: number }}
+        counts={counts[0] as { total: number; uploads: number; ai_generated: number; pending_briefing: number }}
         projects={allProjects.map((p) => ({ id: p.id as string, name: p.name as string }))}
       />
 

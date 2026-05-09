@@ -223,7 +223,7 @@ export function MediaGrid({
               title={`Uploaded ${new Date(a.created_at).toLocaleDateString()}`}
             >
               {a.context_note ? (
-                <p className="text-xs leading-snug">{a.context_note}</p>
+                <p className="line-clamp-6 text-xs leading-snug">{a.context_note}</p>
               ) : (
                 <p className="text-xs italic text-muted">No caption</p>
               )}

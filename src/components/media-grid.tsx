@@ -273,6 +273,7 @@ export function MediaGrid({
           qualityScore={Number(editing.quality_score) || null}
           sceneType={(editing.ai_analysis as Record<string, unknown>)?.scene_type as string || null}
           archivedAt={editing.archived_at}
+          initialAiGenerated={Boolean((editing.metadata as Record<string, unknown> | null)?.ai_generated)}
           aiSuggestedPillar={editing.content_pillar || null}
           aiVerifications={(() => {
             const meta = (editing.metadata || {}) as Record<string, unknown>;

@@ -46,6 +46,11 @@ interface AssetEditModalProps {
       from library + orchestrator pool but data persists until subscription
       cancellation + retention sweep. */
   archivedAt?: string | null;
+  /** Per #161, subscriber's declaration that this asset is AI-generated /
+      AI-modified. Surfaced as a toggle pill in the metadata badge row.
+      Was previously per-item toggle on the capture-page staging UI; now
+      lives here in the modal where other asset metadata is managed. */
+  initialAiGenerated?: boolean;
   /** AI's suggested content pillar (auto-applied; subscriber confirms via #167) */
   aiSuggestedPillar?: string | null;
   /**
@@ -105,6 +110,7 @@ export function AssetEditModal({
   qualityScore,
   sceneType,
   archivedAt,
+  initialAiGenerated = false,
   aiSuggestedPillar,
   aiVerifications,
   captionSource,
@@ -129,6 +135,12 @@ export function AssetEditModal({
   // when subscriber clicks confirm/reject (#167). Server PATCH happens
   // immediately; on failure we revert.
   const [verifications, setVerifications] = useState(aiVerifications || []);
+  // AI-generated declaration state. Toggle in the metadata badge row
+  // (per the streamlined-upload restructure — AI flag moved out of the
+  // capture page and into the modal). Optimistic UI; PATCH fires on
+  // toggle and stamps ai_flag_source = "subscriber_declared".
+  const [aiGenerated, setAiGenerated] = useState(initialAiGenerated);
+  const [savingAi, setSavingAi] = useState(false);
   const _hasGeneratedText = !!(initialMetadata?.generated_text as Record<string, unknown>)?.generated_at;
   const [pillar, setPillar] = useState(initialPillar);
   const [tags, setTags] = useState<string[]>(initialTags || []);
@@ -146,8 +158,25 @@ export function AssetEditModal({
     setProjectIds(initialProjectIds);
     setPersonaIds(initialPersonaIds);
     setVerifications(aiVerifications || []);
+    setAiGenerated(initialAiGenerated);
     speech.stop();
   }, [assetId]);
+
+  async function toggleAiGenerated() {
+    const next = !aiGenerated;
+    setAiGenerated(next); // optimistic
+    setSavingAi(true);
+    try {
+      await fetch(`/api/assets/${assetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ai_generated: next }),
+      });
+    } catch {
+      setAiGenerated(!next); // revert
+    }
+    setSavingAi(false);
+  }
   const [localBrands, setLocalBrands] = useState(brands);
   const [localProjects, setLocalProjects] = useState(projects);
   const [newBrandName, setNewBrandName] = useState("");
@@ -514,6 +543,25 @@ export function AssetEditModal({
                   {totalTagged} tagged
                 </span>
               )}
+              {/* AI-generated toggle (per #161, relocated from capture
+                  page per the streamlined-upload restructure). Subscriber-
+                  controlled declaration; flips ai_flag_source to
+                  "subscriber_declared" when changed. C2PA reader (Phase 2)
+                  may pre-set this at upload from manifest detection. */}
+              <button
+                onClick={toggleAiGenerated}
+                disabled={savingAi}
+                title={aiGenerated
+                  ? "Marked as AI-generated — disclosure prefix added at publish (per platform compliance)"
+                  : "Mark this asset as AI-generated or AI-modified"}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                  aiGenerated
+                    ? "bg-accent text-white"
+                    : "border border-border text-muted hover:text-foreground"
+                } ${savingAi ? "opacity-50" : ""}`}
+              >
+                {aiGenerated ? "🤖 AI" : "+ Mark as AI"}
+              </button>
             </div>
 
             {/* AI verification panel (#167). Surfaces auto-applied AI

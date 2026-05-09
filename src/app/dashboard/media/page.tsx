@@ -3,11 +3,12 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { MediaGrid } from "@/components/media-grid";
 import { MediaFilters } from "./media-filters";
+import { UploadBar } from "@/components/upload-bar";
 
 export const dynamic = "force-dynamic";
 
 interface Props {
-  searchParams: Promise<{ source?: string; type?: string; scene?: string; quality?: string; sort?: string; project?: string; briefing?: string; archived?: string }>;
+  searchParams: Promise<{ source?: string; type?: string; scene?: string; quality?: string; sort?: string; project?: string; briefing?: string; archived?: string; projectName?: string }>;
 }
 
 export default async function MediaPage({ searchParams }: Props) {
@@ -217,13 +218,18 @@ export default async function MediaPage({ searchParams }: Props) {
 
   return (
     <div className="p-4 space-y-6">
-      <div className="mb-6 flex items-baseline justify-between">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="mb-1 text-lg font-semibold">Media Library</h1>
           <p className="text-sm text-muted">
             {filteredAssets.length} of {counts[0]?.total || 0} assets
           </p>
         </div>
+        <UploadBar
+          siteId={siteId}
+          projectId={projectId}
+          projectName={params.projectName || null}
+        />
       </div>
 
       <MediaFilters

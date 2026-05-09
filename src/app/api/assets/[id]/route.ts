@@ -20,9 +20,9 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const { context_note, pillar, content_tags, vendor_ids, brand_ids, project_ids, persona_ids, location_ids, ai_verifications, restore } = body;
+    const { context_note, pillar, content_tags, vendor_ids, brand_ids, project_ids, persona_ids, location_ids, ai_verifications, restore, ai_generated } = body;
 
-    if (context_note === undefined && pillar === undefined && content_tags === undefined && vendor_ids === undefined && brand_ids === undefined && project_ids === undefined && persona_ids === undefined && location_ids === undefined && ai_verifications === undefined && restore === undefined) {
+    if (context_note === undefined && pillar === undefined && content_tags === undefined && vendor_ids === undefined && brand_ids === undefined && project_ids === undefined && persona_ids === undefined && location_ids === undefined && ai_verifications === undefined && restore === undefined && ai_generated === undefined) {
       return NextResponse.json(
         { error: "Nothing to update" },
         { status: 400 }
@@ -50,6 +50,22 @@ export async function PATCH(
         ? (asset.metadata as Record<string, unknown>)
         : {};
     const newMeta = pillar !== undefined ? { ...currentMeta, pillar } : currentMeta;
+
+    // AI-generated declaration update (subscriber-controlled). Per #161,
+    // subscriber declaration is the canonical signal except where C2PA
+    // manifest detection (set at upload) overrides. When subscriber edits
+    // here, treat as a deliberate declaration and stamp ai_flag_source.
+    if (typeof ai_generated === "boolean") {
+      await sql`
+        UPDATE media_assets
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({
+          ai_generated: ai_generated,
+          ai_flag_source: "subscriber_declared",
+          ai_flag_set_at: new Date().toISOString(),
+        })}::jsonb
+        WHERE id = ${id}
+      `;
+    }
 
     // Restore from archive (per project_tracpost_deletion_policy.md). Clears
     // archived_at; asset reappears in library + orchestrator pool. Logged

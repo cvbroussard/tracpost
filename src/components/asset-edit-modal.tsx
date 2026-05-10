@@ -5,7 +5,20 @@ import { toast } from "@/components/feedback";
 import type { PillarGroup } from "./tag-picker";
 import { FaceOverlay } from "./face-overlay";
 import { useAudioBriefing } from "@/hooks/use-audio-briefing";
+import { RecordingBar } from "@/components/recording-bar";
 import { SCENE_TYPES } from "@/lib/scene-types";
+
+interface RecordingRow {
+  id: string;
+  source_asset_id: string | null;
+  storage_url: string | null;
+  mime_type: string | null;
+  duration_ms: number | null;
+  transcript: string | null;
+  transcribed_at: string | null;
+  source: string;
+  created_at: string;
+}
 
 interface Brand {
   id: string;
@@ -182,7 +195,11 @@ export function AssetEditModal({
     setPersonaIds(initialPersonaIds);
     setVerifications(aiVerifications || []);
     setAiGenerated(initialAiGenerated);
+    setTypedMode(false);
+    setTypedDraft("");
     audio.cancel();
+    voiceOver.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assetId]);
 
   async function toggleAiGenerated() {
@@ -225,40 +242,92 @@ export function AssetEditModal({
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Audio briefing — first-class capture (LOCKED 2026-05-09).
-  // Replaces the prior Web Speech API path. Captures the audio bytes
-  // to R2 (recordings table) AND transcribes via Whisper. The transcript
-  // is appended to the existing note (server-side append handled in the
-  // /api/recordings POST when source_asset_id is present).
+  // Audio briefing — recording is canonical asset narrative
+  // (LOCKED 2026-05-10). Stage-on-stop + commit-on-save flow: the
+  // subscriber's recording stays in browser memory until commit, then
+  // ships to R2 + creates a recording row. The committed recording's
+  // transcript becomes the asset's narrative. No append to context_note.
   const audio = useAudioBriefing({
     siteId,
     sourceAssetId: assetId,
     source: "briefing",
-    appendTranscriptToContext: true,
-    onTranscript: useCallback((text: string) => {
-      // Server already appended to media_assets.context_note. Mirror that
-      // into local state so the textarea reflects the change without a
-      // full reload.
-      if (!text) return;
-      setNote((prev) => {
-        if (!prev || !prev.trim()) return text;
-        return prev.trimEnd() + "\n\n" + text;
-      });
-    }, []),
+    onCommitted: useCallback(
+      (_recordingId: string, _transcript: string) => {
+        // Bust the local recordings cache so the Transcription Section
+        // picks up the new latest. Latest wins.
+        void _recordingId;
+        void _transcript;
+        void refetchRecordings();
+      },
+      // refetchRecordings declared below; safe because the callback only
+      // fires after assets are mounted.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [],
+    ),
     onError: useCallback((err: Error) => {
       console.warn("Audio briefing error:", err.message);
     }, []),
   });
 
-  // Keyboard navigation for the briefing pass.
-  // Suppressed when an editable element is focused so the subscriber can
-  // still type in the textarea / inputs without triggering hotkeys.
+  // Voice-over capture — only used for video assets. Independent recording
+  // group with its own state machine. Commit follows the same pattern.
+  const voiceOver = useAudioBriefing({
+    siteId,
+    sourceAssetId: assetId,
+    source: "voice_over",
+    onCommitted: useCallback(
+      () => {
+        void refetchRecordings();
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [],
+    ),
+    onError: useCallback((err: Error) => {
+      console.warn("Voice-over error:", err.message);
+    }, []),
+  });
+
+  // Recordings list for the Transcription Section (latest + history).
+  // Refetched after every commit so the section stays current.
+  const [recordings, setRecordings] = useState<RecordingRow[]>([]);
+  const [recordingsLoaded, setRecordingsLoaded] = useState(false);
+  const refetchRecordings = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/recordings?source_asset_id=${assetId}`);
+      if (res.ok) {
+        const { recordings: rows } = await res.json();
+        setRecordings(rows || []);
+      }
+    } catch {
+      /* ignore — section just stays stale */
+    } finally {
+      setRecordingsLoaded(true);
+    }
+  }, [assetId]);
+  useEffect(() => {
+    setRecordings([]);
+    setRecordingsLoaded(false);
+    refetchRecordings();
+  }, [assetId, refetchRecordings]);
+
+  // Type-instead toggle — accessibility / keyboard-preferring path.
+  // When true, an inline textarea appears in the Transcription Section
+  // for typed input. On save, if the typed text differs from the latest
+  // narrative, a typed-input recording is created.
+  const [typedMode, setTypedMode] = useState(false);
+  const [typedDraft, setTypedDraft] = useState("");
+
+  // Keyboard navigation — minimal pass.
+  // Recording-bar keyboard re-wire (Space=briefing, V=voice-over, etc.) is
+  // intentionally deferred per task #196 until the recording bar settles
+  // through subscriber testing. This block keeps the prior briefing-pass
+  // shortcuts working against the new state machine names.
   // Hotkeys:
-  //   Space    → Start (idle/error) | Stop (recording/paused)
-  //   P        → Pause / Resume toggle
-  //   →        → Save + Next asset
-  //   ←        → Save + Prev asset (if hasPrev)
-  //   Esc      → Cancel recording (if recording/paused) else close modal
+  //   Space → Start (from idle/committed/error) | Stop (from recording/paused)
+  //   P     → Pause / Resume toggle
+  //   →     → Save + Next asset (commits any staged recordings first)
+  //   ←     → Save + Prev asset (commits any staged recordings first)
+  //   Esc   → Cancel recording (if recording/paused) else close modal
   useEffect(() => {
     function isEditableFocused(): boolean {
       const el = document.activeElement;
@@ -270,7 +339,6 @@ export function AssetEditModal({
     }
 
     function onKey(e: KeyboardEvent) {
-      // Allow Esc through even from editable elements (close intent is global)
       if (e.key === "Escape") {
         if (audio.state === "recording" || audio.state === "paused") {
           e.preventDefault();
@@ -282,17 +350,16 @@ export function AssetEditModal({
         return;
       }
 
-      // All other shortcuts only fire when no editable element is focused
       if (isEditableFocused()) return;
-
-      // Don't hijack if a modifier key is held (subscribers using
-      // browser shortcuts shouldn't be surprised).
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       if (e.key === " " || e.code === "Space") {
         e.preventDefault();
-        if (audio.state === "idle" || audio.state === "error") audio.start();
-        else if (audio.state === "recording" || audio.state === "paused") audio.stop();
+        if (audio.state === "idle" || audio.state === "committed" || audio.state === "error") {
+          audio.start();
+        } else if (audio.state === "recording" || audio.state === "paused") {
+          audio.stop();
+        }
       } else if (e.key === "p" || e.key === "P") {
         if (audio.state === "recording" || audio.state === "paused") {
           e.preventDefault();
@@ -492,13 +559,45 @@ export function AssetEditModal({
   }
 
   async function doSave(): Promise<boolean> {
+    // First: commit any staged recordings. Recording is the canonical
+    // narrative now (LOCKED 2026-05-10), so its commit needs to land
+    // before the asset PATCH so downstream readers see the new transcript.
+    if (audio.state === "staged") {
+      await audio.commit();
+    }
+    if (voiceOver.state === "staged") {
+      await voiceOver.commit();
+    }
+
+    // Second: typed-input path. If the subscriber typed in the
+    // "Type instead" textarea and the text differs from the current
+    // narrative, persist as a typed-input recording.
+    if (typedMode && typedDraft.trim()) {
+      const latestTranscript = recordings[0]?.transcript || "";
+      if (typedDraft.trim() !== latestTranscript.trim()) {
+        try {
+          await fetch("/api/recordings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              site_id: siteId,
+              source_asset_id: assetId,
+              transcript: typedDraft.trim(),
+              source: "typed_briefing",
+            }),
+          });
+          await refetchRecordings();
+        } catch {
+          /* surface via toast in caller */
+        }
+      }
+    }
+
+    // Third: the asset PATCH for tags / scene types / brands / etc.
     const body: Record<string, unknown> = {};
-    if (note !== initialNote) body.context_note = note;
-    // pillar / pillars no longer sent on save (LOCKED 2026-05-09).
-    // Pillar membership derives from content_tags at read time. Tags
-    // are the canonical signal; sending pillars would be redundant.
+    // pillar / pillars no longer sent on save. Pillar membership derives
+    // from content_tags at read time.
     void pillar; void pillarsArr; void initialPillarsArr;
-    // Scene Composition multi-select diff
     if (JSON.stringify([...sceneTypesArr].sort()) !== JSON.stringify([...initialSceneTypes].sort())) {
       body.scene_types = sceneTypesArr;
     }
@@ -507,7 +606,10 @@ export function AssetEditModal({
     if (JSON.stringify(projectIds.sort()) !== JSON.stringify(initialProjectIds.sort())) body.project_ids = projectIds;
     if (JSON.stringify(personaIds.sort()) !== JSON.stringify(initialPersonaIds.sort())) body.persona_ids = personaIds;
 
-    if (Object.keys(body).length === 0) return true;
+    if (Object.keys(body).length === 0) {
+      onSaved(note, pillar, tags, brandIds, projectIds, personaIds);
+      return true;
+    }
 
     const res = await fetch(`/api/assets/${assetId}`, {
       method: "PATCH",
@@ -621,244 +723,50 @@ export function AssetEditModal({
           </div>
         </div>
 
-        {/* Content — restructured 2026-05-09 per density/above-the-fold polish.
-            New shape: Context Note full-width at top → 2-column row with
-            smaller image LEFT + Story Angle/Scene Composition stacked RIGHT.
-            Tool selectors (brand/project/persona) flow below the fold. */}
+        {/* Content — restructured 2026-05-10 per the recording-as-canonical
+            pivot. New stack:
+              1. RecordingBar (image=1 group; video=2 groups: briefing + V/O)
+              2. Scene Section (image LEFT, Scene Composition RIGHT)
+              3. Story Angle Section (full-width)
+              4. Transcription Section (latest transcript + history + Type-instead)
+            Tool selectors (brand/project/persona) follow below. */}
         <div className="px-6 pt-4">
 
-            {/* Context Note — full width, at top per the layout pivot.
-                Char counter moved beside the label; readiness pill pushed
-                up to the modal title bar (single source of truth there). */}
-            <div className="mb-4">
-              <div className="mb-1 flex items-center justify-between">
-                <label className="flex items-baseline gap-2 text-xs text-muted">
-                  <span>Context Note</span>
-                  <span className="text-[10px] text-muted/70">{note.length} chars</span>
-                  {note.trim().length > 0 && note.trim().length < 40 && (
-                    <span className="text-[10px] text-muted/70">
-                      ({Math.max(0, 40 - note.trim().length)} to autopilot)
-                    </span>
-                  )}
-                  {audio.state === "recording" && (
-                    <span className="text-[10px] text-danger animate-pulse">
-                      ● {Math.floor(audio.elapsedMs / 1000)}s
-                    </span>
-                  )}
-                  {audio.state === "uploading" && (
-                    <span className="text-[10px] text-muted">Uploading…</span>
-                  )}
-                  {audio.state === "transcribing" && (
-                    <span className="text-[10px] text-muted">Transcribing…</span>
-                  )}
-                  {audio.state === "error" && (
-                    <span className="text-[10px] text-danger">⚠ Audio error</span>
-                  )}
-                </label>
-                {/* Three-button primary action row for keyboard-driven
-                    briefing pass. Hotkeys: Space (Start/Stop), P (Pause/
-                    Resume), Right Arrow (Next), Left Arrow (Prev), Esc
-                    (Cancel recording or Close modal). Suppressed when an
-                    input/textarea is focused so the subscriber can still
-                    type. Buttons are clickable for mouse users. */}
-                <div className="flex items-center gap-1">
-                  {/* START / STOP — toggles based on state */}
-                  {audio.supported && (
-                    audio.state === "idle" || audio.state === "error" ? (
-                      <button
-                        onClick={() => audio.start()}
-                        type="button"
-                        className="rounded border border-border bg-surface-hover px-2 py-1 text-[10px] font-medium text-foreground hover:border-accent/40"
-                        title="Start dictation (Space)"
-                      >
-                        🎤 Start
-                      </button>
-                    ) : (audio.state === "recording" || audio.state === "paused") ? (
-                      <button
-                        onClick={() => audio.stop()}
-                        type="button"
-                        className="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-[10px] font-medium text-danger hover:bg-danger/20"
-                        title="Stop and transcribe (Space)"
-                      >
-                        ■ Stop
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => audio.cancel()}
-                        type="button"
-                        className="rounded border border-border px-2 py-1 text-[10px] text-muted hover:text-foreground"
-                        title="Cancel (Esc)"
-                      >
-                        ✕ Cancel
-                      </button>
-                    )
-                  )}
-                  {/* PAUSE / RESUME — only enabled mid-recording */}
-                  <button
-                    onClick={() => audio.pauseResume()}
-                    type="button"
-                    disabled={audio.state !== "recording" && audio.state !== "paused"}
-                    className={`rounded border px-2 py-1 text-[10px] font-medium ${
-                      audio.state === "paused"
-                        ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"
-                        : audio.state === "recording"
-                        ? "border-border text-foreground hover:border-accent/40"
-                        : "cursor-not-allowed border-border text-muted/40"
-                    }`}
-                    title={
-                      audio.state === "recording"
-                        ? "Pause (P)"
-                        : audio.state === "paused"
-                        ? "Resume (P)"
-                        : "Pause (only while recording)"
-                    }
-                  >
-                    {audio.state === "paused" ? "▶ Resume" : "⏸ Pause"}
-                  </button>
-                  {/* NEXT — saves and advances */}
-                  {hasNext && onNext && (
-                    <button
-                      onClick={() => handleSaveAndNext()}
-                      type="button"
-                      disabled={saving}
-                      className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
-                      title="Save and go to next asset (→)"
-                    >
-                      Next →
-                    </button>
-                  )}
-                  {_hasGeneratedText && (
-                    <span className="ml-2 text-[10px] text-success" title="Auto-generated by TracPost pipeline">
-                      ✓ Auto-captioned
-                    </span>
-                  )}
+            {/* RECORDING BAR — top of modal. Image assets get one group;
+                video assets get two side-by-side (briefing + voice-over). */}
+            <div className="sticky top-[57px] z-10 -mx-6 mb-3 border-b border-border bg-surface px-6 py-2">
+              {mediaType?.startsWith("video") || mediaType === "video" ? (
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  <RecordingBar label="Briefing" audio={audio} icon="🎤" />
+                  <RecordingBar label="Voice-over" audio={voiceOver} icon="🎙" />
                 </div>
-              </div>
-              <div className="relative">
-                <textarea
-                  ref={textareaRef}
-                  value={note}
-                  onChange={handleNoteChange}
-                  onKeyDown={handleNoteKeyDown}
-                  className="w-full text-sm"
-                  style={{ minHeight: 90 }}
-                  placeholder="List details: brass bar sink, #BrandName, walnut countertop, https://vendor.com/product..."
-                />
-                {hashQuery !== null && hashMatches.length > 0 && (
-                  <div className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded border border-border bg-surface shadow-lg">
-                    {hashMatches.map((v, i) => (
-                      <button
-                        key={v.id}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          insertBrandTag(v);
-                        }}
-                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
-                          i === hashIndex ? "bg-accent/10 text-accent" : "text-foreground hover:bg-surface-hover"
-                        }`}
-                      >
-                        <span>
-                          <span className="text-muted">#</span>
-                          {v.slug}
-                          <span className="ml-2 text-xs text-muted">{v.name}</span>
-                        </span>
-                        {v.url && (
-                          <span className="text-[10px] text-muted">↗</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+              ) : (
+                <RecordingBar label="Briefing" audio={audio} icon="🎤" />
+              )}
+              {/* Next-button row — preserved from prior briefing-pass UX so
+                  keyboard-driven advance still works visually. */}
+              <div className="mt-2 flex items-center justify-end gap-2">
+                {note.trim().length >= 40 && (
+                  <span className="rounded bg-success/20 px-1.5 py-0.5 text-[10px] font-medium text-success">
+                    ✓ Ready for autopilot
+                  </span>
+                )}
+                {hasNext && onNext && (
+                  <button
+                    onClick={() => handleSaveAndNext()}
+                    type="button"
+                    disabled={saving}
+                    className="rounded border border-accent/40 bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
+                    title="Save and go to next asset (→)"
+                  >
+                    Next →
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* Story Angle — full-width card directly below Context Note
-                (rebuilt 2026-05-09). Replaces the prior pillar checkbox column,
-                the under-image short-pillar TagPicker, and the bottom Tags
-                section. Pillar selection is now DERIVED from tag selection —
-                no redundant pillar-level checkbox. Each pillar gets a single
-                row with name + description on one line and its tag pills on
-                the next. */}
-            {pillarConfig.length > 0 && (
-              <div className="mb-3 rounded border border-accent/30 bg-accent/5 px-3 py-2.5">
-                <div className="mb-3 flex items-baseline justify-between gap-3">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[11px] font-medium text-accent">Story Angle</span>
-                    <span className="text-[10px] text-muted">
-                      — What this asset is meant to say. Pick the tags that fit; pillar membership follows automatically.
-                    </span>
-                  </div>
-                  <a
-                    href="/help/asset-tagging"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 text-[10px] text-muted underline hover:text-foreground"
-                  >
-                    Learn more
-                  </a>
-                </div>
-                <div className="space-y-3">
-                  {pillarConfig.map((p) => {
-                    return (
-                      <div key={p.id} className="rounded px-2 py-1.5">
-                        {/* Per-pillar background tint removed 2026-05-09 —
-                            visual confusion against the card backdrop;
-                            tag pill state alone (filled vs outlined) carries
-                            the selected-or-not signal. */}
-                        {/* Line 1: pillar name + description on one row */}
-                        <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                          <span className="text-[11px] font-semibold text-foreground">
-                            {p.label}
-                          </span>
-                          {p.description && (
-                            <span className="text-[10px] text-muted">— {p.description}</span>
-                          )}
-                        </div>
-                        {/* Line 2: tag pills */}
-                        <div className="flex flex-wrap gap-1.5">
-                          {p.tags.map((t) => {
-                            const checked = tags.includes(t.id);
-                            return (
-                              <button
-                                key={t.id}
-                                onClick={() => {
-                                  if (checked) {
-                                    setTags((prev) => prev.filter((id) => id !== t.id));
-                                  } else {
-                                    setTags((prev) => [...prev, t.id]);
-                                  }
-                                }}
-                                className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
-                                  checked
-                                    ? "bg-accent text-white"
-                                    : "bg-surface-hover text-muted hover:text-foreground"
-                                }`}
-                              >
-                                {t.label}
-                              </button>
-                            );
-                          })}
-                          {p.tags.length === 0 && (
-                            <span className="text-[10px] italic text-muted">
-                              No tags configured — edit in Business settings
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* 2-column row below Story Angle: image LEFT, Scene Composition
-                RIGHT. On narrow viewports falls back to single column. */}
+            {/* SCENE SECTION — image LEFT, Scene Composition RIGHT, 2-col */}
             <div className="mb-3 grid grid-cols-1 items-stretch gap-4 md:grid-cols-2">
-              {/* LEFT: image preview. Container stretches to match the
-                  Scene Composition card height (CSS Grid default). Image
-                  scales down via max-h-full + object-contain rather than
-                  pushing the column taller — eliminates the dead space
-                  below SC and pulls everything else above the fold. */}
               <div className="flex min-h-0 items-center justify-center overflow-hidden bg-background">
                 {mediaType?.startsWith("video") || mediaType === "video" ? (
                   <video
@@ -890,22 +798,15 @@ export function AssetEditModal({
                   />
                 )}
               </div>
-
-              {/* RIGHT: Scene Composition card (factual frame description).
-                  Multi-select checkboxes — same vocabulary as before. */}
               <div>
-            {SCENE_TYPES.length > 0 && (
-              <div className="rounded border border-accent/30 bg-accent/5 px-3 py-2.5">
-                <div className="mb-2 flex items-baseline justify-between gap-3">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[11px] font-medium text-accent">Scene Composition</span>
-                    <span className="text-[10px] text-muted">
-                      — What&apos;s actually shown.
-                    </span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
+                {SCENE_TYPES.length > 0 && (
+                  <div className="rounded border border-accent/30 bg-accent/5 px-3 py-2.5">
+                    <div className="mb-2 flex items-baseline justify-between gap-3">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-[11px] font-medium text-accent">Scene Composition</span>
+                        <span className="text-[10px] text-muted">— What&apos;s actually shown.</span>
+                      </div>
+                    </div>
                     <div className="space-y-1">
                       {SCENE_TYPES.map((s) => {
                         const checked = sceneTypesArr.includes(s.id);
@@ -935,10 +836,151 @@ export function AssetEditModal({
                       })}
                     </div>
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* STORY ANGLE SECTION — full-width, second priority */}
+            {pillarConfig.length > 0 && (
+              <div className="mb-3 rounded border border-accent/30 bg-accent/5 px-3 py-2.5">
+                <div className="mb-3 flex items-baseline justify-between gap-3">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[11px] font-medium text-accent">Story Angle</span>
+                    <span className="text-[10px] text-muted">
+                      — What this asset is meant to say. Pick the tags that fit; pillar membership follows automatically.
+                    </span>
+                  </div>
+                  <a
+                    href="/help/asset-tagging"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-[10px] text-muted underline hover:text-foreground"
+                  >
+                    Learn more
+                  </a>
+                </div>
+                <div className="space-y-3">
+                  {pillarConfig.map((p) => (
+                    <div key={p.id} className="rounded px-2 py-1.5">
+                      <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <span className="text-[11px] font-semibold text-foreground">{p.label}</span>
+                        {p.description && (
+                          <span className="text-[10px] text-muted">— {p.description}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {p.tags.map((t) => {
+                          const checked = tags.includes(t.id);
+                          return (
+                            <button
+                              key={t.id}
+                              onClick={() => {
+                                if (checked) {
+                                  setTags((prev) => prev.filter((id) => id !== t.id));
+                                } else {
+                                  setTags((prev) => [...prev, t.id]);
+                                }
+                              }}
+                              className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                                checked
+                                  ? "bg-accent text-white"
+                                  : "bg-surface-hover text-muted hover:text-foreground"
+                              }`}
+                            >
+                              {t.label}
+                            </button>
+                          );
+                        })}
+                        {p.tags.length === 0 && (
+                          <span className="text-[10px] italic text-muted">
+                            No tags configured — edit in Business settings
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
+
+            {/* TRANSCRIPTION SECTION — third priority. Shows the asset's
+                canonical narrative (latest recording transcript) with a
+                history accordion and a "Type instead" escape hatch. During
+                the migration window, falls back to the legacy context_note
+                if no recordings exist for the asset. */}
+            <div className="mb-3 rounded border border-border bg-surface px-3 py-2.5">
+              <div className="mb-2 flex items-baseline justify-between gap-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[11px] font-medium text-foreground">Transcription</span>
+                  <span className="text-[10px] text-muted">— Asset narrative (from latest recording).</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!typedMode) {
+                      setTypedDraft(recordings[0]?.transcript || initialNote || "");
+                    }
+                    setTypedMode((m) => !m);
+                  }}
+                  className="text-[10px] text-muted underline hover:text-foreground"
+                >
+                  {typedMode ? "Cancel typing" : "Type instead"}
+                </button>
               </div>
+
+              {typedMode ? (
+                <textarea
+                  ref={textareaRef}
+                  value={typedDraft}
+                  onChange={(e) => {
+                    setTypedDraft(e.target.value);
+                    handleNoteChange(e);
+                  }}
+                  onKeyDown={handleNoteKeyDown}
+                  className="w-full text-sm"
+                  style={{ minHeight: 80 }}
+                  placeholder="Type the narrative for this asset…"
+                />
+              ) : recordings.length > 0 && recordings[0].transcript ? (
+                <>
+                  <div className="rounded bg-background/40 p-2 text-[12px] text-foreground/90">
+                    {recordings[0].transcript}
+                  </div>
+                  {recordings.length > 1 && (
+                    <details className="mt-1.5">
+                      <summary className="cursor-pointer text-[10px] text-muted hover:text-foreground">
+                        + {recordings.length - 1} earlier recording{recordings.length > 2 ? "s" : ""}
+                      </summary>
+                      <div className="mt-1 space-y-1.5">
+                        {recordings.slice(1).map((r) => (
+                          <div
+                            key={r.id}
+                            className="rounded border border-border bg-background/30 p-1.5 text-[11px] text-muted"
+                          >
+                            <div className="mb-0.5 text-[9px] uppercase tracking-wide text-muted/70">
+                              {new Date(r.created_at).toLocaleString()} · {r.source}
+                            </div>
+                            {r.transcript}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </>
+              ) : initialNote ? (
+                <div className="rounded bg-background/40 p-2 text-[12px] text-foreground/90 italic">
+                  {initialNote}
+                  <div className="mt-1 text-[9px] uppercase tracking-wide text-muted/70">
+                    Legacy context note — will migrate to a recording on next save.
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[11px] italic text-muted">
+                  {recordingsLoaded
+                    ? "No narrative yet — record one above or type it in."
+                    : "Loading…"}
+                </div>
+              )}
             </div>
         </div>
 

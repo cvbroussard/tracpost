@@ -46,29 +46,11 @@ export interface TranscribeResult {
  *
  * Requires OPENAI_API_KEY in env. Throws if missing or API fails.
  */
-async function transcribeWithOpenAIWhisper(audioUrl: string): Promise<TranscribeResult> {
+async function whisperFromBlob(audioBlob: Blob, filename: string): Promise<TranscribeResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not set — cannot transcribe");
   }
-
-  // Whisper requires multipart form upload of the audio bytes (no URL
-  // input mode). Fetch the audio from R2, then forward to Whisper.
-  const audioRes = await fetch(audioUrl, { signal: AbortSignal.timeout(30000) });
-  if (!audioRes.ok) {
-    throw new Error(`Failed to fetch audio from R2: ${audioRes.status}`);
-  }
-  const audioBuffer = await audioRes.arrayBuffer();
-  const audioBlob = new Blob([audioBuffer], {
-    type: audioRes.headers.get("content-type") || "audio/webm",
-  });
-
-  // Filename is required by the Whisper API to detect format from extension.
-  // Use the URL's tail or fall back to a generic name with .webm.
-  const tail = audioUrl.split("/").pop() || "audio.webm";
-  const filename = /\.(webm|mp3|mp4|m4a|wav|ogg|opus|flac|mpeg|mpga)$/i.test(tail)
-    ? tail
-    : "audio.webm";
 
   const form = new FormData();
   form.append("file", audioBlob, filename);
@@ -95,9 +77,6 @@ async function transcribeWithOpenAIWhisper(audioUrl: string): Promise<Transcribe
       start: number;
       end: number;
       text: string;
-      // Whisper returns more fields per segment (avg_logprob, no_speech_prob,
-      // tokens, etc.) that we don't need for display. Strip to the three
-      // we use; can revisit if a future use case wants the confidence signals.
     }>;
   };
 
@@ -116,15 +95,48 @@ async function transcribeWithOpenAIWhisper(audioUrl: string): Promise<Transcribe
   };
 }
 
+function pickFilenameFromMime(mime: string | null | undefined, fallback = "audio.webm"): string {
+  const m = (mime || "").toLowerCase();
+  if (m.includes("webm")) return "audio.webm";
+  if (m.includes("ogg")) return "audio.ogg";
+  if (m.includes("mp4") || m.includes("m4a")) return "audio.m4a";
+  if (m.includes("mpeg") || m.includes("mp3")) return "audio.mp3";
+  if (m.includes("wav")) return "audio.wav";
+  if (m.includes("flac")) return "audio.flac";
+  return fallback;
+}
+
 /**
- * Public entry point — transcribe audio from a URL.
+ * Transcribe a Blob directly (no R2 fetch). Used by the
+ * /api/recordings/transcribe-preview endpoint so subscribers can validate
+ * a staged recording before committing — bytes never touch storage.
+ */
+export async function transcribeBlob(audioBlob: Blob, mimeHint?: string): Promise<TranscribeResult> {
+  const filename = pickFilenameFromMime(mimeHint || audioBlob.type);
+  return whisperFromBlob(audioBlob, filename);
+}
+
+/**
+ * Transcribe audio from a URL — fetches from R2, then runs Whisper.
  *
- * Caller passes the audio's public R2 URL. Returns the transcript +
- * provenance. Throws on transcription failure; caller decides whether
- * to retry, mark the recording with an error state, or fall back.
+ * Used by the legacy spoken-recording path on /api/recordings POST when
+ * no precomputed transcript is provided.
  */
 export async function transcribe(audioUrl: string): Promise<TranscribeResult> {
-  // Single provider today. Add provider selection logic here if/when
-  // the bake-off (#152) lands a clear winner alternative.
-  return transcribeWithOpenAIWhisper(audioUrl);
+  const audioRes = await fetch(audioUrl, { signal: AbortSignal.timeout(30000) });
+  if (!audioRes.ok) {
+    throw new Error(`Failed to fetch audio from R2: ${audioRes.status}`);
+  }
+  const audioBuffer = await audioRes.arrayBuffer();
+  const contentType = audioRes.headers.get("content-type") || "audio/webm";
+  const audioBlob = new Blob([audioBuffer], { type: contentType });
+
+  // Prefer the URL's actual extension if it looks like one Whisper handles,
+  // otherwise infer from MIME.
+  const tail = audioUrl.split("/").pop() || "";
+  const filename = /\.(webm|mp3|mp4|m4a|wav|ogg|opus|flac|mpeg|mpga)$/i.test(tail)
+    ? tail
+    : pickFilenameFromMime(contentType);
+
+  return whisperFromBlob(audioBlob, filename);
 }

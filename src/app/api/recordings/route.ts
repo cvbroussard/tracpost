@@ -1,35 +1,43 @@
 /**
- * POST /api/recordings — register a new recording row, kick off
- * Whisper transcription async via waitUntil.
+ * POST /api/recordings — register a new recording row.
  *
- * Body: {
- *   site_id,
- *   storage_url,
- *   mime_type,
- *   source_asset_id?,    // FK media_assets — set for briefing-for-an-asset
- *   speaker_persona_id?, // FK personas — set when speaker is attributed
- *   duration_ms?,
- *   source?,             // briefing | voice_over | testimonial | bed | captured_ambient
- *   metadata?,           // jsonb: device, captured_at, sample_rate, etc.
- *   transcribe?,         // bool — default true; set false to skip async transcription
- *   append_transcript_to_context?, // bool — if true and source_asset_id present,
- *                                   //   appends transcript to media_assets.context_note
- *                                   //   (used by the briefing flow)
- * }
+ * Three input modes (mutually exclusive on the audio side):
  *
- * Returns the recording row immediately (before transcription completes).
- * Caller polls via GET /api/recordings/:id to check transcript status,
- * or relies on the briefing-flip pipeline to pick up the transcript on
- * its next pass.
+ * 1. Spoken capture (legacy / no preview):
+ *    body: { site_id, storage_url, mime_type, source_asset_id?, ... }
+ *    - Audio bytes already in R2 (presigned PUT happened on the client)
+ *    - Whisper runs async via waitUntil
  *
- * Used by both the web briefing modal and (future) the mobile app.
+ * 2. Spoken capture with precomputed transcript:
+ *    body: { ...same as 1, precomputed_transcript: "..." }
+ *    - Audio bytes in R2 + transcript already obtained via
+ *      /api/recordings/transcribe-preview during the staging step
+ *    - Server skips Whisper, persists transcript directly
+ *
+ * 3. Typed capture (accessibility / "Type instead"):
+ *    body: { site_id, transcript, source_asset_id?, ... }
+ *    - No audio bytes; subscriber typed the narrative
+ *    - storage_url + mime_type stay NULL (per migration #108)
+ *    - source forced to 'typed_briefing'
+ *
+ * Per project_tracpost_recording_as_canonical.md (LOCKED 2026-05-10),
+ * recordings.transcript is the canonical asset narrative. This endpoint
+ * no longer appends to media_assets.context_note — that column is being
+ * dropped in the next migration.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { waitUntil } from "@vercel/functions";
 
-const VALID_SOURCES = new Set(["briefing", "voice_over", "testimonial", "bed", "captured_ambient"]);
+const VALID_SOURCES = new Set([
+  "briefing",
+  "voice_over",
+  "testimonial",
+  "bed",
+  "captured_ambient",
+  "typed_briefing",
+]);
 
 export async function POST(req: NextRequest) {
   const authResult = await authenticateRequest(req);
@@ -45,18 +53,40 @@ export async function POST(req: NextRequest) {
       source_asset_id,
       speaker_persona_id,
       duration_ms,
-      source = "briefing",
+      source: explicitSource,
       metadata = {},
       transcribe: shouldTranscribe = true,
-      append_transcript_to_context = source === "briefing" && !!source_asset_id,
+      transcript: typedTranscript,
+      precomputed_transcript,
     } = body;
 
-    if (!site_id || !storage_url || !mime_type) {
+    if (!site_id) {
+      return NextResponse.json({ error: "site_id is required" }, { status: 400 });
+    }
+
+    const isTypedInput = !storage_url && !mime_type && typeof typedTranscript === "string";
+    const isPrecomputedSpoken =
+      !!storage_url && !!mime_type && typeof precomputed_transcript === "string";
+    const isAsyncSpoken = !!storage_url && !!mime_type && !precomputed_transcript;
+
+    if (!isTypedInput && !isPrecomputedSpoken && !isAsyncSpoken) {
       return NextResponse.json(
-        { error: "site_id, storage_url, and mime_type are required" },
+        {
+          error:
+            "Provide either (storage_url + mime_type) for a spoken recording or (transcript) for a typed entry.",
+        },
         { status: 400 },
       );
     }
+
+    if (isTypedInput && !typedTranscript.trim()) {
+      return NextResponse.json(
+        { error: "transcript cannot be empty for typed entries" },
+        { status: 400 },
+      );
+    }
+
+    const source = isTypedInput ? "typed_briefing" : explicitSource || "briefing";
     if (!VALID_SOURCES.has(source)) {
       return NextResponse.json(
         { error: `invalid source "${source}". Allowed: ${Array.from(VALID_SOURCES).join(", ")}` },
@@ -64,7 +94,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify site ownership
     const [site] = await sql`
       SELECT id FROM sites
       WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
@@ -73,8 +102,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Site not found" }, { status: 404 });
     }
 
-    // If source_asset_id provided, verify it belongs to the same site
-    // (defensive — prevents cross-tenant recording attribution).
     if (source_asset_id) {
       const [asset] = await sql`
         SELECT id FROM media_assets
@@ -88,69 +115,67 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const initialTranscript = isTypedInput
+      ? typedTranscript.trim()
+      : isPrecomputedSpoken
+      ? precomputed_transcript.trim()
+      : null;
+    const transcribedAt = initialTranscript ? new Date() : null;
+    const transcribeProvider = isTypedInput
+      ? null
+      : isPrecomputedSpoken
+      ? "openai-whisper-1"
+      : null;
+
     const [recording] = await sql`
       INSERT INTO recordings (
         site_id, source_asset_id, storage_url, duration_ms,
-        mime_type, speaker_persona_id, source, metadata
+        mime_type, speaker_persona_id, source, metadata,
+        transcript, transcribed_at, transcribe_provider
       )
       VALUES (
-        ${site_id}, ${source_asset_id || null}, ${storage_url}, ${duration_ms || null},
-        ${mime_type}, ${speaker_persona_id || null}, ${source},
-        ${JSON.stringify(metadata)}::jsonb
+        ${site_id}, ${source_asset_id || null},
+        ${storage_url || null}, ${duration_ms || null},
+        ${mime_type || null}, ${speaker_persona_id || null}, ${source},
+        ${JSON.stringify(metadata)}::jsonb,
+        ${initialTranscript}, ${transcribedAt}, ${transcribeProvider}
       )
       RETURNING id, site_id, source_asset_id, storage_url, mime_type,
-                duration_ms, source, created_at
+                duration_ms, source, transcript, transcribed_at,
+                transcribe_provider, created_at
     `;
 
-    // Async transcription via waitUntil — caller doesn't block. Whisper
-    // typically returns in 1-5 seconds for short voice memos.
-    if (shouldTranscribe) {
+    // Async Whisper only for the legacy / no-preview spoken path.
+    // Typed and precomputed paths already have a transcript persisted.
+    if (isAsyncSpoken && shouldTranscribe) {
       waitUntil(
         (async () => {
           try {
             const { transcribe } = await import("@/lib/transcribe");
             const result = await transcribe(storage_url as string);
-            // Stash time-anchored segments + language detection into
-            // metadata so future surfaces (operator click-to-seek
-            // playback, voice-over caption sync, clip extraction from
-            // spoken vendor moments) can use them. Captured for ALL
-            // sources even though briefing display ignores them — see
-            // project_tracpost_audio_capture_floor.md (capture floor).
-            const segmentsJson = result.segments && result.segments.length > 0
-              ? JSON.stringify({
-                  segments: result.segments,
-                  language: result.language,
-                })
-              : JSON.stringify({});
+            const segmentsJson =
+              result.segments && result.segments.length > 0
+                ? JSON.stringify({
+                    segments: result.segments,
+                    language: result.language,
+                  })
+                : JSON.stringify({});
             await sql`
               UPDATE recordings
               SET transcript = ${result.text},
                   transcribed_at = NOW(),
                   transcribe_provider = ${result.provider},
-                  duration_ms = COALESCE(duration_ms, ${result.duration ? Math.round(result.duration * 1000) : null}),
+                  duration_ms = COALESCE(duration_ms, ${
+                    result.duration ? Math.round(result.duration * 1000) : null
+                  }),
                   metadata = COALESCE(metadata, '{}'::jsonb) || ${segmentsJson}::jsonb
               WHERE id = ${recording.id}
             `;
-            // If asked, append the transcript to the source asset's
-            // context_note. Briefing flow uses this to flow the dictated
-            // text directly into the asset's caption.
-            if (append_transcript_to_context && source_asset_id && result.text) {
-              await sql`
-                UPDATE media_assets
-                SET context_note = CASE
-                  WHEN context_note IS NULL OR context_note = '' THEN ${result.text}
-                  ELSE context_note || E'\n\n' || ${result.text}
-                END
-                WHERE id = ${source_asset_id}
-              `;
-            }
           } catch (err) {
             console.warn(
               `Transcription failed for recording ${recording.id}:`,
               err instanceof Error ? err.message : err,
             );
-            // Non-fatal — recording row exists, transcript stays NULL
-            // until manual re-transcribe or next cron pickup.
           }
         })(),
       );
@@ -164,9 +189,9 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * GET /api/recordings?source_asset_id=...
- * Lists recordings for an asset. Used by the modal to poll transcript
- * status and by future mobile/operator surfaces to inspect history.
+ * GET /api/recordings?source_asset_id=... | ?site_id=...
+ * Lists recordings for an asset or site. Used by the modal to display
+ * the latest transcript + history, and by future operator surfaces.
  */
 export async function GET(req: NextRequest) {
   const authResult = await authenticateRequest(req);
@@ -184,7 +209,6 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Both query paths verify ownership via subscription_id join
   const recordings = sourceAssetId
     ? await sql`
         SELECT r.id, r.source_asset_id, r.storage_url, r.mime_type,

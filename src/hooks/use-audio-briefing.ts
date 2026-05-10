@@ -3,18 +3,21 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 /**
- * Audio capture hook with two-stage commit.
+ * Audio capture hook with hard-pause state machine.
  *
- * State machine:
- *   idle → start() → recording → pauseResume() ↔ paused
- *                       ↓            ↓
- *                       stop()       stop()
- *                       ↓            ↓
- *                    previewing → staged → commit() → committing → committed
- *                                   ↓
- *                                 discard() → idle
- *                                   ↓
- *                                 start() → recording (replaces staged blob)
+ * State machine (LOCKED 2026-05-10 to option (a) hard-pause):
+ *   idle → start() → recording → stop() → previewing → staged
+ *                                                         ↓
+ *                                                       commit() → committing → committed
+ *                                                         ↓
+ *                                                       discard() → idle
+ *                                                         ↓
+ *                                                       start() → recording (replaces staged blob)
+ *
+ * Pause is the same as Stop — there is no resume. Re-clicking the
+ * primary record button from the staged state starts a NEW take that
+ * silently replaces the prior staged blob. This matches voice-memo-app
+ * mental models and removes the resume-vs-stop UX ambiguity.
  *
  * Stop() captures the blob in browser memory and calls
  * /api/recordings/transcribe-preview so the subscriber can VALIDATE the
@@ -26,12 +29,12 @@ import { useState, useRef, useCallback, useEffect } from "react";
  *
  * Discard() throws away the staged blob — bytes never leave the browser.
  *
- * Re-recording from the staged state silently replaces the staged blob
- * (matches the "redo" mental model — subscriber said the latest take is
- * the one they want).
- *
  * Cancel() is the emergency teardown for any state — used by the modal
  * close paths or unmount.
+ *
+ * Lifecycle hooks: onStart and onStopRequested let the parent coordinate
+ * external state (e.g., voice-over couples to video.play() / video.pause()
+ * and captures video.currentTime as a metadata anchor).
  *
  * See project_tracpost_recording_as_canonical.md.
  */
@@ -39,7 +42,6 @@ import { useState, useRef, useCallback, useEffect } from "react";
 export type BriefingState =
   | "idle"
   | "recording"
-  | "paused"
   | "previewing"
   | "staged"
   | "committing"
@@ -54,6 +56,19 @@ interface UseAudioBriefingOpts {
   source?: "briefing" | "voice_over" | "testimonial" | "captured_ambient";
   onCommitted?: (recordingId: string, transcript: string) => void;
   onError?: (err: Error) => void;
+  /**
+   * Fires just before recording starts. Voice-over uses this to call
+   * video.play() and capture video.currentTime as the anchor offset.
+   * Return any metadata (e.g., { video_offset_seconds: 12.4 }) — it gets
+   * merged into the recording row's metadata at commit time.
+   */
+  onStart?: () => Record<string, unknown> | undefined;
+  /**
+   * Fires when stop() is invoked, before the audio actually stops.
+   * Voice-over uses this to call video.pause() so audio + video pause
+   * together. No return value.
+   */
+  onStopRequested?: () => void;
 }
 
 interface UseAudioBriefingReturn {
@@ -63,7 +78,6 @@ interface UseAudioBriefingReturn {
   stagedDurationMs: number;
   previewTranscript: string;
   start: () => Promise<void>;
-  pauseResume: () => void;
   stop: () => Promise<void>;
   discard: () => void;
   commit: () => Promise<{ recordingId: string; transcript: string } | null>;
@@ -71,7 +85,7 @@ interface UseAudioBriefingReturn {
 }
 
 export function useAudioBriefing(opts: UseAudioBriefingOpts): UseAudioBriefingReturn {
-  const { siteId, sourceAssetId, source = "briefing", onCommitted, onError } = opts;
+  const { siteId, sourceAssetId, source = "briefing", onCommitted, onError, onStart, onStopRequested } = opts;
 
   const [supported, setSupported] = useState(false);
   const [state, setState] = useState<BriefingState>("idle");
@@ -83,13 +97,18 @@ export function useAudioBriefing(opts: UseAudioBriefingOpts): UseAudioBriefingRe
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const stagedBlobRef = useRef<Blob | null>(null);
+  const stagedMetadataRef = useRef<Record<string, unknown>>({});
   const startedAtRef = useRef<number>(0);
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const onCommittedRef = useRef(onCommitted);
   const onErrorRef = useRef(onError);
+  const onStartRef = useRef(onStart);
+  const onStopRequestedRef = useRef(onStopRequested);
   onCommittedRef.current = onCommitted;
   onErrorRef.current = onError;
+  onStartRef.current = onStart;
+  onStopRequestedRef.current = onStopRequested;
 
   useEffect(() => {
     setSupported(
@@ -127,6 +146,7 @@ export function useAudioBriefing(opts: UseAudioBriefingOpts): UseAudioBriefingRe
 
   function clearStagedBlob() {
     stagedBlobRef.current = null;
+    stagedMetadataRef.current = {};
     setPreviewTranscript("");
     setStagedDurationMs(0);
   }
@@ -153,6 +173,12 @@ export function useAudioBriefing(opts: UseAudioBriefingOpts): UseAudioBriefingRe
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
 
+      // Lifecycle hook — voice-over uses this to call video.play() and
+      // capture video.currentTime as the anchor offset for time-anchored
+      // segments later.
+      const startMetadata = onStartRef.current?.() || {};
+      stagedMetadataRef.current = { ...startMetadata };
+
       recorder.start(1000);
       startedAtRef.current = Date.now();
       setElapsedMs(0);
@@ -169,37 +195,11 @@ export function useAudioBriefing(opts: UseAudioBriefingOpts): UseAudioBriefingRe
     }
   }, [state]);
 
-  const pauseResume = useCallback(() => {
-    const recorder = recorderRef.current;
-    if (!recorder) return;
-    if (state === "recording") {
-      try {
-        recorder.pause();
-        if (tickerRef.current) {
-          clearInterval(tickerRef.current);
-          tickerRef.current = null;
-        }
-        setState("paused");
-      } catch {
-        /* noop */
-      }
-    } else if (state === "paused") {
-      try {
-        recorder.resume();
-        const accumulated = elapsedMs;
-        startedAtRef.current = Date.now() - accumulated;
-        tickerRef.current = setInterval(() => {
-          setElapsedMs(Date.now() - startedAtRef.current);
-        }, 250);
-        setState("recording");
-      } catch {
-        /* noop */
-      }
-    }
-  }, [state, elapsedMs]);
-
   const stop = useCallback(async () => {
-    if (state !== "recording" && state !== "paused") return;
+    if (state !== "recording") return;
+    // Lifecycle hook — voice-over uses this to call video.pause() so
+    // audio + video pause together.
+    onStopRequestedRef.current?.();
     const recorder = recorderRef.current;
     if (!recorder) return;
 
@@ -293,6 +293,7 @@ export function useAudioBriefing(opts: UseAudioBriefingOpts): UseAudioBriefingRe
       }
 
       // Step 2 — register the recording row with the precomputed transcript
+      // and any metadata captured at start (e.g., video_offset_seconds for V/O).
       const createRes = await fetch("/api/recordings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -304,6 +305,7 @@ export function useAudioBriefing(opts: UseAudioBriefingOpts): UseAudioBriefingRe
           duration_ms: durationMs,
           source,
           precomputed_transcript: transcript || undefined,
+          metadata: stagedMetadataRef.current,
         }),
       });
       if (!createRes.ok) {
@@ -326,7 +328,7 @@ export function useAudioBriefing(opts: UseAudioBriefingOpts): UseAudioBriefingRe
   }, [state, previewTranscript, stagedDurationMs, siteId, sourceAssetId, source]);
 
   const cancel = useCallback(() => {
-    if (recorderRef.current && (state === "recording" || state === "paused")) {
+    if (recorderRef.current && state === "recording") {
       try {
         recorderRef.current.stop();
       } catch {
@@ -354,7 +356,6 @@ export function useAudioBriefing(opts: UseAudioBriefingOpts): UseAudioBriefingRe
     stagedDurationMs,
     previewTranscript,
     start,
-    pauseResume,
     stop,
     discard,
     commit,

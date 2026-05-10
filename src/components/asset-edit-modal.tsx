@@ -269,12 +269,31 @@ export function AssetEditModal({
     }, []),
   });
 
+  // Video element ref for V/O coupling. Voice-over Start triggers
+  // video.play() AND captures video.currentTime as the anchor offset
+  // for time-anchored transcript segments. V/O Pause triggers
+  // video.pause() so audio + video pause together.
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
   // Voice-over capture — only used for video assets. Independent recording
   // group with its own state machine. Commit follows the same pattern.
+  // Coupled to the video player via onStart/onStopRequested lifecycle hooks.
   const voiceOver = useAudioBriefing({
     siteId,
     sourceAssetId: assetId,
     source: "voice_over",
+    onStart: useCallback(() => {
+      const v = videoRef.current;
+      if (!v) return undefined;
+      const offsetSeconds = v.currentTime;
+      // Best-effort play; some browsers require user-gesture coupling
+      // which is satisfied because this fires inside the click handler.
+      v.play().catch(() => { /* swallow autoplay rejection */ });
+      return { video_offset_seconds: offsetSeconds };
+    }, []),
+    onStopRequested: useCallback(() => {
+      videoRef.current?.pause();
+    }, []),
     onCommitted: useCallback(
       () => {
         void refetchRecordings();
@@ -340,12 +359,12 @@ export function AssetEditModal({
 
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        if (audio.state === "recording" || audio.state === "paused") {
+        if (audio.state === "recording") {
           e.preventDefault();
           audio.cancel();
         } else if (!isEditableFocused()) {
           e.preventDefault();
-          onClose();
+          handleClose();
         }
         return;
       }
@@ -355,15 +374,10 @@ export function AssetEditModal({
 
       if (e.key === " " || e.code === "Space") {
         e.preventDefault();
-        if (audio.state === "idle" || audio.state === "committed" || audio.state === "error") {
-          audio.start();
-        } else if (audio.state === "recording" || audio.state === "paused") {
+        if (audio.state === "recording") {
           audio.stop();
-        }
-      } else if (e.key === "p" || e.key === "P") {
-        if (audio.state === "recording" || audio.state === "paused") {
-          e.preventDefault();
-          audio.pauseResume();
+        } else {
+          audio.start();
         }
       } else if (e.key === "ArrowRight") {
         if (hasNext && onNext && !saving) {
@@ -623,12 +637,13 @@ export function AssetEditModal({
     return true;
   }
 
-  async function handleSave() {
+  // Save & stay — commits staged recordings + asset PATCH, but does NOT
+  // close the modal. Subscriber can keep recording, edit tags, etc.
+  async function handleSaveStay() {
     setSaving(true);
     try {
       const ok = await doSave();
-      if (ok) onClose();
-      else toast.error("Failed to save changes");
+      if (!ok) toast.error("Failed to save changes");
     } catch {
       toast.error("Failed to save changes");
     } finally {
@@ -649,12 +664,36 @@ export function AssetEditModal({
     }
   }
 
+  // Master Cancel — discard all staged recordings AND clear typed draft.
+  // Stays on the modal. No prompt: the subscriber explicitly clicked Cancel.
+  function handleCancel() {
+    audio.discard();
+    voiceOver.discard();
+    setTypedMode(false);
+    setTypedDraft("");
+  }
+
+  // Close — dirty-form check, then close. Routes through window.confirm
+  // for now (full dirty-form guard arrives with task #183).
+  function handleClose() {
+    const briefingDirty = audio.state === "staged" || audio.state === "recording";
+    const voDirty = voiceOver.state === "staged" || voiceOver.state === "recording";
+    const typedDirty = typedMode && typedDraft.trim().length > 0;
+    if (briefingDirty || voDirty || typedDirty) {
+      const ok = window.confirm("You have unsaved recordings or typed text. Close and discard them?");
+      if (!ok) return;
+      handleCancel();
+    }
+    onClose();
+  }
+
+
   const totalTagged = initialBrandIds.length + initialProjectIds.length;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         className="flex w-full max-w-5xl max-h-[90vh] flex-col border border-border bg-surface overflow-y-auto"
@@ -714,7 +753,7 @@ export function AssetEditModal({
               {aiGenerated ? "🤖 AI" : "+ Mark as AI"}
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="ml-2 rounded bg-surface-hover px-2 py-1 text-xs text-muted hover:bg-surface-hover/80 hover:text-foreground"
               aria-label="Close"
             >
@@ -732,37 +771,22 @@ export function AssetEditModal({
             Tool selectors (brand/project/persona) follow below. */}
         <div className="px-6 pt-4">
 
-            {/* RECORDING BAR — top of modal. Image assets get one group;
-                video assets get two side-by-side (briefing + voice-over). */}
+            {/* RECORDING BAR v2 — sticky top, consolidated 6-button toolbar.
+                Capture cluster (Record + V/O) on the left, action cluster
+                (Cancel/Save/Save & Next/Close) on the right. State indicators
+                + staged transcript previews flow below. */}
             <div className="sticky top-[57px] z-10 -mx-6 mb-3 border-b border-border bg-surface px-6 py-2">
-              {mediaType?.startsWith("video") || mediaType === "video" ? (
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  <RecordingBar label="Briefing" audio={audio} icon="🎤" />
-                  <RecordingBar label="Voice-over" audio={voiceOver} icon="🎙" />
-                </div>
-              ) : (
-                <RecordingBar label="Briefing" audio={audio} icon="🎤" />
-              )}
-              {/* Next-button row — preserved from prior briefing-pass UX so
-                  keyboard-driven advance still works visually. */}
-              <div className="mt-2 flex items-center justify-end gap-2">
-                {note.trim().length >= 40 && (
-                  <span className="rounded bg-success/20 px-1.5 py-0.5 text-[10px] font-medium text-success">
-                    ✓ Ready for autopilot
-                  </span>
-                )}
-                {hasNext && onNext && (
-                  <button
-                    onClick={() => handleSaveAndNext()}
-                    type="button"
-                    disabled={saving}
-                    className="rounded border border-accent/40 bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
-                    title="Save and go to next asset (→)"
-                  >
-                    Next →
-                  </button>
-                )}
-              </div>
+              <RecordingBar
+                audio={audio}
+                voiceOver={voiceOver}
+                isVideo={mediaType?.startsWith("video") || mediaType === "video"}
+                onCancel={handleCancel}
+                onSave={handleSaveStay}
+                onSaveAndNext={handleSaveAndNext}
+                onClose={handleClose}
+                saving={saving}
+                hasNext={hasNext && !!onNext}
+              />
             </div>
 
             {/* SCENE SECTION — image LEFT, Scene Composition RIGHT, 2-col */}
@@ -770,6 +794,7 @@ export function AssetEditModal({
               <div className="flex min-h-0 items-center justify-center overflow-hidden bg-background">
                 {mediaType?.startsWith("video") || mediaType === "video" ? (
                   <video
+                    ref={videoRef}
                     src={imageUrl}
                     controls
                     className="max-h-full max-w-full object-contain"
@@ -1272,35 +1297,16 @@ export function AssetEditModal({
               Archive
             </button>
           )}
+          {/* Cancel / Save / Save & Next / Close moved to the top RecordingBar v2.
+              Footer-right keeps only Prev for symmetry with the keyboard ←
+              shortcut. The save-state buttons are at the top now. */}
           <div className="flex items-center gap-2">
             {hasPrev && (
               <button
                 onClick={onPrev}
                 className="px-3 py-2 text-xs text-muted hover:text-foreground"
               >
-                Prev
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-xs text-muted hover:text-foreground"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="border border-border px-4 py-2 text-xs font-medium text-muted hover:text-foreground disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
-            {hasNext && (
-              <button
-                onClick={handleSaveAndNext}
-                disabled={saving}
-                className="bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-              >
-                {saving ? "..." : "Save & Next >>"}
+                ← Prev
               </button>
             )}
           </div>

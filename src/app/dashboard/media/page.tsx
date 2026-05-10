@@ -54,7 +54,7 @@ export default async function MediaPage({ searchParams }: Props) {
                (SELECT COUNT(*)::int FROM jsonb_object_keys(ma.variants)) AS variant_count
         FROM media_assets ma
         WHERE ma.site_id = ${siteId}
-          AND (${showArchived} OR ma.archived_at IS NULL)
+          AND (CASE WHEN ${showArchived} THEN ma.archived_at IS NOT NULL ELSE ma.archived_at IS NULL END)
           AND (${projectId}::uuid IS NULL OR EXISTS (
             SELECT 1 FROM asset_projects ap
             WHERE ap.asset_id = ma.id AND ap.project_id = ${projectId}::uuid
@@ -72,7 +72,7 @@ export default async function MediaPage({ searchParams }: Props) {
                (SELECT COUNT(*)::int FROM jsonb_object_keys(ma.variants)) AS variant_count
         FROM media_assets ma
         WHERE ma.site_id = ${siteId}
-          AND (${showArchived} OR ma.archived_at IS NULL)
+          AND (CASE WHEN ${showArchived} THEN ma.archived_at IS NOT NULL ELSE ma.archived_at IS NULL END)
           AND (${projectId}::uuid IS NULL OR EXISTS (
             SELECT 1 FROM asset_projects ap
             WHERE ap.asset_id = ma.id AND ap.project_id = ${projectId}::uuid
@@ -90,7 +90,7 @@ export default async function MediaPage({ searchParams }: Props) {
                (SELECT COUNT(*)::int FROM jsonb_object_keys(ma.variants)) AS variant_count
         FROM media_assets ma
         WHERE ma.site_id = ${siteId}
-          AND (${showArchived} OR ma.archived_at IS NULL)
+          AND (CASE WHEN ${showArchived} THEN ma.archived_at IS NOT NULL ELSE ma.archived_at IS NULL END)
           AND (${projectId}::uuid IS NULL OR EXISTS (
             SELECT 1 FROM asset_projects ap
             WHERE ap.asset_id = ma.id AND ap.project_id = ${projectId}::uuid
@@ -107,7 +107,7 @@ export default async function MediaPage({ searchParams }: Props) {
                (SELECT COUNT(*)::int FROM jsonb_object_keys(ma.variants)) AS variant_count
         FROM media_assets ma
         WHERE ma.site_id = ${siteId}
-          AND (${showArchived} OR ma.archived_at IS NULL)
+          AND (CASE WHEN ${showArchived} THEN ma.archived_at IS NOT NULL ELSE ma.archived_at IS NULL END)
           AND (${projectId}::uuid IS NULL OR EXISTS (
             SELECT 1 FROM asset_projects ap
             WHERE ap.asset_id = ma.id AND ap.project_id = ${projectId}::uuid
@@ -182,7 +182,8 @@ export default async function MediaPage({ searchParams }: Props) {
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE COALESCE(source, 'upload') = 'upload')::int AS uploads,
       COUNT(*) FILTER (WHERE source = 'ai_generated')::int AS ai_generated,
-      COUNT(*) FILTER (WHERE triage_status = 'pending_briefing' AND archived_at IS NULL)::int AS pending_briefing
+      COUNT(*) FILTER (WHERE triage_status = 'pending_briefing' AND archived_at IS NULL)::int AS pending_briefing,
+      COUNT(*) FILTER (WHERE archived_at IS NOT NULL)::int AS archived
     FROM media_assets WHERE site_id = ${siteId}
   `;
 
@@ -273,6 +274,12 @@ export default async function MediaPage({ searchParams }: Props) {
         counts={counts[0] as { total: number; uploads: number; ai_generated: number; pending_briefing: number }}
         projects={allProjects.map((p) => ({ id: p.id as string, name: p.name as string }))}
       />
+
+      {showArchived && (
+        <div className="mb-3 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+          Showing {(counts[0] as { archived: number }).archived} archived asset{(counts[0] as { archived: number }).archived === 1 ? "" : "s"} — click <span className="font-semibold">✓ Archived</span> in filters to return to your active library.
+        </div>
+      )}
 
       {filteredAssets.length > 0 ? (
         <MediaGrid

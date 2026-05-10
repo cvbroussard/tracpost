@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function VendorsPage() {
-  redirect("/dashboard/entities");
+  redirect("/dashboard/tagging");
 }

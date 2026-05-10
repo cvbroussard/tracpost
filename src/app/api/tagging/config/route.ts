@@ -3,8 +3,9 @@ import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 /**
- * GET /api/entities/config?site_id=...
- * Returns entity slot labels for a site.
+ * GET /api/tagging/config?site_id=...
+ * Returns tag group labels for a site (per-business custom names for the
+ * 6 tag groups: brands, services, projects, personas, branches, service_areas).
  */
 export async function GET(req: NextRequest) {
   const authResult = await authenticateRequest(req);
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * PATCH /api/entities/config
+ * PATCH /api/tagging/config
  * Body: { site_id, brand_label?, project_label?, persona_label?, branch_label?, service_area_label? }
  */
 export async function PATCH(req: NextRequest) {

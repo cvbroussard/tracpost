@@ -1,18 +1,18 @@
 import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { EntitiesManager } from "./entities-manager";
+import { TaggingManager } from "./tagging-manager";
 
 export const dynamic = "force-dynamic";
 
-export default async function EntitiesPage() {
+export default async function TaggingPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
   if (!session.activeSiteId) {
     return (
       <div className="p-4 space-y-6">
-        <h1 className="mb-1 text-lg font-semibold">Entities</h1>
+        <h1 className="mb-1 text-lg font-semibold">Tagging</h1>
         <p className="mt-2 py-12 text-center text-muted">Select a business first.</p>
       </div>
     );
@@ -61,7 +61,7 @@ export default async function EntitiesPage() {
   };
 
   return (
-    <EntitiesManager
+    <TaggingManager
       siteId={siteId}
       labels={labels}
       brands={brands.map((b) => ({

@@ -103,9 +103,9 @@ interface Labels {
   service_label: string | null;
 }
 
-type EntityType = "brands" | "services" | "projects" | "personas" | "branches" | "service_areas";
+type TagGroup = "brands" | "services" | "projects" | "personas" | "branches" | "service_areas";
 
-const SECTIONS: { key: EntityType; labelKey: keyof Labels; defaultLabel: string }[] = [
+const SECTIONS: { key: TagGroup; labelKey: keyof Labels; defaultLabel: string }[] = [
   { key: "brands", labelKey: "brand_label", defaultLabel: "Brands" },
   { key: "services", labelKey: "service_label", defaultLabel: "Services" },
   { key: "projects", labelKey: "project_label", defaultLabel: "Projects" },
@@ -122,7 +122,7 @@ function safeParseJSON(text: string): { ok: boolean; value: unknown; error?: str
   try { return { ok: true, value: JSON.parse(text) }; } catch (e) { return { ok: false, value: null, error: (e as Error).message }; }
 }
 
-export function EntitiesManager({
+export function TaggingManager({
   siteId,
   labels: initialLabels,
   brands: initialBrands,
@@ -186,7 +186,7 @@ export function EntitiesManager({
   const [savingConfig, setSavingConfig] = useState(false);
 
   // Show ALL tabs in beta — even ones with no label set, so subscribers can see what's available
-  const [activeTab, setActiveTab] = useState<EntityType>("brands");
+  const [activeTab, setActiveTab] = useState<TagGroup>("brands");
 
   const [adding, setAdding] = useState(false);
 
@@ -251,7 +251,7 @@ export function EntitiesManager({
   async function saveConfig() {
     setSavingConfig(true);
     try {
-      const res = await fetch("/api/entities/config", {
+      const res = await fetch("/api/tagging/config", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -444,7 +444,7 @@ export function EntitiesManager({
     setAdding(false);
   }
 
-  async function updateItem(type: EntityType, id: string) {
+  async function updateItem(type: TagGroup, id: string) {
     const apiPath = type === "personas" ? "clients" : type === "service_areas" ? "service-areas" : type;
     try {
       const res = await fetch(`/api/${apiPath}/${id}`, {
@@ -472,7 +472,7 @@ export function EntitiesManager({
     } catch { /* ignore */ }
   }
 
-  async function deleteItem(type: EntityType, id: string) {
+  async function deleteItem(type: TagGroup, id: string) {
     const apiPath = type === "personas" ? "clients" : type === "service_areas" ? "service-areas" : type;
     try {
       await fetch(`/api/${apiPath}/${id}`, { method: "DELETE" });
@@ -485,7 +485,7 @@ export function EntitiesManager({
     } catch { /* ignore */ }
   }
 
-  function getItemCount(key: EntityType) {
+  function getItemCount(key: TagGroup) {
     if (key === "brands") return brands.length;
     if (key === "services") return services.length;
     if (key === "projects") return projects.length;
@@ -502,20 +502,20 @@ export function EntitiesManager({
     <div className="mx-auto max-w-5xl">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold">Entities</h1>
-          <p className="mt-1 text-sm text-muted">Tag assets with named entities to shape how content is generated. Beta build — all fields and tabs exposed.</p>
+          <h1 className="text-lg font-semibold">Tagging</h1>
+          <p className="mt-1 text-sm text-muted">Manage the tag groups your assets get tagged with. Each tab is a tag group used by the orchestrator to shape generated content. Beta build — all fields and tabs exposed.</p>
         </div>
         <button
           onClick={() => setShowConfig(!showConfig)}
           className="text-xs text-muted hover:text-foreground"
         >
-          {showConfig ? "Done" : "Configure labels"}
+          {showConfig ? "Done" : "Configure tag group labels"}
         </button>
       </div>
 
       {showConfig && (
         <div className="mb-8 rounded-lg border border-border bg-surface p-4">
-          <h3 className="mb-4 text-sm font-medium">Label Configuration (custom names per business)</h3>
+          <h3 className="mb-4 text-sm font-medium">Tag Group Labels (rename per business)</h3>
           <div className="space-y-3">
             {SECTIONS.map((s) => (
               <div key={s.labelKey} className="flex items-center gap-3">
@@ -1054,7 +1054,7 @@ export function EntitiesManager({
     );
   }
 
-  function EditDeleteRow({ type, id, onEdit }: { type: EntityType; id: string; onEdit: () => void }) {
+  function EditDeleteRow({ type, id, onEdit }: { type: TagGroup; id: string; onEdit: () => void }) {
     return (
       <div className="flex shrink-0 gap-2">
         <button onClick={onEdit} className="text-xs text-muted hover:text-foreground">Edit</button>

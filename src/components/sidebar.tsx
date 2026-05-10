@@ -77,7 +77,7 @@ const MODULES: Module[] = [
         ],
       },
       { label: "Capture", path: "/capture" },
-      { label: "Entities", path: "/entities" },
+      { label: "Tagging", path: "/tagging" },
       { label: "Compose", path: "/compose" },
       { label: "Calendar", path: "/on-deck" },
       { label: "Unifeed", path: "/unifeed" },

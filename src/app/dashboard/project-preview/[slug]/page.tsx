@@ -56,12 +56,12 @@ export default async function ProjectPreviewPage({
     WHERE aproj.project_id = ${projectId}
   `;
 
-  // Fetch location
+  // Fetch branch (formerly "location" — repurposed per migration 110)
   const [location] = await sql`
-    SELECT DISTINCT l.name, l.address, l.city, l.state
-    FROM locations l
-    JOIN asset_locations al ON al.location_id = l.id
-    JOIN asset_projects ap ON ap.asset_id = al.asset_id
+    SELECT DISTINCT b.name, b.address, b.city, b.state
+    FROM branches b
+    JOIN asset_branches ab ON ab.branch_id = b.id
+    JOIN asset_projects ap ON ap.asset_id = ab.asset_id
     WHERE ap.project_id = ${projectId}
     LIMIT 1
   `;

@@ -20,9 +20,9 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const { context_note, pillar, pillars, scene_types, content_tags, vendor_ids, brand_ids, project_ids, persona_ids, location_ids, ai_verifications, restore, ai_generated } = body;
+    const { context_note, pillar, pillars, scene_types, content_tags, vendor_ids, brand_ids, project_ids, persona_ids, branch_ids, ai_verifications, restore, ai_generated } = body;
 
-    if (context_note === undefined && pillar === undefined && pillars === undefined && scene_types === undefined && content_tags === undefined && vendor_ids === undefined && brand_ids === undefined && project_ids === undefined && persona_ids === undefined && location_ids === undefined && ai_verifications === undefined && restore === undefined && ai_generated === undefined) {
+    if (context_note === undefined && pillar === undefined && pillars === undefined && scene_types === undefined && content_tags === undefined && vendor_ids === undefined && brand_ids === undefined && project_ids === undefined && persona_ids === undefined && branch_ids === undefined && ai_verifications === undefined && restore === undefined && ai_generated === undefined) {
       return NextResponse.json(
         { error: "Nothing to update" },
         { status: 400 }
@@ -167,10 +167,10 @@ export async function PATCH(
         await sql`INSERT INTO asset_personas (asset_id, persona_id) VALUES (${id}, ${personaId}) ON CONFLICT DO NOTHING`;
       }
     }
-    if (Array.isArray(location_ids)) {
-      await sql`DELETE FROM asset_locations WHERE asset_id = ${id}`;
-      for (const locationId of location_ids) {
-        await sql`INSERT INTO asset_locations (asset_id, location_id) VALUES (${id}, ${locationId}) ON CONFLICT DO NOTHING`;
+    if (Array.isArray(branch_ids)) {
+      await sql`DELETE FROM asset_branches WHERE asset_id = ${id}`;
+      for (const branchId of branch_ids) {
+        await sql`INSERT INTO asset_branches (asset_id, branch_id) VALUES (${id}, ${branchId}) ON CONFLICT DO NOTHING`;
       }
     }
 

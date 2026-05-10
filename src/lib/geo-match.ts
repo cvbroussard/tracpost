@@ -1,9 +1,14 @@
 /**
- * Geo-matching: auto-associate assets with locations and projects by GPS proximity.
+ * Geo-matching: auto-associate assets with branches and projects by GPS proximity.
  *
  * Runs in two directions:
- * 1. On asset upload — match against existing locations/projects with addresses
- * 2. On location/project create — backfill matching assets by GPS
+ * 1. On asset upload — match against existing branches/projects with addresses
+ * 2. On branch/project create — backfill matching assets by GPS
+ *
+ * Note: per migration 110, the previous `locations` table was renamed to
+ * `branches` to better reflect its actual purpose (per-business operating
+ * units, not geographic regions). Service areas are a separate platform-
+ * scoped entity in service_areas_canonical / site_service_areas.
  */
 import { sql } from "@/lib/db";
 
@@ -49,35 +54,35 @@ async function geocode(address: string): Promise<{ lat: number; lng: number } | 
 }
 
 /**
- * On asset upload: match a GPS-tagged asset against existing locations and projects.
- * Auto-creates asset_locations and asset_projects links.
+ * On asset upload: match a GPS-tagged asset against existing branches and projects.
+ * Auto-creates asset_branches and asset_projects links.
  */
 export async function matchAssetToEntities(
   assetId: string,
   siteId: string,
   lat: number,
   lng: number
-): Promise<{ locations: number; projects: number }> {
-  let locationMatches = 0;
+): Promise<{ branches: number; projects: number }> {
+  let branchMatches = 0;
   let projectMatches = 0;
 
-  // Match against locations with lat/lng in metadata
-  const locations = await sql`
-    SELECT id, metadata FROM locations
+  // Match against branches with lat/lng in metadata
+  const branches = await sql`
+    SELECT id, metadata FROM branches
     WHERE site_id = ${siteId} AND metadata->>'lat' IS NOT NULL
   `;
 
-  for (const loc of locations) {
-    const meta = (loc.metadata || {}) as Record<string, unknown>;
-    const locLat = meta.lat as number;
-    const locLng = meta.lng as number;
-    if (locLat && locLng && haversineKm(lat, lng, locLat, locLng) <= RADIUS_KM) {
+  for (const br of branches) {
+    const meta = (br.metadata || {}) as Record<string, unknown>;
+    const brLat = meta.lat as number;
+    const brLng = meta.lng as number;
+    if (brLat && brLng && haversineKm(lat, lng, brLat, brLng) <= RADIUS_KM) {
       await sql`
-        INSERT INTO asset_locations (asset_id, location_id)
-        VALUES (${assetId}, ${loc.id})
+        INSERT INTO asset_branches (asset_id, branch_id)
+        VALUES (${assetId}, ${br.id})
         ON CONFLICT DO NOTHING
       `;
-      locationMatches++;
+      branchMatches++;
     }
   }
 
@@ -101,15 +106,15 @@ export async function matchAssetToEntities(
     }
   }
 
-  return { locations: locationMatches, projects: projectMatches };
+  return { branches: branchMatches, projects: projectMatches };
 }
 
 /**
- * On location/project create: backfill matching assets by GPS.
+ * On branch/project create: backfill matching assets by GPS.
  * Geocodes the address, stores lat/lng, then matches existing assets.
  */
 export async function backfillAssetsForEntity(
-  entityType: "location" | "project",
+  entityType: "branch" | "project",
   entityId: string,
   siteId: string,
   address: string
@@ -118,9 +123,9 @@ export async function backfillAssetsForEntity(
   if (!geo) return { geocoded: false, matched: 0 };
 
   // Store lat/lng on the entity
-  if (entityType === "location") {
+  if (entityType === "branch") {
     await sql`
-      UPDATE locations
+      UPDATE branches
       SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ lat: geo.lat, lng: geo.lng })}::jsonb
       WHERE id = ${entityId}
     `;
@@ -140,8 +145,8 @@ export async function backfillAssetsForEntity(
   `;
 
   let matched = 0;
-  const joinTable = entityType === "location" ? "asset_locations" : "asset_projects";
-  const fkColumn = entityType === "location" ? "location_id" : "project_id";
+  const joinTable = entityType === "branch" ? "asset_branches" : "asset_projects";
+  const fkColumn = entityType === "branch" ? "branch_id" : "project_id";
 
   for (const asset of assets) {
     const meta = (asset.metadata || {}) as Record<string, unknown>;

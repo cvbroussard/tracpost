@@ -96,9 +96,9 @@ export async function resolveLocationTag(siteId: string): Promise<LocationTag | 
 
   const [loc] = await sql`
     SELECT name, metadata->>'lat' AS lat, metadata->>'lng' AS lng
-    FROM locations
+    FROM branches
     WHERE site_id = ${siteId}
-    ORDER BY created_at ASC
+    ORDER BY is_primary DESC, created_at ASC
     LIMIT 1
   `;
 

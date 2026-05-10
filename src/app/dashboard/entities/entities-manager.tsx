@@ -37,7 +37,7 @@ interface Persona {
   description: string | null;
 }
 
-interface Location {
+interface Branch {
   id: string;
   name: string;
   slug: string;
@@ -45,22 +45,25 @@ interface Location {
   city: string | null;
   state: string | null;
   description: string | null;
+  phone: string | null;
+  is_primary: boolean;
 }
 
 interface Labels {
   brand_label: string | null;
   project_label: string | null;
   persona_label: string | null;
-  location_label: string | null;
+  branch_label: string | null;
+  service_area_label: string | null;
 }
 
-type EntityType = "brands" | "projects" | "personas" | "locations";
+type EntityType = "brands" | "projects" | "personas" | "branches";
 
 const SECTIONS: { key: EntityType; labelKey: keyof Labels }[] = [
   { key: "brands", labelKey: "brand_label" },
   { key: "projects", labelKey: "project_label" },
   { key: "personas", labelKey: "persona_label" },
-  { key: "locations", labelKey: "location_label" },
+  { key: "branches", labelKey: "branch_label" },
 ];
 
 export function EntitiesManager({
@@ -69,20 +72,20 @@ export function EntitiesManager({
   brands: initialBrands,
   projects: initialProjects,
   personas: initialPersonas,
-  locations: initialLocations,
+  branches: initialBranches,
 }: {
   siteId: string;
   labels: Labels;
   brands: Brand[];
   projects: Project[];
   personas: Persona[];
-  locations: Location[];
+  branches: Branch[];
 }) {
   const [labels, setLabels] = useState(initialLabels);
   const [brands, setBrands] = useState(initialBrands);
   const [projects, setProjects] = useState(initialProjects);
   const [personas, setPersonas] = useState(initialPersonas);
-  const [locations, setLocations] = useState(initialLocations);
+  const [branches, setBranches] = useState(initialBranches);
   const [showConfig, setShowConfig] = useState(false);
 
   // Caption status per project
@@ -150,12 +153,14 @@ export function EntitiesManager({
   const [newPersonaConsent, setNewPersonaConsent] = useState(false);
   const [newPersonaDesc, setNewPersonaDesc] = useState("");
 
-  // Location form
-  const [newLocName, setNewLocName] = useState("");
-  const [newLocAddress, setNewLocAddress] = useState("");
-  const [newLocCity, setNewLocCity] = useState("");
-  const [newLocState, setNewLocState] = useState("");
-  const [newLocDesc, setNewLocDesc] = useState("");
+  // Branch form
+  const [newBranchName, setNewBranchName] = useState("");
+  const [newBranchAddress, setNewBranchAddress] = useState("");
+  const [newBranchCity, setNewBranchCity] = useState("");
+  const [newBranchState, setNewBranchState] = useState("");
+  const [newBranchDesc, setNewBranchDesc] = useState("");
+  const [newBranchPhone, setNewBranchPhone] = useState("");
+  const [newBranchPrimary, setNewBranchPrimary] = useState(false);
 
   // Edit state
   const [editing, setEditing] = useState<string | null>(null);
@@ -172,7 +177,8 @@ export function EntitiesManager({
           brand_label: configLabels.brand_label?.trim() || null,
           project_label: configLabels.project_label?.trim() || null,
           persona_label: configLabels.persona_label?.trim() || null,
-          location_label: configLabels.location_label?.trim() || null,
+          branch_label: configLabels.branch_label?.trim() || null,
+          service_area_label: configLabels.service_area_label?.trim() || null,
         }),
       });
       if (res.ok) {
@@ -180,7 +186,8 @@ export function EntitiesManager({
           brand_label: configLabels.brand_label?.trim() || null,
           project_label: configLabels.project_label?.trim() || null,
           persona_label: configLabels.persona_label?.trim() || null,
-          location_label: configLabels.location_label?.trim() || null,
+          branch_label: configLabels.branch_label?.trim() || null,
+          service_area_label: configLabels.service_area_label?.trim() || null,
         };
         setLabels(newLabels);
         setShowConfig(false);
@@ -274,30 +281,34 @@ export function EntitiesManager({
     setAdding(false);
   }
 
-  async function addLocation() {
-    if (!newLocName.trim()) return;
+  async function addBranch() {
+    if (!newBranchName.trim()) return;
     setAdding(true);
     try {
-      const res = await fetch("/api/locations", {
+      const res = await fetch("/api/branches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newLocName.trim(),
-          address: newLocAddress.trim() || null,
-          city: newLocCity.trim() || null,
-          state: newLocState.trim() || null,
-          description: newLocDesc.trim() || null,
+          name: newBranchName.trim(),
+          address: newBranchAddress.trim() || null,
+          city: newBranchCity.trim() || null,
+          state: newBranchState.trim() || null,
+          description: newBranchDesc.trim() || null,
+          phone: newBranchPhone.trim() || null,
+          is_primary: newBranchPrimary,
           site_id: siteId,
         }),
       });
       if (res.ok) {
         const data = await res.json();
-        setLocations((prev) => [...prev, data.location].sort((a, b) => a.name.localeCompare(b.name)));
-        setNewLocName("");
-        setNewLocAddress("");
-        setNewLocCity("");
-        setNewLocState("");
-        setNewLocDesc("");
+        setBranches((prev) => [...prev, data.branch].sort((a, b) => a.name.localeCompare(b.name)));
+        setNewBranchName("");
+        setNewBranchAddress("");
+        setNewBranchCity("");
+        setNewBranchState("");
+        setNewBranchDesc("");
+        setNewBranchPhone("");
+        setNewBranchPrimary(false);
       }
     } catch { /* ignore */ }
     setAdding(false);
@@ -313,11 +324,11 @@ export function EntitiesManager({
       });
       if (res.ok) {
         const data = await res.json();
-        const updated = data[type === "brands" ? "brand" : type === "projects" ? "project" : type === "personas" ? "client" : "location"];
+        const updated = data[type === "brands" ? "brand" : type === "projects" ? "project" : type === "personas" ? "client" : "branch"];
         if (type === "brands") setBrands((prev) => prev.map((e) => (e.id === id ? updated : e)).sort((a, b) => a.name.localeCompare(b.name)));
         if (type === "projects") setProjects((prev) => prev.map((e) => (e.id === id ? updated : e)).sort((a, b) => a.name.localeCompare(b.name)));
         if (type === "personas") setPersonas((prev) => prev.map((e) => (e.id === id ? updated : e)).sort((a, b) => a.name.localeCompare(b.name)));
-        if (type === "locations") setLocations((prev) => prev.map((e) => (e.id === id ? updated : e)).sort((a, b) => a.name.localeCompare(b.name)));
+        if (type === "branches") setBranches((prev) => prev.map((e) => (e.id === id ? updated : e)).sort((a, b) => a.name.localeCompare(b.name)));
         setEditing(null);
       }
     } catch { /* ignore */ }
@@ -330,7 +341,7 @@ export function EntitiesManager({
       if (type === "brands") setBrands((prev) => prev.filter((e) => e.id !== id));
       if (type === "projects") setProjects((prev) => prev.filter((e) => e.id !== id));
       if (type === "personas") setPersonas((prev) => prev.filter((e) => e.id !== id));
-      if (type === "locations") setLocations((prev) => prev.filter((e) => e.id !== id));
+      if (type === "branches") setBranches((prev) => prev.filter((e) => e.id !== id));
     } catch { /* ignore */ }
   }
 
@@ -338,7 +349,7 @@ export function EntitiesManager({
     if (key === "brands") return brands.length;
     if (key === "projects") return projects.length;
     if (key === "personas") return personas.length;
-    if (key === "locations") return locations.length;
+    if (key === "branches") return branches.length;
     return 0;
   }
 
@@ -365,13 +376,19 @@ export function EntitiesManager({
           <h3 className="mb-4 text-sm font-medium">Label Configuration</h3>
           <p className="mb-4 text-xs text-muted">Set a label to enable the section. Clear it to disable.</p>
           <div className="space-y-3">
-            {(["brand_label", "project_label", "persona_label", "location_label"] as const).map((key) => (
+            {(["brand_label", "project_label", "persona_label", "branch_label", "service_area_label"] as const).map((key) => (
               <div key={key} className="flex items-center gap-3">
-                <span className="w-20 text-xs text-dim capitalize">{key.replace("_label", "")}</span>
+                <span className="w-28 text-xs text-dim capitalize">{key.replace("_label", "").replace("_", " ")}</span>
                 <input
                   value={configLabels[key] || ""}
                   onChange={(e) => setConfigLabels((prev) => ({ ...prev, [key]: e.target.value }))}
-                  placeholder={`Label (e.g. ${key === "brand_label" ? "Vendors" : key === "project_label" ? "Projects" : key === "persona_label" ? "People" : "Locations"})`}
+                  placeholder={`Label (e.g. ${
+                    key === "brand_label" ? "Vendors"
+                    : key === "project_label" ? "Projects"
+                    : key === "persona_label" ? "People"
+                    : key === "branch_label" ? "Branches / Offices"
+                    : "Service Areas"
+                  })`}
                   className="flex-1 text-sm"
                 />
               </div>
@@ -484,23 +501,28 @@ export function EntitiesManager({
             </>
           )}
 
-          {activeTab === "locations" && (
+          {activeTab === "branches" && (
             <>
               <div className="mb-6 space-y-2">
                 <div className="flex gap-2">
-                  <input value={newLocName} onChange={(e) => setNewLocName(e.target.value)} className="flex-1 text-sm" placeholder="Location name" />
-                  <button onClick={addLocation} disabled={adding || !newLocName.trim()} className="bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50">
+                  <input value={newBranchName} onChange={(e) => setNewBranchName(e.target.value)} className="flex-1 text-sm" placeholder="Branch name (e.g. Burbank Showroom)" />
+                  <input value={newBranchPhone} onChange={(e) => setNewBranchPhone(e.target.value)} className="w-40 text-sm" placeholder="Phone" />
+                  <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
+                    <input type="checkbox" checked={newBranchPrimary} onChange={(e) => setNewBranchPrimary(e.target.checked)} className="accent-accent" />
+                    Primary
+                  </label>
+                  <button onClick={addBranch} disabled={adding || !newBranchName.trim()} className="bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50">
                     {adding ? "..." : "Add"}
                   </button>
                 </div>
                 <div className="flex gap-2">
-                  <input value={newLocAddress} onChange={(e) => setNewLocAddress(e.target.value)} className="flex-1 text-sm" placeholder="Address" />
-                  <input value={newLocCity} onChange={(e) => setNewLocCity(e.target.value)} className="w-40 text-sm" placeholder="City" />
-                  <input value={newLocState} onChange={(e) => setNewLocState(e.target.value)} className="w-20 text-sm" placeholder="State" />
+                  <input value={newBranchAddress} onChange={(e) => setNewBranchAddress(e.target.value)} className="flex-1 text-sm" placeholder="Address" />
+                  <input value={newBranchCity} onChange={(e) => setNewBranchCity(e.target.value)} className="w-40 text-sm" placeholder="City" />
+                  <input value={newBranchState} onChange={(e) => setNewBranchState(e.target.value)} className="w-20 text-sm" placeholder="State" />
                 </div>
-                <input value={newLocDesc} onChange={(e) => setNewLocDesc(e.target.value)} className="w-full text-sm" placeholder="Description (optional)" />
+                <input value={newBranchDesc} onChange={(e) => setNewBranchDesc(e.target.value)} className="w-full text-sm" placeholder="Description (optional)" />
               </div>
-              {renderLocationList()}
+              {renderBranchList()}
             </>
           )}
         </>
@@ -760,8 +782,8 @@ export function EntitiesManager({
     );
   }
 
-  function renderLocationList() {
-    if (locations.length === 0) {
+  function renderBranchList() {
+    if (branches.length === 0) {
       return (
         <div className="rounded-lg border border-dashed border-border px-8 py-12 text-center">
           <p className="text-sm text-muted">No {currentLabel.toLowerCase()} yet. Add one above.</p>
@@ -770,35 +792,48 @@ export function EntitiesManager({
     }
     return (
       <div className="space-y-1">
-        {locations.map((loc) => (
-          <div key={loc.id} className={`border-b border-border py-3 last:border-0 ${editing === loc.id ? "" : "flex items-center gap-4"}`}>
-            {editing === loc.id ? (
+        {branches.map((branch) => (
+          <div key={branch.id} className={`border-b border-border py-3 last:border-0 ${editing === branch.id ? "" : "flex items-center gap-4"}`}>
+            {editing === branch.id ? (
               <div className="flex-1 space-y-2">
                 <div className="flex gap-2">
-                  <input id={`edit-loc-name-${loc.id}`} value={(editFields.name as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, name: e.target.value }))} className="flex-1 text-sm" placeholder="Name" autoFocus />
-                  <input id={`edit-loc-address-${loc.id}`} value={(editFields.address as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, address: e.target.value }))} className="flex-1 text-sm" placeholder="Address" />
+                  <input id={`edit-branch-name-${branch.id}`} value={(editFields.name as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, name: e.target.value }))} className="flex-1 text-sm" placeholder="Name" autoFocus />
+                  <input id={`edit-branch-phone-${branch.id}`} value={(editFields.phone as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, phone: e.target.value }))} className="w-40 text-sm" placeholder="Phone" />
+                  <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
+                    <input type="checkbox" checked={!!editFields.is_primary} onChange={(e) => setEditFields((f) => ({ ...f, is_primary: e.target.checked }))} className="accent-accent" />
+                    Primary
+                  </label>
                 </div>
                 <div className="flex gap-2">
-                  <input id={`edit-loc-city-${loc.id}`} value={(editFields.city as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, city: e.target.value }))} className="flex-1 text-sm" placeholder="City" />
-                  <input id={`edit-loc-state-${loc.id}`} value={(editFields.state as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, state: e.target.value }))} className="w-20 text-sm" placeholder="ST" />
-                  <input id={`edit-loc-desc-${loc.id}`} value={(editFields.description as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, description: e.target.value }))} className="flex-1 text-sm" placeholder="Description (optional)" />
-                  <button onClick={() => updateItem("locations", loc.id)} className="text-xs text-accent hover:underline">Save</button>
+                  <input id={`edit-branch-address-${branch.id}`} value={(editFields.address as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, address: e.target.value }))} className="flex-1 text-sm" placeholder="Address" />
+                  <input id={`edit-branch-city-${branch.id}`} value={(editFields.city as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, city: e.target.value }))} className="flex-1 text-sm" placeholder="City" />
+                  <input id={`edit-branch-state-${branch.id}`} value={(editFields.state as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, state: e.target.value }))} className="w-20 text-sm" placeholder="ST" />
+                </div>
+                <div className="flex gap-2">
+                  <input id={`edit-branch-desc-${branch.id}`} value={(editFields.description as string) ?? ""} onChange={(e) => setEditFields((f) => ({ ...f, description: e.target.value }))} className="flex-1 text-sm" placeholder="Description (optional)" />
+                  <button onClick={() => updateItem("branches", branch.id)} className="text-xs text-accent hover:underline">Save</button>
                   <button onClick={() => setEditing(null)} className="text-xs text-muted hover:text-foreground">Cancel</button>
                 </div>
               </div>
             ) : (
               <>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{loc.name}</p>
-                  {loc.address && <p className="text-xs text-muted">{loc.address}</p>}
-                  {(loc.city || loc.state) && (
-                    <p className="text-xs text-dim">{[loc.city, loc.state].filter(Boolean).join(", ")}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">{branch.name}</p>
+                    {branch.is_primary && (
+                      <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">Primary</span>
+                    )}
+                  </div>
+                  {branch.address && <p className="text-xs text-muted">{branch.address}</p>}
+                  {(branch.city || branch.state) && (
+                    <p className="text-xs text-dim">{[branch.city, branch.state].filter(Boolean).join(", ")}</p>
                   )}
-                  {loc.description && <p className="text-xs text-dim">{loc.description}</p>}
+                  {branch.phone && <p className="text-xs text-dim">{branch.phone}</p>}
+                  {branch.description && <p className="text-xs text-dim">{branch.description}</p>}
                 </div>
-                <span className="text-xs text-muted">{loc.slug}</span>
-                <button onClick={() => { setEditing(loc.id); setEditFields({ name: loc.name, address: loc.address || "", city: loc.city || "", state: loc.state || "", description: loc.description || "" }); }} className="text-xs text-muted hover:text-foreground">Edit</button>
-                <button onClick={() => deleteItem("locations", loc.id)} className="text-xs text-muted hover:text-danger">Delete</button>
+                <span className="text-xs text-muted">{branch.slug}</span>
+                <button onClick={() => { setEditing(branch.id); setEditFields({ name: branch.name, address: branch.address || "", city: branch.city || "", state: branch.state || "", description: branch.description || "", phone: branch.phone || "", is_primary: branch.is_primary }); }} className="text-xs text-muted hover:text-foreground">Edit</button>
+                <button onClick={() => deleteItem("branches", branch.id)} className="text-xs text-muted hover:text-danger">Delete</button>
               </>
             )}
           </div>

@@ -82,10 +82,10 @@ export default async function ProjectPage({ params }: Props) {
       WHERE aproj.project_id = ${projectId}
     `,
     sql`
-      SELECT DISTINCT l.name, l.city, l.state
-      FROM locations l
-      JOIN asset_locations al ON al.location_id = l.id
-      JOIN asset_projects ap ON ap.asset_id = al.asset_id
+      SELECT DISTINCT b.name, b.city, b.state
+      FROM branches b
+      JOIN asset_branches ab ON ab.branch_id = b.id
+      JOIN asset_projects ap ON ap.asset_id = ab.asset_id
       WHERE ap.project_id = ${projectId}
       LIMIT 1
     `,

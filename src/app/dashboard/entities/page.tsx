@@ -20,12 +20,12 @@ export default async function EntitiesPage() {
 
   const siteId = session.activeSiteId;
 
-  const [brands, projects, personas, locations, siteData] = await Promise.all([
+  const [brands, projects, personas, branches, siteData] = await Promise.all([
     sql`SELECT id, name, slug, url, description FROM brands WHERE site_id = ${siteId} ORDER BY name`,
     sql`SELECT id, name, slug, status, start_date, end_date, address, description, caption_mode, manual_caption_count FROM projects WHERE site_id = ${siteId} ORDER BY name`,
     sql`SELECT id, name, slug, display_name, type, consent_given, description FROM personas WHERE site_id = ${siteId} ORDER BY name`,
-    sql`SELECT id, name, slug, address, city, state, description FROM locations WHERE site_id = ${siteId} ORDER BY name`,
-    sql`SELECT brand_label, project_label, persona_label, location_label FROM sites WHERE id = ${siteId}`,
+    sql`SELECT id, name, slug, address, city, state, description, phone, is_primary FROM branches WHERE site_id = ${siteId} ORDER BY is_primary DESC, name`,
+    sql`SELECT brand_label, project_label, persona_label, branch_label, service_area_label FROM sites WHERE id = ${siteId}`,
   ]);
 
   const site = siteData[0];
@@ -34,7 +34,8 @@ export default async function EntitiesPage() {
     brand_label: (site?.brand_label as string) || null,
     project_label: (site?.project_label as string) || null,
     persona_label: (site?.persona_label as string) || null,
-    location_label: (site?.location_label as string) || null,
+    branch_label: (site?.branch_label as string) || null,
+    service_area_label: (site?.service_area_label as string) || null,
   };
 
   return (
@@ -69,14 +70,16 @@ export default async function EntitiesPage() {
         consent_given: !!c.consent_given,
         description: (c.description as string) || null,
       }))}
-      locations={locations.map((l) => ({
-        id: l.id as string,
-        name: l.name as string,
-        slug: l.slug as string,
-        address: (l.address as string) || null,
-        city: (l.city as string) || null,
-        state: (l.state as string) || null,
-        description: (l.description as string) || null,
+      branches={branches.map((b) => ({
+        id: b.id as string,
+        name: b.name as string,
+        slug: b.slug as string,
+        address: (b.address as string) || null,
+        city: (b.city as string) || null,
+        state: (b.state as string) || null,
+        description: (b.description as string) || null,
+        phone: (b.phone as string) || null,
+        is_primary: !!b.is_primary,
       }))}
     />
   );

@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT brand_label, project_label, persona_label, location_label
+    SELECT brand_label, project_label, persona_label, branch_label, service_area_label
     FROM sites WHERE id = ${siteId}
   `;
 
@@ -29,14 +29,15 @@ export async function GET(req: NextRequest) {
       brand_label: site.brand_label as string | null,
       project_label: site.project_label as string | null,
       persona_label: site.persona_label as string | null,
-      location_label: site.location_label as string | null,
+      branch_label: site.branch_label as string | null,
+      service_area_label: site.service_area_label as string | null,
     },
   });
 }
 
 /**
  * PATCH /api/entities/config
- * Body: { site_id, brand_label?, project_label?, persona_label?, location_label? }
+ * Body: { site_id, brand_label?, project_label?, persona_label?, branch_label?, service_area_label? }
  */
 export async function PATCH(req: NextRequest) {
   const authResult = await authenticateRequest(req);
@@ -44,7 +45,7 @@ export async function PATCH(req: NextRequest) {
   const auth = authResult as AuthContext;
 
   const body = await req.json();
-  const { site_id, brand_label, project_label, persona_label, location_label } = body;
+  const { site_id, brand_label, project_label, persona_label, branch_label, service_area_label } = body;
 
   if (!site_id) {
     return NextResponse.json({ error: "site_id required" }, { status: 400 });
@@ -63,7 +64,8 @@ export async function PATCH(req: NextRequest) {
     SET brand_label = ${brand_label ?? null},
         project_label = ${project_label ?? null},
         persona_label = ${persona_label ?? null},
-        location_label = ${location_label ?? null}
+        branch_label = ${branch_label ?? null},
+        service_area_label = ${service_area_label ?? null}
     WHERE id = ${site_id}
   `;
 

@@ -100,19 +100,50 @@ async function main() {
     arr.sort((a, b) => new Date(a.published_at) - new Date(b.published_at));
   }
 
-  const deleteList = [];
+  const allDupes = [];
   for (const arr of groups.values()) {
-    deleteList.push(...arr.slice(1));
+    allDupes.push(...arr.slice(1));
   }
+
+  // Split by platform: Facebook posts can be deleted via Graph API,
+  // Instagram posts cannot (Meta deliberately doesn't expose IG media
+  // DELETE — they require manual deletion via the Instagram app).
+  const isInstagram = (p) => /instagram\.com/.test(p.platform_post_url || "");
+  const fbDupes = allDupes.filter((p) => !isInstagram(p));
+  const igDupes = allDupes.filter(isInstagram);
 
   console.log(`Total posts inspected: ${posts.length}`);
   console.log(`Distinct tuples: ${groups.size}`);
   console.log(`Keepers: ${groups.size}`);
-  console.log(`Deletion targets: ${deleteList.length}`);
+  console.log(`All dupes: ${allDupes.length}`);
+  console.log(`  Facebook (API-deletable): ${fbDupes.length}`);
+  console.log(`  Instagram (manual deletion only — Meta API doesn't expose IG media DELETE): ${igDupes.length}`);
   console.log("");
 
+  const deleteList = fbDupes;
+
+  // Always print the IG manual-deletion list so the operator has the URLs.
+  if (igDupes.length > 0) {
+    console.log("------------------------------------------------------------");
+    console.log(`  INSTAGRAM POSTS REQUIRING MANUAL DELETION (${igDupes.length})`);
+    console.log("  Meta does not expose a DELETE endpoint for IG media.");
+    console.log("  Open each URL in Instagram and delete via the post menu.");
+    console.log("------------------------------------------------------------");
+    let n = 1;
+    for (const d of igDupes) {
+      console.log(`  [IG ${n++}/${igDupes.length}] ${d.platform_post_url || "(no url) post=" + d.platform_post_id}`);
+    }
+    console.log("");
+    console.log("  After deleting IG posts manually, mark them in DB:");
+    console.log(`    UPDATE social_posts SET vetoed_at = NOW(), veto_reason = '${VETO_REASON} (manual IG)'`);
+    console.log("    WHERE id IN (");
+    console.log("      " + igDupes.map((d) => `'${d.id}'`).join(",\n      "));
+    console.log("    );");
+    console.log("");
+  }
+
   if (deleteList.length === 0) {
-    console.log("No duplicates to delete.");
+    console.log("No Facebook duplicates to delete via API.");
     return;
   }
 

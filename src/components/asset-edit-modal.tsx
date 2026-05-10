@@ -789,15 +789,19 @@ export function AssetEditModal({
               />
             </div>
 
-            {/* SCENE SECTION — image LEFT, Scene Composition RIGHT, 2-col */}
+            {/* SCENE SECTION — image LEFT, Scene Composition RIGHT, 2-col.
+                Image container uses position:relative + absolute children
+                so the media never exceeds the SC card's height. Grid's
+                items-stretch makes both columns the same row height; the
+                absolute media + object-contain confines the visual to that. */}
             <div className="mb-3 grid grid-cols-1 items-stretch gap-4 md:grid-cols-2">
-              <div className="flex min-h-0 items-center justify-center overflow-hidden bg-background">
+              <div className="relative min-h-[200px] overflow-hidden bg-background">
                 {mediaType?.startsWith("video") || mediaType === "video" ? (
                   <video
                     ref={videoRef}
                     src={imageUrl}
                     controls
-                    className="max-h-full max-w-full object-contain"
+                    className="absolute inset-0 h-full w-full object-contain"
                   />
                 ) : faceData && faceData.length > 0 ? (
                   <FaceOverlay
@@ -819,7 +823,7 @@ export function AssetEditModal({
                   <img
                     src={imageUrl}
                     alt=""
-                    className="max-h-full max-w-full object-contain"
+                    className="absolute inset-0 h-full w-full object-contain"
                   />
                 )}
               </div>
@@ -864,6 +868,24 @@ export function AssetEditModal({
                 )}
               </div>
             </div>
+
+            {/* LEGACY CONTEXT NOTE — read-only "cue card" for handwritten
+                notes from the pre-recording era. Surfaces only when the
+                asset has a non-empty context_note (B2K and EK both have
+                rich handwritten notes that are useful as a script/prompt
+                while recording). Disappears once context_note is dropped
+                in migration #109. */}
+            {initialNote && initialNote.trim() && (
+              <div className="mb-3 rounded border border-warning/30 bg-warning/5 px-3 py-2.5">
+                <div className="mb-1.5 flex items-baseline gap-2">
+                  <span className="text-[11px] font-medium text-warning">Legacy Context Note</span>
+                  <span className="text-[10px] text-muted">— Handwritten cue card. Read from this while recording.</span>
+                </div>
+                <div className="whitespace-pre-wrap rounded bg-background/40 p-2 text-[12px] leading-relaxed text-foreground/90">
+                  {initialNote}
+                </div>
+              </div>
+            )}
 
             {/* STORY ANGLE SECTION — full-width, second priority */}
             {pillarConfig.length > 0 && (

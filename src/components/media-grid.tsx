@@ -9,6 +9,10 @@ interface Asset {
   storage_url: string;
   media_type: string;
   context_note: string | null;
+  /** Latest recording transcript (canonical narrative per
+      project_tracpost_recording_as_canonical.md). When present, displays
+      under the thumbnail. Falls back to context_note for legacy assets. */
+  latest_transcript?: string | null;
   triage_status: string;
   quality_score: number | null;
   // content_pillar / content_pillars dropped from the asset model
@@ -226,11 +230,16 @@ export function MediaGrid({
               className="px-2.5 py-2"
               title={`Uploaded ${new Date(a.created_at).toLocaleDateString()}`}
             >
-              {a.context_note ? (
-                <p className="line-clamp-6 text-xs leading-snug">{a.context_note}</p>
-              ) : (
-                <p className="text-xs italic text-muted">No caption</p>
-              )}
+              {(() => {
+                // Recording transcript is the canonical asset narrative;
+                // legacy context_note shown for assets that pre-date the
+                // recording-as-canonical pivot.
+                const text = a.latest_transcript || a.context_note;
+                if (!text) {
+                  return <p className="text-xs italic text-muted">No caption</p>;
+                }
+                return <p className="line-clamp-6 text-xs leading-snug">{text}</p>;
+              })()}
             </div>
           </button>
         ))}

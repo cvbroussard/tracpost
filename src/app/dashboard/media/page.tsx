@@ -116,6 +116,31 @@ export default async function MediaPage({ searchParams }: Props) {
         LIMIT 500
       `;
 
+  // Hydrate latest recording transcript per asset — recordings.transcript
+  // is the canonical asset narrative now (per
+  // project_tracpost_recording_as_canonical.md). Falls back to the legacy
+  // context_note display in the grid when no recording exists for an asset.
+  const assetIdsForRecordings = (allAssets as Array<{ id: string }>).map(a => a.id);
+  const latestTranscripts: Record<string, string> = {};
+  if (assetIdsForRecordings.length > 0) {
+    const recRows = await sql`
+      SELECT DISTINCT ON (source_asset_id)
+        source_asset_id, transcript
+      FROM recordings
+      WHERE source_asset_id = ANY(${assetIdsForRecordings}::uuid[])
+        AND transcript IS NOT NULL
+        AND transcript <> ''
+        AND archived_at IS NULL
+      ORDER BY source_asset_id, created_at DESC
+    `;
+    for (const r of recRows) {
+      latestTranscripts[r.source_asset_id as string] = r.transcript as string;
+    }
+  }
+  for (const a of allAssets as Array<Record<string, unknown>>) {
+    a.latest_transcript = latestTranscripts[a.id as string] || null;
+  }
+
   // Secondary filters applied in JS — cheaper than recomputing the
   // WHERE clause and keeps the SQL path static.
   let filtered = allAssets as Array<Record<string, unknown>>;
@@ -123,8 +148,11 @@ export default async function MediaPage({ searchParams }: Props) {
   if (search) {
     const needle = search.toLowerCase();
     filtered = filtered.filter(a => {
+      // Search transcript first (canonical narrative), then context_note
+      // (legacy fallback). Both are subscriber-meaningful text fields.
+      const transcript = ((a.latest_transcript as string) || "").toLowerCase();
       const note = ((a.context_note as string) || "").toLowerCase();
-      return note.includes(needle);
+      return transcript.includes(needle) || note.includes(needle);
     });
   }
   if (sourceFilter !== "all") {

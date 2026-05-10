@@ -242,6 +242,14 @@ export function AssetEditModal({
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Replace transcript workflow: subscriber clicks "Replace this
+  // transcript" → stash the current latest recording_id; on commit
+  // of the new recording, archive the prior. Hoisted above audio
+  // hook so onCommitted callback can capture it as a dependency.
+  // Asset stays briefed throughout — only the narrative source
+  // changes; debriefed state is reserved for whole-asset archiving.
+  const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
+
   // Audio briefing — recording is canonical asset narrative
   // (LOCKED 2026-05-10). Stage-on-stop + commit-on-save flow: the
   // subscriber's recording stays in browser memory until commit, then
@@ -257,15 +265,24 @@ export function AssetEditModal({
         // picks up the new latest. Latest wins.
         void refetchRecordings();
         // Fire audio-first auto-tagging suggestions per
-        // auto_tagging_audit (LOCKED 2026-05-10). Returns content_tags
-        // suggestions (auto-applied) + brand/service_area candidates
-        // (subscriber single-tap confirms).
+        // auto_tagging_audit (LOCKED 2026-05-10).
         void runAutoTagSuggest(recordingId, transcript);
+        // Replace workflow: if the subscriber initiated this recording
+        // via the "Replace transcript" button, archive the prior
+        // latest so the new one cleanly takes its place. Asset stays
+        // briefed (content_tags untouched).
+        if (replaceTargetId && replaceTargetId !== recordingId) {
+          void (async () => {
+            await archiveRecording(replaceTargetId);
+            await refetchRecordings();
+            setReplaceTargetId(null);
+          })();
+        }
       },
-      // refetchRecordings + runAutoTagSuggest declared below; safe
-      // because the callback only fires after assets are mounted.
+      // refetchRecordings + runAutoTagSuggest + replaceTargetId
+      // declared below; the callback only fires after audio.commit().
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [],
+      [replaceTargetId],
     ),
     onError: useCallback((err: Error) => {
       console.warn("Audio briefing error:", err.message);
@@ -352,6 +369,25 @@ export function AssetEditModal({
   const [serviceAreaCandidates, setServiceAreaCandidates] = useState<ServiceAreaCandidate[]>([]);
   const [autoTagging, setAutoTagging] = useState(false);
   const [confirmedSlugs, setConfirmedSlugs] = useState<Set<string>>(new Set());
+
+  function startReplaceTranscript() {
+    const latest = recordings[0];
+    if (!latest) return;
+    setReplaceTargetId(latest.id);
+    audio.start();
+  }
+
+  async function archiveRecording(id: string) {
+    try {
+      await fetch(`/api/recordings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: true }),
+      });
+    } catch (err) {
+      console.warn("Archive recording failed:", err);
+    }
+  }
 
   const runAutoTagSuggest = useCallback(async (recordingId: string, transcript: string) => {
     if (!transcript || transcript.trim().length < 20) return;
@@ -1169,8 +1205,33 @@ export function AssetEditModal({
                 />
               ) : recordings.length > 0 && recordings[0].transcript ? (
                 <>
+                  {replaceTargetId && (
+                    <div className="mb-1.5 rounded border border-warning/40 bg-warning/10 px-2 py-1 text-[10px] text-warning">
+                      ⚠ Replace mode: this transcript will be archived when you save your new recording. Asset stays briefed.
+                    </div>
+                  )}
                   <div className="rounded bg-background/40 p-2 text-[12px] text-foreground/90">
                     {recordings[0].transcript}
+                  </div>
+                  <div className="mt-1.5 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={startReplaceTranscript}
+                      disabled={!!replaceTargetId || audio.state === "recording" || audio.state === "previewing" || audio.state === "staged" || audio.state === "committing"}
+                      className="text-[10px] text-muted underline hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                      title="Start a new recording that will replace this transcript on save. Old recording archives; asset stays briefed."
+                    >
+                      🔄 Replace this transcript
+                    </button>
+                    {replaceTargetId && (
+                      <button
+                        type="button"
+                        onClick={() => { setReplaceTargetId(null); audio.discard(); }}
+                        className="text-[10px] text-muted underline hover:text-foreground"
+                      >
+                        Cancel replace
+                      </button>
+                    )}
                   </div>
                   {recordings.length > 1 && (
                     <details className="mt-1.5">

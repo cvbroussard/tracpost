@@ -279,11 +279,14 @@ function buildLogoCandidates(brandUrl: string, ogImage: string | null): string[]
 
     // Brandfetch first: their CDN is the only source curated to return
     // an actual brand logo (vs og:image, which is often a hero shot or
-    // product photo in disguise; vs favicons, which are tiny). Returns
-    // 404 for unknown domains, so the chain falls through naturally.
-    // Skipped silently in environments without the client ID.
+    // product photo in disguise; vs favicons, which are tiny).
+    //
+    // CRITICAL: fallback=404 makes Brandfetch return HTTP 404 (instead
+    // of their own b-in-a-box placeholder lettermark) when they don't
+    // have the brand. Without it, our capture pipeline would happily
+    // store the placeholder, thinking it's the real logo.
     if (brandfetchClientId) {
-      candidates.push(`https://cdn.brandfetch.io/${encodeURIComponent(apex)}?c=${encodeURIComponent(brandfetchClientId)}`);
+      candidates.push(`https://cdn.brandfetch.io/${encodeURIComponent(apex)}?c=${encodeURIComponent(brandfetchClientId)}&fallback=404`);
     }
 
     // og:image as backup — sometimes a true wordmark, sometimes a hero

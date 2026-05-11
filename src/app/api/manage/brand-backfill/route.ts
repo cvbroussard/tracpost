@@ -94,7 +94,9 @@ export async function POST(req: NextRequest) {
           let bfUrl: string | null = null;
           try {
             const apex = new URL(brandUrl).hostname.replace(/^www\./, "");
-            bfUrl = `https://cdn.brandfetch.io/${encodeURIComponent(apex)}?c=${encodeURIComponent(brandfetchClientId!)}`;
+            // fallback=404 prevents Brandfetch from serving their
+            // placeholder lettermark when they don't have the brand
+            bfUrl = `https://cdn.brandfetch.io/${encodeURIComponent(apex)}?c=${encodeURIComponent(brandfetchClientId!)}&fallback=404`;
           } catch { /* invalid url */ }
           let newAssetId: string | null = null;
           if (bfUrl) {
@@ -120,8 +122,23 @@ export async function POST(req: NextRequest) {
               WHERE b.id = ${id}
             `;
             results.push({ name, status: "relogoed", url: brandUrl, description: null, hero_url: (after?.hero_url as string | null) || null, og_image_url: null, hero_source: bfUrl, id });
+          } else if (currentSource.includes("brandfetch.io")) {
+            // Brandfetch returned 404 (with our fallback=404 param) but the
+            // existing hero CAME from Brandfetch — meaning what we have is
+            // the placeholder lettermark from before fallback=404 was set.
+            // Clear it so the subscriber sees the letter avatar and knows
+            // to manually paste a real logo.
+            await sql`
+              UPDATE brands
+              SET hero_asset_id = NULL,
+                  logo_service_url = NULL
+              WHERE id = ${id}
+            `;
+            noMatch++;
+            results.push({ name, status: "cleared placeholder", url: brandUrl, description: null, hero_url: null, og_image_url: null, hero_source: null, id });
           } else {
-            // Brandfetch had no entry — leave existing logo alone
+            // Brandfetch had no entry, but existing hero came from somewhere
+            // else (R2 manual paste, prior favicon capture). Leave alone.
             noMatch++;
             results.push({ name, status: "no brandfetch entry", url: brandUrl, description: null, hero_url: null, og_image_url: null, hero_source: null, id });
           }

@@ -1076,6 +1076,11 @@ export function TaggingManager({
                   <p className="text-sm font-medium">{brand.name}</p>
                   {brand.url && <a href={brand.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">{brand.url}</a>}
                   {brand.description && <p className="text-xs text-dim">{brand.description}</p>}
+                  {brand.logo_service_url && (
+                    <a href={brand.logo_service_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-dim hover:text-accent hover:underline" title={brand.logo_service_url}>
+                      logo: {brand.logo_service_url.replace(/^https?:\/\//, "").replace(/\?.*$/, "")}
+                    </a>
+                  )}
                 </div>
                 <span className="text-xs text-muted">{brand.slug}</span>
                 <EditDeleteRow type="brands" id={brand.id} onEdit={() => { setEditing(brand.id); setEditFields({ name: brand.name, url: brand.url || "", description: brand.description || "", hero_asset_id: brand.hero_asset_id || "", hero_image_url: "" }); }} />

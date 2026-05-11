@@ -49,10 +49,26 @@ interface AssetEditModalProps {
   availablePillars?: string[];
   brands?: Brand[];
   projects?: Project[];
+  /** Site's services catalog (rows from `services` table) — for the
+      Services picker (Row 6) and the auto-tag inspector. */
+  services?: Array<{ id: string; name: string; slug: string }>;
+  /** Site's branches catalog (rows from `branches` table) — for the
+      Branches picker (Row 7). */
+  branches?: Array<{ id: string; name: string; slug: string }>;
+  /** Site's service-area overlay rows (joined to canonical for display
+      name) — id is `site_service_areas.id`. For Service Areas picker
+      (Row 8). */
+  serviceAreas?: Array<{ id: string; name: string; slug: string }>;
   brandLabel?: string | null;
   projectLabel?: string | null;
+  serviceLabel?: string | null;
+  branchLabel?: string | null;
+  serviceAreaLabel?: string | null;
   initialBrandIds?: string[];
   initialProjectIds?: string[];
+  initialServiceIds?: string[];
+  initialBranchIds?: string[];
+  initialServiceAreaIds?: string[];
   personaLabel?: string | null;
   initialPersonaIds?: string[];
   source?: string | null;
@@ -96,10 +112,23 @@ interface AssetEditModalProps {
   personas?: Array<{ id: string; name: string; type: string }>;
   initialMetadata?: Record<string, unknown> | null;
   onClose: () => void;
-  onSaved: (note: string, pillar: string, tags: string[], brandIds?: string[], projectIds?: string[], personaIds?: string[]) => void;
+  onSaved: (
+    note: string,
+    pillar: string,
+    tags: string[],
+    brandIds?: string[],
+    projectIds?: string[],
+    personaIds?: string[],
+    serviceIds?: string[],
+    branchIds?: string[],
+    serviceAreaIds?: string[],
+  ) => void;
   onDeleted?: () => void;
   onBrandCreated?: (brand: Brand) => void;
   onProjectCreated?: (project: Project) => void;
+  onServiceCreated?: (service: { id: string; name: string; slug: string }) => void;
+  onBranchCreated?: (branch: { id: string; name: string; slug: string }) => void;
+  onServiceAreaCreated?: (area: { id: string; name: string; slug: string }) => void;
   onNext?: () => void;
   onPrev?: () => void;
   hasNext?: boolean;
@@ -119,10 +148,19 @@ export function AssetEditModal({
   pillarConfig,
   brands = [],
   projects = [],
+  services = [],
+  branches = [],
+  serviceAreas = [],
   brandLabel,
   projectLabel,
+  serviceLabel,
+  branchLabel,
+  serviceAreaLabel,
   initialBrandIds = [],
   initialProjectIds = [],
+  initialServiceIds = [],
+  initialBranchIds = [],
+  initialServiceAreaIds = [],
   personaLabel,
   initialPersonaIds = [],
   source,
@@ -143,6 +181,9 @@ export function AssetEditModal({
   initialMetadata,
   onBrandCreated,
   onProjectCreated,
+  onServiceCreated,
+  onBranchCreated,
+  onServiceAreaCreated,
   onNext,
   onPrev,
   hasNext = false,
@@ -182,6 +223,9 @@ export function AssetEditModal({
   const [brandIds, setBrandIds] = useState<string[]>(initialBrandIds);
   const [projectIds, setProjectIds] = useState<string[]>(initialProjectIds);
   const [personaIds, setPersonaIds] = useState<string[]>(initialPersonaIds);
+  const [serviceIds, setServiceIds] = useState<string[]>(initialServiceIds);
+  const [branchIds, setBranchIds] = useState<string[]>(initialBranchIds);
+  const [serviceAreaIds, setServiceAreaIds] = useState<string[]>(initialServiceAreaIds);
   // saved* mirror initialBrandIds/etc but advance on every successful save.
   // Used to distinguish "confirmed" pills (saved truth, deep color) from
   // "preselected" pills (auto-tag pending, light color, may be unchecked
@@ -189,6 +233,14 @@ export function AssetEditModal({
   const [savedBrandIds, setSavedBrandIds] = useState<string[]>(initialBrandIds);
   const [savedProjectIds, setSavedProjectIds] = useState<string[]>(initialProjectIds);
   const [savedPersonaIds, setSavedPersonaIds] = useState<string[]>(initialPersonaIds);
+  const [savedServiceIds, setSavedServiceIds] = useState<string[]>(initialServiceIds);
+  const [savedBranchIds, setSavedBranchIds] = useState<string[]>(initialBranchIds);
+  const [savedServiceAreaIds, setSavedServiceAreaIds] = useState<string[]>(initialServiceAreaIds);
+  // Local catalog mirrors so quick-create flows can append to the picker
+  // without a server refetch.
+  const [localServices, setLocalServices] = useState(services);
+  const [localBranches, setLocalBranches] = useState(branches);
+  const [localServiceAreas, setLocalServiceAreas] = useState(serviceAreas);
 
   // Reset state when navigating to a different asset
   useEffect(() => {
@@ -200,9 +252,15 @@ export function AssetEditModal({
     setBrandIds(initialBrandIds);
     setProjectIds(initialProjectIds);
     setPersonaIds(initialPersonaIds);
+    setServiceIds(initialServiceIds);
+    setBranchIds(initialBranchIds);
+    setServiceAreaIds(initialServiceAreaIds);
     setSavedBrandIds(initialBrandIds);
     setSavedProjectIds(initialProjectIds);
     setSavedPersonaIds(initialPersonaIds);
+    setSavedServiceIds(initialServiceIds);
+    setSavedBranchIds(initialBranchIds);
+    setSavedServiceAreaIds(initialServiceAreaIds);
     setVerifications(aiVerifications || []);
     setAiGenerated(initialAiGenerated);
     setTypedMode(false);
@@ -231,8 +289,14 @@ export function AssetEditModal({
   const [localProjects, setLocalProjects] = useState(projects);
   const [newBrandName, setNewBrandName] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
+  const [newServiceName, setNewServiceName] = useState("");
+  const [newBranchName, setNewBranchName] = useState("");
+  const [newServiceAreaName, setNewServiceAreaName] = useState("");
   const [creatingBrand, setCreatingBrand] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [creatingService, setCreatingService] = useState(false);
+  const [creatingBranch, setCreatingBranch] = useState(false);
+  const [creatingServiceArea, setCreatingServiceArea] = useState(false);
   const [saving, setSaving] = useState(false);
   // Generate button removed — text generation is automatic in the
   // pipeline cron. Caption + pin_headline + display_caption + alt_text
@@ -741,6 +805,81 @@ export function AssetEditModal({
     setCreatingProject(false);
   }
 
+  async function quickCreateService() {
+    if (!newServiceName.trim()) return;
+    setCreatingService(true);
+    try {
+      const res = await fetch("/api/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newServiceName.trim(), site_id: siteId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const created = data.service || data;
+        setLocalServices((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+        setServiceIds((prev) => [...prev, created.id]);
+        setNewServiceName("");
+        onServiceCreated?.(created);
+      }
+    } catch { /* ignore */ }
+    setCreatingService(false);
+  }
+
+  async function quickCreateBranch() {
+    if (!newBranchName.trim()) return;
+    setCreatingBranch(true);
+    try {
+      const res = await fetch("/api/branches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newBranchName.trim(), site_id: siteId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const created = data.branch || data;
+        setLocalBranches((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+        setBranchIds((prev) => [...prev, created.id]);
+        setNewBranchName("");
+        onBranchCreated?.(created);
+      }
+    } catch { /* ignore */ }
+    setCreatingBranch(false);
+  }
+
+  async function quickCreateServiceArea() {
+    if (!newServiceAreaName.trim()) return;
+    setCreatingServiceArea(true);
+    try {
+      const res = await fetch("/api/service-areas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newServiceAreaName.trim(),
+          site_id: siteId,
+          kind: "city",
+          seed_source: "manual_modal",
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // /api/service-areas returns the overlay row + canonical
+        const overlay = data.overlay || data.service_area || data;
+        const canonical = data.canonical || {};
+        const created = {
+          id: overlay.id || overlay.overlay_id,
+          name: canonical.name || newServiceAreaName.trim(),
+          slug: canonical.slug || "",
+        };
+        setLocalServiceAreas((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+        setServiceAreaIds((prev) => [...prev, created.id]);
+        setNewServiceAreaName("");
+        onServiceAreaCreated?.(created);
+      }
+    } catch { /* ignore */ }
+    setCreatingServiceArea(false);
+  }
+
   /**
    * Subscriber confirms or rejects an AI suggestion (#167). Optimistic UI;
    * server PATCH writes to metadata.ai_verifications. Confirmed/rejected
@@ -817,6 +956,9 @@ export function AssetEditModal({
     if (JSON.stringify(brandIds.sort()) !== JSON.stringify(initialBrandIds.sort())) body.brand_ids = brandIds;
     if (JSON.stringify(projectIds.sort()) !== JSON.stringify(initialProjectIds.sort())) body.project_ids = projectIds;
     if (JSON.stringify(personaIds.sort()) !== JSON.stringify(initialPersonaIds.sort())) body.persona_ids = personaIds;
+    if (JSON.stringify(serviceIds.sort()) !== JSON.stringify(initialServiceIds.sort())) body.service_ids = serviceIds;
+    if (JSON.stringify(branchIds.sort()) !== JSON.stringify(initialBranchIds.sort())) body.branch_ids = branchIds;
+    if (JSON.stringify(serviceAreaIds.sort()) !== JSON.stringify(initialServiceAreaIds.sort())) body.service_area_ids = serviceAreaIds;
 
     if (Object.keys(body).length === 0) {
       // Nothing to PATCH but the recording commit may have changed truth.
@@ -826,7 +968,10 @@ export function AssetEditModal({
       setSavedBrandIds(brandIds);
       setSavedProjectIds(projectIds);
       setSavedPersonaIds(personaIds);
-      onSaved(note, pillar, tags, brandIds, projectIds, personaIds);
+      setSavedServiceIds(serviceIds);
+      setSavedBranchIds(branchIds);
+      setSavedServiceAreaIds(serviceAreaIds);
+      onSaved(note, pillar, tags, brandIds, projectIds, personaIds, serviceIds, branchIds, serviceAreaIds);
       return true;
     }
 
@@ -841,7 +986,10 @@ export function AssetEditModal({
     setSavedBrandIds(brandIds);
     setSavedProjectIds(projectIds);
     setSavedPersonaIds(personaIds);
-    onSaved(note, pillar, tags, brandIds, projectIds, personaIds);
+    setSavedServiceIds(serviceIds);
+    setSavedBranchIds(branchIds);
+    setSavedServiceAreaIds(serviceAreaIds);
+    onSaved(note, pillar, tags, brandIds, projectIds, personaIds, serviceIds, branchIds, serviceAreaIds);
     return true;
   }
 
@@ -1498,6 +1646,162 @@ export function AssetEditModal({
                   </button>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Row 6: Services */}
+        {serviceLabel && (
+          <div className="border-t border-border px-6 py-4">
+            <label className="mb-1.5 block text-xs text-muted">{serviceLabel}</label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {localServices.map((s) => {
+                const selected = serviceIds.includes(s.id);
+                const confirmed = selected && savedServiceIds.includes(s.id);
+                const preselected = selected && !confirmed;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() =>
+                      setServiceIds((prev) =>
+                        selected ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                      )
+                    }
+                    title={preselected ? "Auto-tag preselect — uncheck to skip, or Save to confirm" : undefined}
+                    className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                      confirmed
+                        ? "bg-accent text-white"
+                        : preselected
+                          ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                          : "bg-surface-hover text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {s.name}
+                  </button>
+                );
+              })}
+              <span className="flex items-center gap-1">
+                <input
+                  value={newServiceName}
+                  onChange={(e) => setNewServiceName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && quickCreateService()}
+                  placeholder={`+ ${serviceLabel}`}
+                  className="w-28 rounded bg-transparent px-2 py-0.5 text-xs text-muted outline-none placeholder:text-muted/50 focus:bg-surface-hover"
+                />
+                {newServiceName.trim() && (
+                  <button
+                    onClick={quickCreateService}
+                    disabled={creatingService}
+                    className="text-[10px] text-accent hover:underline"
+                  >
+                    {creatingService ? "..." : "Add"}
+                  </button>
+                )}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Row 7: Branches */}
+        {branchLabel && (
+          <div className="border-t border-border px-6 py-4">
+            <label className="mb-1.5 block text-xs text-muted">{branchLabel}</label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {localBranches.map((b) => {
+                const selected = branchIds.includes(b.id);
+                const confirmed = selected && savedBranchIds.includes(b.id);
+                const preselected = selected && !confirmed;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() =>
+                      setBranchIds((prev) =>
+                        selected ? prev.filter((id) => id !== b.id) : [...prev, b.id]
+                      )
+                    }
+                    title={preselected ? "Auto-tag preselect — uncheck to skip, or Save to confirm" : undefined}
+                    className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                      confirmed
+                        ? "bg-accent text-white"
+                        : preselected
+                          ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                          : "bg-surface-hover text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {b.name}
+                  </button>
+                );
+              })}
+              <span className="flex items-center gap-1">
+                <input
+                  value={newBranchName}
+                  onChange={(e) => setNewBranchName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && quickCreateBranch()}
+                  placeholder={`+ ${branchLabel}`}
+                  className="w-28 rounded bg-transparent px-2 py-0.5 text-xs text-muted outline-none placeholder:text-muted/50 focus:bg-surface-hover"
+                />
+                {newBranchName.trim() && (
+                  <button
+                    onClick={quickCreateBranch}
+                    disabled={creatingBranch}
+                    className="text-[10px] text-accent hover:underline"
+                  >
+                    {creatingBranch ? "..." : "Add"}
+                  </button>
+                )}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Row 8: Service Areas */}
+        {serviceAreaLabel && (
+          <div className="border-t border-border px-6 py-4">
+            <label className="mb-1.5 block text-xs text-muted">{serviceAreaLabel}</label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {localServiceAreas.map((sa) => {
+                const selected = serviceAreaIds.includes(sa.id);
+                const confirmed = selected && savedServiceAreaIds.includes(sa.id);
+                const preselected = selected && !confirmed;
+                return (
+                  <button
+                    key={sa.id}
+                    onClick={() =>
+                      setServiceAreaIds((prev) =>
+                        selected ? prev.filter((id) => id !== sa.id) : [...prev, sa.id]
+                      )
+                    }
+                    title={preselected ? "Auto-tag preselect — uncheck to skip, or Save to confirm" : undefined}
+                    className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                      confirmed
+                        ? "bg-accent text-white"
+                        : preselected
+                          ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                          : "bg-surface-hover text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {sa.name}
+                  </button>
+                );
+              })}
+              <span className="flex items-center gap-1">
+                <input
+                  value={newServiceAreaName}
+                  onChange={(e) => setNewServiceAreaName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && quickCreateServiceArea()}
+                  placeholder={`+ ${serviceAreaLabel}`}
+                  className="w-28 rounded bg-transparent px-2 py-0.5 text-xs text-muted outline-none placeholder:text-muted/50 focus:bg-surface-hover"
+                />
+                {newServiceAreaName.trim() && (
+                  <button
+                    onClick={quickCreateServiceArea}
+                    disabled={creatingServiceArea}
+                    className="text-[10px] text-accent hover:underline"
+                  >
+                    {creatingServiceArea ? "..." : "Add"}
+                  </button>
+                )}
+              </span>
             </div>
           </div>
         )}

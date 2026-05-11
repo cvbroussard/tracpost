@@ -20,9 +20,9 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const { context_note, pillar, pillars, scene_types, content_tags, vendor_ids, brand_ids, project_ids, persona_ids, branch_ids, ai_verifications, restore, ai_generated } = body;
+    const { context_note, pillar, pillars, scene_types, content_tags, vendor_ids, brand_ids, project_ids, persona_ids, branch_ids, service_ids, service_area_ids, ai_verifications, restore, ai_generated } = body;
 
-    if (context_note === undefined && pillar === undefined && pillars === undefined && scene_types === undefined && content_tags === undefined && vendor_ids === undefined && brand_ids === undefined && project_ids === undefined && persona_ids === undefined && branch_ids === undefined && ai_verifications === undefined && restore === undefined && ai_generated === undefined) {
+    if (context_note === undefined && pillar === undefined && pillars === undefined && scene_types === undefined && content_tags === undefined && vendor_ids === undefined && brand_ids === undefined && project_ids === undefined && persona_ids === undefined && branch_ids === undefined && service_ids === undefined && service_area_ids === undefined && ai_verifications === undefined && restore === undefined && ai_generated === undefined) {
       return NextResponse.json(
         { error: "Nothing to update" },
         { status: 400 }
@@ -171,6 +171,21 @@ export async function PATCH(
       await sql`DELETE FROM asset_branches WHERE asset_id = ${id}`;
       for (const branchId of branch_ids) {
         await sql`INSERT INTO asset_branches (asset_id, branch_id) VALUES (${id}, ${branchId}) ON CONFLICT DO NOTHING`;
+      }
+    }
+    if (Array.isArray(service_ids)) {
+      await sql`DELETE FROM asset_services WHERE asset_id = ${id}`;
+      for (const serviceId of service_ids) {
+        await sql`INSERT INTO asset_services (asset_id, service_id) VALUES (${id}, ${serviceId}) ON CONFLICT DO NOTHING`;
+      }
+    }
+    if (Array.isArray(service_area_ids)) {
+      // service_area_ids reference site_service_areas.id (the per-site
+      // overlay row, not platform canonical) — same shape as the other
+      // 5 groups (per-site entity references).
+      await sql`DELETE FROM asset_service_areas WHERE asset_id = ${id}`;
+      for (const serviceAreaId of service_area_ids) {
+        await sql`INSERT INTO asset_service_areas (asset_id, site_service_area_id) VALUES (${id}, ${serviceAreaId}) ON CONFLICT DO NOTHING`;
       }
     }
 

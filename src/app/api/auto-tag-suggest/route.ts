@@ -1,36 +1,52 @@
 /**
  * POST /api/auto-tag-suggest
  *
- * Single entry point for audio-first auto-tagging suggestions, fired
- * by the asset modal after a recording commits. Combines three
- * suggestion paths into one round-trip:
+ * The auto-tag inspector backend. LOCKED 2026-05-10.
+ * See memory/project_tracpost_auto_tag_inspector_design.md for the
+ * full architecture.
  *
- *   1. content_tags (#204): pillar-based tags via existing
- *      suggestTags() function (text-driven Haiku call)
- *   2. brand_candidates (#201): NER-extracted brand mentions, with
- *      existing-vs-new flag for each
- *   3. service_area_candidates (#203): NER-extracted geographic
- *      mentions, with existing-vs-new flag for each (checking BOTH
- *      site overlay and platform canonical)
+ * Single round-trip that produces, per asset recording commit:
  *
- * The modal renders these as suggestions; subscriber single-tap
- * confirms each entity to materialize it (lazy auto-create).
+ *   1. story_angles  — pillar+tags via suggestTags() (separate layer,
+ *      NOT part of the 6-group entity tagging)
+ *   2. groups.{brand|service|project|persona|branch|service_area}
+ *      with applied_matches (existing-catalog hits, server-side
+ *      auto-linked) and suggested_new (NER new-entity proposals,
+ *      brand-only per locked rules)
+ *
+ * Cross-group matches are ADDITIVE — same transcript may yield hits
+ * across multiple groups, all surface, no suppression. Subscriber
+ * confirms each independently in the modal inspector.
  *
  * Body: { transcript, site_id, source_asset_id?, business_category? }
- * Returns: {
- *   content_tags: { pillarId, tagIds[] },
- *   brand_candidates: [{ name, slug, existing, existing_id? }],
- *   service_area_candidates: [{ name, slug, kind, existing_overlay,
- *                                existing_canonical_id?, overlay_id? }]
- * }
  *
- * See auto_tagging_audit.md for the full architecture.
+ * Returns:
+ *   {
+ *     story_angles: { pillarId, tagIds },
+ *     groups: {
+ *       brand:        { applied_matches: CatalogMatch[], suggested_new: NewCandidate[] },
+ *       service:      { applied_matches: CatalogMatch[], suggested_new: [] },
+ *       project:      { applied_matches: CatalogMatch[], suggested_new: [] },
+ *       persona:      { applied_matches: CatalogMatch[], suggested_new: [] },
+ *       branch:       { applied_matches: CatalogMatch[], suggested_new: [] },
+ *       service_area: { applied_matches: CatalogMatch[], suggested_new: [] },
+ *     },
+ *     ner_provider: string,
+ *     ner_warnings: string[],
+ *     source_asset_id: string | null
+ *   }
  */
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { suggestTags } from "@/lib/triage/suggest-tags";
 import { extractEntities } from "@/lib/ner";
+import {
+  AUTO_TAG_RULES,
+  findCatalogMatches,
+  type TagGroup,
+  type CatalogMatch,
+} from "@/lib/auto-tag-rules";
 
 function slugify(s: string): string {
   return s
@@ -39,6 +55,17 @@ function slugify(s: string): string {
     .replace(/^_|_$/g, "")
     .slice(0, 60);
 }
+
+type NewCandidate = {
+  name: string;
+  slug: string;
+  context: string;
+};
+
+type GroupResult = {
+  applied_matches: CatalogMatch[];
+  suggested_new: NewCandidate[];
+};
 
 export async function POST(req: NextRequest) {
   const authResult = await authenticateRequest(req);
@@ -65,9 +92,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Site not found" }, { status: 404 });
     }
 
-    // Run content_tags suggestion + NER extraction in parallel
-    const [tagSuggestion, ner] = await Promise.all([
-      suggestTags(site_id, transcript).catch(() => ({ pillarId: "", tagIds: [] })),
+    // Fetch all 6 catalogs + run NER + suggestTags in parallel.
+    // Catalogs: 6 small per-site queries. Promise.all collapses to one
+    // network round-trip's latency.
+    const [
+      brandRows,
+      serviceRows,
+      projectRows,
+      personaRows,
+      branchRows,
+      serviceAreaRows,
+      tagSuggestion,
+      ner,
+    ] = await Promise.all([
+      sql`SELECT id, name FROM brands WHERE site_id = ${site_id}`,
+      sql`SELECT id, name FROM services WHERE site_id = ${site_id}`,
+      sql`SELECT id, name FROM projects WHERE site_id = ${site_id}`,
+      sql`SELECT id, name FROM personas WHERE site_id = ${site_id}`,
+      sql`SELECT id, name FROM branches WHERE site_id = ${site_id}`,
+      // Service areas: surface OVERLAY id (matches asset_service_areas FK)
+      // with canonical name (the human-readable string subscribers see).
+      sql`
+        SELECT sa.id, c.name
+        FROM site_service_areas sa
+        JOIN service_areas_canonical c ON c.id = sa.service_area_canonical_id
+        WHERE sa.site_id = ${site_id}
+      `,
+      suggestTags(site_id, transcript).catch(() => ({
+        pillarId: "",
+        tagIds: [] as string[],
+      })),
       extractEntities(transcript, business_category).catch(() => ({
         brands: [] as Array<{ name: string; context: string }>,
         places: [] as Array<{ name: string; context: string }>,
@@ -76,110 +130,126 @@ export async function POST(req: NextRequest) {
       })),
     ]);
 
-    // For each NER brand: dedup against existing brands for this site.
-    // Match strategy (in order): slug exact → name substring (either way).
-    // The substring match handles partial mentions like "Thermador Range"
-    // resolving to existing "Thermador" brand.
-    const existingBrands = await sql`
-      SELECT id, slug, name FROM brands WHERE site_id = ${site_id}
-    `;
-    const existingBrandSlugs = new Map<string, string>();
-    const existingBrandsList: Array<{ id: string; slug: string; name: string }> = [];
-    for (const b of existingBrands) {
-      existingBrandSlugs.set(b.slug as string, b.id as string);
-      existingBrandsList.push({ id: b.id as string, slug: b.slug as string, name: (b.name as string).toLowerCase() });
+    // Per-group catalog scan using the locked rules module.
+    const groupEntities: Record<TagGroup, Array<{ id: string; name: string }>> = {
+      brand: brandRows.map((r) => ({ id: r.id as string, name: r.name as string })),
+      service: serviceRows.map((r) => ({ id: r.id as string, name: r.name as string })),
+      project: projectRows.map((r) => ({ id: r.id as string, name: r.name as string })),
+      persona: personaRows.map((r) => ({ id: r.id as string, name: r.name as string })),
+      branch: branchRows.map((r) => ({ id: r.id as string, name: r.name as string })),
+      service_area: serviceAreaRows.map((r) => ({
+        id: r.id as string,
+        name: r.name as string,
+      })),
+    };
+
+    const groups: Record<TagGroup, GroupResult> = {
+      brand: { applied_matches: [], suggested_new: [] },
+      service: { applied_matches: [], suggested_new: [] },
+      project: { applied_matches: [], suggested_new: [] },
+      persona: { applied_matches: [], suggested_new: [] },
+      branch: { applied_matches: [], suggested_new: [] },
+      service_area: { applied_matches: [], suggested_new: [] },
+    };
+
+    for (const group of Object.keys(groups) as TagGroup[]) {
+      groups[group].applied_matches = findCatalogMatches(
+        transcript,
+        group,
+        groupEntities[group],
+      );
     }
 
-    function findExistingBrand(candidateName: string, candidateSlug: string): string | null {
-      // Exact slug match
-      const exact = existingBrandSlugs.get(candidateSlug);
-      if (exact) return exact;
-      // Name-substring match (case-insensitive). E.g., "Thermador Range" → existing "Thermador".
-      const lower = candidateName.toLowerCase();
-      for (const b of existingBrandsList) {
-        if (lower.includes(b.name) || b.name.includes(lower)) {
-          return b.id;
+    // Brand new-entity suggestions from NER (only group with
+    // suggest_create_new=true per AUTO_TAG_RULES).
+    if (AUTO_TAG_RULES.brand.allow_suggest_create_new) {
+      const matchedBrandIds = new Set(
+        groups.brand.applied_matches.map((m) => m.entity_id),
+      );
+      const matchedBrandNamesLower = new Set(
+        groups.brand.applied_matches.map((m) => m.name.toLowerCase()),
+      );
+      for (const b of ner.brands) {
+        const slug = slugify(b.name);
+        const lower = b.name.toLowerCase();
+        // Skip if NER candidate matches an already-applied existing brand.
+        // Catalog scan + name-substring check both ways for robustness.
+        const overlaps = Array.from(matchedBrandNamesLower).some(
+          (existing) => lower.includes(existing) || existing.includes(lower),
+        );
+        if (overlaps) continue;
+        // Skip if slug already exists in catalog (defensive — usually
+        // caught by overlaps check, but slug-based dedup is cheap).
+        const existingBrand = brandRows.find(
+          (r) => slugify(r.name as string) === slug,
+        );
+        if (existingBrand) {
+          // It exists in catalog but didn't catalog-match (maybe due to
+          // word-boundary or eligibility rules). Add to applied_matches
+          // anyway — subscriber said the name, brand exists, link it.
+          if (!matchedBrandIds.has(existingBrand.id as string)) {
+            groups.brand.applied_matches.push({
+              entity_id: existingBrand.id as string,
+              name: existingBrand.name as string,
+              match_text: b.name,
+              match_start: -1,
+              context_excerpt: b.context,
+            });
+            matchedBrandIds.add(existingBrand.id as string);
+          }
+          continue;
         }
+        groups.brand.suggested_new.push({
+          name: b.name,
+          slug,
+          context: b.context,
+        });
       }
-      return null;
     }
 
-    const brandCandidates = ner.brands.map((b) => {
-      const slug = slugify(b.name);
-      const existingId = findExistingBrand(b.name, slug);
-      return {
-        name: b.name,
-        slug,
-        context: b.context,
-        existing: !!existingId,
-        existing_id: existingId || null,
-      };
-    });
-
-    // AUTO-LINK existing brands to the source asset. Subscriber already
-    // authorized the brand's existence; mentioning it in a transcript
-    // about this asset is implicit asset-link confirmation. Net effect:
-    // existing brands appear as ✓ in UI AND get the asset_brands row.
+    // AUTO-LINK existing matches to asset_*_join across all 6 groups.
+    // Subscriber's authorization of entity existence + transcript mention
+    // = implicit asset-link confirmation. Server inserts now; pre-checked
+    // pills in modal; subscriber unchecks before save if any false hits.
     if (source_asset_id) {
-      for (const c of brandCandidates) {
-        if (c.existing && c.existing_id) {
+      for (const group of Object.keys(groups) as TagGroup[]) {
+        const rules = AUTO_TAG_RULES[group];
+        if (!rules.allow_auto_link_existing) continue;
+        for (const m of groups[group].applied_matches) {
           try {
-            await sql`
-              INSERT INTO asset_brands (asset_id, brand_id)
-              VALUES (${source_asset_id}, ${c.existing_id})
-              ON CONFLICT DO NOTHING
-            `;
+            switch (group) {
+              case "brand":
+                await sql`INSERT INTO asset_brands (asset_id, brand_id) VALUES (${source_asset_id}, ${m.entity_id}) ON CONFLICT DO NOTHING`;
+                break;
+              case "service":
+                await sql`INSERT INTO asset_services (asset_id, service_id) VALUES (${source_asset_id}, ${m.entity_id}) ON CONFLICT DO NOTHING`;
+                break;
+              case "project":
+                await sql`INSERT INTO asset_projects (asset_id, project_id) VALUES (${source_asset_id}, ${m.entity_id}) ON CONFLICT DO NOTHING`;
+                break;
+              case "persona":
+                await sql`INSERT INTO asset_personas (asset_id, persona_id) VALUES (${source_asset_id}, ${m.entity_id}) ON CONFLICT DO NOTHING`;
+                break;
+              case "branch":
+                await sql`INSERT INTO asset_branches (asset_id, branch_id) VALUES (${source_asset_id}, ${m.entity_id}) ON CONFLICT DO NOTHING`;
+                break;
+              case "service_area":
+                await sql`INSERT INTO asset_service_areas (asset_id, site_service_area_id) VALUES (${source_asset_id}, ${m.entity_id}) ON CONFLICT DO NOTHING`;
+                break;
+            }
           } catch (err) {
-            console.warn(`Auto-link brand ${c.existing_id} to asset ${source_asset_id} failed:`, err);
+            console.warn(
+              `Auto-link ${group} ${m.entity_id} to asset ${source_asset_id} failed:`,
+              err,
+            );
           }
         }
       }
     }
 
-    // For each NER place: dedup against site overlay AND canonical
-    const existingOverlay = await sql`
-      SELECT sa.id AS overlay_id, c.slug, c.id AS canonical_id
-      FROM site_service_areas sa
-      JOIN service_areas_canonical c ON c.id = sa.service_area_canonical_id
-      WHERE sa.site_id = ${site_id}
-    `;
-    const overlaySlugs = new Map<string, { overlay_id: string; canonical_id: string }>();
-    for (const o of existingOverlay) {
-      overlaySlugs.set(o.slug as string, { overlay_id: o.overlay_id as string, canonical_id: o.canonical_id as string });
-    }
-
-    // For places not yet in overlay, check if canonical row exists platform-wide
-    const placeSlugs = ner.places.map((p) => slugify(p.name));
-    const newSlugs = placeSlugs.filter((s) => !overlaySlugs.has(s));
-    const canonicalLookup = new Map<string, string>();
-    if (newSlugs.length > 0) {
-      const canonicals = await sql`
-        SELECT id, slug FROM service_areas_canonical WHERE slug = ANY(${newSlugs}::text[])
-      `;
-      for (const c of canonicals) {
-        canonicalLookup.set(c.slug as string, c.id as string);
-      }
-    }
-
-    const serviceAreaCandidates = ner.places.map((p) => {
-      const slug = slugify(p.name);
-      const overlayMatch = overlaySlugs.get(slug);
-      const canonicalMatch = canonicalLookup.get(slug);
-      return {
-        name: p.name,
-        slug,
-        kind: "city" as const, // default kind — subscriber can change on add
-        context: p.context,
-        existing_overlay: !!overlayMatch,
-        existing_canonical_id: overlayMatch?.canonical_id || canonicalMatch || null,
-        overlay_id: overlayMatch?.overlay_id || null,
-      };
-    });
-
     return NextResponse.json({
-      content_tags: tagSuggestion,
-      brand_candidates: brandCandidates,
-      service_area_candidates: serviceAreaCandidates,
+      story_angles: tagSuggestion,
+      groups,
       ner_provider: ner.provider,
       ner_warnings: ner.warnings || [],
       source_asset_id: source_asset_id || null,

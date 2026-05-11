@@ -433,22 +433,23 @@ export function AssetEditModal({
   const [typedMode, setTypedMode] = useState(false);
   const [typedDraft, setTypedDraft] = useState("");
 
-  // Audio-first auto-tagging state per auto_tagging_audit (LOCKED 2026-05-10).
-  // Populated by runAutoTagSuggest after audio.commit() resolves. Subscriber
-  // single-tap confirms each candidate; confirmed ones get materialized via
-  // POST /api/brands or /api/service-areas with seed_source='audio_transcript'.
-  interface BrandCandidate { name: string; slug: string; context: string; existing: boolean; existing_id: string | null; }
-  interface ServiceAreaCandidate { name: string; slug: string; kind: string; context: string; existing_overlay: boolean; existing_canonical_id: string | null; overlay_id: string | null; }
-  const [brandCandidates, setBrandCandidates] = useState<BrandCandidate[]>([]);
-  const [serviceAreaCandidates, setServiceAreaCandidates] = useState<ServiceAreaCandidate[]>([]);
+  // Auto-tag inspector state (LOCKED 2026-05-10).
+  // Per memory/project_tracpost_auto_tag_inspector_design.md: cross-group
+  // catalog scan + NER produces per-group results. Subscriber sees applied
+  // matches (existing-catalog hits, server-side auto-linked) and suggested
+  // new (NER proposals — brand-only). All matches additive, no suppression.
+  type InspectorMatch = { entity_id: string; name: string; match_text: string; match_start: number; context_excerpt: string };
+  type InspectorNew = { name: string; slug: string; context: string };
+  type InspectorGroup = { applied_matches: InspectorMatch[]; suggested_new: InspectorNew[] };
+  type InspectorTagGroup = "brand" | "service" | "project" | "persona" | "branch" | "service_area";
+  type InspectorState = Record<InspectorTagGroup, InspectorGroup>;
+  const [inspectorState, setInspectorState] = useState<InspectorState | null>(null);
   const [autoTagging, setAutoTagging] = useState(false);
-  const [confirmedSlugs, setConfirmedSlugs] = useState<Set<string>>(new Set());
   // Track that a suggestion run completed (success or no-result). Used
-  // to render the panel even when NER returned zero candidates so the
-  // subscriber can tell the system ran. Null = never ran this session.
+  // to render the panel even when zero matches surfaced so subscriber can
+  // tell the system ran. Null = never ran this session.
   const [lastSuggestRunAt, setLastSuggestRunAt] = useState<number | null>(null);
   const [autoAppliedTagCount, setAutoAppliedTagCount] = useState(0);
-  const [autoLinkedBrandCount, setAutoLinkedBrandCount] = useState(0);
   const [nerWarnings, setNerWarnings] = useState<string[]>([]);
 
   function startReplaceTranscript() {
@@ -475,7 +476,7 @@ export function AssetEditModal({
     setAutoTagging(true);
     setNerWarnings([]);
     setAutoAppliedTagCount(0);
-    setAutoLinkedBrandCount(0);
+    void recordingId;
     try {
       const res = await fetch("/api/auto-tag-suggest", {
         method: "POST",
@@ -492,11 +493,13 @@ export function AssetEditModal({
       }
       const data = await res.json();
 
-      // Apply content_tags suggestions immediately to Story Angle.
+      // Story Angles: separate layer (editorial framing per-post). Apply
+      // suggested pillar tags immediately to working Story Angle state.
       let appliedCount = 0;
-      if (data.content_tags?.tagIds?.length > 0) {
+      const tagSuggestion = data.story_angles || data.content_tags || {};
+      if (tagSuggestion.tagIds?.length > 0) {
         const allValidTagIds = new Set(pillarConfig.flatMap((p) => p.tags.map((t) => t.id)));
-        const validNewTags = (data.content_tags.tagIds as string[]).filter(
+        const validNewTags = (tagSuggestion.tagIds as string[]).filter(
           (id) => allValidTagIds.has(id),
         );
         setTags((prev) => {
@@ -508,22 +511,32 @@ export function AssetEditModal({
       }
       setAutoAppliedTagCount(appliedCount);
 
-      // Existing brands were auto-linked server-side; count them for display
-      // AND sync the modal's brandIds state so the bottom Brands pill row
-      // reflects the new link AND so doSave's DELETE+INSERT cascade doesn't
-      // wipe what auto-tag just inserted.
-      const brandList = (data.brand_candidates || []) as BrandCandidate[];
-      const linkedExistingIds = brandList
-        .filter((c) => c.existing && c.existing_id)
-        .map((c) => c.existing_id as string);
-      if (linkedExistingIds.length > 0) {
-        setBrandIds((prev) => Array.from(new Set([...prev, ...linkedExistingIds])));
-      }
-      setAutoLinkedBrandCount(linkedExistingIds.length);
+      const groupsResp = (data.groups || {}) as Partial<InspectorState>;
+      const groups: InspectorState = {
+        brand: groupsResp.brand || { applied_matches: [], suggested_new: [] },
+        service: groupsResp.service || { applied_matches: [], suggested_new: [] },
+        project: groupsResp.project || { applied_matches: [], suggested_new: [] },
+        persona: groupsResp.persona || { applied_matches: [], suggested_new: [] },
+        branch: groupsResp.branch || { applied_matches: [], suggested_new: [] },
+        service_area: groupsResp.service_area || { applied_matches: [], suggested_new: [] },
+      };
 
-      void recordingId;
-      setBrandCandidates(brandList);
-      setServiceAreaCandidates(data.service_area_candidates || []);
+      // Push applied-match IDs into each group's working state. Server
+      // already auto-linked to asset_*_join tables; this keeps the bottom
+      // pickers visually in sync (preselected pills) AND prevents doSave's
+      // DELETE+INSERT cascade from wiping what auto-tag just inserted.
+      const mergeIds = (
+        prev: string[],
+        applied: InspectorMatch[],
+      ): string[] => Array.from(new Set([...prev, ...applied.map((m) => m.entity_id)]));
+      if (groups.brand.applied_matches.length > 0) setBrandIds((prev) => mergeIds(prev, groups.brand.applied_matches));
+      if (groups.service.applied_matches.length > 0) setServiceIds((prev) => mergeIds(prev, groups.service.applied_matches));
+      if (groups.project.applied_matches.length > 0) setProjectIds((prev) => mergeIds(prev, groups.project.applied_matches));
+      if (groups.persona.applied_matches.length > 0) setPersonaIds((prev) => mergeIds(prev, groups.persona.applied_matches));
+      if (groups.branch.applied_matches.length > 0) setBranchIds((prev) => mergeIds(prev, groups.branch.applied_matches));
+      if (groups.service_area.applied_matches.length > 0) setServiceAreaIds((prev) => mergeIds(prev, groups.service_area.applied_matches));
+
+      setInspectorState(groups);
       setNerWarnings(Array.isArray(data.ner_warnings) ? data.ner_warnings : []);
     } catch (err) {
       console.warn("Auto-tag suggest failed:", err);
@@ -533,8 +546,10 @@ export function AssetEditModal({
     }
   }, [siteId, assetId, pillarConfig]);
 
-  async function confirmBrandCandidate(c: BrandCandidate, recordingId: string | null) {
-    if (c.existing) return; // Already exists — nothing to do
+  // Confirm a NEW-entity NER suggestion (brand-only per locked rules).
+  // Creates the brand server-side and syncs all relevant local state so
+  // the bottom Brands picker reflects the new selection.
+  async function confirmNewBrand(c: InspectorNew, recordingId: string | null) {
     try {
       const res = await fetch("/api/brands", {
         method: "POST",
@@ -547,55 +562,45 @@ export function AssetEditModal({
           seed_asset_id: assetId,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setConfirmedSlugs((prev) => new Set([...prev, `brand:${c.slug}`]));
-        if (data.brand?.id) {
-          // Mirror quickCreateBrand: keep the bottom Brands picker in sync
-          // so (a) subscriber sees the brand as selected, and (b) doSave's
-          // brand_ids diff includes it — preventing the PATCH cascade from
-          // wiping the asset_brands row that /api/brands just inserted.
-          setLocalBrands((prev) => {
-            if (prev.some((b) => b.id === data.brand.id)) return prev;
-            return [...prev, data.brand].sort((a: Brand, b: Brand) => a.name.localeCompare(b.name));
-          });
-          setBrandIds((prev) => (prev.includes(data.brand.id) ? prev : [...prev, data.brand.id]));
-          onBrandCreated?.(data.brand);
-        }
-      } else {
+      if (!res.ok) {
         console.warn(`Brand confirm HTTP ${res.status}`);
+        return;
       }
+      const data = await res.json();
+      if (!data.brand?.id) return;
+      setLocalBrands((prev) => {
+        if (prev.some((b) => b.id === data.brand.id)) return prev;
+        return [...prev, data.brand].sort((a: Brand, b: Brand) => a.name.localeCompare(b.name));
+      });
+      setBrandIds((prev) => (prev.includes(data.brand.id) ? prev : [...prev, data.brand.id]));
+      onBrandCreated?.(data.brand);
+      // Promote suggested_new → applied_matches (visual graduation)
+      setInspectorState((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          brand: {
+            applied_matches: [
+              ...prev.brand.applied_matches,
+              {
+                entity_id: data.brand.id as string,
+                name: data.brand.name as string,
+                match_text: c.name,
+                match_start: -1,
+                context_excerpt: c.context,
+              },
+            ],
+            suggested_new: prev.brand.suggested_new.filter((s) => s.slug !== c.slug),
+          },
+        };
+      });
     } catch (err) {
       console.warn("Brand confirm failed:", err);
     }
   }
 
-  async function confirmServiceAreaCandidate(c: ServiceAreaCandidate, recordingId: string | null) {
-    if (c.existing_overlay) return;
-    try {
-      const res = await fetch("/api/service-areas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: c.name,
-          kind: c.kind,
-          site_id: siteId,
-          seed_source: "audio_transcript",
-          seed_recording_id: recordingId,
-          seed_asset_id: assetId,
-        }),
-      });
-      if (res.ok) {
-        setConfirmedSlugs((prev) => new Set([...prev, `area:${c.slug}`]));
-      }
-    } catch (err) {
-      console.warn("Service area confirm failed:", err);
-    }
-  }
-
   function dismissAllSuggestions() {
-    setBrandCandidates([]);
-    setServiceAreaCandidates([]);
+    setInspectorState(null);
   }
 
   // Keyboard navigation — minimal pass.
@@ -1145,13 +1150,31 @@ export function AssetEditModal({
               />
             </div>
 
-            {/* AUTO-TAG SUGGESTIONS PANEL — surfaces after audio.commit().
-                Per auto_tagging_audit (LOCKED 2026-05-10): content_tags are
-                auto-applied to Story Angle; existing brands auto-link to
-                asset_brands silently; new brand + service-area candidates
-                require single-tap confirm. Panel renders even when NER
-                returns empty so subscriber can tell the system ran. */}
-            {(autoTagging || lastSuggestRunAt !== null) && (
+            {/* AUTO-TAG INSPECTOR — surfaces after audio.commit().
+                Per project_tracpost_auto_tag_inspector_design.md
+                (LOCKED 2026-05-10): cross-group catalog scan + NER
+                produces per-group {applied_matches, suggested_new}.
+                All hits surface, no suppression. Story Angles are a
+                separate layer (editorial framing per-post, not asset
+                descriptors) — applied silently to working tag state.
+                Panel renders even when zero matches surfaced so
+                subscriber can tell the system ran. */}
+            {(autoTagging || lastSuggestRunAt !== null) && (() => {
+              const groupConfig: Array<{ key: InspectorTagGroup; label: string; toggleSet: (fn: (prev: string[]) => string[]) => void; selectedSet: string[]; savedSet: string[] }> = [
+                { key: "brand", label: brandLabel || "Brands", toggleSet: setBrandIds, selectedSet: brandIds, savedSet: savedBrandIds },
+                { key: "service", label: serviceLabel || "Services", toggleSet: setServiceIds, selectedSet: serviceIds, savedSet: savedServiceIds },
+                { key: "project", label: projectLabel || "Projects", toggleSet: setProjectIds, selectedSet: projectIds, savedSet: savedProjectIds },
+                { key: "persona", label: personaLabel || "People", toggleSet: setPersonaIds, selectedSet: personaIds, savedSet: savedPersonaIds },
+                { key: "branch", label: branchLabel || "Locations", toggleSet: setBranchIds, selectedSet: branchIds, savedSet: savedBranchIds },
+                { key: "service_area", label: serviceAreaLabel || "Service Areas", toggleSet: setServiceAreaIds, selectedSet: serviceAreaIds, savedSet: savedServiceAreaIds },
+              ];
+              const totalApplied = inspectorState
+                ? groupConfig.reduce((sum, g) => sum + (inspectorState[g.key]?.applied_matches.length || 0), 0)
+                : 0;
+              const totalNew = inspectorState
+                ? groupConfig.reduce((sum, g) => sum + (inspectorState[g.key]?.suggested_new.length || 0), 0)
+                : 0;
+              return (
               <div className="mb-3 rounded border border-accent/40 bg-accent/5 px-3 py-2.5">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-[11px] font-medium text-accent">
@@ -1167,76 +1190,80 @@ export function AssetEditModal({
                     </button>
                   )}
                 </div>
-                {!autoTagging && (autoAppliedTagCount > 0 || autoLinkedBrandCount > 0) && (
-                  <div className="mb-1.5 text-[10px] text-success">
+                {!autoTagging && (autoAppliedTagCount > 0 || totalApplied > 0) && (
+                  <div className="mb-2 text-[10px] text-success">
                     {autoAppliedTagCount > 0 && `Applied ${autoAppliedTagCount} Story Angle tag${autoAppliedTagCount > 1 ? "s" : ""}`}
-                    {autoAppliedTagCount > 0 && autoLinkedBrandCount > 0 && " · "}
-                    {autoLinkedBrandCount > 0 && `Linked ${autoLinkedBrandCount} existing brand${autoLinkedBrandCount > 1 ? "s" : ""} to this asset`}
-                  </div>
-                )}
-                {brandCandidates.length > 0 && (
-                  <div className="mb-1.5">
-                    <span className="mr-2 text-[10px] uppercase tracking-wide text-muted">Brands:</span>
-                    {brandCandidates.map((c) => {
-                      const confirmed = confirmedSlugs.has(`brand:${c.slug}`);
-                      return (
-                        <button
-                          key={c.slug}
-                          type="button"
-                          disabled={c.existing || confirmed}
-                          onClick={() => confirmBrandCandidate(c, recordings[0]?.id || null)}
-                          title={c.context}
-                          className={`mr-1.5 mb-1 inline-block rounded px-2 py-0.5 text-[11px] transition-colors ${
-                            c.existing || confirmed
-                              ? "bg-success/20 text-success cursor-default"
-                              : "bg-surface-hover text-foreground hover:bg-accent/20 hover:text-accent"
-                          }`}
-                        >
-                          {c.existing ? "✓ " : confirmed ? "✓ " : "+ "}{c.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {serviceAreaCandidates.length > 0 && (
-                  <div className="mb-1.5">
-                    <span className="mr-2 text-[10px] uppercase tracking-wide text-muted">Service areas:</span>
-                    {serviceAreaCandidates.map((c) => {
-                      const confirmed = confirmedSlugs.has(`area:${c.slug}`);
-                      return (
-                        <button
-                          key={c.slug}
-                          type="button"
-                          disabled={c.existing_overlay || confirmed}
-                          onClick={() => confirmServiceAreaCandidate(c, recordings[0]?.id || null)}
-                          title={c.context}
-                          className={`mr-1.5 mb-1 inline-block rounded px-2 py-0.5 text-[11px] transition-colors ${
-                            c.existing_overlay || confirmed
-                              ? "bg-success/20 text-success cursor-default"
-                              : "bg-surface-hover text-foreground hover:bg-accent/20 hover:text-accent"
-                          }`}
-                        >
-                          {c.existing_overlay ? "✓ " : confirmed ? "✓ " : "+ "}{c.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {!autoTagging && brandCandidates.length === 0 && serviceAreaCandidates.length === 0 && autoAppliedTagCount === 0 && autoLinkedBrandCount === 0 && (
-                  <div className="text-[10px] italic text-muted">
-                    No new brands, service areas, or tag matches detected in this recording. (Try mentioning specific brand names or city names if you expected suggestions.)
+                    {autoAppliedTagCount > 0 && totalApplied > 0 && " · "}
+                    {totalApplied > 0 && `Linked ${totalApplied} existing tag${totalApplied > 1 ? "s" : ""} to this asset`}
                   </div>
                 )}
                 {!autoTagging && nerWarnings.length > 0 && (
-                  <div className="mb-1.5 text-[10px] text-warning">
+                  <div className="mb-2 text-[10px] text-warning">
                     ⚠ Heads up — review these auto-matches before saving (uncheck any that look wrong): {nerWarnings.join(" · ")}
                   </div>
                 )}
-                <div className="text-[10px] text-muted">
-                  Tap to add new entries. Existing entries shown ✓ are already linked.
-                </div>
+                {!autoTagging && inspectorState && groupConfig.map((g) => {
+                  const groupData = inspectorState[g.key];
+                  if (!groupData) return null;
+                  if (groupData.applied_matches.length === 0 && groupData.suggested_new.length === 0) return null;
+                  return (
+                    <div key={g.key} className="mb-2">
+                      <div className="mb-0.5 text-[10px] uppercase tracking-wide text-muted">{g.label}</div>
+                      <div className="flex flex-wrap items-start gap-1.5">
+                        {groupData.applied_matches.map((m) => {
+                          const selected = g.selectedSet.includes(m.entity_id);
+                          const confirmed = selected && g.savedSet.includes(m.entity_id);
+                          const preselected = selected && !confirmed;
+                          return (
+                            <button
+                              key={`applied:${m.entity_id}`}
+                              type="button"
+                              onClick={() => g.toggleSet((prev) => selected ? prev.filter((id) => id !== m.entity_id) : [...prev, m.entity_id])}
+                              title={m.context_excerpt}
+                              className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                                confirmed
+                                  ? "bg-accent text-white"
+                                  : preselected
+                                    ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                                    : "bg-surface-hover text-muted hover:text-foreground"
+                              }`}
+                            >
+                              ✓ {m.name}
+                            </button>
+                          );
+                        })}
+                        {groupData.suggested_new.map((s) => (
+                          <button
+                            key={`new:${s.slug}`}
+                            type="button"
+                            onClick={() => {
+                              if (g.key === "brand") {
+                                void confirmNewBrand(s, recordings[0]?.id || null);
+                              }
+                            }}
+                            title={s.context}
+                            className="rounded bg-surface-hover px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-accent/20 hover:text-accent"
+                          >
+                            + {s.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {!autoTagging && totalApplied === 0 && totalNew === 0 && autoAppliedTagCount === 0 && (
+                  <div className="text-[10px] italic text-muted">
+                    No tag matches detected in this recording. (Try mentioning specific brand names, project names, service names, or city names if you expected suggestions.)
+                  </div>
+                )}
+                {!autoTagging && (totalApplied > 0 || totalNew > 0) && (
+                  <div className="mt-1 text-[10px] text-muted">
+                    Tap ✓ pills to uncheck false matches. Tap + pills to add new entries. Save to commit.
+                  </div>
+                )}
               </div>
-            )}
+              );
+            })()}
 
             {/* SCENE SECTION — image LEFT, Scene Composition RIGHT, 2-col.
                 Image container uses position:relative + absolute children

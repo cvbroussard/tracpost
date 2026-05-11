@@ -1061,7 +1061,7 @@ export function AssetEditModal({
                 )}
                 {!autoTagging && nerWarnings.length > 0 && (
                   <div className="mb-1.5 text-[10px] text-warning">
-                    ⚠ Possible transcription issues: {nerWarnings.join(" · ")}
+                    ⚠ Heads up — review these auto-matches before saving (uncheck any that look wrong): {nerWarnings.join(" · ")}
                   </div>
                 )}
                 <div className="text-[10px] text-muted">

@@ -107,12 +107,18 @@ export async function POST(req: NextRequest) {
     // Images: use storage_url directly. Videos: prefer the poster image
     // (referenced via poster_asset_id) since Anthropic Messages API
     // doesn't accept video files. Skip if no asset_id or no usable URL.
+    //
+    // FALLBACK for legacy videos: when video has no poster_asset_id (was
+    // uploaded before poster_gen, or async gen failed silently), generate
+    // the poster INLINE here. One-time cost per legacy video — the poster
+    // persists on the asset row, future calls use it directly.
     let assetImageUrl: string | undefined;
     if (source_asset_id) {
       const [assetRow] = await sql`
         SELECT
           ma.storage_url,
           ma.media_type,
+          ma.poster_asset_id,
           poster.storage_url AS poster_url
         FROM media_assets ma
         LEFT JOIN media_assets poster ON poster.id = ma.poster_asset_id
@@ -122,8 +128,36 @@ export async function POST(req: NextRequest) {
         const mediaType = (assetRow.media_type as string | null) || "";
         if (mediaType.startsWith("image/")) {
           assetImageUrl = assetRow.storage_url as string | undefined;
-        } else if (mediaType.startsWith("video/") && assetRow.poster_url) {
-          assetImageUrl = assetRow.poster_url as string;
+        } else if (mediaType.startsWith("video/")) {
+          if (assetRow.poster_url) {
+            assetImageUrl = assetRow.poster_url as string;
+          } else {
+            // Legacy video, no poster — generate now (best-effort,
+            // bounded by serverless function timeout). Poster lives
+            // on the asset row after, so future calls hit the cache.
+            try {
+              const { generatePosterForAsset } = await import(
+                "@/lib/pipeline/poster-gen"
+              );
+              const posterId = await generatePosterForAsset(source_asset_id);
+              if (posterId) {
+                const [poster] = await sql`
+                  SELECT storage_url FROM media_assets WHERE id = ${posterId}
+                `;
+                if (poster?.storage_url) {
+                  assetImageUrl = poster.storage_url as string;
+                }
+              }
+            } catch (err) {
+              // Non-fatal: Story Angle falls back to text-only for this
+              // call. Subscriber can retry, or upload a fresh video that
+              // will get a poster the normal way.
+              console.warn(
+                "Inline poster generation for legacy video failed:",
+                err instanceof Error ? err.message : err,
+              );
+            }
+          }
         }
       }
     }

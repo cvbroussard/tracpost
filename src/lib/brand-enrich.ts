@@ -250,23 +250,25 @@ async function fetchOGMeta(url: string): Promise<OGMeta> {
  *      highest-quality option when available, often a wordmark.
  *   2. /apple-touch-icon.png — 180×180 by convention, almost always the
  *      brand's clean logo on a transparent or solid background.
- *      Critically: served as a static asset, bypasses WAF gates that
- *      block dynamic HTML access.
+ *      Served as a static asset, bypasses WAF gates that block
+ *      dynamic HTML access.
  *   3. /apple-touch-icon-precomposed.png — older convention, same role.
- *   4. /favicon.ico — universal fallback, smallest quality.
- *
- * Why this is the cheap-fix for big-brand WAFs (Thermador, Festool,
- * Makita, Marvin): even when their app servers refuse our HTML fetches,
- * they still serve favicons from CDN edge caches without bot checks.
+ *   4. /favicon.ico — universal favicon, smallest quality.
+ *   5. Google's s2/favicons service — bulletproof last resort. Free,
+ *      no auth, Google-CDN-served (no WAF concerns), and indexed for
+ *      basically every public domain. 128×128 PNG quality. Catches
+ *      the enterprise-WAF tier (Thermador, Brizo, Makita, etc.) that
+ *      blocks even our /favicon.ico requests.
  */
 function buildLogoCandidates(brandUrl: string, ogImage: string | null): string[] {
   const candidates: string[] = [];
   if (ogImage) candidates.push(ogImage);
   try {
-    const origin = new URL(brandUrl).origin;
-    candidates.push(`${origin}/apple-touch-icon.png`);
-    candidates.push(`${origin}/apple-touch-icon-precomposed.png`);
-    candidates.push(`${origin}/favicon.ico`);
+    const parsed = new URL(brandUrl);
+    candidates.push(`${parsed.origin}/apple-touch-icon.png`);
+    candidates.push(`${parsed.origin}/apple-touch-icon-precomposed.png`);
+    candidates.push(`${parsed.origin}/favicon.ico`);
+    candidates.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(parsed.hostname)}&sz=128`);
   } catch {
     // brandUrl invalid — fall through with whatever we have
   }

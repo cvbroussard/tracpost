@@ -21,7 +21,12 @@ export default async function TaggingPage() {
   const siteId = session.activeSiteId;
 
   const [brands, projects, personas, branches, services, serviceAreas, siteData] = await Promise.all([
-    sql`SELECT id, name, slug, url, description, hero_asset_id FROM brands WHERE site_id = ${siteId} ORDER BY name`,
+    sql`SELECT b.id, b.name, b.slug, b.url, b.description, b.hero_asset_id,
+            ma.storage_url AS hero_url
+        FROM brands b
+        LEFT JOIN media_assets ma ON ma.id = b.hero_asset_id
+        WHERE b.site_id = ${siteId}
+        ORDER BY b.name`,
     sql`SELECT id, name, slug, status, start_date, end_date, address, description,
             caption_mode, manual_caption_count, hero_asset_id, metadata
         FROM projects WHERE site_id = ${siteId} ORDER BY name`,
@@ -71,6 +76,7 @@ export default async function TaggingPage() {
         url: (b.url as string) || null,
         description: (b.description as string) || null,
         hero_asset_id: (b.hero_asset_id as string) || null,
+        hero_url: (b.hero_url as string) || null,
       }))}
       projects={projects.map((p) => ({
         id: p.id as string,

@@ -9,6 +9,7 @@ interface Brand {
   url: string | null;
   description: string | null;
   hero_asset_id: string | null;
+  hero_url: string | null;
 }
 
 interface Project {
@@ -1038,11 +1039,22 @@ export function TaggingManager({
               </div>
             ) : (
               <>
+                {brand.hero_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={brand.hero_url}
+                    alt={`${brand.name} logo`}
+                    className="h-10 w-10 flex-shrink-0 rounded border border-border bg-bg-soft object-contain p-0.5"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded border border-border bg-bg-soft text-sm font-medium text-muted">
+                    {brand.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{brand.name}</p>
                   {brand.url && <a href={brand.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">{brand.url}</a>}
                   {brand.description && <p className="text-xs text-dim">{brand.description}</p>}
-                  {brand.hero_asset_id && <p className="text-[10px] text-dim">hero: {brand.hero_asset_id.slice(0, 8)}…</p>}
                 </div>
                 <span className="text-xs text-muted">{brand.slug}</span>
                 <EditDeleteRow type="brands" id={brand.id} onEdit={() => { setEditing(brand.id); setEditFields({ name: brand.name, url: brand.url || "", description: brand.description || "", hero_asset_id: brand.hero_asset_id || "" }); }} />

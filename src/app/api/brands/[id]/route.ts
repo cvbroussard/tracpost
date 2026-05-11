@@ -44,7 +44,13 @@ export async function PATCH(
     await sql`UPDATE brands SET hero_asset_id = ${body.hero_asset_id || null} WHERE id = ${id}`;
   }
 
-  const [updated] = await sql`SELECT id, name, slug, url, description, hero_asset_id FROM brands WHERE id = ${id}`;
+  const [updated] = await sql`
+    SELECT b.id, b.name, b.slug, b.url, b.description, b.hero_asset_id,
+           ma.storage_url AS hero_url
+    FROM brands b
+    LEFT JOIN media_assets ma ON ma.id = b.hero_asset_id
+    WHERE b.id = ${id}
+  `;
   return NextResponse.json({ brand: updated });
 }
 

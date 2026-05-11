@@ -434,10 +434,18 @@ export function AssetEditModal({
       }
       setAutoAppliedTagCount(appliedCount);
 
-      // Existing brands were auto-linked server-side; count them for display.
+      // Existing brands were auto-linked server-side; count them for display
+      // AND sync the modal's brandIds state so the bottom Brands pill row
+      // reflects the new link AND so doSave's DELETE+INSERT cascade doesn't
+      // wipe what auto-tag just inserted.
       const brandList = (data.brand_candidates || []) as BrandCandidate[];
-      const linkedCount = brandList.filter((c) => c.existing).length;
-      setAutoLinkedBrandCount(linkedCount);
+      const linkedExistingIds = brandList
+        .filter((c) => c.existing && c.existing_id)
+        .map((c) => c.existing_id as string);
+      if (linkedExistingIds.length > 0) {
+        setBrandIds((prev) => Array.from(new Set([...prev, ...linkedExistingIds])));
+      }
+      setAutoLinkedBrandCount(linkedExistingIds.length);
 
       void recordingId;
       setBrandCandidates(brandList);
@@ -466,7 +474,22 @@ export function AssetEditModal({
         }),
       });
       if (res.ok) {
+        const data = await res.json();
         setConfirmedSlugs((prev) => new Set([...prev, `brand:${c.slug}`]));
+        if (data.brand?.id) {
+          // Mirror quickCreateBrand: keep the bottom Brands picker in sync
+          // so (a) subscriber sees the brand as selected, and (b) doSave's
+          // brand_ids diff includes it — preventing the PATCH cascade from
+          // wiping the asset_brands row that /api/brands just inserted.
+          setLocalBrands((prev) => {
+            if (prev.some((b) => b.id === data.brand.id)) return prev;
+            return [...prev, data.brand].sort((a: Brand, b: Brand) => a.name.localeCompare(b.name));
+          });
+          setBrandIds((prev) => (prev.includes(data.brand.id) ? prev : [...prev, data.brand.id]));
+          onBrandCreated?.(data.brand);
+        }
+      } else {
+        console.warn(`Brand confirm HTTP ${res.status}`);
       }
     } catch (err) {
       console.warn("Brand confirm failed:", err);

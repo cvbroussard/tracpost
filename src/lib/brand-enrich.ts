@@ -34,15 +34,22 @@ interface EnrichResult {
  * Idempotent — checks status before running, skips if already enriched.
  */
 export async function enrichBrand(brandId: string, brandName: string): Promise<void> {
-  // Skip if already enriched
+  // Skip if already enriched. Primary check is the first-class
+  // enriched_at column (migrate-114). enrichment_status string still
+  // honored for explicit 'skipped' / 'failed' states the column can't
+  // express on its own.
   const [current] = await sql`
-    SELECT enrichment_status, url FROM brands WHERE id = ${brandId}
+    SELECT enrichment_status, enriched_at, url FROM brands WHERE id = ${brandId}
   `;
   if (!current) return;
-  if (current.enrichment_status === "enriched" || current.enrichment_status === "skipped") return;
+  if (current.enriched_at) return; // already enriched at some point
+  if (current.enrichment_status === "skipped") return;
   if (current.url) {
-    // URL already set — skip enrichment entirely
-    await sql`UPDATE brands SET enrichment_status = 'skipped' WHERE id = ${brandId}`;
+    // URL already set (manually) — skip enrichment, mark as such
+    await sql`
+      UPDATE brands SET enrichment_status = 'skipped', enriched_at = NOW()
+      WHERE id = ${brandId}
+    `;
     return;
   }
 
@@ -60,6 +67,7 @@ export async function enrichBrand(brandId: string, brandName: string): Promise<v
         url = ${result.url},
         description = COALESCE(brands.description, ${result.description}),
         enrichment_status = ${result.url ? "enriched" : "no_match"},
+        enriched_at = NOW(),
         enrichment_metadata = ${JSON.stringify({
           category: result.category,
           confidence: result.confidence,

@@ -1,7 +1,7 @@
 import { verifyCookie } from "@/lib/cookie-sign";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { enrichBrand, captureLogoAsHeroAsset } from "@/lib/brand-enrich";
+import { enrichBrand, captureLogoAsHeroAsset, extractBrandfetchDomain } from "@/lib/brand-enrich";
 
 /**
  * POST /api/manage/brand-backfill
@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
             await sql`
               UPDATE brands
               SET hero_asset_id = ${newAssetId},
+                  brandfetch_domain = ${extractBrandfetchDomain(bfUrl)},
                   enrichment_metadata = jsonb_set(
                     COALESCE(enrichment_metadata, '{}'::jsonb),
                     '{hero_source}',

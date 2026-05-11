@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { resolveBrandLogo } from "@/lib/brand-logo";
 
 interface Brand {
   id: string;
@@ -10,6 +11,7 @@ interface Brand {
   description: string | null;
   hero_asset_id: string | null;
   hero_url: string | null;
+  brandfetch_domain: string | null;
 }
 
 interface Project {
@@ -1030,14 +1032,17 @@ export function TaggingManager({
             {editing === brand.id ? (
               <div className="flex-1 space-y-2">
                 <div className="flex items-start gap-3">
-                  {brand.hero_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={brand.hero_url} alt={`${brand.name} current logo`} className="h-14 w-14 flex-shrink-0 rounded border border-border bg-bg-soft object-contain p-1" />
-                  ) : (
-                    <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded border border-border bg-bg-soft text-base font-medium text-muted">
-                      {brand.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
+                  {(() => {
+                    const logoUrl = resolveBrandLogo(brand, process.env.NEXT_PUBLIC_BRANDFETCH_CLIENT_ID || null, { type: "icon", height: 180 });
+                    return logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoUrl} alt={`${brand.name} current logo`} className="h-14 w-14 flex-shrink-0 rounded border border-border bg-bg-soft object-contain p-1" />
+                    ) : (
+                      <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded border border-border bg-bg-soft text-base font-medium text-muted">
+                        {brand.name.charAt(0).toUpperCase()}
+                      </div>
+                    );
+                  })()}
                   <div className="flex-1 space-y-2">
                     <div className="flex gap-2">
                       <input value={String(editFields.name ?? "")} onChange={(e) => setEditFields((f) => ({ ...f, name: e.target.value }))} className="flex-1 text-sm" placeholder="Name" autoFocus />
@@ -1059,18 +1064,21 @@ export function TaggingManager({
               </div>
             ) : (
               <>
-                {brand.hero_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={brand.hero_url}
-                    alt={`${brand.name} logo`}
-                    className="h-10 w-10 flex-shrink-0 rounded border border-border bg-bg-soft object-contain p-0.5"
-                  />
-                ) : (
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded border border-border bg-bg-soft text-sm font-medium text-muted">
-                    {brand.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
+                {(() => {
+                  const logoUrl = resolveBrandLogo(brand, process.env.NEXT_PUBLIC_BRANDFETCH_CLIENT_ID || null, { type: "icon", height: 180 });
+                  return logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoUrl}
+                      alt={`${brand.name} logo`}
+                      className="h-10 w-10 flex-shrink-0 rounded border border-border bg-bg-soft object-contain p-0.5"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded border border-border bg-bg-soft text-sm font-medium text-muted">
+                      {brand.name.charAt(0).toUpperCase()}
+                    </div>
+                  );
+                })()}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{brand.name}</p>
                   {brand.url && <a href={brand.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">{brand.url}</a>}

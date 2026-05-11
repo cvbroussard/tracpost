@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   const brands = await sql`
     SELECT b.id, b.name, b.slug, b.url, b.description, b.hero_asset_id,
-           b.created_at, ma.storage_url AS hero_url
+           b.brandfetch_domain, b.created_at, ma.storage_url AS hero_url
     FROM brands b
     LEFT JOIN media_assets ma ON ma.id = b.hero_asset_id
     WHERE b.site_id = ${siteId}
@@ -114,8 +114,8 @@ export async function POST(req: NextRequest) {
     } catch { /* non-fatal */ }
   }
 
-  // Shape parity with GET — UI consumers expect hero_url. Async
-  // enrichment hasn't fired yet at this point, so it's null until
-  // the next page load.
-  return NextResponse.json({ brand: { ...brand, hero_url: null } });
+  // Shape parity with GET — UI consumers expect hero_url and
+  // brandfetch_domain. Async enrichment hasn't fired yet at this
+  // point, so both are null until the next page load.
+  return NextResponse.json({ brand: { ...brand, hero_url: null, brandfetch_domain: null } });
 }

@@ -133,12 +133,18 @@ export async function enrichBrand(
     // og description, or logo). "no_match" if nothing came back.
     const gotNewData = !!(claudeResult.url || ogMeta.description || heroAssetId);
 
+    // Pattern C: when the captured logo came from Brandfetch's CDN,
+    // remember the domain so renderers can construct variant URLs
+    // (icon vs logo vs symbol, light vs dark, etc.) at runtime.
+    const brandfetchDomain = extractBrandfetchDomain(heroSource);
+
     await sql`
       UPDATE brands
       SET
         url = COALESCE(brands.url, ${claudeResult.url}),
         description = COALESCE(brands.description, ${finalDescription}),
         hero_asset_id = COALESCE(brands.hero_asset_id, ${heroAssetId}),
+        brandfetch_domain = COALESCE(brands.brandfetch_domain, ${brandfetchDomain}),
         enrichment_status = ${gotNewData ? "enriched" : "no_match"},
         enriched_at = NOW(),
         enrichment_metadata = ${JSON.stringify({
@@ -239,6 +245,22 @@ async function fetchOGMeta(url: string): Promise<OGMeta> {
     };
   } catch {
     return { title: null, description: null, image: null };
+  }
+}
+
+/**
+ * Pull the domain segment out of a Brandfetch CDN URL so we can store
+ * it on the brand row for runtime variant rendering. Returns null for
+ * non-Brandfetch sources.
+ */
+export function extractBrandfetchDomain(heroSource: string | null): string | null {
+  if (!heroSource || !heroSource.startsWith("https://cdn.brandfetch.io/")) return null;
+  try {
+    const path = new URL(heroSource).pathname.replace(/^\//, "");
+    const domain = decodeURIComponent(path.split("/")[0]);
+    return domain || null;
+  } catch {
+    return null;
   }
 }
 

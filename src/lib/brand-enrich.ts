@@ -109,9 +109,24 @@ export async function enrichBrand(
     // Stage 3: Logo capture. Skip if a hero is already set on the brand
     // (force mode would otherwise create an orphan media_asset that
     // COALESCE drops on the way out — wasteful R2 write).
+    //
+    // Walk a prioritized candidate list. og:image is preferred when
+    // available (often a hero-quality wordmark), then fall back to
+    // conventional static-asset paths that bypass WAF/JS-render walls
+    // because they're served straight from CDN. apple-touch-icon is a
+    // de-facto logo standard at 180×180 and almost universal on big
+    // brand sites that block bot HTML access.
     let heroAssetId: string | null = null;
-    if (ogMeta.image && fetchTarget && !existingHeroId) {
-      heroAssetId = await captureLogoAsHeroAsset(siteId, brandId, brandName, fetchTarget, ogMeta.image);
+    let heroSource: string | null = null;
+    if (fetchTarget && !existingHeroId) {
+      const candidates = buildLogoCandidates(fetchTarget, ogMeta.image);
+      for (const candidate of candidates) {
+        heroAssetId = await captureLogoAsHeroAsset(siteId, brandId, brandName, fetchTarget, candidate);
+        if (heroAssetId) {
+          heroSource = candidate;
+          break;
+        }
+      }
     }
 
     // Status: "enriched" if any new useful data landed (claude url,
@@ -136,6 +151,7 @@ export async function enrichBrand(
           stage_3_logo_captured: !!heroAssetId,
           og_title: ogMeta.title,
           og_image_url: ogMeta.image,
+          hero_source: heroSource,
           force,
         })}::jsonb
       WHERE id = ${brandId}
@@ -224,6 +240,37 @@ async function fetchOGMeta(url: string): Promise<OGMeta> {
   } catch {
     return { title: null, description: null, image: null };
   }
+}
+
+/**
+ * Build the prioritized list of logo-candidate URLs for a brand site.
+ *
+ * Order:
+ *   1. og:image (or fallback meta we already extracted) — usually the
+ *      highest-quality option when available, often a wordmark.
+ *   2. /apple-touch-icon.png — 180×180 by convention, almost always the
+ *      brand's clean logo on a transparent or solid background.
+ *      Critically: served as a static asset, bypasses WAF gates that
+ *      block dynamic HTML access.
+ *   3. /apple-touch-icon-precomposed.png — older convention, same role.
+ *   4. /favicon.ico — universal fallback, smallest quality.
+ *
+ * Why this is the cheap-fix for big-brand WAFs (Thermador, Festool,
+ * Makita, Marvin): even when their app servers refuse our HTML fetches,
+ * they still serve favicons from CDN edge caches without bot checks.
+ */
+function buildLogoCandidates(brandUrl: string, ogImage: string | null): string[] {
+  const candidates: string[] = [];
+  if (ogImage) candidates.push(ogImage);
+  try {
+    const origin = new URL(brandUrl).origin;
+    candidates.push(`${origin}/apple-touch-icon.png`);
+    candidates.push(`${origin}/apple-touch-icon-precomposed.png`);
+    candidates.push(`${origin}/favicon.ico`);
+  } catch {
+    // brandUrl invalid — fall through with whatever we have
+  }
+  return candidates;
 }
 
 /**

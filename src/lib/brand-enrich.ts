@@ -262,10 +262,23 @@ async function fetchOGMeta(url: string): Promise<OGMeta> {
  */
 function buildLogoCandidates(brandUrl: string, ogImage: string | null): string[] {
   const candidates: string[] = [];
-  if (ogImage) candidates.push(ogImage);
+  const brandfetchClientId = process.env.BRANDFETCH_CLIENT_ID;
+
   try {
     const parsed = new URL(brandUrl);
     const apex = parsed.hostname.replace(/^www\./, "");
+
+    // Brandfetch first: their CDN is the only source curated to return
+    // an actual brand logo (vs og:image, which is often a hero shot or
+    // product photo in disguise; vs favicons, which are tiny). Returns
+    // 404 for unknown domains, so the chain falls through naturally.
+    // Skipped silently in environments without the client ID.
+    if (brandfetchClientId) {
+      candidates.push(`https://cdn.brandfetch.io/${encodeURIComponent(apex)}?c=${encodeURIComponent(brandfetchClientId)}`);
+    }
+
+    // og:image as backup — sometimes a true wordmark, sometimes a hero
+    if (ogImage) candidates.push(ogImage);
 
     // Try favicon paths from BOTH hostname variants (www and apex).
     // Some sites only serve favicons from one or the other.
@@ -277,14 +290,16 @@ function buildLogoCandidates(brandUrl: string, ogImage: string | null): string[]
       candidates.push(`${origin}/favicon.ico`);
     }
 
-    // Google fallback — try apex first (broader indexing), then www
-    // variant if different. Google often only indexes one variant.
+    // Google s2/favicons — bulletproof bottom-tier, always returns
+    // something (even if a generic globe). Try apex first (broader
+    // indexing), then www variant if different.
     candidates.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(apex)}&sz=128`);
     if (apex !== parsed.hostname) {
       candidates.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(parsed.hostname)}&sz=128`);
     }
   } catch {
     // brandUrl invalid — fall through with whatever we have
+    if (ogImage) candidates.push(ogImage);
   }
   return candidates;
 }

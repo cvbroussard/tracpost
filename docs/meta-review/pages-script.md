@@ -42,7 +42,7 @@ need development first.
 
 **Status:** ✅ READY
 
-**Screencast grouping:** "Connect" (with #2 + #7)
+**Screencast ID:** `pages-01-connect` (groups #2 + #7)
 
 ---
 
@@ -63,7 +63,7 @@ need development first.
 
 **Status:** ✅ READY (#85 shipped)
 
-**Screencast grouping:** "Connect" (with #1 + #7)
+**Screencast ID:** `pages-01-connect` (groups #1 + #7)
 
 ---
 
@@ -92,7 +92,7 @@ need development first.
 - ✗ #115 Compose link field semantic-per-mode
 - ⚠ #107 Per-asset link inference (nice-to-have, not strictly required)
 
-**Screencast grouping:** "Publish a Post" (dedicated)
+**Screencast ID:** `pages-02-publish` (dedicated)
 
 ---
 
@@ -116,7 +116,7 @@ need development first.
 - ✗ #116 Engagement polling pipeline (load-bearing per attribution-chain memory)
 - ✗ Per-post analytics surface in TracPost UI
 
-**Screencast grouping:** "View Post Insights" (dedicated)
+**Screencast ID:** `pages-03-insights` (dedicated)
 
 ---
 
@@ -138,7 +138,7 @@ need development first.
 - ✗ Comment list UI doesn't exist
 - ✗ Comment polling pipeline (similar shape to #116, may be sub-task)
 
-**Screencast grouping:** "Comment Management" (with #6)
+**Screencast ID:** `pages-04-comments` (groups #5 + #6)
 
 ---
 
@@ -167,7 +167,7 @@ need development first.
 - ✗ Hide UI
 - ✗ Backend: POST to Graph API for replies + comment moderation endpoints
 
-**Screencast grouping:** "Comment Management" (with #5)
+**Screencast ID:** `pages-04-comments` (shared with #5)
 
 ---
 
@@ -188,18 +188,18 @@ need development first.
 - ⚙️ Need a BM-managed Page in the test environment for the demo
 - ⚠ Screencast must explicitly call out "this Page is in Business Manager" so reviewer understands why this permission is needed
 
-**Screencast grouping:** "Connect" (with #1 + #2)
+**Screencast ID:** `pages-01-connect` (groups #1 + #2 + #7)
 
 ---
 
 ## Screencast Catalog
 
-| Screencast | Covers | Estimated length | Status |
-|---|---|---|---|
-| **Connect** | `email` + `pages_show_list` + `business_management` | 2-3 min | ✅ READY (pending ⚙️ BM Page setup) |
-| **Publish a Post** | `pages_manage_posts` | 3-4 min | 🟡 NEEDS POLISH (#109, #75, #115) |
-| **View Post Insights** | `pages_read_engagement` | 2-3 min | 🔴 NOT BUILT (#116) |
-| **Comment Management** | `pages_read_user_content` + `pages_manage_engagement` | 3-4 min | 🔴 NOT BUILT (full comment UI + backend) |
+| ID | Title | Covers | Length | Status |
+|---|---|---|---|---|
+| `pages-01-connect` | Connect | `email` + `pages_show_list` + `business_management` | 2-3 min | ✅ READY (pending ⚙️ BM Page setup) |
+| `pages-02-publish` | Publish a Post | `pages_manage_posts` | 3-4 min | 🟡 NEEDS POLISH (#109, #75, #115) |
+| `pages-03-insights` | View Post Insights | `pages_read_engagement` | 2-3 min | 🔴 NOT BUILT (#116) |
+| `pages-04-comments` | Comment Management | `pages_read_user_content` + `pages_manage_engagement` | 3-4 min | 🔴 NOT BUILT (full comment UI + backend) |
 
 ## Ranked Build Sequence
 

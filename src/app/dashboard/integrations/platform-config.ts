@@ -60,7 +60,7 @@ export const PLATFORMS: PlatformConfig[] = [
       "During the connection process, you'll be required to select a Business Page — often shown as a Page with 'business' in parentheses.",
       "Your personal profile must have an admin role on the Page.",
       "The Page must be in Published state (not draft).",
-      "One business = one Page. Pick only the Page for this business — don't opt into 'all current and future Pages'.",
+      "You can grant access to one Page or all of your Pages — after connecting, TracPost will show a picker so you choose exactly which Page to use for this business.",
     ],
     whatWeDoWithIt: [
       "Publish posts, photos, and link shares to the connected Page",

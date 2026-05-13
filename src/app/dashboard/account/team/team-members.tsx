@@ -28,6 +28,7 @@ const ROLE_LABELS: Record<string, { label: string; description: string }> = {
   owner: { label: "Owner", description: "Full access plus billing, plan changes, and team management" },
   member: { label: "Member", description: "Full studio access — analytics, posts, sites, brand, connections" },
   capture: { label: "Capture", description: "Mobile app only — upload photos and videos" },
+  reviewer: { label: "Reviewer", description: "Read-only audit access — used for Meta app review accounts" },
 };
 
 export function TeamMembers({
@@ -49,6 +50,7 @@ export function TeamMembers({
   const [editPhone, setEditPhone] = useState("");
   const [editSiteId, setEditSiteId] = useState("");
   const [editNotifyVia, setEditNotifyVia] = useState("email");
+  const [editPassword, setEditPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [sendingInvite, setSendingInvite] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
@@ -59,6 +61,7 @@ export function TeamMembers({
   const [addEmail, setAddEmail] = useState("");
   const [addRole, setAddRole] = useState("member");
   const [addSiteId, setAddSiteId] = useState("");
+  const [addPassword, setAddPassword] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,6 +73,7 @@ export function TeamMembers({
     setEditRole(member.role);
     setEditSiteId(member.siteId || "");
     setEditNotifyVia(member.notifyVia || "email");
+    setEditPassword("");
     setQrUrl(null);
   }
 
@@ -86,17 +90,22 @@ export function TeamMembers({
           role: editRole,
           siteId: editSiteId || null,
           notifyVia: editNotifyVia,
+          password: editPassword || undefined,
         }),
       });
       if (res.ok) {
         setMembers((prev) =>
           prev.map((m) =>
             m.id === memberId
-              ? { ...m, name: editName.trim() || m.name, email: editEmail.trim() || m.email, phone: editPhone.trim() || m.phone, role: editRole, siteId: editSiteId || null, notifyVia: editNotifyVia }
+              ? { ...m, name: editName.trim() || m.name, email: editEmail.trim() || m.email, phone: editPhone.trim() || m.phone, role: editRole, siteId: editSiteId || null, notifyVia: editNotifyVia, hasPassword: editPassword ? true : m.hasPassword }
               : m
           )
         );
+        setEditPassword("");
         setEditing(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.warning(data.error || "Failed to save");
       }
     } catch { /* ignore */ }
     setSaving(false);
@@ -127,6 +136,7 @@ export function TeamMembers({
           email: addEmail.trim(),
           role: addRole,
           siteId: addSiteId || null,
+          password: addPassword || undefined,
         }),
       });
       if (res.ok) {
@@ -138,7 +148,7 @@ export function TeamMembers({
           phone: null,
           role: data.member.role,
           siteId: data.member.siteId || null,
-          hasPassword: false,
+          hasPassword: !!addPassword,
           hasDevice: false,
           notifyVia: "email",
           lastActiveAt: null,
@@ -149,6 +159,7 @@ export function TeamMembers({
         setAddEmail("");
         setAddRole("member");
         setAddSiteId("");
+        setAddPassword("");
       } else {
         const data = await res.json();
         setError(data.error || "Failed to add member");
@@ -287,10 +298,25 @@ export function TeamMembers({
                     >
                       <option value="member">Member — full studio access</option>
                       <option value="capture">Capture — mobile only</option>
+                      <option value="reviewer">Reviewer — read-only audit</option>
                     </select>
                     <p className="mt-1 text-[10px] text-dim">
                       {ROLE_LABELS[editRole]?.description}
                     </p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted">
+                      Password <span className="text-dim">(optional — sets/overrides)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      placeholder="Leave blank to keep existing"
+                      className="w-full text-sm"
+                      autoComplete="off"
+                    />
+                    <p className="mt-1 text-[10px] text-dim">Min 8 chars. Plain text shown intentionally — operator-only field.</p>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-muted">Site Access</label>
@@ -453,7 +479,9 @@ export function TeamMembers({
               >
                 <option value="member">Member — full studio access</option>
                 <option value="capture">Capture — mobile only</option>
+                <option value="reviewer">Reviewer — read-only audit</option>
               </select>
+              <p className="mt-1 text-[10px] text-dim">{ROLE_LABELS[addRole]?.description}</p>
             </div>
             <div>
               <label className="mb-1 block text-xs text-muted">Site Access</label>
@@ -467,6 +495,20 @@ export function TeamMembers({
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs text-muted">
+                Password <span className="text-dim">(optional — sets directly; blank = magic-link invite)</span>
+              </label>
+              <input
+                type="text"
+                value={addPassword}
+                onChange={(e) => setAddPassword(e.target.value)}
+                placeholder="Leave blank to send a magic-link invite instead"
+                className="w-full text-sm"
+                autoComplete="off"
+              />
+              <p className="mt-1 text-[10px] text-dim">Min 8 chars. Useful for creating reviewer accounts with known credentials to hand off.</p>
             </div>
           </div>
 

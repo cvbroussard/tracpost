@@ -126,6 +126,16 @@ const OWNER_ONLY_ACCOUNT_PATHS = new Set([
   "/account/subscription",
 ]);
 
+// Reviewer-hidden paths — hides nav entries (and their children) for
+// users with the `reviewer` role, used during Meta app review windows.
+// Cleanup after final approval: delete this set + the filter use below.
+const REVIEWER_HIDDEN_PATHS = new Set([
+  "/business",      // has deactivate button, brand-DNA edit, canonical place edit
+  "/tools",         // Asset Studio Tools sub
+  "/documents",     // Asset Studio Documents sub
+  "/capture",       // deadweight redirect to /media
+]);
+
 interface SidebarProps {
   userName: string;
   sites: SiteInfo[];
@@ -141,8 +151,17 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner", plan = 
     window.location.hostname === "studio.tracpost.com";
   const prefix = isSubdomain ? "" : "/dashboard";
   const isOwner = role === "owner";
+  const isReviewer = role === "reviewer";
   const isEnterprise = plan.toLowerCase().includes("enterprise");
-  const visibleModules = MODULES.filter((m) => !m.enterpriseOnly || isEnterprise);
+  const visibleModules = MODULES.filter((m) => !m.enterpriseOnly || isEnterprise).map((m) => ({
+    ...m,
+    subs: m.subs
+      .filter((sub) => !isReviewer || !REVIEWER_HIDDEN_PATHS.has(sub.path))
+      .map((sub) => ({
+        ...sub,
+        children: sub.children?.filter((c) => !isReviewer || !REVIEWER_HIDDEN_PATHS.has(c.path)),
+      })),
+  }));
 
   function pathMatches(p: string): boolean {
     const full = prefix + p;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 export const runtime = "nodejs";
 
@@ -46,12 +47,20 @@ export async function PATCH(
     await sql`UPDATE users SET site_id = ${body.siteId || null} WHERE id = ${id}`;
   }
 
-  if (body.role !== undefined && ["member", "capture"].includes(body.role)) {
+  if (body.role !== undefined && ["member", "capture", "reviewer"].includes(body.role)) {
     await sql`UPDATE users SET role = ${body.role} WHERE id = ${id}`;
   }
 
   if (body.notifyVia !== undefined && ["email", "sms", "both"].includes(body.notifyVia)) {
     await sql`UPDATE users SET notify_via = ${body.notifyVia} WHERE id = ${id}`;
+  }
+
+  if (body.password !== undefined && typeof body.password === "string" && body.password.length > 0) {
+    if (body.password.length < 8) {
+      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+    }
+    const hash = await bcrypt.hash(body.password, 12);
+    await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${id}`;
   }
 
   return NextResponse.json({ success: true });

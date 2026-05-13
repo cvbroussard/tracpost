@@ -133,6 +133,7 @@ export function TaggingManager({
   branches: initialBranches,
   services: initialServices,
   serviceAreas: initialServiceAreas,
+  role = "owner",
 }: {
   siteId: string;
   labels: Labels;
@@ -142,7 +143,21 @@ export function TaggingManager({
   branches: Branch[];
   services: Service[];
   serviceAreas: ServiceArea[];
+  role?: string;
 }) {
+  // Reviewer-mode swap: tabs still navigate, but each tab's body
+  // renders a pre-captured screenshot instead of the interactive grid.
+  // Used during Meta app review windows to demonstrate depth without
+  // exposing mutation. Files live in /public/review-screenshots/.
+  const isReviewer = role === "reviewer";
+  const REVIEWER_SCREENSHOTS: Record<TagGroup, string> = {
+    brands: "/review-screenshots/tag-group-brands.png",
+    services: "/review-screenshots/tag-group-services.png",
+    projects: "/review-screenshots/tag-group-project.png",
+    personas: "/review-screenshots/tag-group-people.png",
+    branches: "/review-screenshots/tag-group-branches.png",
+    service_areas: "/review-screenshots/tag-group-service-areas.png",
+  };
   const [labels, setLabels] = useState(initialLabels);
   const [brands, setBrands] = useState(initialBrands);
   const [projects, setProjects] = useState(initialProjects);
@@ -602,15 +617,17 @@ export function TaggingManager({
           <h1 className="text-lg font-semibold">Tagging</h1>
           <p className="mt-1 text-sm text-muted">Manage the tag groups your assets get tagged with. Each tab is a tag group used by the orchestrator to shape generated content. Beta build — all fields and tabs exposed.</p>
         </div>
-        <button
-          onClick={() => setShowConfig(!showConfig)}
-          className="text-xs text-muted hover:text-foreground"
-        >
-          {showConfig ? "Done" : "Configure tag group labels"}
-        </button>
+        {!isReviewer && (
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="text-xs text-muted hover:text-foreground"
+          >
+            {showConfig ? "Done" : "Configure tag group labels"}
+          </button>
+        )}
       </div>
 
-      {showConfig && (
+      {!isReviewer && showConfig && (
         <div className="mb-8 rounded-lg border border-border bg-surface p-4">
           <h3 className="mb-1 text-sm font-medium">Tag Group Labels</h3>
           <p className="mb-3 text-[11px] text-muted">
@@ -849,8 +866,18 @@ export function TaggingManager({
         ))}
       </div>
 
+      {/* Reviewer-mode body swap: screenshot in place of interactive grid. */}
+      {isReviewer && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={REVIEWER_SCREENSHOTS[activeTab]}
+          alt={`${activeTab} catalog`}
+          className="w-full max-w-5xl rounded border border-border"
+        />
+      )}
+
       {/* ── Brands tab ────────────────────────────────────────────────── */}
-      {activeTab === "brands" && (
+      {!isReviewer && activeTab === "brands" && (
         <>
           <div className="mb-6 space-y-2">
             <div className="flex gap-2">
@@ -870,7 +897,7 @@ export function TaggingManager({
       )}
 
       {/* ── Services tab ──────────────────────────────────────────────── */}
-      {activeTab === "services" && (
+      {!isReviewer && activeTab === "services" && (
         <>
           <div className="mb-6 space-y-2">
             <div className="flex gap-2">
@@ -892,7 +919,7 @@ export function TaggingManager({
       )}
 
       {/* ── Projects tab ──────────────────────────────────────────────── */}
-      {activeTab === "projects" && (
+      {!isReviewer && activeTab === "projects" && (
         <>
           <div className="mb-6 space-y-2">
             <div className="flex gap-2">
@@ -924,7 +951,7 @@ export function TaggingManager({
       )}
 
       {/* ── Personas tab ──────────────────────────────────────────────── */}
-      {activeTab === "personas" && (
+      {!isReviewer && activeTab === "personas" && (
         <>
           <div className="mb-6 space-y-2">
             <div className="flex gap-2">
@@ -956,7 +983,7 @@ export function TaggingManager({
       )}
 
       {/* ── Branches tab ──────────────────────────────────────────────── */}
-      {activeTab === "branches" && (
+      {!isReviewer && activeTab === "branches" && (
         <>
           {/* 2-column responsive grid. Long fields (address, GBP, hero,
               description) span both columns. City + State pair on one
@@ -988,7 +1015,7 @@ export function TaggingManager({
       )}
 
       {/* ── Service Areas tab ─────────────────────────────────────────── */}
-      {activeTab === "service_areas" && (
+      {!isReviewer && activeTab === "service_areas" && (
         <>
           <div className="mb-3 rounded border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             Beta — service areas are shared across the platform. Adding a region (e.g. &ldquo;Pasadena&rdquo;) uses the same canonical entry as other businesses serving that area; your business simply attaches its own coverage to it.

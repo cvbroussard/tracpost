@@ -69,6 +69,7 @@ export default async function TaggingPage() {
     <TaggingManager
       siteId={siteId}
       labels={labels}
+      role={session.role || "owner"}
       brands={brands.map((b) => ({
         id: b.id as string,
         name: b.name as string,

@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/account/team — Add a team member (creates a user under the subscription)
- * Body: { name, email, role, siteId? }
+ * Body: { name, email, role, siteId?, password? }
+ *
+ * If password is provided, sets it directly on the new user. Useful
+ * for creating reviewer accounts with known credentials to hand to
+ * Meta. If omitted, the standard magic-link invite flow handles
+ * first-time sign-in.
  */
 export async function POST(req: NextRequest) {
   const authResult = await authenticateRequest(req);
@@ -17,14 +23,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Owner access required" }, { status: 403 });
   }
 
-  const { name, email, role, siteId } = await req.json();
+  const { name, email, role, siteId, password } = await req.json();
 
   if (!name || !email) {
     return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
   }
 
-  if (!["member", "capture"].includes(role)) {
+  if (!["member", "capture", "reviewer"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+
+  if (password !== undefined && password !== null && password !== "" && password.length < 8) {
+    return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
   }
 
   // Check if email already exists
@@ -35,15 +45,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A user with this email already exists" }, { status: 409 });
   }
 
+  const passwordHash = password ? await bcrypt.hash(password, 12) : null;
+
   // Create team member user under the current subscription
   const [member] = await sql`
-    INSERT INTO users (name, email, role, subscription_id, site_id, is_active)
-    VALUES (${name.trim()}, ${email.trim()}, ${role}, ${auth.subscriptionId}, ${siteId || null}, true)
+    INSERT INTO users (name, email, role, subscription_id, site_id, is_active, password_hash)
+    VALUES (${name.trim()}, ${email.trim()}, ${role}, ${auth.subscriptionId}, ${siteId || null}, true, ${passwordHash})
     RETURNING id, name, email, role, site_id
   `;
 
-  // Send magic link invite for web-eligible roles
-  if (role !== "capture") {
+  // Send magic link invite for web-eligible roles when no password was set.
+  // If owner set a password directly (reviewer flow), skip the invite —
+  // the credentials are handed off out-of-band.
+  if (role !== "capture" && !password) {
     try {
       const { generateMagicToken } = await import("@/lib/magic-link");
       const { sendWelcomeEmail } = await import("@/lib/email");

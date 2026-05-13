@@ -35,7 +35,15 @@ export default async function TeamPage() {
   ]);
 
   const plan = (subRow[0]?.plan as string) || "free";
-  const userLimit = plan === "pro" || plan === "authority" ? 10 : plan === "growth" ? 3 : 2;
+  // Team-member caps per plan. Enterprise gets a generous cap so the
+  // owner can create dedicated reviewer accounts (one per Meta app
+  // review) without bumping into limits.
+  const userLimit =
+    plan === "enterprise" ? 50 :
+    plan === "authority" ? 25 :
+    plan === "pro" ? 15 :
+    plan === "growth" ? 10 :
+    3;
 
   const siteList = sites.map((s) => ({
     id: s.id as string,

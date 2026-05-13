@@ -40,6 +40,7 @@ export async function POST(
       growth: 2,
       pro: 5,
       authority: 10,
+      enterprise: 50,
     };
     const maxSites = tierLimits[plan] || 1;
 

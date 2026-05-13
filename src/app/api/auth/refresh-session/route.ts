@@ -16,11 +16,22 @@ export async function POST() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const sites = await sql`
+  // Re-query the user to pick up any owner edits to site_id (Site Access)
+  // since last login. Session caches go stale across permission changes
+  // until refresh fires — this keeps reviewer scoping current.
+  const [userRow] = await sql`
+    SELECT site_id FROM users WHERE id = ${session.userId}
+  `;
+  const userSiteScope = (userRow?.site_id as string | null) || null;
+
+  const rawSites = await sql`
     SELECT id, name, url, is_active FROM sites
     WHERE subscription_id = ${session.subscriptionId}
     ORDER BY is_active DESC, created_at ASC
   `;
+  const sites = userSiteScope
+    ? rawSites.filter((s) => s.id === userSiteScope)
+    : rawSites;
 
   const updated = {
     userId: session.userId,

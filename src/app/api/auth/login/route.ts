@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
 
   const rows = await sql`
-    SELECT u.id, u.name, u.role, u.password_hash, u.subscription_id,
+    SELECT u.id, u.name, u.role, u.password_hash, u.subscription_id, u.site_id,
            s.plan, s.name AS subscription_name
     FROM users u
     JOIN subscriptions s ON u.subscription_id = s.id
@@ -53,17 +53,22 @@ export async function POST(req: NextRequest) {
   }
 
   const subscriptionId = user.subscription_id as string;
+  const userSiteScope = (user.site_id as string | null) || null;
 
-  const sites = await sql`
+  // If user has a site_id scope (Site Access bound to a single business),
+  // filter sites to just that one. Otherwise return all subscription sites.
+  const rawSites = await sql`
     SELECT id, name, url, is_active FROM sites
     WHERE subscription_id = ${subscriptionId}
     ORDER BY is_active DESC, created_at ASC
   `;
+  const sites = userSiteScope
+    ? rawSites.filter((s) => s.id === userSiteScope)
+    : rawSites;
 
   // Auto-select when only ONE active site exists: no ambiguity, no reason
   // to make the subscriber click. Inactive sites don't count toward the
-  // "single site" check — a subscriber with B² active + EK deactivated
-  // should still get auto-picked into B².
+  // "single site" check. Site-scoped users also auto-pick their one site.
   const activeOnly = sites.filter((s) => s.is_active !== false);
   const activeSiteId = activeOnly.length === 1 ? (activeOnly[0].id as string) : null;
 

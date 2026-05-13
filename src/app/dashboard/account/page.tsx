@@ -31,13 +31,10 @@ export default async function MyAccountPage() {
       <section className="mb-8">
         <h2 className="mb-4">Profile</h2>
         <div className="space-y-3">
-          <div className="flex items-baseline justify-between border-b border-border py-2">
-            <span className="text-sm text-muted">Email</span>
-            <span className="font-medium">{subscriber.email || "—"}</span>
-          </div>
           <AccountProfile
             userId={subscriber.id as string}
             initialName={subscriber.name as string}
+            initialEmail={(subscriber.email as string) || ""}
             initialPhone={(subscriber.phone as string) || ""}
             hasPassword={subscriber.has_password as boolean}
           />

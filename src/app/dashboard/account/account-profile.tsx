@@ -6,15 +6,20 @@ import { PhoneE164Field } from "@/components/forms";
 interface Props {
   userId: string;
   initialName: string;
+  initialEmail: string;
   initialPhone: string;
   hasPassword: boolean;
 }
 
-export function AccountProfile({ userId, initialName, initialPhone, hasPassword }: Props) {
+export function AccountProfile({ userId, initialName, initialEmail, initialPhone, hasPassword }: Props) {
   const [ownerName, setOwnerName] = useState(initialName);
+  const [email, setEmail] = useState(initialEmail);
+  const [emailBaseline, setEmailBaseline] = useState(initialEmail);
   const [companyPhone, setCompanyPhone] = useState(initialPhone);
   const [saving, setSaving] = useState(false);
   const [ownerNameSuccess, setOwnerNameSuccess] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [companyPhoneSuccess, setCompanyPhoneSuccess] = useState(false);
 
   // Password flow
@@ -62,6 +67,33 @@ export function AccountProfile({ userId, initialName, initialPhone, hasPassword 
         setOwnerNameSuccess(true);
         setTimeout(() => setOwnerNameSuccess(false), 3000);
       }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveEmail() {
+    const trimmed = email.trim();
+    if (!trimmed || trimmed === emailBaseline) return;
+    setSaving(true);
+    setEmailSuccess(false);
+    setEmailError(null);
+    try {
+      const res = await fetch("/api/account/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      if (res.ok) {
+        setEmailBaseline(trimmed);
+        setEmailSuccess(true);
+        setTimeout(() => setEmailSuccess(false), 3000);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setEmailError(data.error || "Failed to update email");
+      }
+    } catch {
+      setEmailError("Request failed");
     } finally {
       setSaving(false);
     }
@@ -163,6 +195,35 @@ export function AccountProfile({ userId, initialName, initialPhone, hasPassword 
             {saving ? "..." : ownerNameSuccess ? "Saved" : "Save"}
           </button>
         </div>
+      </div>
+
+      {/* Email */}
+      <div className="border-b border-border py-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted">Email</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setEmailError(null); }}
+              className="px-2 py-1 text-right"
+              style={{ width: 260 }}
+              placeholder="you@example.com"
+              autoComplete="email"
+            />
+            <button
+              onClick={saveEmail}
+              disabled={saving || !email.trim() || email.trim() === emailBaseline}
+              className="border border-border px-3 py-1 text-sm text-muted hover:text-foreground disabled:opacity-30"
+            >
+              {saving ? "..." : emailSuccess ? "Saved" : "Save"}
+            </button>
+          </div>
+        </div>
+        {emailError && <p className="mt-1 text-right text-xs text-danger">{emailError}</p>}
+        <p className="mt-1 text-right text-[10px] text-dim">
+          Used for login and notifications. Changing it doesn&rsquo;t sign you out.
+        </p>
       </div>
 
       {/* Phone */}

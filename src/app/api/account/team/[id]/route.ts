@@ -36,7 +36,16 @@ export async function PATCH(
   }
 
   if (body.email !== undefined && typeof body.email === "string" && body.email.trim()) {
-    await sql`UPDATE users SET email = ${body.email.trim()} WHERE id = ${id}`;
+    const newEmail = body.email.trim();
+    // Uniqueness collision check — prevent owners from renaming a
+    // member to an email that already belongs to another user.
+    const [collision] = await sql`
+      SELECT id FROM users WHERE email = ${newEmail} AND id != ${id}
+    `;
+    if (collision) {
+      return NextResponse.json({ error: "A user with this email already exists" }, { status: 409 });
+    }
+    await sql`UPDATE users SET email = ${newEmail} WHERE id = ${id}`;
   }
 
   if (body.phone !== undefined && typeof body.phone === "string") {

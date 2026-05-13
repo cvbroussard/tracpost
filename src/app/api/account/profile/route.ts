@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest) {
   const auth = authResult as AuthContext;
 
   const body = await req.json();
-  const { name, subscriptionName, ownerName, phone, companyPhone } = body;
+  const { name, subscriptionName, ownerName, phone, companyPhone, email } = body;
   const bizName = subscriptionName || name;
 
   if (bizName) {
@@ -41,6 +41,20 @@ export async function PATCH(req: NextRequest) {
       UPDATE users SET phone = ${phone || null}
       WHERE id = ${auth.userId}
     `;
+  }
+
+  // Self-edit email — uniqueness collision check excluding the current user.
+  // Auth scope is already constrained to auth.userId, so users can only
+  // change their own email, never anyone else's.
+  if (email !== undefined && typeof email === "string" && email.trim()) {
+    const newEmail = email.trim();
+    const [collision] = await sql`
+      SELECT id FROM users WHERE email = ${newEmail} AND id != ${auth.userId}
+    `;
+    if (collision) {
+      return NextResponse.json({ error: "A user with this email already exists" }, { status: 409 });
+    }
+    await sql`UPDATE users SET email = ${newEmail} WHERE id = ${auth.userId}`;
   }
 
   return NextResponse.json({ ok: true });

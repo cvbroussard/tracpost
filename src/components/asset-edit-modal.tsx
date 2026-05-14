@@ -489,6 +489,15 @@ export function AssetEditModal({
   // BOTH eagerly (staged state, pre-commit) AND via onCommitted.
   const lastProcessedTranscriptRef = useRef<string>("");
 
+  // Scroll-to-top on asset change — when the modal swaps to the next asset
+  // via Save & Next, the scrollable inner panel keeps the prior asset's
+  // scroll offset, dropping the subscriber halfway down the new asset's
+  // content. Reset to top whenever assetId changes.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [assetId]);
+
   const runAutoTagSuggest = useCallback(async (recordingId: string, transcript: string) => {
     if (!transcript || transcript.trim().length < 5) return;
     if (lastProcessedTranscriptRef.current === transcript) return;
@@ -1176,6 +1185,7 @@ export function AssetEditModal({
       onClick={handleClose}
     >
       <div
+        ref={scrollContainerRef}
         className="flex w-full max-w-5xl max-h-[90vh] flex-col border border-border bg-surface overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >

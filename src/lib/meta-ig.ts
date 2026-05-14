@@ -17,7 +17,13 @@
  *   NEXT_PUBLIC_APP_URL
  */
 
-const IG_AUTHORIZE_URL = "https://api.instagram.com/oauth/authorize";
+// Authorize endpoint is `www.instagram.com` (current IG Login API).
+// `api.instagram.com/oauth/authorize` is the deprecated Basic Display
+// endpoint — Meta returns "Invalid platform app" when a new Visual app
+// hits it because the app is registered for the current product, not
+// the legacy one. Token endpoint remains on api.instagram.com per Meta
+// docs (the deprecation only affected the authorize host).
+const IG_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize";
 const IG_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const IG_LONG_LIVED_URL = "https://graph.instagram.com/access_token";
 const IG_GRAPH_BASE = "https://graph.instagram.com";

@@ -23,6 +23,22 @@ export default async function MediaPage({ searchParams }: Props) {
     );
   }
 
+  // Reviewer-mode swap: render a pre-captured screenshot of the full
+  // content area (header + upload buttons + grid all baked into the
+  // image). No live header above it — the screenshot IS the page.
+  if (session.role === "reviewer") {
+    return (
+      <div className="p-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/review-screenshots/source-library.png"
+          alt="Source Library"
+          className="w-full max-w-5xl rounded border border-border"
+        />
+      </div>
+    );
+  }
+
   const siteId = session.activeSiteId;
   const params = await searchParams;
   const search = (params.q || "").trim();

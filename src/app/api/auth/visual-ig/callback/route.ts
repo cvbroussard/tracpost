@@ -110,13 +110,23 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // 7. Auto-assign on single-site
-    const siteRows = await sql`
-      SELECT id FROM sites WHERE subscription_id = ${state.subscription_id} LIMIT 2
-    `;
-    if (siteRows.length === 1) {
+    // 7. Auto-assign — IG Login API is structurally 1:1 (token grants
+    // access to exactly one IG Business Account), so there's nothing to
+    // pick. Honor state.site_id when present (OAuth initiated from a
+    // specific business's integrations page); fall back to single-site
+    // subscribers when no business context. This skips the manual
+    // pending_assignment picker for IG entirely — picker remains in
+    // place for FB where one user can manage many Pages.
+    let bindSiteId: string | null = state.site_id || null;
+    if (!bindSiteId) {
+      const siteRows = await sql`
+        SELECT id FROM sites WHERE subscription_id = ${state.subscription_id} LIMIT 2
+      `;
+      if (siteRows.length === 1) bindSiteId = siteRows[0].id as string;
+    }
+    if (bindSiteId) {
       await assignSiteToAsset({
-        siteId: siteRows[0].id as string,
+        siteId: bindSiteId,
         platformAssetId: newIgAssetId,
         isPrimary: true,
       });

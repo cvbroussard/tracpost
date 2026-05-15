@@ -252,6 +252,74 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
     `;
   }
 
+  // Categories sync: align site_gbp_categories with Google's snapshot.
+  // The page reads from this relational store, not from gbp_profile.categories
+  // JSONB. Google is canonical on each sync; replaces existing rows for
+  // this site (including the primary flag). Subscriber-side edits push to
+  // Google via pushCategoriesToGoogle and survive the next round-trip.
+  type RawCategory = { name?: string; displayName?: string };
+  const rawCats: Array<{ raw: RawCategory; isPrimary: boolean }> = [];
+  if (data.categories?.primaryCategory) {
+    rawCats.push({ raw: data.categories.primaryCategory, isPrimary: true });
+  }
+  for (const c of (data.categories?.additionalCategories || []) as RawCategory[]) {
+    rawCats.push({ raw: c, isPrimary: false });
+  }
+  const parsedCats = rawCats
+    .map(({ raw, isPrimary }) => {
+      const name = raw.name || "";
+      let gcid: string | null = null;
+      if (name.startsWith("categories/")) gcid = name.slice("categories/".length);
+      else if (name.startsWith("gcid:")) gcid = name;
+      return gcid ? { gcid, displayName: raw.displayName || gcid, isPrimary } : null;
+    })
+    .filter((c): c is { gcid: string; displayName: string; isPrimary: boolean } => c !== null);
+
+  if (parsedCats.length > 0) {
+    // Ensure each gcid exists in gbp_categories (FK requirement)
+    for (const c of parsedCats) {
+      await sql`
+        INSERT INTO gbp_categories (gcid, name)
+        VALUES (${c.gcid}, ${c.displayName})
+        ON CONFLICT (gcid) DO UPDATE SET name = EXCLUDED.name
+      `;
+    }
+    // Replace site_gbp_categories rows — Google's snapshot wins on sync
+    await sql`DELETE FROM site_gbp_categories WHERE site_id = ${siteId}`;
+    for (const c of parsedCats) {
+      await sql`
+        INSERT INTO site_gbp_categories (site_id, gcid, is_primary, chosen_at, chosen_by)
+        VALUES (${siteId}, ${c.gcid}, ${c.isPrimary}, NOW(), 'gbp_sync')
+      `;
+    }
+  }
+
+  // Defensive enrichment sweep: any place_id appearing in the pulled GBP
+  // data that we don't already have enriched in service_areas_canonical
+  // gets enriched in the background. Picker-driven enrichment is the
+  // primary path; this catches places added directly in Google's UI.
+  const placeInfos = (data.serviceArea?.places?.placeInfos || []) as Array<{ placeId?: string; placeName?: string }>;
+  const placeIds = placeInfos.map((p) => p.placeId).filter((id): id is string => Boolean(id));
+  if (placeIds.length > 0) {
+    const known = await sql`
+      SELECT place_id FROM service_areas_canonical
+      WHERE place_id = ANY(${placeIds}::text[]) AND viewport IS NOT NULL
+    `;
+    const knownIds = new Set(known.map((r) => r.place_id as string));
+    const toEnrich = placeInfos.filter((p) => p.placeId && !knownIds.has(p.placeId));
+    if (toEnrich.length > 0) {
+      try {
+        const { waitUntil } = await import("@vercel/functions");
+        const { enrichPlace } = await import("./enrich-place");
+        waitUntil((async () => {
+          for (const p of toEnrich) {
+            try { await enrichPlace(p.placeId!, p.placeName || ""); } catch { /* skip */ }
+          }
+        })());
+      } catch { /* @vercel/functions unavailable */ }
+    }
+  }
+
   // Return the merged result for the UI
   if (!isInitialSync) {
     return { ...(existing as unknown as GbpProfile), metadata: result.metadata, completeness: result.completeness, synced_at: result.synced_at };

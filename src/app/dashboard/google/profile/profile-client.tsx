@@ -1011,6 +1011,15 @@ export function ProfileClient({ siteId }: { siteId: string }) {
                           },
                         } : prev);
                         setDirty(true);
+                        // Fire-and-forget enrichment — pulls Place details
+                        // (viewport, types, kind) into service_areas_canonical
+                        // so downstream readers (orchestrator, asset matcher,
+                        // landing-page generator) have everything ready.
+                        fetch("/api/gbp-place/enrich", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ place_id: place.placeId, place_name: place.placeName }),
+                        }).catch(() => { /* non-fatal */ });
                       }}
                     />
                   </div>

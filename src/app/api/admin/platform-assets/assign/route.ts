@@ -16,22 +16,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "site_id and platform_asset_id required" }, { status: 400 });
   }
 
+  const [asset] = await sql`SELECT platform FROM platform_assets WHERE id = ${platform_asset_id}`;
+  const platform = asset?.platform as string | undefined;
+
   // If marking primary, unset other primaries for the same site+platform first
-  if (is_primary) {
-    const [asset] = await sql`SELECT platform FROM platform_assets WHERE id = ${platform_asset_id}`;
-    if (asset) {
-      await sql`
-        UPDATE site_platform_assets
-        SET is_primary = false
-        WHERE site_id = ${site_id}
-          AND platform_asset_id IN (
-            SELECT id FROM platform_assets WHERE platform = ${asset.platform}
-          )
-      `;
-    }
+  if (is_primary && platform) {
+    await sql`
+      UPDATE site_platform_assets
+      SET is_primary = false
+      WHERE site_id = ${site_id}
+        AND platform_asset_id IN (
+          SELECT id FROM platform_assets WHERE platform = ${platform}
+        )
+    `;
   }
 
   await assignSiteToAsset({ siteId: site_id, platformAssetId: platform_asset_id, isPrimary: is_primary });
+
+  // GBP primary assignments need a fresh profile sync so the local cache
+  // populates and dirty state lands in the coherent (clean) state. Mirrors
+  // the legacy /api/google/link-locations path, non-fatal on failure.
+  if (is_primary && platform === "gbp") {
+    try {
+      const { syncProfileFromGoogle } = await import("@/lib/gbp/profile");
+      await syncProfileFromGoogle(site_id);
+    } catch (err) {
+      console.warn("Post-assignment GBP sync failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
   return NextResponse.json({ success: true });
 }
 

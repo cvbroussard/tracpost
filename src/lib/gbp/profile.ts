@@ -229,9 +229,15 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
   const isInitialSync = !existing.title;
 
   if (isInitialSync) {
-    // Initial sync — full write, Google is source of truth
+    // Initial sync — full write, Google is source of truth.
+    // Reset dirty state too: by definition there are no local-side edits
+    // pending push when we just pulled fresh from Google.
     await sql`
-      UPDATE sites SET gbp_profile = ${JSON.stringify(result)}::jsonb WHERE id = ${siteId}
+      UPDATE sites
+      SET gbp_profile = ${JSON.stringify(result)}::jsonb,
+          gbp_sync_dirty = false,
+          gbp_dirty_fields = '{}'
+      WHERE id = ${siteId}
     `;
   } else {
     // Re-sync — only update read-only metadata fields

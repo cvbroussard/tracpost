@@ -3,15 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 /**
- * GET /api/google/places-search?q=Pittsburgh[&type=address]
+ * GET /api/google/places-search?q=Pittsburgh
  *
- * Default (no type / type=region): city/region predictions — used by Compose
- * Reach for service-area targeting.
+ * Returns autocomplete predictions for any Google Place — establishments,
+ * cities, neighborhoods, townships, ZIPs, colloquial regions, addresses,
+ * etc. Same call shape regardless of caller.
  *
- * type=address: full predictions (establishments + street addresses + regions) —
- * used by Settings → Business Location for the canonical sites.place_id, where
- * the subscriber is identifying their actual business or street address, not a
- * service area.
+ * The legacy `type=address` param is preserved as a no-op for backwards
+ * compatibility; previously it gated whether to apply a 5-type filter. The
+ * filter capped predictions at admin-only types and silently dropped
+ * colloquial_area names like "Squirrel Hill" and "Northwestern Pennsylvania."
+ * Subscribers preferred the broader unfiltered behavior of the address mode,
+ * so the default mode now matches it.
  *
  * Uses Google Places API (New) — Autocomplete endpoint, US region restricted.
  */
@@ -34,37 +37,24 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Region mode (default): city/sublocality/admin areas only.
-    // Address mode: omit includedPrimaryTypes so all types (establishment,
-    // street_address, premise, etc.) are returned.
-    const requestBody: Record<string, unknown> = {
-      input: query,
-      includedRegionCodes: ["us"],
-    };
-    if (type !== "address") {
-      // Google Places (New) caps includedPrimaryTypes at 5. These five
-      // cover the realistic service-area shapes a subscriber declares:
-      // cities, neighborhoods, townships/CDPs, counties, states. Without
-      // administrative_area_level_3, places like Mt. Lebanon, PA (a
-      // township, not an incorporated city) silently drop from results.
-      requestBody.includedPrimaryTypes = [
-        "locality",
-        "sublocality",
-        "administrative_area_level_1",
-        "administrative_area_level_2",
-        "administrative_area_level_3",
-      ];
-    }
-
+    // No type filter: returns everything Google returns (establishments,
+    // street addresses, townships, ZIPs, neighborhoods, colloquial regions,
+    // cities, counties, states, etc.). Matches the behavior subscribers
+    // already validated via the LocationPicker (type=address) flow.
+    //
+    // Trade-off accepted: noise (e.g., "Mt. Lebanon Public Library" alongside
+    // "Mt. Lebanon, PA"). Breadth wins because Google's includedPrimaryTypes
+    // caps at 5 — any restricted set silently drops valid declarations like
+    // colloquial_area regions ("Northwestern Pennsylvania") and informal
+    // neighborhood names ("Squirrel Hill"). The `type` param is preserved
+    // for backwards compatibility with existing callers but is now a no-op.
+    void type;
     const res = await fetch(
       "https://places.googleapis.com/v1/places:autocomplete",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": apiKey,
-        },
-        body: JSON.stringify(requestBody),
+        headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey },
+        body: JSON.stringify({ input: query, includedRegionCodes: ["us"] }),
       }
     );
 
@@ -73,12 +63,12 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await res.json();
-    const predictions = (data.suggestions || [])
-      .filter((s: Record<string, unknown>) => s.placePrediction)
-      .map((s: { placePrediction: { placeId: string; text: { text: string } } }) => ({
-        placeId: s.placePrediction.placeId,
-        placeName: s.placePrediction.text.text,
-      }));
+    const predictions = ((data.suggestions || []) as Array<Record<string, unknown>>)
+      .filter((s) => s.placePrediction)
+      .map((s) => {
+        const pp = s.placePrediction as { placeId: string; text: { text: string } };
+        return { placeId: pp.placeId, placeName: pp.text.text };
+      });
 
     return NextResponse.json({ predictions });
   } catch {

@@ -1438,12 +1438,25 @@ export function AssetEditModal({
                           const selected = g.selectedSet.includes(m.entity_id);
                           const confirmed = selected && g.savedSet.includes(m.entity_id);
                           const preselected = selected && !confirmed;
+                          // Provenance: match_text "📍 GPS" → GPS-derived
+                          // (asset's EXIF coords matched a service area's
+                          // viewport). Anything else → transcript-derived
+                          // (NER + catalog match against subscriber's words).
+                          // Badge tells subscriber WHY each tag was suggested
+                          // so they can apply intuition for confirm/reject —
+                          // and resolve any conflict between signals at the
+                          // single Save decision boundary.
+                          const isGpsDerived = m.match_text === "📍 GPS";
+                          const provenanceBadge = isGpsDerived ? "📍" : "🎤";
+                          const provenanceTitle = isGpsDerived
+                            ? `From photo location: ${m.context_excerpt}`
+                            : `From transcript: ${m.context_excerpt}`;
                           return (
                             <button
                               key={`applied:${m.entity_id}`}
                               type="button"
                               onClick={() => g.toggleSet((prev) => selected ? prev.filter((id) => id !== m.entity_id) : [...prev, m.entity_id])}
-                              title={m.context_excerpt}
+                              title={provenanceTitle}
                               className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
                                 confirmed
                                   ? "bg-accent text-white"
@@ -1452,7 +1465,7 @@ export function AssetEditModal({
                                     : "bg-surface-hover text-muted hover:text-foreground"
                               }`}
                             >
-                              ✓ {m.name}
+                              ✓ {m.name} <span className="opacity-60 text-[9px]">{provenanceBadge}</span>
                             </button>
                           );
                         })}

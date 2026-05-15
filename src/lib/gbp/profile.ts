@@ -74,21 +74,30 @@ async function getGbpCredentials(siteId: string): Promise<{
   locationPath: string;
   accountId: string;
 } | null> {
-  const [gbpAccount] = await sql`
-    SELECT sa.id, sa.account_id, sa.access_token_encrypted, sa.metadata
-    FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
+  // Source of truth: unified connection-machinery tables.
+  //   platform_assets + site_platform_assets — written by /manage/connections
+  //   gbp_credentials — OAuth token store, keyed on site_id
+  // Legacy social_accounts/site_social_links path no longer carries GBP.
+  const [row] = await sql`
+    SELECT pa.id AS asset_row_id, pa.asset_id, gc.access_token
+    FROM platform_assets pa
+    JOIN site_platform_assets spa ON spa.platform_asset_id = pa.id
+    JOIN gbp_credentials gc ON gc.site_id = spa.site_id AND gc.is_active = true
+    WHERE spa.site_id = ${siteId}
+      AND pa.platform = 'gbp'
+      AND pa.asset_type = 'gbp_location'
+      AND spa.is_primary = true
     LIMIT 1
   `;
 
-  if (!gbpAccount) return null;
+  if (!row) return null;
 
-  const accessToken = decrypt(gbpAccount.access_token_encrypted as string);
-  // v1 Business Information API uses just "locations/{id}" — no accounts prefix
-  const locationPath = gbpAccount.account_id as string;
+  const accessToken = decrypt(row.access_token as string);
+  // v1 Business Information API uses "locations/{id}" — platform_assets.asset_id
+  // already stores this format.
+  const locationPath = row.asset_id as string;
 
-  return { accessToken, locationPath, accountId: gbpAccount.id as string };
+  return { accessToken, locationPath, accountId: row.asset_row_id as string };
 }
 
 /**

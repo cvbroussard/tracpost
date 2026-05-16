@@ -167,48 +167,28 @@ export async function POST(req: NextRequest) {
       RETURNING id, site_id, storage_url, media_type, context_note, triage_status, briefable_at, created_at
     `;
 
-    // Post-upload work, all non-blocking via waitUntil. Three cases:
+    // Post-upload work, all non-blocking via waitUntil. Two cases:
     //
     // (a) HEIC: convert HEIC→JPEG inline (browsers can't render HEIC, so
-    //     the asset is unbriefable until conversion lands). If the
-    //     subscriber briefed-on-upload, chain into processBriefedAsset
-    //     after conversion completes — vision triage needs a JPEG too.
+    //     the asset is unbriefable until conversion lands).
     //
-    // (b) Briefed-on-upload non-HEIC: route through processBriefedAsset
-    //     which orchestrates the full briefing-flip pipeline atomically
-    //     (triage with context → AI url_slug → source rename → poster
-    //     for videos → variant render).
-    //
-    // (c) Unbriefed video: generate poster so library cards have a
+    // (b) Unbriefed video: generate poster so library cards have a
     //     thumbnail before the subscriber gets around to briefing.
-    //     Poster will be re-keyed at briefing flip.
+    //
+    // Briefed-on-upload no longer auto-fires the cascade (LOCKED 2026-05-16,
+    // manual-first). Subscribers who upload via the briefed-on-upload mobile
+    // flow still get the briefing metadata + triage_status flip; the
+    // cascade (asset_analysis, slug, variants) runs only when they
+    // explicitly hit the Auto-tag preview/Apply in the modal.
     if (isHeic) {
       waitUntil(
         (async () => {
           try {
             const { convertHeicAsset } = await import("@/lib/pipeline/heic-convert");
             await convertHeicAsset(asset.id as string);
-            if (briefedOnUpload) {
-              const { processBriefedAsset } = await import("@/lib/pipeline/process-briefed-asset");
-              await processBriefedAsset(asset.id as string);
-            }
           } catch (err) {
             console.warn(
-              "HEIC convert chain failed (non-fatal):",
-              err instanceof Error ? err.message : err,
-            );
-          }
-        })(),
-      );
-    } else if (briefedOnUpload) {
-      waitUntil(
-        (async () => {
-          try {
-            const { processBriefedAsset } = await import("@/lib/pipeline/process-briefed-asset");
-            await processBriefedAsset(asset.id as string);
-          } catch (err) {
-            console.warn(
-              "processBriefedAsset failed (non-fatal — asset still saved):",
+              "HEIC convert failed (non-fatal):",
               err instanceof Error ? err.message : err,
             );
           }

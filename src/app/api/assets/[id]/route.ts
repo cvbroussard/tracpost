@@ -211,33 +211,20 @@ export async function PATCH(
           WHERE id = ${id} AND triage_status = 'pending_briefing'
         `;
 
-        // Render ALL applicable templates eagerly on briefing flip. Per
-        // project_tracpost_render_format_default.md + the eager-cheap policy,
-        // every connected-platform variant should be ready by the time the
-        // orchestrator picks or Compose loads — so subscriber Compose Review
-        // shows the actual file that will publish.
+        // Manual-first cascade (LOCKED 2026-05-16):
+        // Save persists the form + flips triage_status. It does NOT
+        // auto-fire the cascade (asset_analysis, slug derivation, R2
+        // rename, variant render). Subscriber must explicitly click the
+        // Auto-tag preview/Apply flow in the modal to produce a
+        // consumable asset. Until then, the asset is briefed (has
+        // narrative) but not consumable (no asset_analysis), which the
+        // orchestrator/generator pool queries correctly gate on.
         //
-        // Real ffmpeg/sharp rendering takes 5-30 seconds for the full set —
-        // waitUntil so the briefing-save response returns immediately and
-        // renders continue on the serverless instance until completion.
-        // Render failures don't block the response.
-        waitUntil(
-          (async () => {
-            try {
-              // processBriefedAsset orchestrates the full briefing-flip pipeline:
-              // vision triage with full context → AI returns url_slug → source rename
-              // → poster gen with derived key (videos) → cascade-delete old variants →
-              // render all variants with slug-derived keys.
-              const { processBriefedAsset } = await import("@/lib/pipeline/process-briefed-asset");
-              await processBriefedAsset(id);
-            } catch (err) {
-              console.warn(
-                "Variant render failed (non-fatal — asset still briefed):",
-                err instanceof Error ? err.message : err,
-              );
-            }
-          })(),
-        );
+        // Rationale: matches Select → Recommend → Review → Trigger
+        // subscriber pattern; avoids spending ~$0.025 LLM + ~10s
+        // R2/variant work on every save (including typo edits); keeps
+        // the cascade preview as the explicit "make this consumable"
+        // ceremony.
       }
     }
 

@@ -146,6 +146,102 @@ export async function fetchProfile(siteId: string): Promise<GbpProfile | null> {
 }
 
 /**
+ * Parse a Google Business Information API location resource into our
+ * GbpProfile shape. Used both for initial sync (GET response) and for
+ * post-push refresh (PATCH response — Google returns the updated
+ * location, which captures any server-side normalization like phone
+ * formatting and address geocoding).
+ */
+function parseLocationResponse(data: Record<string, unknown>): GbpProfile {
+  const regularHours: GbpProfile["regularHours"] = [];
+  const rh = data.regularHours as Record<string, unknown> | undefined;
+  const periods = rh?.periods as Array<Record<string, unknown>> | undefined;
+  if (periods) {
+    for (const period of periods) {
+      regularHours.push({
+        day: (period.openDay as string) || "",
+        openTime: formatTime(period.openTime as Record<string, number> | undefined),
+        closeTime: formatTime(period.closeTime as Record<string, number> | undefined),
+      });
+    }
+  }
+
+  const specialHours: GbpProfile["specialHours"] = [];
+  const sh = data.specialHours as Record<string, unknown> | undefined;
+  const shPeriods = sh?.specialHourPeriods as Array<Record<string, unknown>> | undefined;
+  if (shPeriods) {
+    for (const period of shPeriods) {
+      const startDate = period.startDate as Record<string, number> | undefined;
+      specialHours.push({
+        date: `${startDate?.year}-${String(startDate?.month).padStart(2, "0")}-${String(startDate?.day).padStart(2, "0")}`,
+        openTime: formatTime(period.openTime as Record<string, number> | undefined),
+        closeTime: formatTime(period.closeTime as Record<string, number> | undefined),
+        isClosed: (period.closed as boolean) || false,
+      });
+    }
+  }
+
+  const cats = data.categories as Record<string, unknown> | undefined;
+  const primaryCat = cats?.primaryCategory as Record<string, string> | undefined;
+  const primaryCategory = primaryCat?.displayName || "";
+  const additionalCategories = ((cats?.additionalCategories || []) as Array<Record<string, string>>)
+    .map((c) => c.displayName || "");
+
+  const profile = data.profile as Record<string, string> | undefined;
+  const phoneNumbers = data.phoneNumbers as Record<string, string> | undefined;
+  const storefrontAddress = data.storefrontAddress as Record<string, unknown> | undefined;
+  const openInfo = data.openInfo as Record<string, unknown> | undefined;
+  const openingDate = openInfo?.openingDate as Record<string, number> | undefined;
+  const metadata = data.metadata as Record<string, unknown> | undefined;
+
+  const missing: string[] = [];
+  if (!data.title) missing.push("Business name");
+  if (!profile?.description) missing.push("Description");
+  if (!phoneNumbers?.primaryPhone) missing.push("Phone number");
+  if (!data.websiteUri) missing.push("Website");
+  if (!storefrontAddress) missing.push("Address");
+  if (!periods?.length) missing.push("Business hours");
+  if (!primaryCategory) missing.push("Primary category");
+  if (!additionalCategories.length) missing.push("Additional categories");
+
+  const totalFields = 8;
+  const filledFields = totalFields - missing.length;
+  const score = Math.round((filledFields / totalFields) * 100);
+
+  return {
+    name: (data.name as string) || "",
+    title: (data.title as string) || "",
+    description: profile?.description || "",
+    phoneNumber: phoneNumbers?.primaryPhone || "",
+    websiteUri: (data.websiteUri as string) || "",
+    address: {
+      addressLines: (storefrontAddress?.addressLines as string[]) || [],
+      locality: (storefrontAddress?.locality as string) || "",
+      administrativeArea: (storefrontAddress?.administrativeArea as string) || "",
+      postalCode: (storefrontAddress?.postalCode as string) || "",
+      regionCode: (storefrontAddress?.regionCode as string) || "US",
+    },
+    regularHours,
+    specialHours,
+    categories: { primary: primaryCategory, additional: additionalCategories },
+    serviceArea: (data.serviceArea as Record<string, unknown>) || null,
+    openingDate: openingDate
+      ? `${openingDate.year}-${String(openingDate.month).padStart(2, "0")}-${String(openingDate.day).padStart(2, "0")}`
+      : null,
+    metadata: {
+      placeId: (metadata?.placeId as string) || null,
+      mapsUri: (metadata?.mapsUri as string) || null,
+      newReviewUri: (metadata?.newReviewUri as string) || null,
+      hasVoiceOfMerchant: (metadata?.hasVoiceOfMerchant as boolean) || false,
+      canModifyServiceList: (metadata?.canModifyServiceList as boolean) || false,
+      canHaveFoodMenus: (metadata?.canHaveFoodMenus as boolean) || false,
+    },
+    completeness: { score, missing },
+    synced_at: new Date().toISOString(),
+  };
+}
+
+/**
  * Pull profile from Google API and store in local DB.
  *
  * Initial sync (no cached profile): full write — Google is source of truth.
@@ -170,86 +266,7 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
   }
 
   const data = await res.json();
-
-  // Parse regular hours
-  const regularHours: GbpProfile["regularHours"] = [];
-  if (data.regularHours?.periods) {
-    for (const period of data.regularHours.periods) {
-      regularHours.push({
-        day: period.openDay || "",
-        openTime: formatTime(period.openTime),
-        closeTime: formatTime(period.closeTime),
-      });
-    }
-  }
-
-  // Parse special hours
-  const specialHours: GbpProfile["specialHours"] = [];
-  if (data.specialHours?.specialHourPeriods) {
-    for (const period of data.specialHours.specialHourPeriods) {
-      specialHours.push({
-        date: `${period.startDate?.year}-${String(period.startDate?.month).padStart(2, "0")}-${String(period.startDate?.day).padStart(2, "0")}`,
-        openTime: formatTime(period.openTime),
-        closeTime: formatTime(period.closeTime),
-        isClosed: period.closed || false,
-      });
-    }
-  }
-
-  // Parse categories
-  const primaryCategory = data.categories?.primaryCategory?.displayName || "";
-  const additionalCategories = (data.categories?.additionalCategories || [])
-    .map((c: Record<string, string>) => c.displayName || "");
-
-  // Calculate completeness
-  const missing: string[] = [];
-  if (!data.title) missing.push("Business name");
-  if (!data.profile?.description) missing.push("Description");
-  if (!data.phoneNumbers?.primaryPhone) missing.push("Phone number");
-  if (!data.websiteUri) missing.push("Website");
-  if (!data.storefrontAddress) missing.push("Address");
-  if (!data.regularHours?.periods?.length) missing.push("Business hours");
-  if (!primaryCategory) missing.push("Primary category");
-  if (!additionalCategories.length) missing.push("Additional categories");
-
-  const totalFields = 8;
-  const filledFields = totalFields - missing.length;
-  const score = Math.round((filledFields / totalFields) * 100);
-
-  const result: GbpProfile = {
-    name: data.name || "",
-    title: data.title || "",
-    description: data.profile?.description || "",
-    phoneNumber: data.phoneNumbers?.primaryPhone || "",
-    websiteUri: data.websiteUri || "",
-    address: {
-      addressLines: data.storefrontAddress?.addressLines || [],
-      locality: data.storefrontAddress?.locality || "",
-      administrativeArea: data.storefrontAddress?.administrativeArea || "",
-      postalCode: data.storefrontAddress?.postalCode || "",
-      regionCode: data.storefrontAddress?.regionCode || "US",
-    },
-    regularHours,
-    specialHours,
-    categories: {
-      primary: primaryCategory,
-      additional: additionalCategories,
-    },
-    serviceArea: data.serviceArea || null,
-    openingDate: data.openInfo?.openingDate
-      ? `${data.openInfo.openingDate.year}-${String(data.openInfo.openingDate.month).padStart(2, "0")}-${String(data.openInfo.openingDate.day).padStart(2, "0")}`
-      : null,
-    metadata: {
-      placeId: data.metadata?.placeId || null,
-      mapsUri: data.metadata?.mapsUri || null,
-      newReviewUri: data.metadata?.newReviewUri || null,
-      hasVoiceOfMerchant: data.metadata?.hasVoiceOfMerchant || false,
-      canModifyServiceList: data.metadata?.canModifyServiceList || false,
-      canHaveFoodMenus: data.metadata?.canHaveFoodMenus || false,
-    },
-    completeness: { score, missing },
-    synced_at: new Date().toISOString(),
-  };
+  const result = parseLocationResponse(data);
 
   // Check if this is initial sync or re-sync
   const [existingSite] = await sql`SELECT gbp_profile FROM sites WHERE id = ${siteId}`;
@@ -514,6 +531,19 @@ export async function pushProfileToGoogle(siteId: string): Promise<{ success: bo
       console.error("GBP push attempted fields:", updateMask.join(", "));
       // Keep dirty flag on ALL errors so user can retry
       return { success: false, error: isQuota ? "Quota exceeded — will retry" : `Push failed (${res.status}). Fields: ${updateMask.join(", ")}. Google: ${err.slice(0, 100)}` };
+    }
+
+    // Pull-after-push: parse Google's PATCH response (the updated location
+    // resource) and overwrite the cache. Captures any server-side normalization
+    // (phone formatting, address geocoding) so local matches Google exactly.
+    try {
+      const patched = await res.json();
+      const refreshed = parseLocationResponse(patched);
+      await sql`
+        UPDATE sites SET gbp_profile = ${JSON.stringify(refreshed)}::jsonb WHERE id = ${siteId}
+      `;
+    } catch (err) {
+      console.warn("GBP push: failed to parse PATCH response, cache will reflect what we sent:", err instanceof Error ? err.message : err);
     }
   }
 

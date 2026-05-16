@@ -1,5 +1,4 @@
-import { sql } from "@/lib/db";
-import { decrypt } from "@/lib/crypto";
+import { getGbpCredentials } from "./credentials";
 
 /**
  * GBP Performance API — fetch business metrics.
@@ -29,11 +28,6 @@ export interface PerformanceData {
   searchImpressions: DailyMetric[];
   mapsImpressions: DailyMetric[];
   searchKeywords: Array<{ keyword: string; impressions: number }>;
-}
-
-// v1 Performance API uses just "locations/{id}" — no accounts prefix
-function getLocationId(platformAccountId: string): string {
-  return platformAccountId;
 }
 
 async function fetchDailyMetric(
@@ -111,19 +105,11 @@ async function fetchSearchKeywords(
  * Returns 30 days of daily metrics + top search keywords.
  */
 export async function fetchPerformance(siteId: string): Promise<PerformanceData | null> {
-  const [gbpAccount] = await sql`
-    SELECT sa.id, sa.account_id, sa.access_token_encrypted, sa.metadata
-    FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
-    LIMIT 1
-  `;
-
-  if (!gbpAccount) return null;
-
-  const accessToken = decrypt(gbpAccount.access_token_encrypted as string);
-  const metadata = gbpAccount.metadata as Record<string, unknown>;
-  const locationPath = getLocationId(gbpAccount.account_id);
+  const creds = await getGbpCredentials(siteId);
+  if (!creds) return null;
+  const accessToken = creds.accessToken;
+  // Performance API uses v1 locations/{id} path — no accounts prefix.
+  const locationPath = creds.locationPath;
 
   const endDate = new Date();
   const startDate = new Date();

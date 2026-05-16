@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import { decrypt } from "@/lib/crypto";
+import { getGbpCredentials } from "./credentials";
 import { primaryPillarFromTags, type PillarConfig } from "@/lib/pillars";
 
 /**
@@ -78,13 +78,6 @@ export function mapToGbpCategory(
     return SCENE_TO_GBP_CATEGORY[sceneType];
   }
   return "ADDITIONAL";
-}
-
-function buildLocationPath(accountMetadata: Record<string, unknown>, platformAccountId: string): string {
-  const gbpAccountId = (accountMetadata?.account_id as string) || "";
-  return gbpAccountId && platformAccountId
-    ? `${gbpAccountId}/${platformAccountId}`
-    : platformAccountId;
 }
 
 export async function listGbpPhotos(
@@ -201,19 +194,10 @@ export async function setGbpCoverOrLogo(
  * Called after quality gates pass in the pipeline.
  */
 export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; skipped: number }> {
-  const [gbpAccount] = await sql`
-    SELECT sa.id, sa.account_id, sa.access_token_encrypted, sa.metadata
-    FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
-    LIMIT 1
-  `;
-
-  if (!gbpAccount) return { synced: 0, skipped: 0 };
-
-  const accessToken = decrypt(gbpAccount.access_token_encrypted as string);
-  const metadata = gbpAccount.metadata as Record<string, unknown>;
-  const locationPath = buildLocationPath(metadata, gbpAccount.account_id);
+  const creds = await getGbpCredentials(siteId);
+  if (!creds) return { synced: 0, skipped: 0 };
+  const accessToken = creds.accessToken;
+  const locationPath = creds.v4LocationPath;
 
   // Use site-relative publish threshold
   const { getThresholds, publishAbove } = await import("@/lib/pipeline/quality-thresholds");
@@ -324,19 +308,10 @@ export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; 
  * Pull existing GBP photos into sync table for display.
  */
 export async function pullGbpPhotos(siteId: string): Promise<number> {
-  const [gbpAccount] = await sql`
-    SELECT sa.id, sa.account_id, sa.access_token_encrypted, sa.metadata
-    FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
-    LIMIT 1
-  `;
-
-  if (!gbpAccount) return 0;
-
-  const accessToken = decrypt(gbpAccount.access_token_encrypted as string);
-  const metadata = gbpAccount.metadata as Record<string, unknown>;
-  const locationPath = buildLocationPath(metadata, gbpAccount.account_id);
+  const creds = await getGbpCredentials(siteId);
+  if (!creds) return 0;
+  const accessToken = creds.accessToken;
+  const locationPath = creds.v4LocationPath;
 
   const items = await listGbpPhotos(accessToken, locationPath);
   let added = 0;

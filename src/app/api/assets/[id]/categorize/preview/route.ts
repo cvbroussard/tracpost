@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { runStage1 } from "@/lib/categorization/stage1-extract";
 import { runStage2 } from "@/lib/categorization/stage2-multimodal";
+import { matchBrandsFromNer } from "@/lib/categorization/brand-match";
 import { getAssetNarrative } from "@/lib/asset-narrative";
 
 export const runtime = "nodejs";
@@ -21,8 +22,12 @@ export const maxDuration = 60; // Sonnet vision ~5s + Haiku NER ~1s + overhead
  *     If omitted, reads from getAssetNarrative (latest active recording).
  *
  * Response:
- *   { ok: true, stage1, stage2 }
+ *   { ok: true, stage1, stage2, brand_match: { matched, suggested_new } }
  *   or { ok: false, error, stage }
+ *
+ * brand_match shows what cascade-commit would link from the catalog and
+ * what unmatched NER candidates the subscriber could promote to new
+ * brands. Computed locally, no LLM cost.
  *
  * Cost: ~$0.025 per call (Haiku $0.005 + Sonnet vision $0.02).
  * Does NOT persist anything. Safe to fire multiple times.
@@ -67,13 +72,14 @@ export async function POST(
     transcript = narrative.text;
   }
 
-  // Load site categories + brand catalog + pillar options
-  const [siteCategories, siteBrands, siteRow] = await Promise.all([
+  // Load site categories + pillar options. Brand catalog is NOT loaded
+  // here — Stage 2 doesn't see brands anymore (hallucination prevention);
+  // brand matching happens via Stage 1 NER + the matcher below.
+  const [siteCategories, siteRow] = await Promise.all([
     sql`SELECT sgc.gcid, gc.name FROM site_gbp_categories sgc
         JOIN gbp_categories gc ON gc.gcid = sgc.gcid
         WHERE sgc.site_id = ${asset.site_id}
         ORDER BY sgc.is_primary DESC, gc.name`,
-    sql`SELECT id, slug, name FROM brands WHERE site_id = ${asset.site_id}`,
     sql`SELECT pillar_config, brand_dna FROM sites WHERE id = ${asset.site_id}`,
   ]);
 
@@ -119,7 +125,6 @@ export async function POST(
     transcript,
     stage1,
     siteCategories: siteCategories as Array<{ gcid: string; name: string }>,
-    siteBrands: siteBrands as Array<{ id: string; slug: string; name: string }>,
     brandDnaDigest,
     pillarConfig,
   });
@@ -131,5 +136,17 @@ export async function POST(
     return NextResponse.json({ ok: false, error: `Stage 2 skipped: ${s2.reason}`, stage: "stage2" }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, stage1, stage2: s2.result });
+  // Brand match preview — pure local, no LLM. Mirrors what commit will do.
+  const nerBrandCandidates = stage1?.entities.brands.map((b) => ({
+    name: b.text,
+    context: b.context_excerpt,
+  })) ?? [];
+  const brandMatch = await matchBrandsFromNer(asset.site_id as string, nerBrandCandidates);
+
+  return NextResponse.json({
+    ok: true,
+    stage1,
+    stage2: s2.result,
+    brand_match: brandMatch,
+  });
 }

@@ -33,6 +33,7 @@ import { deriveSourceKey } from "@/lib/pipeline/asset-keys";
 import { renderAllVariantsForAsset } from "@/lib/pipeline/variant-render";
 import { purgeCdnCache } from "@/lib/cdn";
 import { persistStage2 } from "./stage2-multimodal";
+import { matchBrandsFromNer } from "./brand-match";
 import type { Stage1Result } from "./stage1-extract";
 import type { Stage2Result } from "./stage2-multimodal";
 
@@ -45,7 +46,11 @@ export interface CommitCascadeInput {
 export interface CommitCascadeResult {
   ok: boolean;
   categoryRows: number;
+  /** Catalog brands linked from Stage 1 NER hits. */
   brandRows: number;
+  /** NER brand candidates that didn't match the catalog — caller can
+   * surface for promote-to-catalog. */
+  suggestedNewBrandCount: number;
   slugApplied: string;
   renamed: boolean;
   variantCount: number;
@@ -68,8 +73,28 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
   const oldSourceUrl = asset.storage_url as string;
   const mediaType = (asset.media_type as string) || "";
 
-  // ── 2. Persist the cascade artifact + structured tags + vendors ──
-  const { categoryRows, brandRows } = await persistStage2(assetId, stage1, stage2);
+  // ── 2. Persist cascade artifact + structured tags ────────────────
+  const { categoryRows } = await persistStage2(assetId, stage1, stage2);
+
+  // ── 2b. Brand matching from Stage 1 NER ──────────────────────────
+  // Vision-based brand detection was retired (hallucinated from catalog
+  // payload). NER → fuzzy catalog match is the proven path. Subscriber
+  // can promote suggested_new entries to catalog from the asset modal;
+  // that triggers enrichBrand() via the standard POST /api/brands path.
+  const nerBrandCandidates = stage1?.entities.brands.map((b) => ({
+    name: b.text,
+    context: b.context_excerpt,
+  })) ?? [];
+  const brandMatch = await matchBrandsFromNer(siteId, nerBrandCandidates);
+  let brandRows = 0;
+  for (const m of brandMatch.matched) {
+    await sql`
+      INSERT INTO asset_brands (asset_id, brand_id)
+      VALUES (${assetId}, ${m.brand_id})
+      ON CONFLICT DO NOTHING
+    `;
+    brandRows++;
+  }
 
   // ── 3. Derive slug + new R2 key from cascade output ──────────────
   // Fallback to UUID-prefix slug if cascade somehow didn't produce one
@@ -183,8 +208,9 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
 
   console.log(
     `commitCascade ${assetId}: slug="${slug}" renamed=${renamed} ` +
-      `categoryRows=${categoryRows} brandRows=${brandRows} variants=${variantCount} ` +
-      `warnings=${warnings.length}`,
+      `categoryRows=${categoryRows} brandRows=${brandRows} ` +
+      `suggestedNewBrands=${brandMatch.suggested_new.length} ` +
+      `variants=${variantCount} warnings=${warnings.length}`,
   );
 
   // Suppress unused-var warning on currentSourceUrl in case we don't
@@ -195,6 +221,7 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
     ok: true,
     categoryRows,
     brandRows,
+    suggestedNewBrandCount: brandMatch.suggested_new.length,
     slugApplied: slug,
     renamed,
     variantCount,

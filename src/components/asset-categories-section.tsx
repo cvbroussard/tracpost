@@ -51,11 +51,14 @@ interface CascadePreview {
       secondaries: Array<{ gcid: string; name: string; confidence: number; reasoning: string }>;
     };
     scene_types: string[];
-    detected_vendors: Array<{ brand_slug: string; brand_name: string; confidence: number; visual_evidence: string | null }>;
     url_slug: string;
     story_angles: string[];
     suggested_pillar: string | null;
     caption_hints: { tone: string; voice_anchor: string; key_phrases_to_use: string[]; audience: string; lead_with: string };
+  };
+  brand_match: {
+    matched: Array<{ brand_id: string; name: string; ner_text: string; context: string }>;
+    suggested_new: Array<{ name: string; slug: string; context: string }>;
   };
 }
 
@@ -106,7 +109,7 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
       if (!res.ok || !d.ok) {
         throw new Error(d.error || `Preview failed (${res.status})`);
       }
-      setPreview({ stage1: d.stage1, stage2: d.stage2 });
+      setPreview({ stage1: d.stage1, stage2: d.stage2, brand_match: d.brand_match });
     } catch (e) {
       setCascadeError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -283,9 +286,14 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
               {preview.stage2.story_angles.length > 0 && (
                 <div>Angles: {preview.stage2.story_angles.join(", ")}</div>
               )}
-              {preview.stage2.detected_vendors.length > 0 && (
+              {preview.brand_match.matched.length > 0 && (
                 <div className="col-span-2">
-                  Vendors: {preview.stage2.detected_vendors.map((v) => `${v.brand_name} (${(v.confidence * 100).toFixed(0)}%)`).join(", ")}
+                  Brands (catalog): {preview.brand_match.matched.map((m) => `${m.name} ← "${m.ner_text}"`).join(", ")}
+                </div>
+              )}
+              {preview.brand_match.suggested_new.length > 0 && (
+                <div className="col-span-2 text-amber-700">
+                  New brand candidates: {preview.brand_match.suggested_new.map((s) => s.name).join(", ")}
                 </div>
               )}
               {preview.stage2.url_slug && (

@@ -171,31 +171,90 @@ export async function processBriefedAsset(assetId: string): Promise<{
     console.error(`Variant render failed in processBriefedAsset for ${assetId}:`, err instanceof Error ? err.message : err);
   }
 
-  // ── 5b. Auto-categorize against site's 10 GBP categories ─────────
-  // Multimodal LLM call (image + transcript + 10 categories → ranked
-  // gcids) writes to asset_categories. Replaces the services tag group
-  // per #223. Non-fatal — if categorization fails, the rest of the
-  // briefing pipeline still succeeds; categorization can be retried
-  // independently. Skip outcomes (no_transcript / no_site_categories
-  // / no_image) are expected paths, not errors.
+  // ── 5b. Asset analysis cascade ────────────────────────────────────
+  // Per project_tracpost_asset_analysis_cascade memory:
+  //   Stage 1: NER on transcript (Haiku, ~$0.005) → entities + suggested_tags
+  //   Stage 2: Multimodal vision (Sonnet, ~$0.02) → asset_categories +
+  //            scene_types + detected_vendors + url_slug + story_angles +
+  //            suggested_pillar + caption_hints
+  //   Persists: asset_analysis JSONB (full artifact) + asset_categories
+  //            (structured tag) + asset_brands (visually-confirmed vendors)
+  //
+  // HARD CONTRACT: transcript required. Refuses to run without one.
+  // Non-fatal — failures don't break the rest of the briefing pipeline.
   try {
-    const { categorizeAsset, persistCategorization } = await import("@/lib/categorization/asset-categorizer");
-    const outcome = await categorizeAsset(assetId);
-    if (outcome.status === "success") {
-      const { inserted, preservedOverrides } = await persistCategorization(assetId, outcome.result);
-      console.log(
-        `Auto-categorized ${assetId}: primary=${outcome.result.primary.gcid} ` +
-          `(${(outcome.result.primary.confidence * 100).toFixed(0)}%), ` +
-          `${outcome.result.secondaries.length} secondaries, ` +
-          `${inserted} inserted, ${preservedOverrides} overrides preserved`,
-      );
-    } else if (outcome.status === "skipped") {
-      console.log(`Auto-categorization skipped for ${assetId}: ${outcome.reason}`);
+    const [{ runStage1 }, { runStage2, persistStage2 }, { getAssetNarrative }] = await Promise.all([
+      import("@/lib/categorization/stage1-extract"),
+      import("@/lib/categorization/stage2-multimodal"),
+      import("@/lib/asset-narrative"),
+    ]);
+
+    const narrative = await getAssetNarrative(assetId);
+    if (narrative.source === "empty" || !narrative.text.trim()) {
+      console.log(`Asset analysis cascade skipped for ${assetId}: no transcript`);
     } else {
-      console.warn(`Auto-categorization error for ${assetId}: ${outcome.error}`);
+      // Stage 1 — text-only NER + tag suggestion
+      const s1 = await runStage1(narrative.text);
+      const stage1Result = s1.status === "success" ? s1.result : null;
+      if (s1.status === "error") {
+        console.warn(`Stage 1 (NER) failed for ${assetId}: ${s1.error}`);
+      }
+
+      // Resolve image URL for Stage 2 (poster for video, storage_url for image)
+      let imageUrl = oldSourceUrl;
+      if (mediaType === "video" && asset.poster_asset_id) {
+        const [poster] = await sql`SELECT storage_url FROM media_assets WHERE id = ${asset.poster_asset_id}`;
+        imageUrl = (poster?.storage_url as string) || imageUrl;
+      }
+
+      // Load site categories + brand catalog + pillar options
+      const [siteCategories, siteBrands, siteRow] = await Promise.all([
+        sql`SELECT sgc.gcid, gc.name FROM site_gbp_categories sgc
+            JOIN gbp_categories gc ON gc.gcid = sgc.gcid
+            WHERE sgc.site_id = ${siteId}
+            ORDER BY sgc.is_primary DESC, gc.name`,
+        sql`SELECT id, slug, name FROM brands WHERE site_id = ${siteId}`,
+        sql`SELECT pillar_config, brand_dna FROM sites WHERE id = ${siteId}`,
+      ]);
+      const pillarConfig = (siteRow[0]?.pillar_config || []) as Array<{ id: string }>;
+      const pillarOptions = pillarConfig.map((p) => p.id);
+      const brandDna = siteRow[0]?.brand_dna as Record<string, unknown> | null;
+      const brandDnaDigest = brandDna
+        ? `Site brand DNA available — voice + positioning signals present`
+        : null;
+
+      // Stage 2 — multimodal analysis
+      const s2 = await runStage2({
+        assetId,
+        imageUrl,
+        transcript: narrative.text,
+        stage1: stage1Result,
+        siteCategories: siteCategories as Array<{ gcid: string; name: string }>,
+        siteBrands: siteBrands as Array<{ id: string; slug: string; name: string }>,
+        brandDnaDigest,
+        pillarOptions,
+      });
+
+      if (s2.status === "success") {
+        const { categoryRows, brandRows } = await persistStage2(assetId, stage1Result, s2.result);
+        console.log(
+          `Asset analysis cascade succeeded for ${assetId}: ` +
+            `primary=${s2.result.asset_categories.primary.gcid} ` +
+            `(${(s2.result.asset_categories.primary.confidence * 100).toFixed(0)}%), ` +
+            `${s2.result.asset_categories.secondaries.length} secondaries, ` +
+            `${s2.result.scene_types.length} scene_types, ` +
+            `${s2.result.detected_vendors.length} vendors, ` +
+            `slug=${s2.result.url_slug.slice(0, 40)}, ` +
+            `${categoryRows} category rows + ${brandRows} brand rows persisted`,
+        );
+      } else if (s2.status === "skipped") {
+        console.log(`Stage 2 skipped for ${assetId}: ${s2.reason}`);
+      } else {
+        console.warn(`Stage 2 error for ${assetId}: ${s2.error}`);
+      }
     }
   } catch (err) {
-    console.error(`Auto-categorization threw for ${assetId}:`, err instanceof Error ? err.message : err);
+    console.error(`Asset analysis cascade threw for ${assetId}:`, err instanceof Error ? err.message : err);
   }
 
   // ── 6. Mark asset migrated + briefable ───────────────────────────

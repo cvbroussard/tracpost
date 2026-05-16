@@ -1639,23 +1639,11 @@ export function AssetEditModal({
               </div>
             </div>
 
-            {/* LEGACY CONTEXT NOTE — handwritten cue card subscriber reads
-                from while recording. Now positioned after Scene so the
-                subscriber's reading flow is: Transcription review → Scene
-                review → Legacy cue card (the prompt for the next take).
-                Surfaces only when the asset has a non-empty context_note.
-                Disappears once context_note column is dropped. */}
-            {initialNote && initialNote.trim() && (
-              <div className="mb-3 rounded border border-warning/30 bg-warning/5 px-3 py-2.5">
-                <div className="mb-1.5 flex items-baseline gap-2">
-                  <span className="text-[11px] font-medium text-warning">Legacy Context Note</span>
-                  <span className="text-[10px] text-muted">— Handwritten cue card. Read from this while recording.</span>
-                </div>
-                <div className="whitespace-pre-wrap rounded bg-background/40 p-2 text-[12px] leading-relaxed text-foreground/90">
-                  {initialNote}
-                </div>
-              </div>
-            )}
+            {/* Legacy Context Note card retired 2026-05-16 — new recording
+                methodology no longer needs a handwritten cue card surface.
+                The underlying context_note column persists until migration
+                #195 backfills + drops it; getAssetNarrative continues to
+                read it as a fallback in the meantime. */}
 
             {/* STORY ANGLE SECTION — moved BELOW Transcription (2026-05-11) */}
             {pillarConfig.length > 0 && (

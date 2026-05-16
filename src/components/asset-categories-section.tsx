@@ -1,6 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, forwardRef, useImperativeHandle } from "react";
+
+/**
+ * Imperative handle exposed via ref. The Auto-tag bar's trigger button
+ * calls triggerPreview() to fire the cascade preview without owning
+ * the cascade state itself.
+ */
+export interface AutoTagSectionHandle {
+  triggerPreview: () => void;
+  /** True when a preview is in flight or already loaded. Bar uses this
+   * to enable/disable its trigger button + adjust its label. */
+  hasPreview: boolean;
+  /** True during the preview LLM call. */
+  isPreviewing: boolean;
+}
 
 interface SiteCategory {
   gcid: string;
@@ -61,7 +75,24 @@ interface CascadePreview {
   };
 }
 
-export function AssetCategoriesSection({ assetId }: { assetId: string }) {
+interface AssetCategoriesSectionProps {
+  assetId: string;
+  /** When true, the section's internal "⚡ Auto-tag this asset" trigger
+   * button is suppressed. Use this when the Auto-tag bar renders its own
+   * trigger button (the canonical surface 2026-05-16). The bar drives
+   * preview via the imperative handle. */
+  hideTrigger?: boolean;
+  /** Optional className passthrough so the parent (e.g. Auto-tag bar
+   * body) can override the default border-t/px-6 padding. */
+  className?: string;
+  /** Notified whenever cascade preview state changes (isPreviewing /
+   * hasPreview). Refs alone don't re-render the parent — the bar uses
+   * this to update its trigger button label + disabled state. */
+  onStateChange?: (state: { isPreviewing: boolean; hasPreview: boolean }) => void;
+}
+
+export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCategoriesSectionProps>(
+  function AssetCategoriesSection({ assetId, hideTrigger = false, className, onStateChange }, ref) {
   const [data, setData] = useState<CategoriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +124,23 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Expose imperative trigger so the Auto-tag bar (parent) can fire
+  // preview from its own button without owning the cascade state.
+  useImperativeHandle(
+    ref,
+    () => ({
+      triggerPreview: () => { void runPreview(); },
+      hasPreview: preview !== null,
+      isPreviewing: previewing,
+    }),
+    [preview, previewing],
+  );
+
+  // Notify parent of state changes — refs alone don't trigger re-renders.
+  useEffect(() => {
+    onStateChange?.({ isPreviewing: previewing, hasPreview: preview !== null });
+  }, [previewing, preview, onStateChange]);
 
   async function runPreview() {
     setPreviewing(true);
@@ -161,10 +209,12 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
     }
   }
 
+  const wrapperClass = className ?? "border-t border-border px-6 py-4";
+
   if (loading) {
     return (
-      <div className="border-t border-border px-6 py-4">
-        <label className="mb-1.5 block text-xs text-muted">Auto-tag</label>
+      <div className={wrapperClass}>
+        {!hideTrigger && <label className="mb-1.5 block text-xs text-muted">Auto-tag</label>}
         <p className="text-[11px] text-muted">Loading…</p>
       </div>
     );
@@ -172,8 +222,8 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
 
   if (!data) {
     return (
-      <div className="border-t border-border px-6 py-4">
-        <label className="mb-1.5 block text-xs text-muted">Auto-tag</label>
+      <div className={wrapperClass}>
+        {!hideTrigger && <label className="mb-1.5 block text-xs text-muted">Auto-tag</label>}
         <p className="text-[11px] text-danger">{error || "Failed to load"}</p>
       </div>
     );
@@ -186,15 +236,17 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
   const addable = siteCategories.filter((c) => !assigned.has(c.gcid));
 
   return (
-    <div className="border-t border-border px-6 py-4">
-      <div className="mb-1.5 flex items-center justify-between">
-        <label className="text-xs text-muted">Auto-tag</label>
-        {assignments.length > 0 && primary?.assigned_by === "auto" && primary.confidence !== null && (
-          <span className="text-[9px] text-muted">
-            auto · {(Number(primary.confidence) * 100).toFixed(0)}% confidence
-          </span>
-        )}
-      </div>
+    <div className={wrapperClass}>
+      {!hideTrigger && (
+        <div className="mb-1.5 flex items-center justify-between">
+          <label className="text-xs text-muted">Auto-tag</label>
+          {assignments.length > 0 && primary?.assigned_by === "auto" && primary.confidence !== null && (
+            <span className="text-[9px] text-muted">
+              auto · {(Number(primary.confidence) * 100).toFixed(0)}% confidence
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Empty states */}
       {siteCategories.length === 0 && (
@@ -210,8 +262,10 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
         </div>
       )}
 
-      {/* Auto-tag CTA — appears when transcript exists but no preview is loaded */}
-      {siteCategories.length > 0 && asset.hasTranscript && !preview && (
+      {/* Auto-tag CTA — appears when transcript exists but no preview is loaded.
+          Suppressed when hideTrigger=true (the Auto-tag bar above renders
+          the canonical trigger button and calls triggerPreview() via ref). */}
+      {!hideTrigger && siteCategories.length > 0 && asset.hasTranscript && !preview && (
         <div className="mb-2">
           <button
             onClick={runPreview}
@@ -382,7 +436,7 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
       {error && <p className="mt-2 text-[10px] text-danger">{error}</p>}
     </div>
   );
-}
+});
 
 function CategoryPill({
   assignment,

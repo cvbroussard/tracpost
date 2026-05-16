@@ -5,9 +5,14 @@ import { toast, confirm as confirmDialog } from "@/components/feedback";
 import type { PillarGroup } from "./tag-picker";
 import { FaceOverlay } from "./face-overlay";
 import { useAudioBriefing } from "@/hooks/use-audio-briefing";
-import { RecordingBar } from "@/components/recording-bar";
+import {
+  AutoTagBar,
+  PrimaryToggleButton as AudioToggleButton,
+  StateIndicator as AudioStateIndicator,
+  StagedPreview as AudioStagedPreview,
+} from "@/components/auto-tag-bar";
 import { SCENE_TYPES } from "@/lib/scene-types";
-import { AssetCategoriesSection } from "@/components/asset-categories-section";
+import { AssetCategoriesSection, type AutoTagSectionHandle } from "@/components/asset-categories-section";
 
 interface RecordingRow {
   id: string;
@@ -215,6 +220,20 @@ export function AssetEditModal({
   );
   // initialPillarsArr captures the seeded value to compute the save-time diff.
   const initialPillarsArr = initialPillars.length > 0 ? initialPillars : initialPillar ? [initialPillar] : [];
+  // Imperative handle on AssetCategoriesSection — Auto-tag bar's
+  // trigger button calls cascadeRef.current?.triggerPreview() so the
+  // cascade fires from the bar while state stays inside the section.
+  const cascadeRef = useRef<AutoTagSectionHandle | null>(null);
+  const [cascadeBusy, setCascadeBusy] = useState(false);
+  const [cascadeHasPreview, setCascadeHasPreview] = useState(false);
+  const handleCascadeStateChange = useCallback(
+    (s: { isPreviewing: boolean; hasPreview: boolean }) => {
+      setCascadeBusy(s.isPreviewing);
+      setCascadeHasPreview(s.hasPreview);
+    },
+    [],
+  );
+
   const [brandIds, setBrandIds] = useState<string[]>(initialBrandIds);
   const [projectIds, setProjectIds] = useState<string[]>(initialProjectIds);
   const [personaIds, setPersonaIds] = useState<string[]>(initialPersonaIds);
@@ -1228,31 +1247,41 @@ export function AssetEditModal({
             in the image, then read the cue card for the NEXT take. */}
         <div className="px-6 pt-4">
 
-            {/* RECORDING BAR v2 — sticky top, consolidated 6-button toolbar.
-                Capture cluster (Record + V/O) on the left, action cluster
-                (Cancel/Save/Save & Next/Close) on the right. State indicators
-                + staged transcript previews flow below. */}
+            {/* AUTO-TAG BAR — sticky top, was RecordingBar (2026-05-16
+                identity flip). Left cluster: Auto-tag trigger button
+                (+ V/O for video). Right cluster: Cancel/Save/Save&Next/
+                Close. Body slot: cascade preview + assignments rendered
+                inline so the bar grows to accommodate. The Record button
+                lives in the Transcription card below now. */}
             <div className="sticky top-[57px] z-10 -mx-6 mb-3 border-b border-border bg-surface px-6 py-2">
-              <RecordingBar
+              <AutoTagBar
                 audio={audio}
                 voiceOver={voiceOver}
                 isVideo={mediaType?.startsWith("video") || mediaType === "video"}
+                onAutoTag={() => cascadeRef.current?.triggerPreview()}
+                autoTagDisabled={cascadeBusy}
+                autoTagLabel={
+                  cascadeBusy
+                    ? "Analyzing…"
+                    : cascadeHasPreview
+                    ? "⚡ Re-tag"
+                    : "⚡ Auto-tag"
+                }
                 onCancel={handleCancel}
                 onSave={handleSaveStay}
                 onSaveAndNext={handleSaveAndNext}
                 onClose={handleClose}
                 saving={saving}
                 hasNext={hasNext && !!onNext}
-              />
-            </div>
-
-            {/* AUTO-TAG (cascade) — promoted to top of modal 2026-05-16.
-                Sits directly under RecordingBar so the cascade preview /
-                Apply flow is the first thing subscriber sees after the
-                transcript lands. Was previously buried at row 5.5 below
-                Scene/Story Angle sections. */}
-            <div className="-mx-6 mb-3">
-              <AssetCategoriesSection assetId={assetId} />
+              >
+                <AssetCategoriesSection
+                  ref={cascadeRef}
+                  assetId={assetId}
+                  hideTrigger
+                  className=""
+                  onStateChange={handleCascadeStateChange}
+                />
+              </AutoTagBar>
             </div>
 
             {/* AUTO-TAG INSPECTOR — surfaces after audio.commit().
@@ -1461,7 +1490,7 @@ export function AssetEditModal({
                   type="button"
                   onClick={() => {
                     if (!typedMode) {
-                      setTypedDraft(recordings[0]?.transcript || initialNote || "");
+                      setTypedDraft(recordings[0]?.transcript || "");
                     }
                     setTypedMode((m) => !m);
                   }}
@@ -1470,6 +1499,22 @@ export function AssetEditModal({
                   {typedMode ? "Cancel typing" : "Type instead"}
                 </button>
               </div>
+
+              {/* Record button lives in the Transcription card permanently
+                  (2026-05-16) — was in the top RecordingBar previously.
+                  Whether or not a transcript exists, the subscriber starts
+                  capture from inside this card. */}
+              {!typedMode && (
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <AudioToggleButton audio={audio} idleLabel="Record" />
+                  <AudioStateIndicator label="Briefing" audio={audio} />
+                </div>
+              )}
+              {!typedMode && audio.state === "staged" && (
+                <div className="mb-2">
+                  <AudioStagedPreview label="Briefing" audio={audio} />
+                </div>
+              )}
 
               {typedMode ? (
                 <textarea
@@ -1540,16 +1585,9 @@ export function AssetEditModal({
                     </details>
                   )}
                 </>
-              ) : initialNote ? (
-                <div className="rounded bg-background/40 p-2 text-[12px] text-foreground/90 italic">
-                  {initialNote}
-                  <div className="mt-1 text-[9px] uppercase tracking-wide text-muted/70">
-                    Legacy context note for this asset — will migrate to a recording on next save.
-                  </div>
-                </div>
               ) : (
-                <div className="text-[11px] italic text-muted">
-                  No recordings for this asset yet — record one above or type it in.
+                <div className="rounded border border-dashed border-border bg-background/40 px-3 py-3 text-center text-[11px] text-muted">
+                  No transcription exists. Click <span className="font-medium text-foreground">Record</span> above to get started.
                 </div>
               )}
             </div>

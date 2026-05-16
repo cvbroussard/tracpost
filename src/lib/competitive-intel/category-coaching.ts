@@ -94,11 +94,24 @@ What this means for your reasoning:
 - The subscriber is likely a capability-superior operator who hasn't done the SEO basics. Your job is to put them at the bar that mid-tier competitors are clearing. The lift is achievable.
 - Confidence in coaching outputs goes UP, not down, because the bar to clear is empirically demonstrated low.
 
+TIER PARTITION (load-bearing for category recommendations):
+
+The competitor frequency digest below is split into TWO sets:
+
+- **In-tier frequency** — categories used by SERP competitors classified into the subscriber's declared commercial tier. These are the operators the subscriber chose to compete against. THIS is the primary signal for what categories to keep, add, or promote — these competitors share the subscriber's structural position and clientele.
+
+- **Cross-tier ambient** — categories used by SERP competitors in different tiers (specialty trades, scale operators, out-of-category). These appear in the same SERPs but compete for different customers. DO NOT use cross-tier category usage as a reason to add categories the subscriber isn't already declaring. Cross-tier signal is informational only — useful to flag "an out-of-category business outranks you here" as bar evidence, but not for recommending category changes.
+
+Rules for tier-aware category coaching:
+- "3 of N competitors use this category" should reference IN-TIER counts unless explicitly noted otherwise.
+- Don't add categories on the basis of cross-tier usage alone (e.g., don't add "Tile contractor" because Gilbert Tile uses it — Gilbert is a specialty trade, not your tier).
+- Out-of-category competitor categories (e.g., Painting with a Twist's "Art studio") MUST be excluded from any category recommendations.
+
 INPUTS YOU GET (treat each as a different signal):
 - The business's currently-declared GBP categories (subscriber said this — preserves their signal even when imperfect)
 - Their GBP self-description (their own voice on what they do)
 - Brand DNA signals (TracPost's analysis of their actual content/voice)
-- Top SERP competitors' full category lists with a frequency digest (what's clearing the local SEO bar — not what's best-in-class)
+- Top SERP competitors' full category lists partitioned into in-tier vs cross-tier frequency digests
 - A relevant slice of the GBP gcid catalog you may pick from
 
 CRITICAL RULES:
@@ -142,10 +155,13 @@ Each object shape:
 }`;
 
 /**
- * Build a digest of competitor category frequency across all top
+ * Build a digest of competitor category frequency across a set of
  * competitors. This becomes the "battle-tested market signal" we feed
  * the LLM as a pre-computed table, reducing the work it has to do AND
  * the chance it miscounts.
+ *
+ * Called separately for in-tier vs cross-tier competitor subsets so
+ * the prompt can present partitioned counts (per tier-partition rules).
  */
 function buildCompetitorFrequencyDigest(
   competitorCategories: CompetitorCategories[],
@@ -164,6 +180,34 @@ function buildCompetitorFrequencyDigest(
     }
   }
   return map;
+}
+
+/**
+ * Partition competitor categories into in-tier vs cross-tier subsets
+ * based on subscriber's declared tier and per-competitor classifications
+ * (resolved via tier2.cid → topCompetitor.placeId → topCompetitor.inferredTier).
+ */
+function partitionCompetitorCategoriesByTier(
+  competitorCategories: CompetitorCategories[],
+  topCompetitors: AnalysisPayload["topCompetitors"],
+  subscriberTierSlug: string | null,
+): { inTier: CompetitorCategories[]; crossTier: CompetitorCategories[]; tierByCid: Map<string, string | null> } {
+  // Index competitor tiers by cid (which equals topCompetitor.placeId)
+  const tierByCid = new Map<string, string | null>();
+  for (const c of topCompetitors) {
+    tierByCid.set(c.placeId, c.inferredTier?.tierSlug ?? null);
+  }
+  if (!subscriberTierSlug) {
+    return { inTier: [], crossTier: competitorCategories, tierByCid };
+  }
+  const inTier: CompetitorCategories[] = [];
+  const crossTier: CompetitorCategories[] = [];
+  for (const cc of competitorCategories) {
+    const cTier = tierByCid.get(cc.cid);
+    if (cTier === subscriberTierSlug) inTier.push(cc);
+    else crossTier.push(cc);
+  }
+  return { inTier, crossTier, tierByCid };
 }
 
 /**
@@ -189,17 +233,23 @@ function distillBrandDna(brandDna: Record<string, unknown> | null): string {
 export async function generateCategoryCoaching(inputs: CoachingInputs): Promise<CoachingResult> {
   const { siteName, currentCategories, gbpDescription, brandDna, analysis, analysisId } = inputs;
 
-  // Build the competitor frequency digest
-  const frequencyMap = buildCompetitorFrequencyDigest(analysis.competitorCategories || []);
-  const frequencyEntries = Array.from(frequencyMap.entries())
+  // Tier-aware partition of competitor categories
+  const subscriberTierSlug = analysis.subscriberTier?.slug ?? null;
+  const subscriberTierLabel = analysis.subscriberTier?.label ?? null;
+  const { inTier, crossTier } = partitionCompetitorCategoriesByTier(
+    analysis.competitorCategories || [],
+    analysis.topCompetitors || [],
+    subscriberTierSlug,
+  );
+  const inTierFreq = Array.from(buildCompetitorFrequencyDigest(inTier).entries())
+    .map(([gcid, v]) => ({ gcid, ...v }))
+    .sort((a, b) => b.count - a.count);
+  const crossTierFreq = Array.from(buildCompetitorFrequencyDigest(crossTier).entries())
     .map(([gcid, v]) => ({ gcid, ...v }))
     .sort((a, b) => b.count - a.count);
 
   // Gather the full gcid universe for "catalog slice" hint to the LLM —
   // every gcid that's currently on subscriber OR appeared on a competitor.
-  // Plus we can include a tail of sector-adjacent gcids from gbp_categories
-  // to expose adjacent ideas the LLM might pick from. For V1 keep it tight:
-  // just the union of subscriber + competitor gcids.
   const universeGcids = new Set<string>();
   for (const c of currentCategories) universeGcids.add(c.gcid);
   for (const cc of analysis.competitorCategories || []) {
@@ -216,9 +266,12 @@ export async function generateCategoryCoaching(inputs: CoachingInputs): Promise<
     currentCategories,
     gbpDescription,
     brandDnaDigest: distillBrandDna(brandDna),
-    frequencyEntries,
+    inTierFreq,
+    crossTierFreq,
+    inTierCount: inTier.length,
+    crossTierCount: crossTier.length,
+    subscriberTierLabel,
     catalogSlice: catalogSlice as Array<{ gcid: string; name: string }>,
-    competitorCount: (analysis.competitorCategories || []).length,
   });
 
   const res = await anthropic.messages.create({
@@ -265,15 +318,23 @@ interface PromptArgs {
   currentCategories: Array<{ gcid: string; name: string; isPrimary: boolean }>;
   gbpDescription: string | null;
   brandDnaDigest: string;
-  frequencyEntries: Array<{ gcid: string; displayName: string; count: number; competitors: string[]; primaryCount: number }>;
+  inTierFreq: Array<{ gcid: string; displayName: string; count: number; competitors: string[]; primaryCount: number }>;
+  crossTierFreq: Array<{ gcid: string; displayName: string; count: number; competitors: string[]; primaryCount: number }>;
+  inTierCount: number;
+  crossTierCount: number;
+  subscriberTierLabel: string | null;
   catalogSlice: Array<{ gcid: string; name: string }>;
-  competitorCount: number;
 }
 
 function buildPrompt(a: PromptArgs): string {
   const lines: string[] = [];
 
-  lines.push(`Business: ${a.siteName}\n`);
+  lines.push(`Business: ${a.siteName}`);
+  if (a.subscriberTierLabel) {
+    lines.push(`Declared commercial tier: ${a.subscriberTierLabel}\n`);
+  } else {
+    lines.push("Declared commercial tier: NOT SET — partition rules degrade; treat all competitors as ambient.\n");
+  }
 
   lines.push("=== CURRENT GBP CATEGORIES (subscriber's declared set) ===\n");
   if (a.currentCategories.length === 0) {
@@ -293,11 +354,29 @@ function buildPrompt(a: PromptArgs): string {
   lines.push(a.brandDnaDigest);
   lines.push("");
 
-  lines.push(`=== COMPETITOR CATEGORY FREQUENCY (across ${a.competitorCount} top SERP competitors) ===\n`);
-  lines.push("Sorted by appearance count. primaryCount = how many competitors lead with this category.\n");
-  for (const e of a.frequencyEntries) {
-    lines.push(`  ${e.count}/${a.competitorCount}  [primary on ${e.primaryCount}]  ${e.gcid}  →  ${e.displayName}`);
-    lines.push(`     used by: ${e.competitors.join(", ")}`);
+  lines.push(`=== IN-TIER COMPETITOR CATEGORY FREQUENCY (across ${a.inTierCount} ${a.subscriberTierLabel ? `${a.subscriberTierLabel} ` : ""}competitors) ===`);
+  lines.push("PRIMARY SIGNAL. Sorted by appearance count. primaryCount = how many lead with this category.");
+  lines.push("These competitors share the subscriber's tier — use their category usage to inform keep/add decisions.\n");
+  if (a.inTierFreq.length === 0) {
+    lines.push("  (no in-tier competitors had category data — coaching relies on subscriber declarations + Brand DNA only)\n");
+  } else {
+    for (const e of a.inTierFreq) {
+      lines.push(`  ${e.count}/${a.inTierCount}  [primary on ${e.primaryCount}]  ${e.gcid}  →  ${e.displayName}`);
+      lines.push(`     used by: ${e.competitors.join(", ")}`);
+    }
+  }
+  lines.push("");
+
+  lines.push(`=== CROSS-TIER AMBIENT CATEGORY FREQUENCY (across ${a.crossTierCount} cross-tier competitors) ===`);
+  lines.push("AMBIENT ONLY — do not weight these as reasons to add/drop categories.");
+  lines.push("Categories appearing only here belong to specialty trades, scale operators, or out-of-category businesses.\n");
+  if (a.crossTierFreq.length === 0) {
+    lines.push("  (no cross-tier competitors)\n");
+  } else {
+    for (const e of a.crossTierFreq) {
+      lines.push(`  ${e.count}/${a.crossTierCount}  ${e.gcid}  →  ${e.displayName}`);
+      lines.push(`     used by: ${e.competitors.join(", ")}`);
+    }
   }
   lines.push("");
 
@@ -310,7 +389,8 @@ function buildPrompt(a: PromptArgs): string {
   lines.push("=== ASK ===\n");
   lines.push("Return exactly 10 categories as a JSON array. Exactly 1 with proposedPrimary=true, 9 with proposedPrimary=false.");
   lines.push("Use action values: keep (currently declared, keep it), add (new), drop (currently declared but should be removed), promote_to_primary (currently declared as additional, should become primary).");
-  lines.push("Cite specific signal in every `reasoning` field — competitor names, brand DNA traits, description phrases.");
+  lines.push("Cite specific signal in every `reasoning` field — IN-TIER competitor names + counts, brand DNA traits, description phrases.");
+  lines.push("Never cite cross-tier competitors as reasons to keep/add — they're ambient only.");
 
   return lines.join("\n");
 }
@@ -322,13 +402,16 @@ function buildPrompt(a: PromptArgs): string {
 export async function coachCategoriesForSite(siteId: string): Promise<CoachingResult> {
   const [site] = await sql`
     SELECT
-      id, name,
-      gbp_profile->>'description' AS gbp_description,
-      brand_dna,
+      s.id, s.name,
+      s.gbp_profile->>'description' AS gbp_description,
+      s.brand_dna,
+      ct.slug AS tier_slug,
+      ct.label AS tier_label,
       (SELECT JSON_AGG(JSON_BUILD_OBJECT('gcid', gc.gcid, 'name', gc.name, 'isPrimary', sgc.is_primary))
        FROM site_gbp_categories sgc JOIN gbp_categories gc ON gc.gcid = sgc.gcid
        WHERE sgc.site_id = ${siteId}) AS current_categories
-    FROM sites WHERE id = ${siteId}
+    FROM sites s LEFT JOIN commercial_tiers ct ON ct.id = s.commercial_tier_id
+    WHERE s.id = ${siteId}
   `;
   if (!site) throw new Error(`Site ${siteId} not found`);
 
@@ -345,13 +428,22 @@ export async function coachCategoriesForSite(siteId: string): Promise<CoachingRe
     );
   }
 
+  // Refresh subscriber tier from current sites state — analysis snapshot
+  // may pre-date tier assignment or subscriber may have changed tier.
+  const payload = cma.analysis_data as AnalysisPayload;
+  if (site.tier_slug) {
+    payload.subscriberTier = { slug: site.tier_slug as string, label: site.tier_label as string };
+  } else {
+    payload.subscriberTier = null;
+  }
+
   return generateCategoryCoaching({
     siteId,
     siteName: site.name as string,
     currentCategories: (site.current_categories || []) as CoachingInputs["currentCategories"],
     gbpDescription: (site.gbp_description as string) || null,
     brandDna: (site.brand_dna as Record<string, unknown>) || null,
-    analysis: cma.analysis_data as AnalysisPayload,
+    analysis: payload,
     analysisId: cma.id as string,
   });
 }

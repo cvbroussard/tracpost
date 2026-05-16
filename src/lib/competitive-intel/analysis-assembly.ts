@@ -31,6 +31,7 @@ import {
 } from "./competitor-extraction";
 import { fetchCompetitorProfile } from "./competitor-profile";
 import { generateRecommendations, type Recommendation } from "./recommendations";
+import { classifyCompetitors, type ClassifiedTier } from "./tier-classifier";
 
 /**
  * US state abbreviation expansion for SerpAPI location parameter.
@@ -116,6 +117,14 @@ export interface AnalysisPayload {
   subscriberCategories: Array<{ gcid: string; name: string; isPrimary: boolean }>;
   /** Site's service areas at time of analysis */
   subscriberServiceAreas: Array<{ placeId: string; placeName: string }>;
+  /**
+   * Subscriber's declared commercial tier at time of analysis (snapshot).
+   * Drives the in-tier vs cross-tier partition in downstream reasoning.
+   * Optional because pre-tier-model analyses persisted before this field
+   * existed; null/undefined means "no tier filter — render all competitors
+   * as equally relevant."
+   */
+  subscriberTier?: { slug: string; label: string } | null;
   /** Subscriber's own competitive metrics (rating, reviews, completeness, etc.) */
   subscriberMetrics: SubscriberMetrics;
   /** All target queries we ran */
@@ -148,6 +157,15 @@ export interface EnrichedCompetitor extends RankingCompetitor {
   // website — sufficient for the V1 comparison. V2 may add a
   // CID→PlaceID resolver (via Find Place call with title + address)
   // for additional categories.
+
+  /**
+   * Inferred commercial tier — set by tier classifier after Tier 2
+   * enrichment. Used by recommendations + coaching to partition
+   * topCompetitors into in-tier (subscriber's tier) vs cross-tier
+   * (ambient context). Optional because pre-tier-model analyses
+   * persisted before this field existed; treat as unclassified.
+   */
+  inferredTier?: ClassifiedTier;
 }
 
 export interface AssemblyResult {
@@ -194,15 +212,22 @@ export async function runAnalysisForSite(
     // 2) Load subscriber's site context for comparison + competitive metrics
     const [siteRow] = await sql`
       SELECT
-        gbp_profile,
-        gbp_profile->'serviceArea'->'places'->'placeInfos' AS place_infos,
+        s.gbp_profile,
+        s.gbp_profile->'serviceArea'->'places'->'placeInfos' AS place_infos,
+        ct.slug AS tier_slug,
+        ct.label AS tier_label,
         (SELECT JSON_AGG(JSON_BUILD_OBJECT('gcid', gc.gcid, 'name', gc.name, 'isPrimary', sgc.is_primary))
          FROM site_gbp_categories sgc JOIN gbp_categories gc ON gc.gcid = sgc.gcid
          WHERE sgc.site_id = ${siteId}) AS categories
-      FROM sites WHERE id = ${siteId}
+      FROM sites s
+      LEFT JOIN commercial_tiers ct ON ct.id = s.commercial_tier_id
+      WHERE s.id = ${siteId}
     `;
     const subscriberCategories = (siteRow?.categories || []) as AnalysisPayload["subscriberCategories"];
     const subscriberServiceAreas = (siteRow?.place_infos || []) as AnalysisPayload["subscriberServiceAreas"];
+    const subscriberTier = siteRow?.tier_slug
+      ? { slug: siteRow.tier_slug as string, label: siteRow.tier_label as string }
+      : null;
     const profile = (siteRow?.gbp_profile || {}) as Record<string, unknown>;
     const profileMetadata = (profile.metadata || {}) as Record<string, unknown>;
     const profileCompleteness = (profile.completeness || {}) as { score?: number; missing?: string[] };
@@ -313,11 +338,25 @@ export async function runAnalysisForSite(
       }
     }
 
+    // 5c) Tier classification — assign each top competitor a commercial
+    // tier slug (Haiku, ~$0.001/competitor). Downstream consumers
+    // (recommendations + coaching) partition the topCompetitors into
+    // in-tier vs cross-tier based on subscriber's declared tier.
+    const tier2Map = new Map<string, CompetitorCategories>(
+      competitorCategories.map((cc) => [cc.cid, cc]),
+    );
+    const tierMap = await classifyCompetitors(topCompetitors, tier2Map);
+    for (const c of topCompetitors) {
+      const t = tierMap.get(c.placeId);
+      if (t) c.inferredTier = t;
+    }
+
     // 6) Assemble payload
     const payload: AnalysisPayload = {
       generatedAt: new Date().toISOString(),
       subscriberCategories,
       subscriberServiceAreas,
+      subscriberTier,
       subscriberMetrics,
       targetQueries: queries,
       topCompetitors,

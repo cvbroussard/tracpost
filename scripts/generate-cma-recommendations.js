@@ -41,6 +41,19 @@ b. **Opportunity frame, not anxiety frame.** Subscriber feeling "I'm a quality o
 
 c. **Non-competitor SERP results are STRONG evidence of a low bar, not noise to dismiss.** When entertainment businesses or adjacent-industry results rank, that's the loudest possible signal that the SERP rewards hygiene over fit. Name it explicitly.
 
+TIER PARTITION (read carefully — load-bearing):
+
+The subscriber has declared their commercial tier. Competitors in the SERP have been classified into commercial tiers too. The snapshot below shows TWO sets:
+
+  - **In-tier competitive set** — operators that share the subscriber's tier. These are the peers the subscriber chose to compete against. Reasoning, comparisons, and metrics should weight these heavily.
+
+  - **Cross-tier ambient context** — operators in different commercial tiers (smaller, larger, specialty trades, out-of-category). They appear on the SERP but compete for different clientele. NEVER treat them as peers or benchmarks. Use them only as ambient evidence of SERP dynamics (e.g., "even an out-of-category business outranks you here — proves the bar is achievable").
+
+Rules for working with the partition:
+  - Primary signal: in-tier set. Counts, comparisons, "X of N competitors" should reference in-tier unless explicitly noted otherwise.
+  - Cross-tier mentions: only when relevant (anti-pattern outliers, bar-evidence). Frame as "operators outside your tier" or by their specific tier label, NEVER as peers.
+  - Don't equate the subscriber to cross-tier operators in language or metrics.
+
 CRITICAL RULES (read carefully — violations destroy trust):
 
 1. **NEVER INVENT NUMBERS.** Use ONLY data present in the analysis snapshot below. If a metric is missing (rating, review count, etc.), say "unknown" or omit the recommendation. Better to skip a recommendation than fabricate a value.
@@ -94,6 +107,13 @@ function buildSnapshot(payload, count) {
     lines.push(`  - Service areas declared: ${m.serviceAreaCount}`);
     lines.push("");
   }
+  if (payload.subscriberTier) {
+    lines.push(`Subscriber's declared commercial tier: ${payload.subscriberTier.label} (slug: ${payload.subscriberTier.slug})`);
+    lines.push(`This is the peer group the subscriber chose. Use it to partition competitors below.`);
+    lines.push("");
+  } else {
+    lines.push(`Subscriber commercial tier: NOT DECLARED — treat all competitors as ambient SERP context, not peers.\n`);
+  }
   lines.push("GBP Categories:");
   for (const c of payload.subscriberCategories) {
     lines.push(`  - ${c.name}${c.isPrimary ? " [PRIMARY]" : ""}`);
@@ -106,16 +126,60 @@ function buildSnapshot(payload, count) {
   for (const q of payload.targetQueries) {
     lines.push(`  [${q.weight}] "${q.query}"`);
   }
-  lines.push(`\n=== RANKING COMPETITORS (${payload.topCompetitors.length} captured, ${payload.totalCompetitorsObserved} total) ===\n`);
-  for (let i = 0; i < payload.topCompetitors.length; i++) {
-    lines.push(formatCompetitor(i + 1, payload.topCompetitors[i]));
+
+  const subscriberSlug = payload.subscriberTier?.slug || null;
+  const inTier = subscriberSlug
+    ? payload.topCompetitors.filter((c) => c.inferredTier?.tierSlug === subscriberSlug)
+    : [];
+  const crossTier = subscriberSlug
+    ? payload.topCompetitors.filter((c) => c.inferredTier?.tierSlug !== subscriberSlug)
+    : payload.topCompetitors;
+
+  lines.push(`\n=== IN-TIER COMPETITIVE SET (${inTier.length} of ${payload.topCompetitors.length}) ===`);
+  if (subscriberSlug) {
+    lines.push(`These are operators classified into the subscriber's tier (${payload.subscriberTier.label}).`);
+    lines.push(`Reasoning, comparisons, and "X of N" counts should reference THIS set primarily.\n`);
+  } else {
+    lines.push(`Subscriber tier not declared — in-tier set is empty.\n`);
   }
-  lines.push(`\n=== ASK ===\n`);
+  if (inTier.length === 0) {
+    lines.push("  (no in-tier competitors in the top results)\n");
+  } else {
+    for (let i = 0; i < inTier.length; i++) {
+      lines.push(formatCompetitor(i + 1, inTier[i]));
+    }
+  }
+
+  lines.push(`\n=== CROSS-TIER AMBIENT CONTEXT (${crossTier.length} of ${payload.topCompetitors.length}) ===`);
+  lines.push(`These operators appear on the SERP but compete in different commercial tiers.`);
+  lines.push(`NOT peers — do not equate the subscriber to them. Reference only as ambient signal.\n`);
+  if (crossTier.length === 0) {
+    lines.push("  (no cross-tier competitors)\n");
+  } else {
+    for (let i = 0; i < crossTier.length; i++) {
+      const tierLabel = crossTier[i].inferredTier?.tierLabel ?? "unclassified";
+      lines.push(`[Cross-tier: ${tierLabel}]`);
+      lines.push(formatCompetitor(i + 1, crossTier[i]));
+    }
+  }
+
+  lines.push(`\nTotal observed across all queries: ${payload.totalCompetitorsObserved} businesses\n`);
+
+  lines.push(`=== ASK ===\n`);
   lines.push(`Return the top ${count} most impactful, actionable recommendations as a JSON array.`);
   lines.push(`Each recommendation must have: { kind, title, message, priority, reasoning, actionability }.`);
   lines.push(`kind options: category_gap, category_alignment, review_velocity, rating_gap, competitor_watch, non_competitor_filter, geographic_gap, category_dominance, service_offering, general.`);
   lines.push(`priority options: high, medium, low.`);
   return lines.join("\n");
+}
+
+async function loadSubscriberTier(siteId) {
+  const [row] = await sql`
+    SELECT ct.slug, ct.label
+    FROM sites s LEFT JOIN commercial_tiers ct ON ct.id = s.commercial_tier_id
+    WHERE s.id = ${siteId}
+  `;
+  return row?.slug ? { slug: row.slug, label: row.label } : null;
 }
 
 async function fetchSubscriberMetricsIfMissing(payload) {
@@ -179,6 +243,13 @@ async function run() {
   console.log(`  Competitors in payload: ${payload.topCompetitors.length}`);
 
   payload = await fetchSubscriberMetricsIfMissing(payload);
+
+  // Always refresh subscriber tier from current sites state — tier can
+  // change between persisted snapshot and regen run.
+  payload.subscriberTier = await loadSubscriberTier(SITE_ID);
+  const classifiedCount = payload.topCompetitors.filter((c) => c.inferredTier).length;
+  console.log(`  Subscriber tier: ${payload.subscriberTier?.label || "(not set)"}`);
+  console.log(`  Competitors with tier classification: ${classifiedCount}/${payload.topCompetitors.length}`);
 
   const userMessage = buildSnapshot(payload, 4);
   const res = await anthropic.messages.create({

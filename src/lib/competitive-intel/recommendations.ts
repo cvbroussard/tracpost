@@ -61,13 +61,26 @@ b. **Opportunity frame, not anxiety frame.** Subscriber feeling "I'm a quality o
 
 c. **Non-competitor SERP results are STRONG evidence of a low bar, not noise to dismiss.** When entertainment businesses or adjacent-industry results rank, that's the loudest possible signal that the SERP rewards hygiene over fit. Name it explicitly.
 
+TIER PARTITION (read carefully — load-bearing):
+
+The subscriber has declared their commercial tier. Competitors in the SERP have been classified into commercial tiers too. The snapshot below shows TWO sets:
+
+  - **In-tier competitive set** — operators that share the subscriber's tier. These are the peers the subscriber chose to compete against. Reasoning, comparisons, and metrics should weight these heavily.
+
+  - **Cross-tier ambient context** — operators in different commercial tiers (smaller, larger, specialty trades, out-of-category). They appear on the SERP but compete for different clientele. NEVER treat them as peers or benchmarks. Use them only as ambient evidence of SERP dynamics (e.g., "even an out-of-category business outranks you here — proves the bar is achievable").
+
+Rules for working with the partition:
+  - Primary signal: in-tier set. Counts, comparisons, "X of N competitors" should reference in-tier unless explicitly noted otherwise.
+  - Cross-tier mentions: only when relevant (anti-pattern outliers, bar-evidence). Frame as "operators outside your tier" or by their specific tier label, NEVER as peers.
+  - Don't equate the subscriber to cross-tier operators in language or metrics.
+
 CRITICAL RULES (read carefully — violations destroy trust):
 
 1. **NEVER INVENT NUMBERS.** Use ONLY data present in the analysis snapshot below. If a metric is missing (rating, review count, etc.), say "unknown" or omit the recommendation. Better to skip a recommendation than fabricate a value.
 
 2. **Be SPECIFIC** — when data is present, cite real values: competitor names from the snapshot, exact review counts shown, exact query positions, exact category names. Generic advice ("get more reviews") is worthless without supporting data; specific advice citing snapshot values earns trust.
 
-3. **Treat non-competitors as low-bar evidence, not noise.** When a SERP result clearly isn't a real competitor (entertainment business on contractor queries, etc.), don't just filter it — name it as proof the bar is achievable. Surface via "non_competitor_filter" kind with framing like "even [type] outranks you on [query] — clearing this bar is about consistent presence and hygiene, not about beating capable competitors."
+3. **Treat non-competitors as low-bar evidence, not noise.** When a cross-tier result is clearly out-of-category (entertainment business on contractor queries, etc.), don't just filter it — name it as proof the bar is achievable. Surface via "non_competitor_filter" kind with framing like "even [type] outranks you on [query] — clearing this bar is about consistent presence and hygiene, not about beating capable competitors."
 
 4. **Prioritize by IMPACT, not difficulty** — a "high" priority recommendation should be one that, if acted on, would meaningfully close the rank gap. The lifts are achievable — say so.
 
@@ -75,7 +88,7 @@ CRITICAL RULES (read carefully — violations destroy trust):
 
 6. **ALWAYS include "what to do"** — every recommendation has an actionability field with a concrete next action.
 
-7. **Cite the DATA explicitly in the reasoning** — patterns like "X of N top competitors are tagged as <category>, you're tagged as <other>" earn trust by being verifiable against the snapshot.
+7. **Cite the DATA explicitly in the reasoning** — patterns like "X of N in-tier competitors are tagged as <category>, you're tagged as <other>" earn trust by being verifiable against the snapshot.
 
 8. **Avoid filler** — if only 3 strong recommendations exist, return 3. Don't pad.
 
@@ -137,6 +150,17 @@ function buildAnalysisSnapshot(payload: AnalysisPayload, count: number): string 
   lines.push(`  - Service areas declared: ${m.serviceAreaCount}`);
   lines.push("");
 
+  // Subscriber's declared commercial tier — drives the in-tier vs
+  // cross-tier partition below. If null, the LLM gets the full set
+  // un-partitioned (pre-tier-model behavior).
+  if (payload.subscriberTier) {
+    lines.push(`Subscriber's declared commercial tier: ${payload.subscriberTier.label} (slug: ${payload.subscriberTier.slug})`);
+    lines.push(`This is the peer group the subscriber chose. Use it to partition competitors below.`);
+  } else {
+    lines.push(`Subscriber commercial tier: NOT DECLARED — treat all competitors as ambient SERP context, not peers.`);
+  }
+  lines.push("");
+
   lines.push("GBP Categories (subscriber's declared service taxonomy):");
   for (const c of payload.subscriberCategories) {
     lines.push(`  - ${c.name}${c.isPrimary ? " [PRIMARY]" : ""}`);
@@ -154,12 +178,48 @@ function buildAnalysisSnapshot(payload: AnalysisPayload, count: number): string 
   }
   lines.push("");
 
-  lines.push(`=== RANKING COMPETITORS (${payload.topCompetitors.length} captured, ${payload.totalCompetitorsObserved} total observed) ===\n`);
-  for (let i = 0; i < payload.topCompetitors.length; i++) {
-    const c = payload.topCompetitors[i];
-    lines.push(formatCompetitor(i + 1, c));
+  // Partition competitors by tier match. Subscriber's tier slug
+  // determines what counts as "in-tier."
+  const subscriberSlug = payload.subscriberTier?.slug || null;
+  const inTier = subscriberSlug
+    ? payload.topCompetitors.filter((c) => c.inferredTier?.tierSlug === subscriberSlug)
+    : [];
+  const crossTier = subscriberSlug
+    ? payload.topCompetitors.filter((c) => c.inferredTier?.tierSlug !== subscriberSlug)
+    : payload.topCompetitors;
+
+  lines.push(`=== IN-TIER COMPETITIVE SET (${inTier.length} of ${payload.topCompetitors.length}) ===`);
+  if (subscriberSlug) {
+    lines.push(`These are operators classified into the subscriber's tier (${payload.subscriberTier!.label}).`);
+    lines.push(`Reasoning, comparisons, and "X of N" counts should reference THIS set primarily.\n`);
+  } else {
+    lines.push(`Subscriber tier not declared — in-tier set is empty. All competitors fall into ambient context below.\n`);
+  }
+  if (inTier.length === 0) {
+    lines.push("  (no in-tier competitors in the top results)\n");
+  } else {
+    for (let i = 0; i < inTier.length; i++) {
+      lines.push(formatCompetitor(i + 1, inTier[i]));
+    }
   }
   lines.push("");
+
+  lines.push(`=== CROSS-TIER AMBIENT CONTEXT (${crossTier.length} of ${payload.topCompetitors.length}) ===`);
+  lines.push(`These operators appear on the SERP but compete in different commercial tiers.`);
+  lines.push(`NOT peers — do not equate the subscriber to them. Reference only as ambient signal`);
+  lines.push(`(out-of-category outranking = bar evidence; specialty trades = not chasing same clientele).\n`);
+  if (crossTier.length === 0) {
+    lines.push("  (no cross-tier competitors)\n");
+  } else {
+    for (let i = 0; i < crossTier.length; i++) {
+      const tierLabel = crossTier[i].inferredTier?.tierLabel ?? "unclassified";
+      lines.push(`[Cross-tier: ${tierLabel}]`);
+      lines.push(formatCompetitor(i + 1, crossTier[i]));
+    }
+  }
+  lines.push("");
+
+  lines.push(`Total observed across all queries: ${payload.totalCompetitorsObserved} businesses\n`);
 
   lines.push("=== ASK ===\n");
   lines.push(`Return the top ${count} most impactful, actionable recommendations as a JSON array.`);

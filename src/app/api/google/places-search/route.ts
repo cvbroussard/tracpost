@@ -37,24 +37,23 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // No type filter: returns everything Google returns (establishments,
-    // street addresses, townships, ZIPs, neighborhoods, colloquial regions,
-    // cities, counties, states, etc.). Matches the behavior subscribers
-    // already validated via the LocationPicker (type=address) flow.
-    //
-    // Trade-off accepted: noise (e.g., "Mt. Lebanon Public Library" alongside
-    // "Mt. Lebanon, PA"). Breadth wins because Google's includedPrimaryTypes
-    // caps at 5 — any restricted set silently drops valid declarations like
-    // colloquial_area regions ("Northwestern Pennsylvania") and informal
-    // neighborhood names ("Squirrel Hill"). The `type` param is preserved
-    // for backwards compatibility with existing callers but is now a no-op.
+    // Call Google with no type filter (covers all geographic types — Google
+    // caps includedPrimaryTypes at 5 and a smaller set silently drops valid
+    // declarations like colloquial_area). languageCode pins predictions to
+    // English so subscribers don't see "Pensilvânia, USA" alongside
+    // "Pennsylvania, USA". Filtering happens client-side below since
+    // Places (New) Autocomplete doesn't support excludedPrimaryTypes.
     void type;
     const res = await fetch(
       "https://places.googleapis.com/v1/places:autocomplete",
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey },
-        body: JSON.stringify({ input: query, includedRegionCodes: ["us"] }),
+        body: JSON.stringify({
+          input: query,
+          includedRegionCodes: ["us"],
+          languageCode: "en",
+        }),
       }
     );
 
@@ -62,13 +61,37 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ predictions: [] });
     }
 
+    // Whitelist filter: keep only predictions that include at least one
+    // known geographic type. Drops establishments, businesses, schools,
+    // libraries, restaurants, streets, addresses, plus_codes, etc. without
+    // having to enumerate every business sub-type Google can emit.
+    const GEOGRAPHIC_TYPES = new Set([
+      "locality",
+      "sublocality",
+      "sublocality_level_1",
+      "sublocality_level_2",
+      "sublocality_level_3",
+      "sublocality_level_4",
+      "sublocality_level_5",
+      "neighborhood",
+      "colloquial_area",
+      "postal_code",
+      "postal_code_prefix",
+      "postal_code_suffix",
+      "administrative_area_level_1",
+      "administrative_area_level_2",
+      "administrative_area_level_3",
+      "administrative_area_level_4",
+      "administrative_area_level_5",
+      "country",
+    ]);
+
     const data = await res.json();
     const predictions = ((data.suggestions || []) as Array<Record<string, unknown>>)
       .filter((s) => s.placePrediction)
-      .map((s) => {
-        const pp = s.placePrediction as { placeId: string; text: { text: string } };
-        return { placeId: pp.placeId, placeName: pp.text.text };
-      });
+      .map((s) => s.placePrediction as { placeId: string; text: { text: string }; types?: string[] })
+      .filter((pp) => (pp.types || []).some((t) => GEOGRAPHIC_TYPES.has(t)))
+      .map((pp) => ({ placeId: pp.placeId, placeName: pp.text.text }));
 
     return NextResponse.json({ predictions });
   } catch {

@@ -72,18 +72,15 @@ export function MediaGrid({
   projects = [],
   services = [],
   branches = [],
-  serviceAreas = [],
   brandLabel = null,
   projectLabel = null,
   serviceLabel = null,
   branchLabel = null,
-  serviceAreaLabel = null,
   assetBrandMap = {},
   assetProjectMap = {},
   assetPersonaMap = {},
   assetServiceMap = {},
   assetBranchMap = {},
-  assetServiceAreaMap = {},
   personaLabel = null,
   personaList = [],
 }: {
@@ -95,18 +92,15 @@ export function MediaGrid({
   projects?: Project[];
   services?: SimpleEntity[];
   branches?: SimpleEntity[];
-  serviceAreas?: SimpleEntity[];
   brandLabel?: string | null;
   projectLabel?: string | null;
   serviceLabel?: string | null;
   branchLabel?: string | null;
-  serviceAreaLabel?: string | null;
   assetBrandMap?: Record<string, string[]>;
   assetProjectMap?: Record<string, string[]>;
   assetPersonaMap?: Record<string, string[]>;
   assetServiceMap?: Record<string, string[]>;
   assetBranchMap?: Record<string, string[]>;
-  assetServiceAreaMap?: Record<string, string[]>;
   personaLabel?: string | null;
   personaList?: Array<{ id: string; name: string; type: string }>;
 }) {
@@ -117,15 +111,13 @@ export function MediaGrid({
   const [liveProjects, setLiveProjects] = useState(projects);
   const [liveServices, setLiveServices] = useState(services);
   const [liveBranches, setLiveBranches] = useState(branches);
-  const [liveServiceAreas, setLiveServiceAreas] = useState(serviceAreas);
   const [liveBrandMap, setLiveBrandMap] = useState(assetBrandMap);
   const [liveProjectMap, setLiveProjectMap] = useState(assetProjectMap);
   const [livePersonaMap, setLivePersonaMap] = useState(assetPersonaMap);
   const [liveServiceMap, setLiveServiceMap] = useState(assetServiceMap);
   const [liveBranchMap, setLiveBranchMap] = useState(assetBranchMap);
-  const [liveServiceAreaMap, setLiveServiceAreaMap] = useState(assetServiceAreaMap);
 
-  function handleSaved(note: string, _pillar: string, tags: string[], brandIds?: string[], projectIds?: string[], personaIds?: string[], serviceIds?: string[], branchIds?: string[], serviceAreaIds?: string[], sceneTypes?: string[]) {
+  function handleSaved(note: string, _pillar: string, tags: string[], brandIds?: string[], projectIds?: string[], personaIds?: string[], serviceIds?: string[], branchIds?: string[], sceneTypes?: string[]) {
     if (!editing) return;
     // pillar param retained in signature for back-compat with the modal
     // callback contract, but ignored here — pillars derive from tags now
@@ -156,9 +148,6 @@ export function MediaGrid({
     }
     if (branchIds) {
       setLiveBranchMap((prev) => ({ ...prev, [editing.id]: branchIds }));
-    }
-    if (serviceAreaIds) {
-      setLiveServiceAreaMap((prev) => ({ ...prev, [editing.id]: serviceAreaIds }));
     }
   }
 
@@ -301,24 +290,20 @@ export function MediaGrid({
           projects={liveProjects}
           services={liveServices}
           branches={liveBranches}
-          serviceAreas={liveServiceAreas}
           brandLabel={brandLabel}
           projectLabel={projectLabel}
           serviceLabel={serviceLabel}
           branchLabel={branchLabel}
-          serviceAreaLabel={serviceAreaLabel}
           initialBrandIds={liveBrandMap[editing.id] || []}
           initialProjectIds={liveProjectMap[editing.id] || []}
           initialServiceIds={liveServiceMap[editing.id] || []}
           initialBranchIds={liveBranchMap[editing.id] || []}
-          initialServiceAreaIds={liveServiceAreaMap[editing.id] || []}
           personaLabel={personaLabel}
           initialPersonaIds={livePersonaMap[editing.id] || []}
           onBrandCreated={(brand) => setLiveBrands((prev) => [...prev, brand].sort((a, b) => a.name.localeCompare(b.name)))}
           onProjectCreated={(project) => setLiveProjects((prev) => [...prev, project].sort((a, b) => a.name.localeCompare(b.name)))}
           onServiceCreated={(service) => setLiveServices((prev) => [...prev, service].sort((a, b) => a.name.localeCompare(b.name)))}
           onBranchCreated={(branch) => setLiveBranches((prev) => [...prev, branch].sort((a, b) => a.name.localeCompare(b.name)))}
-          onServiceAreaCreated={(area) => setLiveServiceAreas((prev) => [...prev, area].sort((a, b) => a.name.localeCompare(b.name)))}
           captionSource={((editing.metadata as Record<string, unknown>)?.caption_source as string) || null}
           initialMetadata={editing.metadata as Record<string, unknown> | null}
           faces={(() => {

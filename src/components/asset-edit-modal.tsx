@@ -55,20 +55,14 @@ interface AssetEditModalProps {
   /** Site's branches catalog (rows from `branches` table) — for the
       Branches picker (Row 7). */
   branches?: Array<{ id: string; name: string; slug: string }>;
-  /** Site's service-area overlay rows (joined to canonical for display
-      name) — id is `site_service_areas.id`. For Service Areas picker
-      (Row 8). */
-  serviceAreas?: Array<{ id: string; name: string; slug: string }>;
   brandLabel?: string | null;
   projectLabel?: string | null;
   serviceLabel?: string | null;
   branchLabel?: string | null;
-  serviceAreaLabel?: string | null;
   initialBrandIds?: string[];
   initialProjectIds?: string[];
   initialServiceIds?: string[];
   initialBranchIds?: string[];
-  initialServiceAreaIds?: string[];
   personaLabel?: string | null;
   initialPersonaIds?: string[];
   source?: string | null;
@@ -121,7 +115,6 @@ interface AssetEditModalProps {
     personaIds?: string[],
     serviceIds?: string[],
     branchIds?: string[],
-    serviceAreaIds?: string[],
     sceneTypes?: string[],
   ) => void;
   onDeleted?: () => void;
@@ -129,7 +122,6 @@ interface AssetEditModalProps {
   onProjectCreated?: (project: Project) => void;
   onServiceCreated?: (service: { id: string; name: string; slug: string }) => void;
   onBranchCreated?: (branch: { id: string; name: string; slug: string }) => void;
-  onServiceAreaCreated?: (area: { id: string; name: string; slug: string }) => void;
   onNext?: () => void;
   onPrev?: () => void;
   hasNext?: boolean;
@@ -151,17 +143,14 @@ export function AssetEditModal({
   projects = [],
   services = [],
   branches = [],
-  serviceAreas = [],
   brandLabel,
   projectLabel,
   serviceLabel,
   branchLabel,
-  serviceAreaLabel,
   initialBrandIds = [],
   initialProjectIds = [],
   initialServiceIds = [],
   initialBranchIds = [],
-  initialServiceAreaIds = [],
   personaLabel,
   initialPersonaIds = [],
   source,
@@ -184,7 +173,6 @@ export function AssetEditModal({
   onProjectCreated,
   onServiceCreated,
   onBranchCreated,
-  onServiceAreaCreated,
   onNext,
   onPrev,
   hasNext = false,
@@ -231,7 +219,6 @@ export function AssetEditModal({
   const [personaIds, setPersonaIds] = useState<string[]>(initialPersonaIds);
   const [serviceIds, setServiceIds] = useState<string[]>(initialServiceIds);
   const [branchIds, setBranchIds] = useState<string[]>(initialBranchIds);
-  const [serviceAreaIds, setServiceAreaIds] = useState<string[]>(initialServiceAreaIds);
   // saved* mirror initialBrandIds/etc but advance on every successful save.
   // Used to distinguish "confirmed" pills (saved truth, deep color) from
   // "preselected" pills (auto-tag pending, light color, may be unchecked
@@ -241,13 +228,11 @@ export function AssetEditModal({
   const [savedPersonaIds, setSavedPersonaIds] = useState<string[]>(initialPersonaIds);
   const [savedServiceIds, setSavedServiceIds] = useState<string[]>(initialServiceIds);
   const [savedBranchIds, setSavedBranchIds] = useState<string[]>(initialBranchIds);
-  const [savedServiceAreaIds, setSavedServiceAreaIds] = useState<string[]>(initialServiceAreaIds);
   const [savedSceneTypesArr, setSavedSceneTypesArr] = useState<string[]>(initialSceneTypes);
   // Local catalog mirrors so quick-create flows can append to the picker
   // without a server refetch.
   const [localServices, setLocalServices] = useState(services);
   const [localBranches, setLocalBranches] = useState(branches);
-  const [localServiceAreas, setLocalServiceAreas] = useState(serviceAreas);
   const [localPersonas, setLocalPersonas] = useState(personaList);
 
   // Reset state when navigating to a different asset
@@ -263,13 +248,11 @@ export function AssetEditModal({
     setPersonaIds(initialPersonaIds);
     setServiceIds(initialServiceIds);
     setBranchIds(initialBranchIds);
-    setServiceAreaIds(initialServiceAreaIds);
     setSavedBrandIds(initialBrandIds);
     setSavedProjectIds(initialProjectIds);
     setSavedPersonaIds(initialPersonaIds);
     setSavedServiceIds(initialServiceIds);
     setSavedBranchIds(initialBranchIds);
-    setSavedServiceAreaIds(initialServiceAreaIds);
     setSavedSceneTypesArr(initialSceneTypes);
     setVerifications(aiVerifications || []);
     setAiGenerated(initialAiGenerated);
@@ -302,13 +285,11 @@ export function AssetEditModal({
   const [newProjectName, setNewProjectName] = useState("");
   const [newServiceName, setNewServiceName] = useState("");
   const [newBranchName, setNewBranchName] = useState("");
-  const [newServiceAreaName, setNewServiceAreaName] = useState("");
   const [newPersonaName, setNewPersonaName] = useState("");
   const [creatingBrand, setCreatingBrand] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [creatingService, setCreatingService] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
-  const [creatingServiceArea, setCreatingServiceArea] = useState(false);
   const [creatingPersona, setCreatingPersona] = useState(false);
   const [saving, setSaving] = useState(false);
   // Generate button removed — text generation is automatic in the
@@ -454,7 +435,7 @@ export function AssetEditModal({
   type InspectorMatch = { entity_id: string; name: string; match_text: string; match_start: number; context_excerpt: string };
   type InspectorNew = { name: string; slug: string; context: string; source?: string; keyword?: string };
   type InspectorGroup = { applied_matches: InspectorMatch[]; suggested_new: InspectorNew[] };
-  type InspectorTagGroup = "brand" | "service" | "project" | "persona" | "branch" | "service_area";
+  type InspectorTagGroup = "brand" | "service" | "project" | "persona" | "branch";
   type InspectorState = Record<InspectorTagGroup, InspectorGroup>;
   const [inspectorState, setInspectorState] = useState<InspectorState | null>(null);
   const [autoTagging, setAutoTagging] = useState(false);
@@ -575,7 +556,6 @@ export function AssetEditModal({
         project: groupsResp.project || { applied_matches: [], suggested_new: [] },
         persona: groupsResp.persona || { applied_matches: [], suggested_new: [] },
         branch: groupsResp.branch || { applied_matches: [], suggested_new: [] },
-        service_area: groupsResp.service_area || { applied_matches: [], suggested_new: [] },
       };
 
       // Push applied-match IDs into each group's working state. Server
@@ -591,7 +571,6 @@ export function AssetEditModal({
       if (groups.project.applied_matches.length > 0) setProjectIds((prev) => mergeIds(prev, groups.project.applied_matches));
       if (groups.persona.applied_matches.length > 0) setPersonaIds((prev) => mergeIds(prev, groups.persona.applied_matches));
       if (groups.branch.applied_matches.length > 0) setBranchIds((prev) => mergeIds(prev, groups.branch.applied_matches));
-      if (groups.service_area.applied_matches.length > 0) setServiceAreaIds((prev) => mergeIds(prev, groups.service_area.applied_matches));
 
       setInspectorState(groups);
       setNerWarnings(Array.isArray(data.ner_warnings) ? data.ner_warnings : []);
@@ -614,7 +593,6 @@ export function AssetEditModal({
       project: "/api/projects",
       persona: "/api/personas",
       branch: "/api/branches",
-      service_area: "/api/service-areas",
     };
     const endpoint = endpointByGroup[group];
     try {
@@ -625,7 +603,6 @@ export function AssetEditModal({
         seed_recording_id: recordingId,
         seed_asset_id: assetId,
       };
-      if (group === "service_area") reqBody.kind = "city";
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -638,7 +615,7 @@ export function AssetEditModal({
       const data = await res.json();
       // Response shape varies per endpoint — extract entity defensively
       const created = data.brand || data.service || data.project ||
-        data.persona || data.branch || data.overlay || data.service_area || data;
+        data.persona || data.branch || data;
       if (!created?.id) return;
       // Push to local catalog + working state + saved* graduate skip
       // (saved* will graduate on next successful save)
@@ -667,11 +644,6 @@ export function AssetEditModal({
           setLocalBranches((prev) => prev.some((b) => b.id === entry.id) ? prev : [...prev, entry].sort((a, b) => a.name.localeCompare(b.name)));
           setBranchIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
           onBranchCreated?.(entry);
-          break;
-        case "service_area":
-          setLocalServiceAreas((prev) => prev.some((sa) => sa.id === entry.id) ? prev : [...prev, entry].sort((a, b) => a.name.localeCompare(b.name)));
-          setServiceAreaIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          onServiceAreaCreated?.(entry);
           break;
       }
       // Promote suggested_new → applied_matches (visual graduation)
@@ -970,39 +942,6 @@ export function AssetEditModal({
     setCreatingPersona(false);
   }
 
-  async function quickCreateServiceArea() {
-    if (!newServiceAreaName.trim()) return;
-    setCreatingServiceArea(true);
-    try {
-      const res = await fetch("/api/service-areas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newServiceAreaName.trim(),
-          site_id: siteId,
-          kind: "city",
-          seed_source: "manual_modal",
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // /api/service-areas returns the overlay row + canonical
-        const overlay = data.overlay || data.service_area || data;
-        const canonical = data.canonical || {};
-        const created = {
-          id: overlay.id || overlay.overlay_id,
-          name: canonical.name || newServiceAreaName.trim(),
-          slug: canonical.slug || "",
-        };
-        setLocalServiceAreas((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-        setServiceAreaIds((prev) => [...prev, created.id]);
-        setNewServiceAreaName("");
-        onServiceAreaCreated?.(created);
-      }
-    } catch { /* ignore */ }
-    setCreatingServiceArea(false);
-  }
-
   /**
    * Subscriber confirms or rejects an AI suggestion (#167). Optimistic UI;
    * server PATCH writes to metadata.ai_verifications. Confirmed/rejected
@@ -1081,7 +1020,6 @@ export function AssetEditModal({
     if (JSON.stringify(personaIds.sort()) !== JSON.stringify(initialPersonaIds.sort())) body.persona_ids = personaIds;
     if (JSON.stringify(serviceIds.sort()) !== JSON.stringify(initialServiceIds.sort())) body.service_ids = serviceIds;
     if (JSON.stringify(branchIds.sort()) !== JSON.stringify(initialBranchIds.sort())) body.branch_ids = branchIds;
-    if (JSON.stringify(serviceAreaIds.sort()) !== JSON.stringify(initialServiceAreaIds.sort())) body.service_area_ids = serviceAreaIds;
 
     if (Object.keys(body).length === 0) {
       // Nothing to PATCH but the recording commit may have changed truth.
@@ -1093,10 +1031,9 @@ export function AssetEditModal({
       setSavedPersonaIds(personaIds);
       setSavedServiceIds(serviceIds);
       setSavedBranchIds(branchIds);
-      setSavedServiceAreaIds(serviceAreaIds);
       setSavedTags(tags);
       setSavedSceneTypesArr(sceneTypesArr);
-      onSaved(note, pillar, tags, brandIds, projectIds, personaIds, serviceIds, branchIds, serviceAreaIds, sceneTypesArr);
+      onSaved(note, pillar, tags, brandIds, projectIds, personaIds, serviceIds, branchIds, sceneTypesArr);
       return true;
     }
 
@@ -1118,10 +1055,9 @@ export function AssetEditModal({
     setSavedPersonaIds(personaIds);
     setSavedServiceIds(serviceIds);
     setSavedBranchIds(branchIds);
-    setSavedServiceAreaIds(serviceAreaIds);
     setSavedTags(tags);
     setSavedSceneTypesArr(sceneTypesArr);
-    onSaved(note, pillar, tags, brandIds, projectIds, personaIds, serviceIds, branchIds, serviceAreaIds, sceneTypesArr);
+    onSaved(note, pillar, tags, brandIds, projectIds, personaIds, serviceIds, branchIds, sceneTypesArr);
     return true;
   }
 
@@ -1179,10 +1115,9 @@ export function AssetEditModal({
     const personasDirty = !sortedEq(personaIds, savedPersonaIds);
     const servicesDirty = !sortedEq(serviceIds, savedServiceIds);
     const branchesDirty = !sortedEq(branchIds, savedBranchIds);
-    const serviceAreasDirty = !sortedEq(serviceAreaIds, savedServiceAreaIds);
     const scenesDirty = !sortedEq(sceneTypesArr, savedSceneTypesArr);
     const tagSelectionDirty = tagsDirty || brandsDirty || projectsDirty ||
-      personasDirty || servicesDirty || branchesDirty || serviceAreasDirty || scenesDirty;
+      personasDirty || servicesDirty || branchesDirty || scenesDirty;
     const isDirty = briefingDirty || voDirty || typedDirty || tagSelectionDirty;
     if (isDirty) {
       // Build a specific message so subscriber knows WHAT they'd lose
@@ -1326,7 +1261,6 @@ export function AssetEditModal({
                 { key: "project", label: projectLabel || "Projects", toggleSet: setProjectIds, selectedSet: projectIds, savedSet: savedProjectIds },
                 { key: "persona", label: personaLabel || "People", toggleSet: setPersonaIds, selectedSet: personaIds, savedSet: savedPersonaIds },
                 { key: "branch", label: branchLabel || "Locations", toggleSet: setBranchIds, selectedSet: branchIds, savedSet: savedBranchIds },
-                { key: "service_area", label: serviceAreaLabel || "Service Areas", toggleSet: setServiceAreaIds, selectedSet: serviceAreaIds, savedSet: savedServiceAreaIds },
               ];
               const totalApplied = inspectorState
                 ? groupConfig.reduce((sum, g) => sum + (inspectorState[g.key]?.applied_matches.length || 0), 0)
@@ -2044,56 +1978,6 @@ export function AssetEditModal({
                     className="text-[10px] text-accent hover:underline"
                   >
                     {creatingBranch ? "..." : "Add"}
-                  </button>
-                )}
-              </span>
-            </div>
-          </div>
-
-        {/* Row 8: Service Areas — hard-exposed regardless of label/empty state */}
-        <div className="border-t border-border px-6 py-4">
-            <label className="mb-1.5 block text-xs text-muted">{serviceAreaLabel || "Service Areas"}</label>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {localServiceAreas.map((sa) => {
-                const selected = serviceAreaIds.includes(sa.id);
-                const confirmed = selected && savedServiceAreaIds.includes(sa.id);
-                const preselected = selected && !confirmed;
-                return (
-                  <button
-                    key={sa.id}
-                    onClick={() =>
-                      setServiceAreaIds((prev) =>
-                        selected ? prev.filter((id) => id !== sa.id) : [...prev, sa.id]
-                      )
-                    }
-                    title={preselected ? "Auto-tag preselect — uncheck to skip, or Save to confirm" : undefined}
-                    className={`rounded px-2 py-0.5 text-xs transition-colors ${
-                      confirmed
-                        ? "bg-accent text-white"
-                        : preselected
-                          ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                          : "bg-surface-hover text-muted hover:text-foreground"
-                    }`}
-                  >
-                    {sa.name}
-                  </button>
-                );
-              })}
-              <span className="flex items-center gap-1">
-                <input
-                  value={newServiceAreaName}
-                  onChange={(e) => setNewServiceAreaName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && quickCreateServiceArea()}
-                  placeholder={`+ ${serviceAreaLabel || "Service Area"}`}
-                  className="w-28 rounded bg-transparent px-2 py-0.5 text-xs text-muted outline-none placeholder:text-muted/50 focus:bg-surface-hover"
-                />
-                {newServiceAreaName.trim() && (
-                  <button
-                    onClick={quickCreateServiceArea}
-                    disabled={creatingServiceArea}
-                    className="text-[10px] text-accent hover:underline"
-                  >
-                    {creatingServiceArea ? "..." : "Add"}
                   </button>
                 )}
               </span>

@@ -3,7 +3,7 @@ import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { AUTO_TAG_RULES, getEffectiveRules, type TagGroup, type AutoTagRules, type AutoTagRulesOverride } from "@/lib/auto-tag-rules";
 
-const TAG_GROUPS: TagGroup[] = ["brand", "service", "project", "persona", "branch", "service_area"];
+const TAG_GROUPS: TagGroup[] = ["brand", "service", "project", "persona", "branch"];
 
 // Numeric rule fields (separated for sanitization in PATCH).
 const NUMERIC_RULE_KEYS = ["min_match_chars", "min_match_words"] as const;
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT brand_label, project_label, persona_label, branch_label, service_area_label, service_label, tag_group_config
+    SELECT brand_label, project_label, persona_label, branch_label, service_label, tag_group_config
     FROM sites WHERE id = ${siteId}
   `;
 
@@ -49,7 +49,6 @@ export async function GET(req: NextRequest) {
     project: { default: [], override: null, effective: [] },
     persona: { default: [], override: null, effective: [] },
     branch: { default: [], override: null, effective: [] },
-    service_area: { default: [], override: null, effective: [] },
   };
   const rules: Record<TagGroup, { default: AutoTagRules; override: AutoTagRulesOverride | null; effective: AutoTagRules }> = {} as Record<TagGroup, { default: AutoTagRules; override: AutoTagRulesOverride | null; effective: AutoTagRules }>;
   for (const g of TAG_GROUPS) {
@@ -74,7 +73,6 @@ export async function GET(req: NextRequest) {
       project_label: site.project_label as string | null,
       persona_label: site.persona_label as string | null,
       branch_label: site.branch_label as string | null,
-      service_area_label: site.service_area_label as string | null,
       service_label: site.service_label as string | null,
     },
     keyword_cues,
@@ -87,7 +85,7 @@ export async function GET(req: NextRequest) {
  * Body: {
  *   site_id,
  *   brand_label?, project_label?, persona_label?, branch_label?,
- *   service_area_label?, service_label?,
+ *   service_label?,
  *   keyword_cues?: { brand?: string[], service?: string[], ... }
  *     — REPLACES the default per group when non-empty array provided.
  *       Pass empty array or null to RESET to defaults. Pass undefined
@@ -100,7 +98,7 @@ export async function PATCH(req: NextRequest) {
   const auth = authResult as AuthContext;
 
   const body = await req.json();
-  const { site_id, brand_label, project_label, persona_label, branch_label, service_area_label, service_label, keyword_cues, rules: rulesBody } = body;
+  const { site_id, brand_label, project_label, persona_label, branch_label, service_label, keyword_cues, rules: rulesBody } = body;
 
   if (!site_id) {
     return NextResponse.json({ error: "site_id required" }, { status: 400 });
@@ -198,7 +196,6 @@ export async function PATCH(req: NextRequest) {
         project_label = ${project_label ?? null},
         persona_label = ${persona_label ?? null},
         branch_label = ${branch_label ?? null},
-        service_area_label = ${service_area_label ?? null},
         service_label = ${service_label ?? null},
         tag_group_config = ${JSON.stringify(nextConfig)}::jsonb
     WHERE id = ${site_id}

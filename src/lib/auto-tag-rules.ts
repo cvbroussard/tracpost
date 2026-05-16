@@ -18,8 +18,7 @@ export type TagGroup =
   | "service"
   | "project"
   | "persona"
-  | "branch"
-  | "service_area";
+  | "branch";
 
 export type AutoTagRules = {
   /** Skip catalog match if entity name is shorter than this many chars. */
@@ -116,21 +115,6 @@ export const AUTO_TAG_RULES: Record<TagGroup, AutoTagRules> = {
     allow_auto_create_new: false,
     allow_keyword_create_new: true,
     keyword_cues: ["branch", "location", "office", "store"],
-  },
-  service_area: {
-    min_match_chars: 4,
-    min_match_words: 1,
-    word_boundary_required: true,
-    // Existing site overlay matches are unambiguous (subscriber
-    // already chose which canonical to link).
-    allow_auto_link_existing: true,
-    // NER place extraction stays disabled (Point Breeze cross-
-    // canonical ambiguity). Keyword cue path works because subscriber
-    // explicit + geocoding-on-create resolves geographic ambiguity.
-    allow_suggest_create_new: false,
-    allow_auto_create_new: false,
-    allow_keyword_create_new: true,
-    keyword_cues: ["area", "neighborhood"],
   },
 };
 

@@ -20,7 +20,7 @@ export default async function TaggingPage() {
 
   const siteId = session.activeSiteId;
 
-  const [brands, projects, personas, branches, services, serviceAreas, siteData] = await Promise.all([
+  const [brands, projects, personas, branches, services, siteData] = await Promise.all([
     sql`SELECT b.id, b.name, b.slug, b.url, b.description, b.hero_asset_id,
             b.logo_service_url, ma.storage_url AS hero_url
         FROM brands b
@@ -41,16 +41,7 @@ export default async function TaggingPage() {
     sql`SELECT id, name, slug, description, price_range, duration, display_order,
             hero_asset_id, metadata, source
         FROM services WHERE site_id = ${siteId} ORDER BY display_order ASC, name ASC`,
-    sql`SELECT
-            sa.id AS overlay_id, sa.is_active, sa.hero_asset_id,
-            sa.site_notes, sa.custom_description,
-            c.id AS canonical_id, c.name, c.slug, c.kind, c.parent_region_id,
-            c.place_id, c.boundary_geojson
-          FROM site_service_areas sa
-          JOIN service_areas_canonical c ON c.id = sa.service_area_canonical_id
-          WHERE sa.site_id = ${siteId}
-          ORDER BY c.name`,
-    sql`SELECT brand_label, project_label, persona_label, branch_label, service_area_label, service_label
+    sql`SELECT brand_label, project_label, persona_label, branch_label, service_label
         FROM sites WHERE id = ${siteId}`,
   ]);
 
@@ -61,7 +52,6 @@ export default async function TaggingPage() {
     project_label: (site?.project_label as string) || null,
     persona_label: (site?.persona_label as string) || null,
     branch_label: (site?.branch_label as string) || null,
-    service_area_label: (site?.service_area_label as string) || null,
     service_label: (site?.service_label as string) || null,
   };
 
@@ -137,20 +127,6 @@ export default async function TaggingPage() {
         hero_asset_id: (s.hero_asset_id as string) || null,
         metadata: (s.metadata as Record<string, unknown>) || {},
         source: (s.source as string) || "manual",
-      }))}
-      serviceAreas={serviceAreas.map((sa) => ({
-        overlay_id: sa.overlay_id as string,
-        canonical_id: sa.canonical_id as string,
-        name: sa.name as string,
-        slug: sa.slug as string,
-        kind: sa.kind as string,
-        parent_region_id: (sa.parent_region_id as string) || null,
-        place_id: (sa.place_id as string) || null,
-        boundary_geojson: (sa.boundary_geojson as Record<string, unknown>) || null,
-        is_active: !!sa.is_active,
-        hero_asset_id: (sa.hero_asset_id as string) || null,
-        site_notes: (sa.site_notes as string) || null,
-        custom_description: (sa.custom_description as string) || null,
       }))}
     />
   );

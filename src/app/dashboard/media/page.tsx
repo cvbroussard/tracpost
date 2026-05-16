@@ -203,22 +203,13 @@ export default async function MediaPage({ searchParams }: Props) {
     FROM media_assets WHERE site_id = ${siteId}
   `;
 
-  const [siteData, allBrands, allProjects, allPersonas, allServices, allBranches, allServiceAreas, assetBrandRows, assetProjectRows, assetPersonaRows, assetServiceRows, assetBranchRows, assetServiceAreaRows] = await Promise.all([
-    sql`SELECT content_pillars, pillar_config, brand_label, project_label, persona_label, branch_label, service_label, service_area_label FROM sites WHERE id = ${siteId}`,
+  const [siteData, allBrands, allProjects, allPersonas, allServices, allBranches, assetBrandRows, assetProjectRows, assetPersonaRows, assetServiceRows, assetBranchRows] = await Promise.all([
+    sql`SELECT content_pillars, pillar_config, brand_label, project_label, persona_label, branch_label, service_label FROM sites WHERE id = ${siteId}`,
     sql`SELECT id, name, slug, url FROM brands WHERE site_id = ${siteId} ORDER BY name ASC`,
     sql`SELECT id, name, slug FROM projects WHERE site_id = ${siteId} ORDER BY name ASC`,
     sql`SELECT id, name, type FROM personas WHERE site_id = ${siteId} ORDER BY name ASC`,
     sql`SELECT id, name, slug FROM services WHERE site_id = ${siteId} ORDER BY name ASC`,
     sql`SELECT id, name, slug FROM branches WHERE site_id = ${siteId} ORDER BY name ASC`,
-    // Service areas surface the OVERLAY id with the canonical name —
-    // matches asset_service_areas.site_service_area_id reference shape.
-    sql`
-      SELECT sa.id, c.name, c.slug
-      FROM site_service_areas sa
-      JOIN service_areas_canonical c ON c.id = sa.service_area_canonical_id
-      WHERE sa.site_id = ${siteId}
-      ORDER BY c.name ASC
-    `,
     sql`
       SELECT ab.asset_id, ab.brand_id
       FROM asset_brands ab
@@ -247,12 +238,6 @@ export default async function MediaPage({ searchParams }: Props) {
       SELECT ab.asset_id, ab.branch_id
       FROM asset_branches ab
       JOIN media_assets ma ON ma.id = ab.asset_id
-      WHERE ma.site_id = ${siteId}
-    `,
-    sql`
-      SELECT asa.asset_id, asa.site_service_area_id
-      FROM asset_service_areas asa
-      JOIN media_assets ma ON ma.id = asa.asset_id
       WHERE ma.site_id = ${siteId}
     `,
   ]);
@@ -292,13 +277,6 @@ export default async function MediaPage({ searchParams }: Props) {
     assetBranchMap[aid].push(row.branch_id as string);
   }
 
-  const assetServiceAreaMap: Record<string, string[]> = {};
-  for (const row of assetServiceAreaRows) {
-    const aid = row.asset_id as string;
-    if (!assetServiceAreaMap[aid]) assetServiceAreaMap[aid] = [];
-    assetServiceAreaMap[aid].push(row.site_service_area_id as string);
-  }
-
   const pillars = (siteData[0]?.content_pillars || []) as string[];
   const pillarConfig = (siteData[0]?.pillar_config || []) as Array<{
     id: string; label: string; description: string;
@@ -310,7 +288,6 @@ export default async function MediaPage({ searchParams }: Props) {
   const personaLabel = (siteData[0]?.persona_label as string) || null;
   const serviceLabel = (siteData[0]?.service_label as string) || null;
   const branchLabel = (siteData[0]?.branch_label as string) || null;
-  const serviceAreaLabel = (siteData[0]?.service_area_label as string) || null;
 
   // Project filter is applied in SQL above (pre-LIMIT) so the slice
   // picks from project-matching rows, not from the library at large.
@@ -360,18 +337,15 @@ export default async function MediaPage({ searchParams }: Props) {
           projects={allProjects as Array<{ id: string; name: string; slug: string }>}
           services={allServices as Array<{ id: string; name: string; slug: string }>}
           branches={allBranches as Array<{ id: string; name: string; slug: string }>}
-          serviceAreas={allServiceAreas as Array<{ id: string; name: string; slug: string }>}
           brandLabel={brandLabel}
           projectLabel={projectLabel}
           serviceLabel={serviceLabel}
           branchLabel={branchLabel}
-          serviceAreaLabel={serviceAreaLabel}
           assetBrandMap={assetBrandMap}
           assetProjectMap={assetProjectMap}
           assetPersonaMap={assetPersonaMap}
           assetServiceMap={assetServiceMap}
           assetBranchMap={assetBranchMap}
-          assetServiceAreaMap={assetServiceAreaMap}
           personaLabel={personaLabel}
           personaList={allPersonas.map((p) => ({ id: p.id as string, name: p.name as string, type: (p.type as string) || "person" }))}
         />

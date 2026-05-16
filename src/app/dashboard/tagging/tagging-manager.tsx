@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LocationPicker, type PickedPlace } from "@/components/location-picker";
 
 interface Brand {
   id: string;
@@ -82,31 +81,15 @@ interface Service {
   source: string;
 }
 
-interface ServiceArea {
-  overlay_id: string;
-  canonical_id: string;
-  name: string;
-  slug: string;
-  kind: string;
-  parent_region_id: string | null;
-  place_id: string | null;
-  boundary_geojson: Record<string, unknown> | null;
-  is_active: boolean;
-  hero_asset_id: string | null;
-  site_notes: string | null;
-  custom_description: string | null;
-}
-
 interface Labels {
   brand_label: string | null;
   project_label: string | null;
   persona_label: string | null;
   branch_label: string | null;
-  service_area_label: string | null;
   service_label: string | null;
 }
 
-type TagGroup = "brands" | "services" | "projects" | "personas" | "branches" | "service_areas";
+type TagGroup = "brands" | "services" | "projects" | "personas" | "branches";
 
 const SECTIONS: { key: TagGroup; labelKey: keyof Labels; defaultLabel: string }[] = [
   { key: "brands", labelKey: "brand_label", defaultLabel: "Brands" },
@@ -114,7 +97,6 @@ const SECTIONS: { key: TagGroup; labelKey: keyof Labels; defaultLabel: string }[
   { key: "projects", labelKey: "project_label", defaultLabel: "Projects" },
   { key: "personas", labelKey: "persona_label", defaultLabel: "Personas" },
   { key: "branches", labelKey: "branch_label", defaultLabel: "Branches" },
-  { key: "service_areas", labelKey: "service_area_label", defaultLabel: "Service Areas" },
 ];
 
 function jsonStringify(v: unknown): string {
@@ -133,7 +115,6 @@ export function TaggingManager({
   personas: initialPersonas,
   branches: initialBranches,
   services: initialServices,
-  serviceAreas: initialServiceAreas,
   role = "owner",
 }: {
   siteId: string;
@@ -143,7 +124,6 @@ export function TaggingManager({
   personas: Persona[];
   branches: Branch[];
   services: Service[];
-  serviceAreas: ServiceArea[];
   role?: string;
 }) {
   // Reviewer-mode swap: tabs still navigate, but each tab's body
@@ -157,7 +137,6 @@ export function TaggingManager({
     projects: "/review-screenshots/tag-group-project.png",
     personas: "/review-screenshots/tag-group-people.png",
     branches: "/review-screenshots/tag-group-branches.png",
-    service_areas: "/review-screenshots/tag-group-service-areas.png",
   };
   const [labels, setLabels] = useState(initialLabels);
   const [brands, setBrands] = useState(initialBrands);
@@ -165,7 +144,6 @@ export function TaggingManager({
   const [personas, setPersonas] = useState(initialPersonas);
   const [branches, setBranches] = useState(initialBranches);
   const [services, setServices] = useState(initialServices);
-  const [serviceAreas, setServiceAreas] = useState(initialServiceAreas);
   const [showConfig, setShowConfig] = useState(false);
 
   // Caption status per project
@@ -238,7 +216,6 @@ export function TaggingManager({
     projects: "project",
     personas: "persona",
     branches: "branch",
-    service_areas: "service_area",
   };
 
   // Lazy-load cue + rules config when subscriber opens the Configure panel
@@ -321,17 +298,6 @@ export function TaggingManager({
   const [newBranchPrimary, setNewBranchPrimary] = useState(false);
   const [newBranchHero, setNewBranchHero] = useState("");
 
-  // Service Area form
-  // Service area creation uses Google Places picker. The picked place
-  // carries name + place_id + lat/lon. Kind (city/county/state/etc)
-  // is now DERIVED server-side from Google's place types — subscriber
-  // doesn't need to redundantly classify what the Place ID already
-  // encodes. Description/notes/hero remain as overlay-level fields.
-  const [pickedSAPlace, setPickedSAPlace] = useState<PickedPlace | null>(null);
-  const [newSADesc, setNewSADesc] = useState("");
-  const [newSANotes, setNewSANotes] = useState("");
-  const [newSAHero, setNewSAHero] = useState("");
-
   // Edit state
   const [editing, setEditing] = useState<string | null>(null);
   const [editFields, setEditFields] = useState<Record<string, unknown>>({});
@@ -374,7 +340,6 @@ export function TaggingManager({
           project_label: configLabels.project_label?.trim() || null,
           persona_label: configLabels.persona_label?.trim() || null,
           branch_label: configLabels.branch_label?.trim() || null,
-          service_area_label: configLabels.service_area_label?.trim() || null,
           service_label: configLabels.service_label?.trim() || null,
           keyword_cues: Object.keys(keyword_cues).length > 0 ? keyword_cues : undefined,
           rules: Object.keys(rules).length > 0 ? rules : undefined,
@@ -386,7 +351,6 @@ export function TaggingManager({
           project_label: configLabels.project_label?.trim() || null,
           persona_label: configLabels.persona_label?.trim() || null,
           branch_label: configLabels.branch_label?.trim() || null,
-          service_area_label: configLabels.service_area_label?.trim() || null,
           service_label: configLabels.service_label?.trim() || null,
         });
         setShowConfig(false);
@@ -534,35 +498,8 @@ export function TaggingManager({
     setAdding(false);
   }
 
-  async function addServiceArea() {
-    if (!pickedSAPlace) return;
-    setAdding(true);
-    try {
-      const res = await fetch("/api/service-areas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: pickedSAPlace.placeName,
-          // No `kind` sent — server derives it from the Place ID's
-          // Google Places types (per 2026-05-15 architecture).
-          place_id: pickedSAPlace.placeId,
-          custom_description: newSADesc.trim() || null,
-          site_notes: newSANotes.trim() || null,
-          hero_asset_id: newSAHero.trim() || null,
-          site_id: siteId,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setServiceAreas((prev) => [...prev, data.service_area].sort((a, b) => a.name.localeCompare(b.name)));
-        setPickedSAPlace(null); setNewSADesc(""); setNewSANotes(""); setNewSAHero("");
-      }
-    } catch { /* ignore */ }
-    setAdding(false);
-  }
-
   async function updateItem(type: TagGroup, id: string) {
-    const apiPath = type === "personas" ? "clients" : type === "service_areas" ? "service-areas" : type;
+    const apiPath = type === "personas" ? "clients" : type;
     try {
       const res = await fetch(`/api/${apiPath}/${id}`, {
         method: "PATCH",
@@ -575,22 +512,20 @@ export function TaggingManager({
                   : type === "projects" ? "project"
                   : type === "personas" ? "client"
                   : type === "branches" ? "branch"
-                  : type === "services" ? "service"
-                  : "service_area";
+                  : "service";
         const updated = data[key];
         if (type === "brands") setBrands((prev) => prev.map((e) => e.id === id ? updated : e).sort((a, b) => a.name.localeCompare(b.name)));
         if (type === "services") setServices((prev) => prev.map((e) => e.id === id ? updated : e));
         if (type === "projects") setProjects((prev) => prev.map((e) => e.id === id ? updated : e).sort((a, b) => a.name.localeCompare(b.name)));
         if (type === "personas") setPersonas((prev) => prev.map((e) => e.id === id ? updated : e).sort((a, b) => a.name.localeCompare(b.name)));
         if (type === "branches") setBranches((prev) => prev.map((e) => e.id === id ? updated : e).sort((a, b) => a.name.localeCompare(b.name)));
-        if (type === "service_areas") setServiceAreas((prev) => prev.map((e) => e.overlay_id === id ? updated : e).sort((a, b) => a.name.localeCompare(b.name)));
         setEditing(null);
       }
     } catch { /* ignore */ }
   }
 
   async function deleteItem(type: TagGroup, id: string) {
-    const apiPath = type === "personas" ? "clients" : type === "service_areas" ? "service-areas" : type;
+    const apiPath = type === "personas" ? "clients" : type;
     try {
       await fetch(`/api/${apiPath}/${id}`, { method: "DELETE" });
       if (type === "brands") setBrands((prev) => prev.filter((e) => e.id !== id));
@@ -598,7 +533,6 @@ export function TaggingManager({
       if (type === "projects") setProjects((prev) => prev.filter((e) => e.id !== id));
       if (type === "personas") setPersonas((prev) => prev.filter((e) => e.id !== id));
       if (type === "branches") setBranches((prev) => prev.filter((e) => e.id !== id));
-      if (type === "service_areas") setServiceAreas((prev) => prev.filter((e) => e.overlay_id !== id));
     } catch { /* ignore */ }
   }
 
@@ -608,7 +542,6 @@ export function TaggingManager({
     if (key === "projects") return projects.length;
     if (key === "personas") return personas.length;
     if (key === "branches") return branches.length;
-    if (key === "service_areas") return serviceAreas.length;
     return 0;
   }
 
@@ -1018,46 +951,6 @@ export function TaggingManager({
           {renderBranchList()}
         </>
       )}
-
-      {/* ── Service Areas tab ─────────────────────────────────────────── */}
-      {!isReviewer && activeTab === "service_areas" && (
-        <>
-          <div className="mb-3 rounded border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-            Beta — service areas are shared across the platform. Adding a region uses the same canonical entry as other businesses serving that area; your business simply attaches its own coverage to it.
-          </div>
-          <div className="mb-3 rounded border border-accent/30 bg-accent/5 px-3 py-2 text-[11px] text-foreground">
-            <p className="font-medium text-accent mb-1">💡 Add only places you actually serve</p>
-            <p className="text-muted">
-              Adding &ldquo;Pittsburgh&rdquo; claims ALL Pittsburgh — assets mentioning any neighborhood (Squirrel Hill, etc.) tag for you. Adding individual neighborhoods means assets tag only on those specific mentions, not generic &ldquo;Pittsburgh&rdquo; references. Don&rsquo;t add a state unless you serve the entire state.
-            </p>
-          </div>
-          <div className="mb-6 space-y-2">
-            <div className="flex gap-2 items-start">
-              <div className="flex-1">
-                <LocationPicker
-                  value={pickedSAPlace}
-                  onChange={setPickedSAPlace}
-                  placeholder="Search for a city, neighborhood, county, or state..."
-                />
-              </div>
-              <button onClick={addServiceArea} disabled={adding || !pickedSAPlace} className="bg-accent px-4 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50 h-[38px]">
-                {adding ? "..." : "Add"}
-              </button>
-            </div>
-            {pickedSAPlace && (
-              <div className="rounded bg-bg-soft px-2 py-1.5 text-[10px] text-muted">
-                <span className="font-medium text-foreground">{pickedSAPlace.placeName}</span>
-                <span className="ml-2">📍 {pickedSAPlace.formattedAddress}</span>
-                <span className="ml-2 font-mono text-dim">place_id: {pickedSAPlace.placeId}</span>
-              </div>
-            )}
-            <input value={newSADesc} onChange={(e) => setNewSADesc(e.target.value)} className="w-full text-sm" placeholder="Custom description (overlay — your site only)" />
-            <input value={newSANotes} onChange={(e) => setNewSANotes(e.target.value)} className="w-full text-sm" placeholder="Site notes (overlay — internal)" />
-            <input value={newSAHero} onChange={(e) => setNewSAHero(e.target.value)} className="w-full text-sm" placeholder="Hero asset UUID (optional)" />
-          </div>
-          {renderServiceAreaList()}
-        </>
-      )}
     </div>
   );
 
@@ -1348,79 +1241,6 @@ export function TaggingManager({
                 </div>
                 <span className="text-xs text-muted">{branch.slug}</span>
                 <EditDeleteRow type="branches" id={branch.id} onEdit={() => { setEditing(branch.id); setEditFields({ name: branch.name, address: branch.address || "", city: branch.city || "", state: branch.state || "", description: branch.description || "", phone: branch.phone || "", gbp_location_id: branch.gbp_location_id || "", is_primary: branch.is_primary, hero_asset_id: branch.hero_asset_id || "", hours_json: jsonStringify(branch.hours) }); }} />
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  function renderServiceAreaList() {
-    if (serviceAreas.length === 0) return <EmptyState label={currentLabel} />;
-    // Sort: ancestry-descending (broadest → narrowest) then alphabetical.
-    // Reading order matches an address: state at top, neighborhood at
-    // bottom. Subscriber sees the umbrella relationships at a glance.
-    const KIND_PRIORITY: Record<string, number> = {
-      region: 1,
-      state: 2,
-      metro: 3,
-      county: 4,
-      city: 5,
-      zip: 6,
-      neighborhood: 7,
-    };
-    const sortedServiceAreas = [...serviceAreas].sort((a, b) => {
-      const pa = KIND_PRIORITY[a.kind] ?? 99;
-      const pb = KIND_PRIORITY[b.kind] ?? 99;
-      if (pa !== pb) return pa - pb;
-      return a.name.localeCompare(b.name);
-    });
-    return (
-      <div className="space-y-1">
-        {sortedServiceAreas.map((sa) => (
-          <div key={sa.overlay_id} className={`border-b border-border py-3 last:border-0 ${editing === sa.overlay_id ? "" : "flex items-center gap-4"}`}>
-            {editing === sa.overlay_id ? (
-              <div className="flex-1 space-y-2">
-                <div className="rounded border border-warning/30 bg-warning/10 px-2 py-1 text-[10px] text-warning">
-                  Editing OVERLAY only — name/kind/boundary are canonical and require operator review to change.
-                </div>
-                <div className="flex gap-2">
-                  <span className="flex-1 rounded border border-border bg-background px-2 py-1 text-sm text-muted">{sa.name} (canonical, read-only here)</span>
-                  <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
-                    <input type="checkbox" checked={!!editFields.is_active} onChange={(e) => setEditFields((f) => ({ ...f, is_active: e.target.checked }))} className="accent-accent" />
-                    Active
-                  </label>
-                </div>
-                <input value={String(editFields.custom_description ?? "")} onChange={(e) => setEditFields((f) => ({ ...f, custom_description: e.target.value }))} className="w-full text-sm" placeholder="Custom description (overlay)" />
-                <input value={String(editFields.site_notes ?? "")} onChange={(e) => setEditFields((f) => ({ ...f, site_notes: e.target.value }))} className="w-full text-sm" placeholder="Site notes (internal)" />
-                <input value={String(editFields.hero_asset_id ?? "")} onChange={(e) => setEditFields((f) => ({ ...f, hero_asset_id: e.target.value }))} className="w-full text-sm" placeholder="Hero asset UUID" />
-                <SaveCancelRow onSave={() => updateItem("service_areas", sa.overlay_id)} onCancel={() => setEditing(null)} />
-              </div>
-            ) : (
-              <>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">{sa.name}</p>
-                    <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent">{sa.kind}</span>
-                    {!sa.is_active && <span className="rounded bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted">inactive</span>}
-                  </div>
-                  {sa.custom_description && <p className="text-xs text-muted">{sa.custom_description}</p>}
-                  {sa.site_notes && <p className="text-[10px] italic text-dim">notes: {sa.site_notes}</p>}
-                  {/* Read-only Place ID badge — visible during beta for monitoring.
-                      Mono font + bg block makes it scannable + easy to copy. */}
-                  {sa.place_id ? (
-                    <p className="mt-1 inline-block rounded bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent" title="Google Place ID">
-                      📍 {sa.place_id}
-                    </p>
-                  ) : (
-                    <p className="mt-1 inline-block rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning" title="No Google Place ID — name-only matching">
-                      ⚠ no place_id
-                    </p>
-                  )}
-                </div>
-                <span className="text-xs text-muted">{sa.slug}</span>
-                <EditDeleteRow type="service_areas" id={sa.overlay_id} onEdit={() => { setEditing(sa.overlay_id); setEditFields({ is_active: sa.is_active, custom_description: sa.custom_description || "", site_notes: sa.site_notes || "", hero_asset_id: sa.hero_asset_id || "" }); }} />
               </>
             )}
           </div>

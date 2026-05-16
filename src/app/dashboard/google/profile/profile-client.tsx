@@ -46,6 +46,7 @@ interface GbpProfile {
     score: number;
     missing: string[];
   };
+  socialProfiles?: Array<{ platform: string; url: string }>;
   synced_at?: string;
 }
 
@@ -502,43 +503,93 @@ function AskForReviewsCard({ profile, siteId, onStatus }: { profile: GbpProfile;
   );
 }
 
-function SocialProfilesCard({ siteId }: { siteId: string }) {
-  const [profiles, setProfiles] = useState<Array<{ platform: string; url: string; handle: string }>>([]);
-  const [loading, setLoading] = useState(true);
+const SOCIAL_PLATFORM_OPTIONS = [
+  "facebook",
+  "instagram",
+  "twitter",
+  "linkedin",
+  "youtube",
+  "tiktok",
+  "pinterest",
+  "whatsapp",
+] as const;
 
-  useEffect(() => {
-    fetch(`/api/google/social-profiles?site_id=${siteId}`)
-      .then((r) => r.ok ? r.json() : { profiles: [] })
-      .then((data) => setProfiles(data.profiles || []))
-      .finally(() => setLoading(false));
-  }, [siteId]);
+function SocialProfilesCard({
+  profiles,
+  onChange,
+}: {
+  profiles: Array<{ platform: string; url: string }>;
+  onChange: (next: Array<{ platform: string; url: string }>) => void;
+}) {
+  const [newPlatform, setNewPlatform] = useState<string>("instagram");
+  const [newUrl, setNewUrl] = useState("");
 
-  if (loading) return null;
+  function addRow() {
+    const url = newUrl.trim();
+    if (!url) return;
+    const filtered = profiles.filter((p) => p.platform !== newPlatform);
+    onChange([...filtered, { platform: newPlatform, url }]);
+    setNewUrl("");
+  }
+
+  function removeRow(platform: string) {
+    onChange(profiles.filter((p) => p.platform !== platform));
+  }
+
+  function updateRow(platform: string, url: string) {
+    onChange(profiles.map((p) => p.platform === platform ? { ...p, url } : p));
+  }
 
   return (
     <Section title="Social Profiles">
-      {profiles.length > 0 ? (
-        <div className="space-y-1">
-          {profiles.map((p) => (
-              <div key={p.platform} className="flex items-center justify-between border-b border-border py-1.5 last:border-0">
-                <div className="flex items-center gap-2">
-                  <PlatformIcon platform={p.platform} size={14} />
-                  <span className="text-xs">{p.handle}</span>
-                </div>
-                <a
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[9px] text-accent hover:underline"
-                >
-                  Open
-                </a>
-              </div>
-          ))}
+      <div className="space-y-1.5">
+        {profiles.map((p) => (
+          <div key={p.platform} className="group/social flex items-center gap-2 border-b border-border py-1.5 last:border-0">
+            <PlatformIcon platform={p.platform} size={14} />
+            <input
+              value={p.url}
+              onChange={(e) => updateRow(p.platform, e.target.value)}
+              onBlur={() => onChange(profiles)}
+              className="flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[10px] focus:border-border focus:outline-none"
+              spellCheck={false}
+            />
+            <button
+              onClick={() => removeRow(p.platform)}
+              className="text-gray-400 opacity-0 transition-opacity group-hover/social:opacity-100 hover:!text-danger"
+              title="Remove"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 pt-1">
+          <select
+            value={newPlatform}
+            onChange={(e) => setNewPlatform(e.target.value)}
+            className="rounded border border-border bg-background px-2 py-1 text-[10px] focus:border-accent focus:outline-none"
+          >
+            {SOCIAL_PLATFORM_OPTIONS.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+          <input
+            value={newUrl}
+            onChange={(e) => setNewUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") addRow(); }}
+            placeholder="https://..."
+            className="flex-1 rounded border border-border bg-background px-2 py-1 text-[10px] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20"
+          />
+          <button
+            onClick={addRow}
+            className="rounded bg-accent px-2 py-1 text-[10px] text-white hover:bg-accent/90"
+            disabled={!newUrl.trim()}
+          >
+            Add
+          </button>
         </div>
-      ) : (
-        <p className="text-xs text-muted">No social accounts connected. Connect platforms from the Connections page to auto-populate.</p>
-      )}
+      </div>
     </Section>
   );
 }
@@ -1063,7 +1114,14 @@ export function ProfileClient({ siteId }: { siteId: string }) {
 
         {/* Right column */}
         <div className="space-y-4">
-          <SocialProfilesCard siteId={siteId} />
+          <SocialProfilesCard
+            profiles={profile.socialProfiles || []}
+            onChange={(next) => {
+              setProfile((prev) => prev ? { ...prev, socialProfiles: next } : prev);
+              setDirty(true);
+              saveProfileField("socialProfiles", next);
+            }}
+          />
 
           <AskForReviewsCard profile={profile} siteId={siteId} onStatus={setPushStatus} />
 

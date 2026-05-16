@@ -53,7 +53,42 @@ export interface GbpProfile {
     score: number;
     missing: string[];
   };
+  socialProfiles?: Array<{ platform: string; url: string }>;
   synced_at?: string;
+}
+
+/**
+ * Platforms TracPost surfaces in the social profiles picker.
+ * Each maps to Google's attribute name (attributes/url_<platform>).
+ * Subscribers can add a URL for any platform regardless of whether
+ * TracPost has an OAuth connection to it — these are independent.
+ */
+export const SOCIAL_PLATFORMS = [
+  "facebook",
+  "instagram",
+  "twitter",
+  "linkedin",
+  "youtube",
+  "tiktok",
+  "pinterest",
+  "whatsapp",
+] as const;
+export type SocialPlatform = typeof SOCIAL_PLATFORMS[number];
+
+const ATTR_PREFIX = "attributes/url_";
+
+function parseAttributesResponse(data: Record<string, unknown>): Array<{ platform: string; url: string }> {
+  const attrs = (data.attributes || []) as Array<Record<string, unknown>>;
+  const result: Array<{ platform: string; url: string }> = [];
+  for (const attr of attrs) {
+    const name = attr.name as string | undefined;
+    if (!name?.startsWith(ATTR_PREFIX)) continue;
+    const platform = name.slice(ATTR_PREFIX.length);
+    const uriValues = (attr.uriValues || []) as Array<{ uri?: string }>;
+    const uri = uriValues[0]?.uri;
+    if (uri) result.push({ platform, url: uri });
+  }
+  return result;
 }
 
 const READ_MASK = [
@@ -237,6 +272,7 @@ function parseLocationResponse(data: Record<string, unknown>): GbpProfile {
       canHaveFoodMenus: (metadata?.canHaveFoodMenus as boolean) || false,
     },
     completeness: { score, missing },
+    socialProfiles: [],
     synced_at: new Date().toISOString(),
   };
 }
@@ -254,10 +290,14 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
   const creds = await getGbpCredentials(siteId);
   if (!creds) return null;
 
-  const res = await fetch(
-    `${BIZ_INFO_API}/${creds.locationPath}?readMask=${READ_MASK}`,
-    { headers: { Authorization: `Bearer ${creds.accessToken}` } }
-  );
+  // Fire Location.get + attributes.list in parallel — attributes lives on a
+  // separate endpoint and holds social profile URLs (url_facebook, etc.)
+  // that the Location.readMask doesn't expose.
+  const auth = { Authorization: `Bearer ${creds.accessToken}` };
+  const [res, attrRes] = await Promise.all([
+    fetch(`${BIZ_INFO_API}/${creds.locationPath}?readMask=${READ_MASK}`, { headers: auth }),
+    fetch(`${BIZ_INFO_API}/${creds.locationPath}/attributes`, { headers: auth }),
+  ]);
 
   if (!res.ok) {
     const err = await res.text();
@@ -267,6 +307,15 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
 
   const data = await res.json();
   const result = parseLocationResponse(data);
+
+  // Merge socialProfiles from the attributes endpoint (best-effort — if
+  // the call fails we still have the rest of the profile).
+  if (attrRes.ok) {
+    try {
+      const attrData = await attrRes.json();
+      result.socialProfiles = parseAttributesResponse(attrData);
+    } catch { /* skip */ }
+  }
 
   // Check if this is initial sync or re-sync
   const [existingSite] = await sql`SELECT gbp_profile FROM sites WHERE id = ${siteId}`;
@@ -291,6 +340,12 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
       metadata: result.metadata,
       completeness: result.completeness,
       synced_at: result.synced_at,
+      // Backfill socialProfiles from Google if local cache doesn't have
+      // it yet (legacy cache from before this field existed). Once set,
+      // local is canonical and subscriber edits survive re-sync.
+      socialProfiles: existing.socialProfiles !== undefined
+        ? existing.socialProfiles
+        : result.socialProfiles,
     };
     await sql`
       UPDATE sites SET gbp_profile = ${JSON.stringify(safeUpdate)}::jsonb WHERE id = ${siteId}
@@ -388,6 +443,7 @@ export async function updateProfile(
     regularHours?: GbpProfile["regularHours"];
     serviceArea?: GbpProfile["serviceArea"];
     address?: GbpProfile["address"];
+    socialProfiles?: GbpProfile["socialProfiles"];
   },
 ): Promise<{ success: boolean; error?: string }> {
   // Read current cached profile
@@ -408,6 +464,7 @@ export async function updateProfile(
   if (updates.regularHours !== undefined) { cached.regularHours = updates.regularHours; changedFields.push("regularHours"); }
   if (updates.serviceArea !== undefined) { cached.serviceArea = updates.serviceArea; changedFields.push("serviceArea"); }
   if (updates.address !== undefined) { cached.address = updates.address; changedFields.push("storefrontAddress"); }
+  if (updates.socialProfiles !== undefined) { cached.socialProfiles = updates.socialProfiles; changedFields.push("socialProfiles"); }
 
   cached.synced_at = new Date().toISOString();
 
@@ -539,11 +596,44 @@ export async function pushProfileToGoogle(siteId: string): Promise<{ success: bo
     try {
       const patched = await res.json();
       const refreshed = parseLocationResponse(patched);
+      // Preserve socialProfiles — the Location PATCH doesn't include them.
+      refreshed.socialProfiles = (profile.socialProfiles as GbpProfile["socialProfiles"]) || [];
       await sql`
         UPDATE sites SET gbp_profile = ${JSON.stringify(refreshed)}::jsonb WHERE id = ${siteId}
       `;
     } catch (err) {
       console.warn("GBP push: failed to parse PATCH response, cache will reflect what we sent:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  // Push social profiles (separate /attributes endpoint).
+  // updateMask lists ALL platforms we support so removed entries get
+  // cleared on Google's side too. Body only contains entries the
+  // subscriber currently has — Google interprets "in mask, not in body"
+  // as deletion.
+  if (dirtyFields.has("socialProfiles")) {
+    const socialProfiles = (profile.socialProfiles as GbpProfile["socialProfiles"]) || [];
+    const allMaskNames = SOCIAL_PLATFORMS.map((p) => `attributes/url_${p}`).join(",");
+    const attrBody = {
+      name: `${creds.locationPath}/attributes`,
+      attributes: socialProfiles.map((sp) => ({
+        name: `attributes/url_${sp.platform}`,
+        valueType: "URL",
+        uriValues: [{ uri: sp.url }],
+      })),
+    };
+    const attrRes = await fetch(
+      `${BIZ_INFO_API}/${creds.locationPath}/attributes?updateMask=${encodeURIComponent(allMaskNames)}`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${creds.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(attrBody),
+      }
+    );
+    if (!attrRes.ok) {
+      const err = await attrRes.text();
+      console.error("GBP attributes push failed:", err.slice(0, 300));
+      return { success: false, error: `Social profiles push failed (${attrRes.status}). Google: ${err.slice(0, 100)}` };
     }
   }
 

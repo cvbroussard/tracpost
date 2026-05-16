@@ -2,6 +2,25 @@ import { sql } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
+ * GET /api/admin/sites?subscription_id=xxx — List sites for a subscriber.
+ * Returns active sites sorted by name. Used by operator /manage pages
+ * to populate site pickers.
+ */
+export async function GET(req: NextRequest) {
+  const subscriptionId = req.nextUrl.searchParams.get("subscription_id");
+  if (!subscriptionId) {
+    return NextResponse.json({ error: "subscription_id required" }, { status: 400 });
+  }
+  const sites = await sql`
+    SELECT id, name, domain, url, provisioning_status, is_active
+    FROM sites
+    WHERE subscription_id = ${subscriptionId} AND is_active = true
+    ORDER BY name
+  `;
+  return NextResponse.json({ sites });
+}
+
+/**
  * POST /api/admin/sites — Create a site for any subscriber (admin only).
  * No auth gate yet — Phase 1 bootstrap.
  */

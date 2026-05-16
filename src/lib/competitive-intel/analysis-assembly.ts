@@ -18,7 +18,12 @@
  */
 import { sql } from "@/lib/db";
 import { deriveTargetQueries, type TargetQuery } from "./query-derivation";
-import { fetchSerp, type SerpResponse } from "./serp-fetch";
+import {
+  fetchSerp,
+  fetchCompetitorCategories,
+  type SerpResponse,
+  type CompetitorCategories,
+} from "./serp-fetch";
 import {
   extractRankingCompetitors,
   type RankingCompetitor,
@@ -117,6 +122,14 @@ export interface AnalysisPayload {
   targetQueries: TargetQuery[];
   /** Top N ranking competitors with merged SERP signal + Places profile */
   topCompetitors: EnrichedCompetitor[];
+  /**
+   * Tier 2 enrichment — full GBP category list per top competitor.
+   * Fetched via SerpAPI google_maps `place` engine. Surfaces the
+   * positioning gaps (e.g., "5 of your competitors are tagged
+   * Custom home builder, you're not") that Tier 1 primary-only can't.
+   * Empty array if Tier 2 enrichment was skipped or failed for all.
+   */
+  competitorCategories: CompetitorCategories[];
   /** Total distinct businesses observed (for moat data) */
   totalCompetitorsObserved: number;
   /** LLM-generated strategic recommendations (Phase 1E) */
@@ -124,6 +137,8 @@ export interface AnalysisPayload {
   /** Raw cost telemetry */
   serpQueriesRun: number;
   competitorProfilesFetched: number;
+  /** How many Tier 2 google_maps fetches succeeded (cost = N × $0.0075) */
+  competitorCategoriesFetched: number;
 }
 
 export interface EnrichedCompetitor extends RankingCompetitor {
@@ -268,6 +283,36 @@ export async function runAnalysisForSite(
     // EnrichedCompetitor note). SerpAPI local pack data is sufficient.
     const topCompetitors: EnrichedCompetitor[] = extraction.topCompetitors;
 
+    // 5b) Tier 2 enrichment — full GBP category list per top competitor.
+    // SerpAPI google_maps `place` endpoint, fired in parallel for the top
+    // N. ~$0.0075 per fetch; for N=10 that's $0.075 added to the run.
+    // Surfaces additional-category positioning gaps that Tier 1's
+    // primary-only `type` field can't reveal.
+    const tier2Results = await Promise.all(
+      topCompetitors.map((c) =>
+        fetchCompetitorCategories(c.placeId, c.type ?? null).catch((err) => {
+          console.warn(`Tier 2 fetch failed for ${c.title}:`, err instanceof Error ? err.message : err);
+          return null;
+        }),
+      ),
+    );
+    const competitorCategories: CompetitorCategories[] = tier2Results.filter(
+      (c): c is CompetitorCategories => c !== null,
+    );
+
+    // Seed any newly-discovered gcids into the local catalog so coaching
+    // can later FK them when adding to site_gbp_categories. Mirrors the
+    // existing INSERT...ON CONFLICT pattern from syncProfileFromGoogle.
+    for (const cc of competitorCategories) {
+      for (let i = 0; i < cc.gcids.length; i++) {
+        await sql`
+          INSERT INTO gbp_categories (gcid, name)
+          VALUES (${cc.gcids[i]}, ${cc.displayNames[i]})
+          ON CONFLICT (gcid) DO NOTHING
+        `;
+      }
+    }
+
     // 6) Assemble payload
     const payload: AnalysisPayload = {
       generatedAt: new Date().toISOString(),
@@ -276,9 +321,11 @@ export async function runAnalysisForSite(
       subscriberMetrics,
       targetQueries: queries,
       topCompetitors,
+      competitorCategories,
       totalCompetitorsObserved: extraction.totalBusinessesObserved,
       serpQueriesRun,
       competitorProfilesFetched: subscriberPlaceId ? 1 : 0, // own profile fetch
+      competitorCategoriesFetched: competitorCategories.length,
     };
 
     // 7) Generate LLM recommendations (Phase 1E). Non-fatal — analysis

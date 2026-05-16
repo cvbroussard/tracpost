@@ -170,3 +170,86 @@ export function parseSerpResponse(
     organic,
   };
 }
+
+/**
+ * A competitor's full GBP category list, extracted via the SerpAPI
+ * google_maps engine (Tier 2 enrichment).
+ *
+ * The standard local pack (Tier 1) returns one `type` string per result
+ * — the primary category. The google_maps `place` endpoint returns the
+ * full set (primary + additional), with both display names and the
+ * matching gcid-style IDs.
+ */
+export interface CompetitorCategories {
+  /** Google CID (matches LocalPackResult.placeId — our join key) */
+  cid: string;
+  /** Business title from the place page */
+  title: string;
+  /**
+   * Full set of gcids the competitor has declared, in `gcid:<id>` form
+   * (catalog-ready — prepend already applied).
+   */
+  gcids: string[];
+  /** Parallel to `gcids` — display names for each. Same length. */
+  displayNames: string[];
+  /**
+   * Best-guess primary gcid, derived by matching the local-pack `type`
+   * string (Tier 1) against the Tier 2 display names. SerpAPI returns
+   * the Tier 2 list alphabetically, so we can't infer primary from
+   * order alone. null if no match.
+   */
+  primaryGcid: string | null;
+}
+
+/**
+ * Fetch a competitor's full GBP category list via SerpAPI's google_maps
+ * `place` engine. Returns null on any failure (network, parse, empty
+ * data) — caller decides whether to treat as fatal or graceful skip.
+ *
+ * Cost: ~$0.0075 per call. Bolt onto every CMA run for all top
+ * competitors (cheap relative to the deliverable quality uplift).
+ */
+export async function fetchCompetitorCategories(
+  cid: string,
+  primaryTypeDisplay: string | null = null,
+): Promise<CompetitorCategories | null> {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) throw new Error("SERPAPI_KEY not set");
+
+  const url = new URL("https://serpapi.com/search");
+  url.searchParams.set("engine", "google_maps");
+  url.searchParams.set("type", "place");
+  url.searchParams.set("data_cid", cid);
+  url.searchParams.set("api_key", apiKey);
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    console.warn(`SerpAPI google_maps fetch failed for CID ${cid} (${res.status})`);
+    return null;
+  }
+
+  const data = (await res.json()) as Record<string, unknown>;
+  const place = (data.place_results || {}) as Record<string, unknown>;
+  // SerpAPI labels this field `type` (singular) but it's actually an array
+  // of display names for the place's full category list.
+  const types = (place.type || []) as string[];
+  const typeIds = (place.type_ids || []) as string[];
+  if (!Array.isArray(types) || !Array.isArray(typeIds) || types.length === 0 || typeIds.length !== types.length) {
+    return null;
+  }
+
+  const gcids = typeIds.map((id) => `gcid:${id}`);
+  let primaryGcid: string | null = null;
+  if (primaryTypeDisplay) {
+    const idx = types.findIndex((t) => t.toLowerCase() === primaryTypeDisplay.toLowerCase());
+    if (idx >= 0) primaryGcid = gcids[idx];
+  }
+
+  return {
+    cid,
+    title: (place.title as string) || "",
+    gcids,
+    displayNames: types,
+    primaryGcid,
+  };
+}

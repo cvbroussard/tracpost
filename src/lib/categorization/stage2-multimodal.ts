@@ -24,7 +24,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
-import { SCENE_TYPE_IDS } from "@/lib/scene-types";
+import { SCENE_TYPES, SCENE_TYPE_IDS } from "@/lib/scene-types";
 import type { Stage1Result } from "./stage1-extract";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -96,8 +96,7 @@ OUTPUTS (all required):
    - Each entry: { gcid, confidence (0..1), reasoning (cite transcript + visual evidence) }
    - NEVER invent gcids — only use ones from the site's category list provided
 
-2. **scene_types** — From the fixed taxonomy below, pick any/all that apply to the image. Return as salience-ranked array (position [0] = most prominent). The taxonomy is cross-cutting (an asset can be multiple), do not arbitrarily limit count.
-   Allowed values: wide_shot, close_up, in_progress, people, before, after, documentation, lifestyle
+2. **scene_types** — From the fixed taxonomy provided in the user message, pick any/all that strictly match the operator's canonical description (NOT your default interpretation of the slug name). Each scene type has a specific definition — match against the description text, not what the slug "sounds like" in general photography vocabulary. Return as salience-ranked array (position [0] = most prominent). The taxonomy is cross-cutting (an asset can legitimately be multiple), do not arbitrarily limit count. But do not over-apply — if the description doesn't fit, leave it out.
 
 3. **detected_vendors** — Brand vendors visible IN THE IMAGE, cross-referenced against the site's brand catalog AND Stage 1's brand NER. For each detected vendor:
    - brand_slug: must match a slug from the site's brand catalog provided
@@ -165,8 +164,10 @@ function buildUserMessage(input: Stage2Input): string {
   }
   lines.push("");
 
-  lines.push("=== ALLOWED SCENE_TYPES ===\n");
-  lines.push(SCENE_TYPE_IDS.join(", "));
+  lines.push("=== ALLOWED SCENE_TYPES (match against the description, not just the slug name) ===\n");
+  for (const t of SCENE_TYPES) {
+    lines.push(`  ${t.id} — ${t.description}`);
+  }
   lines.push("");
 
   if (input.pillarOptions.length > 0) {

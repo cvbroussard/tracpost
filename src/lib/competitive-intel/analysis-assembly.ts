@@ -24,6 +24,7 @@ import {
   type RankingCompetitor,
   type ExtractionResult,
 } from "./competitor-extraction";
+import { generateRecommendations, type Recommendation } from "./recommendations";
 
 /**
  * US state abbreviation expansion for SerpAPI location parameter.
@@ -93,8 +94,8 @@ export interface AnalysisPayload {
   topCompetitors: EnrichedCompetitor[];
   /** Total distinct businesses observed (for moat data) */
   totalCompetitorsObserved: number;
-  /** Surfaced gaps + recommendations (LLM-generated in a later phase) */
-  recommendations?: Array<{ kind: string; message: string; priority: "high" | "medium" | "low" }>;
+  /** LLM-generated strategic recommendations (Phase 1E) */
+  recommendations?: Recommendation[];
   /** Raw cost telemetry */
   serpQueriesRun: number;
   competitorProfilesFetched: number;
@@ -217,7 +218,16 @@ export async function runAnalysisForSite(
       competitorProfilesFetched: 0, // V1: no separate Places enrichment
     };
 
-    // 7) Persist + mark complete
+    // 7) Generate LLM recommendations (Phase 1E). Non-fatal — analysis
+    // still persists with empty recommendations if the LLM call fails.
+    try {
+      payload.recommendations = await generateRecommendations(payload);
+    } catch (err) {
+      console.warn("Recommendation generation failed:", err instanceof Error ? err.message : err);
+      payload.recommendations = [];
+    }
+
+    // 8) Persist + mark complete
     await sql`
       UPDATE competitive_market_analyses
       SET status = 'complete', analysis_data = ${JSON.stringify(payload)}::jsonb, updated_at = NOW()

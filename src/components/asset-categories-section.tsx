@@ -43,12 +43,34 @@ interface CategoriesResponse {
  *   - "Add another" picker drops down to site's remaining categories
  *   - "Set as primary" + "Remove" actions per existing pill
  */
+interface CascadePreview {
+  stage1: unknown | null;
+  stage2: {
+    asset_categories: {
+      primary: { gcid: string; name: string; confidence: number; reasoning: string };
+      secondaries: Array<{ gcid: string; name: string; confidence: number; reasoning: string }>;
+    };
+    scene_types: string[];
+    detected_vendors: Array<{ brand_slug: string; brand_name: string; confidence: number; visual_evidence: string | null }>;
+    url_slug: string;
+    story_angles: string[];
+    suggested_pillar: string | null;
+    caption_hints: { tone: string; voice_anchor: string; key_phrases_to_use: string[]; audience: string; lead_with: string };
+  };
+}
+
 export function AssetCategoriesSection({ assetId }: { assetId: string }) {
   const [data, setData] = useState<CategoriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [inspectingGcid, setInspectingGcid] = useState<string | null>(null);
+
+  // Cascade preview state (decoupled auto-tag flow)
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<CascadePreview | null>(null);
+  const [committing, setCommitting] = useState(false);
+  const [cascadeError, setCascadeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!assetId) return;
@@ -69,6 +91,55 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function runPreview() {
+    setPreviewing(true);
+    setCascadeError(null);
+    setPreview(null);
+    try {
+      const res = await fetch(`/api/assets/${assetId}/categorize/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      const d = await res.json();
+      if (!res.ok || !d.ok) {
+        throw new Error(d.error || `Preview failed (${res.status})`);
+      }
+      setPreview({ stage1: d.stage1, stage2: d.stage2 });
+    } catch (e) {
+      setCascadeError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  async function commitPreview() {
+    if (!preview) return;
+    setCommitting(true);
+    setCascadeError(null);
+    try {
+      const res = await fetch(`/api/assets/${assetId}/categorize/commit`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ stage1: preview.stage1, stage2: preview.stage2 }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || `Commit failed (${res.status})`);
+      // Clear preview state + reload current assignments
+      setPreview(null);
+      await load();
+    } catch (e) {
+      setCascadeError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCommitting(false);
+    }
+  }
+
+  function discardPreview() {
+    setPreview(null);
+    setCascadeError(null);
+  }
 
   async function act(action: "add" | "remove" | "set_primary", gcid: string) {
     try {
@@ -133,14 +204,101 @@ export function AssetCategoriesSection({ assetId }: { assetId: string }) {
 
       {siteCategories.length > 0 && assignments.length === 0 && !asset.hasTranscript && (
         <div className="rounded border border-dashed border-border bg-background px-3 py-2 text-[11px] text-muted">
-          Pending briefing. Auto-categorization fires once a transcript exists for this asset.
+          Pending briefing. Record audio or add a context note, then click Auto-tag below.
         </div>
       )}
 
-      {siteCategories.length > 0 && assignments.length === 0 && asset.hasTranscript && (
-        <div className="rounded border border-dashed border-warning/40 bg-warning/5 px-3 py-2 text-[11px] text-warning">
-          Transcript present but no category assigned. Auto-categorization may have errored.
-          Use the picker below to assign manually.
+      {/* Auto-tag CTA — appears when transcript exists but no preview is loaded */}
+      {siteCategories.length > 0 && asset.hasTranscript && !preview && (
+        <div className="mb-2">
+          <button
+            onClick={runPreview}
+            disabled={previewing || committing}
+            className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+          >
+            {previewing ? "Analyzing…" : assignments.length === 0 ? "⚡ Auto-tag this asset" : "⚡ Re-categorize"}
+          </button>
+          {assignments.length === 0 && (
+            <span className="ml-2 text-[10px] text-muted">
+              Multimodal AI · transcript + image → ranked categories (~$0.025, ~10s)
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Cascade preview — primary + secondaries + confidence + reasoning + Apply/Discard */}
+      {preview && (
+        <div className="mb-3 rounded-lg border border-accent/40 bg-accent/5 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-accent">Preview — not yet saved</span>
+            <div className="flex gap-1.5">
+              <button
+                onClick={commitPreview}
+                disabled={committing}
+                className="rounded bg-accent px-3 py-1 text-[10px] font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+              >
+                {committing ? "Applying…" : "✓ Apply"}
+              </button>
+              <button
+                onClick={discardPreview}
+                disabled={committing}
+                className="rounded bg-surface-hover px-3 py-1 text-[10px] text-muted hover:text-foreground disabled:opacity-50"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {/* Primary preview */}
+            <div className="rounded border border-accent/30 bg-background px-2.5 py-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold">
+                  ★ {preview.stage2.asset_categories.primary.name}
+                </span>
+                <span className="text-[9px] tabular-nums text-muted">
+                  {(preview.stage2.asset_categories.primary.confidence * 100).toFixed(0)}%
+                </span>
+              </div>
+              <p className="mt-1 text-[10px] leading-relaxed text-muted">
+                {preview.stage2.asset_categories.primary.reasoning}
+              </p>
+            </div>
+            {/* Secondaries preview */}
+            {preview.stage2.asset_categories.secondaries.map((s) => (
+              <div key={s.gcid} className="rounded border border-border bg-background px-2.5 py-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs">{s.name}</span>
+                  <span className="text-[9px] tabular-nums text-muted">
+                    {(s.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <p className="mt-1 text-[10px] leading-relaxed text-muted">{s.reasoning}</p>
+              </div>
+            ))}
+            {/* Brief glimpse of other cascade outputs */}
+            <div className="grid grid-cols-2 gap-1.5 pt-1 text-[10px] text-muted">
+              {preview.stage2.scene_types.length > 0 && (
+                <div>Scene: {preview.stage2.scene_types.join(", ")}</div>
+              )}
+              {preview.stage2.story_angles.length > 0 && (
+                <div>Angles: {preview.stage2.story_angles.join(", ")}</div>
+              )}
+              {preview.stage2.detected_vendors.length > 0 && (
+                <div className="col-span-2">
+                  Vendors: {preview.stage2.detected_vendors.map((v) => `${v.brand_name} (${(v.confidence * 100).toFixed(0)}%)`).join(", ")}
+                </div>
+              )}
+              {preview.stage2.url_slug && (
+                <div className="col-span-2">Slug: <code className="text-[9px]">{preview.stage2.url_slug}</code></div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cascadeError && (
+        <div className="mb-2 rounded border border-danger/40 bg-danger/5 px-3 py-2 text-[11px] text-danger">
+          {cascadeError}
         </div>
       )}
 

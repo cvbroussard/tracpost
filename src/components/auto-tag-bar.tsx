@@ -65,10 +65,13 @@ interface AutoTagBarProps {
   onSave: () => void;
   /** Save & Next: commit + advance to next asset in the briefing pass. */
   onSaveAndNext: () => void;
+  /** Previous: navigate to the prior asset in the briefing pass. */
+  onPrev?: () => void;
   /** Close: dirty-form check + close modal. */
   onClose: () => void;
   saving: boolean;
   hasNext: boolean;
+  hasPrev?: boolean;
   /** Body content — typically the cascade preview / assignments
    * rendering of <AssetCategoriesSection>. Renders below the button row
    * and grows the bar to fit. */
@@ -211,9 +214,11 @@ export function AutoTagBar({
   onCancel,
   onSave,
   onSaveAndNext,
+  onPrev,
   onClose,
   saving,
   hasNext,
+  hasPrev,
   children,
 }: AutoTagBarProps) {
   const anyActive =
@@ -262,6 +267,17 @@ export function AutoTagBar({
           >
             Save
           </button>
+          {hasPrev && onPrev && (
+            <button
+              type="button"
+              onClick={onPrev}
+              disabled={saving}
+              className="rounded border border-border px-2.5 py-1.5 text-[12px] font-medium text-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              title="Go to previous asset in the briefing pass (←)"
+            >
+              ← Prev
+            </button>
+          )}
           <button
             type="button"
             onClick={onSaveAndNext}

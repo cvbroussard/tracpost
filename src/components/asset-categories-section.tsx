@@ -407,82 +407,65 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
         </div>
       )}
 
-      {/* Assigned pills */}
+      {/* Committed cascade artifact, read-only. Single-column layout.
+          Categories first (primary highlighted via ★ glyph), then the
+          rest of the cascade outputs each on its own row. No pills,
+          no clicks, no Add — this is a review surface, not an input
+          surface (2026-05-17). To re-trigger the cascade, click the
+          ⚡ Auto-tag button in the bar. */}
       {assignments.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="space-y-1 text-[11px] text-foreground">
           {primary && (
-            <CategoryPill
-              key={primary.gcid}
-              assignment={primary}
-              isInspecting={inspectingGcid === primary.gcid}
-              onInspect={() => setInspectingGcid(inspectingGcid === primary.gcid ? null : primary.gcid)}
-              onRemove={() => act("remove", primary.gcid)}
-              onSetPrimary={() => {}}
-              variant="primary"
-            />
+            <div>
+              <span className="text-muted">Category: </span>
+              <span className="font-medium">★ {primary.name}</span>
+              {primary.confidence !== null && (
+                <span className="ml-1 text-[10px] text-muted">
+                  · {(Number(primary.confidence) * 100).toFixed(0)}%
+                </span>
+              )}
+            </div>
           )}
-          {secondaries.map((a) => (
-            <CategoryPill
-              key={a.gcid}
-              assignment={a}
-              isInspecting={inspectingGcid === a.gcid}
-              onInspect={() => setInspectingGcid(inspectingGcid === a.gcid ? null : a.gcid)}
-              onRemove={() => act("remove", a.gcid)}
-              onSetPrimary={() => act("set_primary", a.gcid)}
-              variant="secondary"
-            />
-          ))}
-          {addable.length > 0 && (
-            <button
-              onClick={() => setPicking(!picking)}
-              className="rounded bg-surface-hover px-2 py-0.5 text-xs text-muted hover:text-foreground"
-            >
-              {picking ? "Cancel" : "+ Add"}
-            </button>
+          {secondaries.length > 0 && (
+            <div>
+              <span className="text-muted">Also: </span>
+              <span>{secondaries.map((s) => s.name).join(", ")}</span>
+            </div>
           )}
         </div>
       )}
 
-      {/* Picker */}
-      {picking && addable.length > 0 && (
-        <div className="mt-2 max-h-48 overflow-y-auto rounded border border-border bg-background p-2">
-          <div className="flex flex-wrap gap-1.5">
-            {addable.map((c) => (
-              <button
-                key={c.gcid}
-                onClick={() => act("add", c.gcid)}
-                className="rounded bg-surface px-2 py-0.5 text-xs text-muted hover:bg-accent/10 hover:text-accent"
-              >
-                + {c.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Committed cascade extras — same fields the preview shows
-          (scene types, story angles, brand matches, slug). Surfaces
-          after Save so subscriber can verify what landed without
-          re-running the cascade. */}
+      {/* Committed cascade extras — each on its own row, read-only. */}
       {committed && (
-        <div className="mt-3 grid grid-cols-2 gap-1.5 border-t border-border pt-2 text-[10px] text-muted">
+        <div className="mt-2 space-y-1 border-t border-border pt-2 text-[11px] text-muted">
           {committed.scene_types.length > 0 && (
-            <div>Scene: {committed.scene_types.join(", ")}</div>
+            <div>
+              <span className="text-muted/70">Scene: </span>
+              <span className="text-foreground/90">{committed.scene_types.join(", ")}</span>
+            </div>
           )}
           {committed.story_angles.length > 0 && (
-            <div>Angles: {committed.story_angles.join(", ")}</div>
+            <div>
+              <span className="text-muted/70">Angles: </span>
+              <span className="text-foreground/90">{committed.story_angles.join(", ")}</span>
+            </div>
           )}
           {committed.brands.length > 0 && (
-            <div className="col-span-2">
-              Brands: {committed.brands.map((b) => b.name).join(", ")}
+            <div>
+              <span className="text-muted/70">Brands: </span>
+              <span className="text-foreground/90">{committed.brands.map((b) => b.name).join(", ")}</span>
             </div>
           )}
           {committed.suggested_pillar && (
-            <div>Pillar: {committed.suggested_pillar}</div>
+            <div>
+              <span className="text-muted/70">Pillar: </span>
+              <span className="text-foreground/90">{committed.suggested_pillar}</span>
+            </div>
           )}
           {committed.url_slug && (
-            <div className="col-span-2">
-              Slug: <code className="text-[9px]">{committed.url_slug}</code>
+            <div>
+              <span className="text-muted/70">Slug: </span>
+              <code className="text-[10px] text-foreground/90">{committed.url_slug}</code>
             </div>
           )}
         </div>

@@ -234,6 +234,29 @@ export function AssetEditModal({
     [],
   );
 
+  // Variant thumbnails — rendered below the source media. Loaded on
+  // mount + after Save (cascade fires variant render in background;
+  // re-fetch happens via cascadeHasPreview transitions). Cheap GET.
+  const [variants, setVariants] = useState<Array<{
+    id: string;
+    template_id: string | null;
+    storage_url: string;
+    status: string;
+    media_type: string | null;
+    aspect_ratio: string | null;
+    template_label: string | null;
+    platform_id: string | null;
+  }>>([]);
+  useEffect(() => {
+    if (!assetId) return;
+    let cancelled = false;
+    void fetch(`/api/assets/${assetId}/variants`)
+      .then((r) => (r.ok ? r.json() : { variants: [] }))
+      .then((d) => { if (!cancelled) setVariants(d.variants ?? []); })
+      .catch(() => { /* non-fatal */ });
+    return () => { cancelled = true; };
+  }, [assetId, cascadeHasPreview]);
+
   const [brandIds, setBrandIds] = useState<string[]>(initialBrandIds);
   const [projectIds, setProjectIds] = useState<string[]>(initialProjectIds);
   const [personaIds, setPersonaIds] = useState<string[]>(initialPersonaIds);
@@ -1296,9 +1319,11 @@ export function AssetEditModal({
                 onCancel={handleCancel}
                 onSave={handleSaveStay}
                 onSaveAndNext={handleSaveAndNext}
+                onPrev={onPrev}
                 onClose={handleClose}
                 saving={saving}
                 hasNext={hasNext && !!onNext}
+                hasPrev={hasPrev && !!onPrev}
               >
                 <AssetCategoriesSection
                   ref={cascadeRef}
@@ -1629,7 +1654,7 @@ export function AssetEditModal({
                   ref={videoRef}
                   src={imageUrl}
                   controls
-                  className="w-full max-h-[60vh] object-contain"
+                  className="w-full max-h-[36vh] object-contain"
                 />
               ) : faceData && faceData.length > 0 ? (
                 <FaceOverlay
@@ -1651,61 +1676,54 @@ export function AssetEditModal({
                 <img
                   src={imageUrl}
                   alt=""
-                  className="w-full max-h-[60vh] object-contain"
+                  className="w-full max-h-[36vh] object-contain"
                 />
               )}
             </div>
 
-            {/* Scene Composition — LEGACY STUB. Values display retired
-                2026-05-16; cascade owns scene_types now (in Auto-tag
-                card). Section kept as placeholder during debug +
-                cascade-rollout testing. */}
-            <div className="mb-3 rounded border border-border bg-background/40 px-3 py-2 text-[11px] text-muted">
-              <span>Scene Composition</span>
-              <span className="ml-2 text-[10px] text-muted/60">— legacy (read-only stub during debug)</span>
-            </div>
+            {/* VARIANT THUMBNAILS — strip of rendered platform variants
+                directly below the source media. Each variant is the
+                source asset re-rendered into a per-platform aspect
+                ratio + format by sharp/ffmpeg (fires async after
+                cascade commit; populates within 5-30s). When empty
+                (cascade hasn't committed yet, or render still pending)
+                this entire block hides. */}
+            {variants.length > 0 && (
+              <div className="mb-3">
+                <div className="mb-1.5 text-[10px] uppercase tracking-wide text-muted/70">
+                  Variants ({variants.length})
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {variants.map((v) => (
+                    <a
+                      key={v.id}
+                      href={v.storage_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group relative block overflow-hidden rounded border border-border bg-background hover:border-accent/60"
+                      title={`${v.template_label || v.template_id || "variant"}${v.platform_id ? ` · ${v.platform_id}` : ""}${v.aspect_ratio ? ` · ${v.aspect_ratio}` : ""} · ${v.status}`}
+                    >
+                      {v.media_type?.startsWith("video") ? (
+                        <video src={v.storage_url} className="h-20 w-auto object-contain" muted />
+                      ) : (
+                        <img src={v.storage_url} alt="" className="h-20 w-auto object-contain" />
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-background/80 px-1 py-0.5 text-[9px] text-muted opacity-0 transition-opacity group-hover:opacity-100">
+                        {v.template_label || v.platform_id || "variant"}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {/* Legacy Context Note card retired 2026-05-16 — new recording
-                methodology no longer needs a handwritten cue card surface.
-                The underlying context_note column persists until migration
-                #195 backfills + drops it; getAssetNarrative continues to
-                read it as a fallback in the meantime. */}
-
-            {/* Story Angle — LEGACY STUB. Values display retired
-                2026-05-16; cascade owns story_angles now (in Auto-tag
-                card). Section kept as placeholder during debug. */}
-            <div className="mb-3 rounded border border-border bg-background/40 px-3 py-2 text-[11px] text-muted">
-              <span>Story Angle</span>
-              <span className="ml-2 text-[10px] text-muted/60">— legacy (read-only stub during debug)</span>
-            </div>
-        </div>
-
-        {/* Bottom Tags section retired 2026-05-09 — Story Angle card above
-            owns all pillar tag selection. Selected pills are visible inline
-            on each pillar row; no need for a separate chip strip. */}
-
-        {/* LEGACY STUBS — Brands / Projects / People / Locations.
-            Values display + pill toggles + quick-create inputs retired
-            2026-05-16. Cards kept as placeholders during debug; cascade
-            (Auto-tag card above) owns brand attribution via NER. State
-            vars + PATCH payload left in place as no-ops for one cycle. */}
-        <div className="border-t border-border px-6 py-4 space-y-2">
-          <div className="rounded border border-border bg-background/40 px-3 py-2 text-[11px] text-muted">
-            <span>{brandLabel || "Brands"}</span>
-            <span className="ml-2 text-[10px] text-muted/60">— legacy (read-only stub during debug)</span>
-          </div>
-          <div className="rounded border border-border bg-background/40 px-3 py-2 text-[11px] text-muted">
-            <span>{projectLabel || "Projects"}</span>
-            <span className="ml-2 text-[10px] text-muted/60">— legacy (read-only stub during debug)</span>
-          </div>
-          <div className="rounded border border-border bg-background/40 px-3 py-2 text-[11px] text-muted">
-            <span>{personaLabel || "People"}</span>
-            <span className="ml-2 text-[10px] text-muted/60">— legacy (read-only stub during debug)</span>
-          </div>
-          <div className="rounded border border-border bg-background/40 px-3 py-2 text-[11px] text-muted">
-            <span>{branchLabel || "Locations"}</span>
-            <span className="ml-2 text-[10px] text-muted/60">— legacy (read-only stub during debug)</span>
-          </div>
+            {/* Legacy stubs (Scene Composition, Story Angle, Brands,
+                Projects, People, Locations) all removed 2026-05-17 —
+                the cascade Auto-tag card at the top of the modal now
+                surfaces every value those stubs would have shown,
+                read-only. State vars + PATCH payload fields stay in
+                the component as no-op tombstones until the cascade
+                proves out across all subscriber sites. */}
         </div>
 
         {/* Asset Studio enhancement tools removed from the source-asset modal
@@ -1866,19 +1884,9 @@ export function AssetEditModal({
               Archive
             </button>
           )}
-          {/* Cancel / Save / Save & Next / Close moved to the top RecordingBar v2.
-              Footer-right keeps only Prev for symmetry with the keyboard ←
-              shortcut. The save-state buttons are at the top now. */}
-          <div className="flex items-center gap-2">
-            {hasPrev && (
-              <button
-                onClick={onPrev}
-                className="px-3 py-2 text-xs text-muted hover:text-foreground"
-              >
-                ← Prev
-              </button>
-            )}
-          </div>
+          {/* All navigation + save controls live in the top Auto-tag bar
+              now. Footer-right kept as a hook for future controls. */}
+          <div className="flex items-center gap-2" />
         </div>
       </div>
     </div>

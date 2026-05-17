@@ -62,29 +62,48 @@ export async function matchServiceAreas(
   gpsLat?: number | null,
   gpsLng?: number | null,
 ): Promise<ServiceAreaMatchResult> {
-  const catalogRows = await sql`
-    SELECT
-      sa.id AS overlay_id,
-      c.id AS canonical_id,
-      c.name,
-      c.place_id,
-      c.kind,
-      c.viewport
-    FROM site_service_areas sa
-    JOIN service_areas_canonical c ON c.id = sa.service_area_canonical_id
-    WHERE sa.site_id = ${siteId}
-      AND sa.is_active = TRUE
+  // Per migration 120 (2026-05-15): site_service_areas table was dropped
+  // when asset-side tagging was retired. Subscriber's declared GBP
+  // service areas now live in sites.gbp_profile->'serviceArea'->'places'
+  // ->'placeInfos' as a JSONB array of { placeId, placeName }. Canonical
+  // viewport + kind data still lives in service_areas_canonical, joined
+  // by place_id.
+  const [site] = await sql`
+    SELECT gbp_profile->'serviceArea'->'places'->'placeInfos' AS place_infos
+    FROM sites
+    WHERE id = ${siteId}
   `;
-  if (catalogRows.length === 0) return { matched: [] };
+  const placeInfos = (site?.place_infos || []) as Array<{ placeId?: string; placeName?: string }>;
+  const placeIds = placeInfos.map((p) => p.placeId).filter((id): id is string => Boolean(id));
+  if (placeIds.length === 0) return { matched: [] };
 
-  const catalog: CatalogRow[] = catalogRows.map((r) => ({
-    overlay_id: r.overlay_id as string,
-    canonical_id: r.canonical_id as string,
-    name: r.name as string,
-    place_id: (r.place_id as string | null) ?? null,
-    kind: (r.kind as string) ?? "",
-    viewport: (r.viewport as ViewportBox | null) ?? null,
-  }));
+  const canonicalRows = await sql`
+    SELECT id, name, place_id, kind, viewport
+    FROM service_areas_canonical
+    WHERE place_id = ANY(${placeIds}::text[])
+  `;
+  const canonicalByPlaceId = new Map(canonicalRows.map((r) => [r.place_id as string, r]));
+
+  // Build catalog: prefer canonical name/viewport when enriched, fall
+  // back to GBP placeName for unenriched entries (matching still works
+  // by transcript substring, GPS just won't have a viewport to test).
+  const catalog: CatalogRow[] = placeInfos
+    .filter((p): p is { placeId: string; placeName?: string } => Boolean(p.placeId))
+    .map((p) => {
+      const c = canonicalByPlaceId.get(p.placeId);
+      return {
+        // No more overlay row — use canonical id when enriched, else
+        // place_id as a stable identifier for dedupe.
+        overlay_id: (c?.id as string) || p.placeId,
+        canonical_id: (c?.id as string) || "",
+        name: (c?.name as string) || p.placeName || "",
+        place_id: p.placeId,
+        kind: (c?.kind as string) || "",
+        viewport: (c?.viewport as ViewportBox | null) ?? null,
+      };
+    })
+    .filter((c) => c.name.length > 0);
+  if (catalog.length === 0) return { matched: [] };
 
   const matched: ServiceAreaCatalogMatch[] = [];
   const claimed = new Set<string>();

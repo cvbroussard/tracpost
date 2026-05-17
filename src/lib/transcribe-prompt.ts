@@ -181,13 +181,38 @@ export async function normalizeTranscriptCase(text: string, siteId: string): Pro
 
   let out = text;
   for (const name of canonical) {
-    // Escape regex special chars in the catalog name (e.g. parens,
-    // dots in "A.B. Smith Co."). Then wrap in word boundaries +
-    // case-insensitive flag. The replacement string is the catalog's
-    // canonical form.
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`\\b${escaped}\\b`, "gi");
-    out = out.replace(re, name);
+    // For each catalog entry, generate both & and "and" variants so
+    // we catch the transcription model's tendency to expand "&" to
+    // "and" (people say "and" aloud regardless of how the brand is
+    // written). E.g. catalog "Tile & Design" also matches "tile
+    // and design" in the transcript. Both get re-cased to the
+    // canonical form. Same pattern brand-match.ts uses for fuzzy
+    // matching — applied to the case normalizer too.
+    for (const variant of expandAmpAndVariants(name)) {
+      // Escape regex special chars (parens, dots, ampersand isn't
+      // special but doesn't hurt). Then wrap in word boundaries +
+      // case-insensitive flag. Replacement is always the canonical
+      // catalog form.
+      const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(`\\b${escaped}\\b`, "gi");
+      out = out.replace(re, name);
+    }
   }
   return out;
+}
+
+/** Returns the catalog name plus a variant with & ↔ and swapped,
+ * if either token is present. Lets the normalizer match transcripts
+ * where the model expanded "&" to "and" (or, less commonly, the
+ * reverse). Word-boundary " and " / " & " only — avoids hitting
+ * partial words like "Sandwich". */
+function expandAmpAndVariants(name: string): string[] {
+  const variants = new Set<string>([name]);
+  if (name.includes(" & ")) {
+    variants.add(name.replace(/ & /g, " and "));
+  }
+  if (/ and /i.test(name)) {
+    variants.add(name.replace(/ and /gi, " & "));
+  }
+  return Array.from(variants);
 }

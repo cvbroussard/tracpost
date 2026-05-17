@@ -142,6 +142,11 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
   const [committing, setCommitting] = useState(false);
   const [cascadeError, setCascadeError] = useState<string | null>(null);
   const [rawOpen, setRawOpen] = useState(false);
+  // Force-remount key + defaultOpenDepth let Expand/Collapse All reset
+  // every CollapsibleNode's internal state at once. Bump treeKey to
+  // re-mount the tree with the new defaultOpenDepth.
+  const [treeKey, setTreeKey] = useState(0);
+  const [defaultOpenDepth, setDefaultOpenDepth] = useState(2);
 
   const load = useCallback(async () => {
     if (!assetId) return;
@@ -516,20 +521,49 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
           see exactly what the cascade produced. */}
       {committed?.raw_analysis && (
         <div className="mt-2 border-t border-border pt-2">
-          <button
-            onClick={() => setRawOpen((v) => !v)}
-            className="flex items-center gap-1 text-[10px] text-muted hover:text-accent"
-          >
-            <span className="inline-block w-2 text-center">{rawOpen ? "▾" : "▸"}</span>
-            <span>{rawOpen ? "Hide raw JSON" : "View raw JSON"}</span>
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setRawOpen((v) => !v)}
+              className="flex items-center gap-1 text-[10px] text-muted hover:text-accent"
+            >
+              <span className="inline-block w-2 text-center">{rawOpen ? "▾" : "▸"}</span>
+              <span>{rawOpen ? "Hide raw JSON" : "View raw JSON"}</span>
+            </button>
+            {rawOpen && (
+              <div className="flex items-center gap-2 text-[10px] text-muted">
+                <button
+                  onClick={() => {
+                    setDefaultOpenDepth(999);
+                    setTreeKey((k) => k + 1);
+                  }}
+                  className="hover:text-accent"
+                >
+                  Expand all
+                </button>
+                <span className="text-muted/40">·</span>
+                <button
+                  onClick={() => {
+                    setDefaultOpenDepth(0);
+                    setTreeKey((k) => k + 1);
+                  }}
+                  className="hover:text-accent"
+                >
+                  Collapse all
+                </button>
+              </div>
+            )}
+          </div>
           {rawOpen && (
-            <div className="mt-2 max-h-96 overflow-auto rounded border border-border bg-background p-3 font-mono text-[10px] leading-relaxed">
+            <div
+              key={treeKey}
+              className="mt-2 max-h-96 overflow-auto rounded border border-border bg-background p-3 font-mono text-[10px] leading-relaxed"
+            >
               <JsonView
                 value={{
                   analysis: committed.raw_analysis,
                   service_area_match: committed.raw_service_area_match,
                 }}
+                defaultOpenDepth={defaultOpenDepth}
               />
             </div>
           )}
@@ -564,7 +598,15 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
  * font-mono) so big artifacts fit a max-h-96 scroll container without
  * dominating the asset modal.
  */
-function JsonView({ value, depth = 0 }: { value: unknown; depth?: number }) {
+function JsonView({
+  value,
+  depth = 0,
+  defaultOpenDepth = 2,
+}: {
+  value: unknown;
+  depth?: number;
+  defaultOpenDepth?: number;
+}) {
   const indent = depth * 12;
 
   if (value === null) return <span className="text-muted">null</span>;
@@ -578,7 +620,7 @@ function JsonView({ value, depth = 0 }: { value: unknown; depth?: number }) {
     return (
       <CollapsibleNode
         summary={`[${value.length}]`}
-        defaultOpen={depth < 2}
+        defaultOpen={depth < defaultOpenDepth}
         openBrace="["
         closeBrace="]"
         indent={indent}
@@ -586,7 +628,7 @@ function JsonView({ value, depth = 0 }: { value: unknown; depth?: number }) {
         {value.map((item, i) => (
           <div key={i} style={{ paddingLeft: indent + 12 }}>
             <span className="text-muted">{i}: </span>
-            <JsonView value={item} depth={depth + 1} />
+            <JsonView value={item} depth={depth + 1} defaultOpenDepth={defaultOpenDepth} />
             {i < value.length - 1 ? <span className="text-muted">,</span> : null}
           </div>
         ))}
@@ -600,7 +642,7 @@ function JsonView({ value, depth = 0 }: { value: unknown; depth?: number }) {
     return (
       <CollapsibleNode
         summary={`{${entries.length}}`}
-        defaultOpen={depth < 2}
+        defaultOpen={depth < defaultOpenDepth}
         openBrace="{"
         closeBrace="}"
         indent={indent}
@@ -609,7 +651,7 @@ function JsonView({ value, depth = 0 }: { value: unknown; depth?: number }) {
           <div key={k} style={{ paddingLeft: indent + 12 }}>
             <span className="text-foreground/90">&quot;{k}&quot;</span>
             <span className="text-muted">: </span>
-            <JsonView value={v} depth={depth + 1} />
+            <JsonView value={v} depth={depth + 1} defaultOpenDepth={defaultOpenDepth} />
             {i < entries.length - 1 ? <span className="text-muted">,</span> : null}
           </div>
         ))}

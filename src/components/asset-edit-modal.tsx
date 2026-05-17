@@ -470,6 +470,34 @@ export function AssetEditModal({
   const [typedMode, setTypedMode] = useState(false);
   const [typedDraft, setTypedDraft] = useState("");
 
+  // Re-transcribe state. Per-row spinner so the subscriber sees which
+  // recording is currently being re-processed. Session flag indicates
+  // any transcript has been refreshed since the asset was last
+  // analyzed — banner prompts the subscriber to click Analyze to
+  // refresh tags. Cleared by analyze (cascade re-fires) or by closing
+  // the modal.
+  const [transcribingId, setTranscribingId] = useState<string | null>(null);
+  const [transcriptRefreshed, setTranscriptRefreshed] = useState(false);
+
+  const retranscribe = useCallback(async (recordingId: string) => {
+    setTranscribingId(recordingId);
+    try {
+      const res = await fetch(`/api/recordings/${recordingId}/transcribe`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(error || `Transcribe failed (${res.status})`);
+      }
+      await refetchRecordings();
+      setTranscriptRefreshed(true);
+    } catch (err) {
+      console.warn("Re-transcribe failed:", err);
+    } finally {
+      setTranscribingId(null);
+    }
+  }, [refetchRecordings]);
+
   // Auto-tag inspector state (LOCKED 2026-05-10).
   // Per memory/project_tracpost_auto_tag_inspector_design.md: cross-group
   // catalog scan + NER produces per-group results. Subscriber sees applied
@@ -1299,7 +1327,12 @@ export function AssetEditModal({
                 audio={audio}
                 voiceOver={voiceOver}
                 isVideo={mediaType?.startsWith("video") || mediaType === "video"}
-                onAutoTag={() => cascadeRef.current?.triggerPreview()}
+                onAutoTag={() => {
+                  // Clear stale-transcript banner — subscriber is
+                  // acting on it by re-running Analyze.
+                  setTranscriptRefreshed(false);
+                  cascadeRef.current?.triggerPreview();
+                }}
                 autoTagDisabled={
                   cascadeBusy ||
                   // Gate on transcript existence — the cascade is
@@ -1589,13 +1622,18 @@ export function AssetEditModal({
                       ⚠ Replace mode: this transcript will be archived when you save your new recording. Asset stays briefed.
                     </div>
                   )}
-                  <div className="rounded bg-background/40 p-2 text-[12px] text-foreground/90">
-                    {recordings[0].transcript}
-                  </div>
+                  {transcriptRefreshed && (
+                    <div className="mb-1.5 rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] text-accent">
+                      ✨ Transcript updated — click <span className="font-semibold">⚡ Analyze</span> above to refresh tags from the new text.
+                    </div>
+                  )}
+                  <RecordingRowView
+                    recording={recordings[0]}
+                    isLatest
+                    transcribing={transcribingId === recordings[0].id}
+                    onRetranscribe={() => retranscribe(recordings[0].id)}
+                  />
                   <div className="mt-1.5 flex gap-2">
-                    {/* "✨ Suggest tags" legacy action removed 2026-05-16.
-                        The cascade Auto-tag section at the top of the modal
-                        now owns this surface (one preview → Apply flow). */}
                     <button
                       type="button"
                       onClick={startReplaceTranscript}
@@ -1622,15 +1660,13 @@ export function AssetEditModal({
                       </summary>
                       <div className="mt-1 space-y-1.5">
                         {recordings.slice(1).map((r) => (
-                          <div
+                          <RecordingRowView
                             key={r.id}
-                            className="rounded border border-border bg-background/30 p-1.5 text-[11px] text-muted"
-                          >
-                            <div className="mb-0.5 text-[9px] uppercase tracking-wide text-muted/70">
-                              {new Date(r.created_at).toLocaleString()} · {r.source}
-                            </div>
-                            {r.transcript}
-                          </div>
+                            recording={r}
+                            isLatest={false}
+                            transcribing={transcribingId === r.id}
+                            onRetranscribe={() => retranscribe(r.id)}
+                          />
                         ))}
                       </div>
                     </details>
@@ -1901,6 +1937,89 @@ export function AssetEditModal({
           <div className="flex items-center gap-2" />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * One row in the Brief section's recording list. Shows file-style
+ * label (timestamp · duration · format · source), the transcript,
+ * provider + when last transcribed, and a per-row Transcribe action
+ * so subscribers can re-derive the transcript without re-recording.
+ * Decouples capture from processing — same audio, fresh STT.
+ */
+function RecordingRowView({
+  recording,
+  isLatest,
+  transcribing,
+  onRetranscribe,
+}: {
+  recording: RecordingRow;
+  isLatest: boolean;
+  transcribing: boolean;
+  onRetranscribe: () => void;
+}) {
+  const mimeExt = (() => {
+    const m = (recording.mime_type || "").toLowerCase();
+    if (m.includes("webm")) return "webm";
+    if (m.includes("mp3") || m.includes("mpeg")) return "mp3";
+    if (m.includes("mp4") || m.includes("m4a")) return "m4a";
+    if (m.includes("ogg") || m.includes("opus")) return "ogg";
+    if (m.includes("wav")) return "wav";
+    if (m.includes("flac")) return "flac";
+    return null;
+  })();
+  const durLabel =
+    recording.duration_ms != null
+      ? `${Math.round(recording.duration_ms / 100) / 10}s`
+      : null;
+  const fileLabel = [
+    new Date(recording.created_at).toLocaleString(),
+    durLabel,
+    mimeExt,
+    recording.source,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  // Re-transcribe only makes sense for stored-audio recordings.
+  // Typed input has no storage_url — disable the button there.
+  const canRetranscribe = Boolean(recording.storage_url) && !transcribing;
+  return (
+    <div
+      className={`rounded p-2 ${
+        isLatest
+          ? "bg-background/40 text-[12px] text-foreground/90"
+          : "border border-border bg-background/30 p-1.5 text-[11px] text-muted"
+      }`}
+    >
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span
+          className={`uppercase tracking-wide ${
+            isLatest ? "text-[9px] text-muted/70" : "text-[9px] text-muted/70"
+          }`}
+        >
+          {fileLabel}
+        </span>
+        <button
+          type="button"
+          onClick={onRetranscribe}
+          disabled={!canRetranscribe}
+          className="text-[10px] text-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          title={
+            recording.storage_url
+              ? "Re-run transcription on this audio using the latest STT model + your current catalog vocabulary"
+              : "Typed input — no audio to re-transcribe"
+          }
+        >
+          {transcribing ? "Transcribing…" : "▶ Transcribe"}
+        </button>
+      </div>
+      <div>{recording.transcript}</div>
+      {recording.transcribed_at && (
+        <div className="mt-1 text-[9px] text-muted/60">
+          Last transcribed {new Date(recording.transcribed_at).toLocaleString()}
+        </div>
+      )}
     </div>
   );
 }

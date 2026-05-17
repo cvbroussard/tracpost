@@ -225,9 +225,9 @@ function fuzzyWordEqual(a: string, b: string): boolean {
  * apostrophes which can carry semantic weight). NBSPs/tabs collapsed
  * to spaces via the same lowercase pipeline.
  */
-type TokenWithPos = { word: string; start: number; end: number };
+export type TokenWithPos = { word: string; start: number; end: number };
 
-function tokenizeWithPositions(text: string): TokenWithPos[] {
+export function tokenizeWithPositions(text: string): TokenWithPos[] {
   const tokens: TokenWithPos[] = [];
   // Build the normalized form to tokenize, but track positions in original
   const lower = text.toLowerCase();

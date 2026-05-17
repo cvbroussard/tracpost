@@ -77,6 +77,17 @@ interface CascadePreview {
     matched: Array<{ brand_id: string; name: string; ner_text: string; context: string }>;
     suggested_new: Array<{ name: string; slug: string; context: string }>;
   };
+  service_area_match: {
+    matched: Array<{
+      overlay_id: string;
+      canonical_id: string;
+      name: string;
+      place_id: string | null;
+      kind: string;
+      source: "transcript" | "gps";
+      context: string;
+    }>;
+  };
 }
 
 interface AssetCategoriesSectionProps {
@@ -163,7 +174,11 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
       if (!res.ok || !d.ok) {
         throw new Error(d.error || `Preview failed (${res.status})`);
       }
-      setPreview({ analysis: d.analysis, brand_match: d.brand_match });
+      setPreview({
+        analysis: d.analysis,
+        brand_match: d.brand_match,
+        service_area_match: d.service_area_match ?? { matched: [] },
+      });
     } catch (e) {
       setCascadeError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -362,6 +377,11 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
               {preview.brand_match.suggested_new.length > 0 && (
                 <div className="col-span-2 text-amber-700">
                   New brand candidates: {preview.brand_match.suggested_new.map((s) => s.name).join(", ")}
+                </div>
+              )}
+              {preview.service_area_match.matched.length > 0 && (
+                <div className="col-span-2">
+                  Service areas: {preview.service_area_match.matched.map((s) => `${s.name}${s.source === "gps" ? " 📍" : ""}`).join(", ")}
                 </div>
               )}
               {preview.analysis.url_slug && (

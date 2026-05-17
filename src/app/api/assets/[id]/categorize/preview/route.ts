@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { runCascade, type PillarConfigEntry } from "@/lib/categorization/cascade-analyze";
 import { matchBrandsFromNer } from "@/lib/categorization/brand-match";
+import { matchServiceAreas } from "@/lib/categorization/service-area-match";
 import { getAssetNarrative } from "@/lib/asset-narrative";
 
 export const runtime = "nodejs";
@@ -41,7 +42,7 @@ export async function POST(
   const { id: assetId } = await params;
 
   const [asset] = await sql`
-    SELECT id, site_id, storage_url, media_type, poster_asset_id
+    SELECT id, site_id, storage_url, media_type, poster_asset_id, gps_lat, gps_lng
     FROM media_assets WHERE id = ${assetId}
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
@@ -117,11 +118,26 @@ export async function POST(
     name: b.text,
     context: b.context_excerpt,
   }));
-  const brandMatch = await matchBrandsFromNer(asset.site_id as string, nerBrandCandidates);
+
+  // Service area match preview — pure local, no LLM. GBP-canonical
+  // service areas matched against transcript substring + asset GPS
+  // viewport containment (per project_tracpost_service_areas_gbp
+  // _canonical memory). No persistence; orchestrator re-computes JIT
+  // at gen time.
+  const [brandMatch, serviceAreaMatch] = await Promise.all([
+    matchBrandsFromNer(asset.site_id as string, nerBrandCandidates),
+    matchServiceAreas(
+      asset.site_id as string,
+      transcript,
+      asset.gps_lat as number | null,
+      asset.gps_lng as number | null,
+    ),
+  ]);
 
   return NextResponse.json({
     ok: true,
     analysis: cascade.result,
     brand_match: brandMatch,
+    service_area_match: serviceAreaMatch,
   });
 }

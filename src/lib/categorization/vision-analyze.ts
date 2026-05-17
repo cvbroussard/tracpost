@@ -206,6 +206,13 @@ export async function analyzeVision(input: VisionInput): Promise<VisionOutcome> 
     const res = await anthropic.messages.create({
       model: VISION_MODEL,
       max_tokens: 3000,
+      // Vision is interpretive — categories, scene_types, story
+      // angles, slug, caption_hints. Default temp=1.0 produced
+      // significant run-to-run drift on stable inputs (subscribers
+      // re-analyzing saw slug/category churn). Drop to 0.3 — enough
+      // creative latitude on phrasing without rotating the
+      // load-bearing fields. Still NOT seeded; some variance remains.
+      temperature: 0.3,
       system: buildSystemPrompt(),
       messages: [
         {

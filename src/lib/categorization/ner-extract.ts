@@ -116,6 +116,13 @@ export async function extractNer(transcript: string): Promise<NerOutcome> {
     const res = await anthropic.messages.create({
       model: NER_MODEL,
       max_tokens: 2000,
+      // NER is extraction, not interpretation — we want the same
+      // entities pulled from the same transcript every time. temp=0
+      // gives the most stable surface forms (which the downstream
+      // matchers then bind to the catalog). Anthropic doesn't expose
+      // a seed so this isn't fully deterministic, but it's as close
+      // as the API gets.
+      temperature: 0,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
     });

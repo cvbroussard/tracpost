@@ -470,14 +470,21 @@ export function AssetEditModal({
   const [typedMode, setTypedMode] = useState(false);
   const [typedDraft, setTypedDraft] = useState("");
 
-  // Re-transcribe state. Per-row spinner so the subscriber sees which
-  // recording is currently being re-processed. Session flag indicates
-  // any transcript has been refreshed since the asset was last
-  // analyzed — banner prompts the subscriber to click Analyze to
-  // refresh tags. Cleared by analyze (cascade re-fires) or by closing
-  // the modal.
+  // Re-transcribe state. Per-row spinner shows which recording is
+  // currently being re-processed. Staged map holds preview results
+  // keyed by recording_id — populated by Transcribe, consumed by
+  // Save (which PATCHes each one), cleared by Revert. Form is dirty
+  // whenever staged.size > 0. Banner indicates any transcript was
+  // refreshed in-session — prompts subscriber to re-Analyze after.
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
   const [transcriptRefreshed, setTranscriptRefreshed] = useState(false);
+  type StagedTranscript = {
+    transcript: string;
+    transcribe_provider: string;
+    segments: Array<{ start: number; end: number; text: string }>;
+    language: string | null;
+  };
+  const [stagedTranscripts, setStagedTranscripts] = useState<Map<string, StagedTranscript>>(new Map());
 
   const retranscribe = useCallback(async (recordingId: string) => {
     setTranscribingId(recordingId);
@@ -489,14 +496,68 @@ export function AssetEditModal({
         const { error } = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         throw new Error(error || `Transcribe failed (${res.status})`);
       }
-      await refetchRecordings();
-      setTranscriptRefreshed(true);
+      const { preview } = await res.json();
+      if (preview && typeof preview.transcript === "string") {
+        // Stage in client state — DO NOT refetch (the DB hasn't changed).
+        // Modal Save commits via PATCH; per-row Revert discards.
+        setStagedTranscripts((prev) => {
+          const next = new Map(prev);
+          next.set(recordingId, {
+            transcript: preview.transcript,
+            transcribe_provider: preview.transcribe_provider,
+            segments: preview.segments || [],
+            language: preview.language ?? null,
+          });
+          return next;
+        });
+        setTranscriptRefreshed(true);
+      }
     } catch (err) {
       console.warn("Re-transcribe failed:", err);
     } finally {
       setTranscribingId(null);
     }
-  }, [refetchRecordings]);
+  }, []);
+
+  const revertStagedTranscript = useCallback((recordingId: string) => {
+    setStagedTranscripts((prev) => {
+      const next = new Map(prev);
+      next.delete(recordingId);
+      return next;
+    });
+  }, []);
+
+  /** Commits all staged transcripts via PATCH. Called from the save
+   * handler. Returns count of committed rows (for telemetry / future
+   * toast). Failures per-row are logged but don't abort the batch. */
+  const commitStagedTranscripts = useCallback(async (): Promise<number> => {
+    if (stagedTranscripts.size === 0) return 0;
+    let committed = 0;
+    const entries = Array.from(stagedTranscripts.entries());
+    for (const [recordingId, staged] of entries) {
+      try {
+        const res = await fetch(`/api/recordings/${recordingId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            transcript: staged.transcript,
+            transcribe_provider: staged.transcribe_provider,
+            segments: staged.segments,
+            language: staged.language,
+          }),
+        });
+        if (res.ok) committed++;
+        else console.warn(`Commit transcript ${recordingId} failed: ${res.status}`);
+      } catch (err) {
+        console.warn(`Commit transcript ${recordingId} error:`, err);
+      }
+    }
+    // Clear the staging map only after attempt — refetch will pull the
+    // committed state from the DB.
+    setStagedTranscripts(new Map());
+    await refetchRecordings();
+    return committed;
+  }, [stagedTranscripts, refetchRecordings]);
 
   // Auto-tag inspector state (LOCKED 2026-05-10).
   // Per memory/project_tracpost_auto_tag_inspector_design.md: cross-group
@@ -1052,6 +1113,13 @@ export function AssetEditModal({
     if (voiceOver.state === "staged") {
       await voiceOver.commit();
     }
+    // Commit any re-transcribe previews staged via the per-recording
+    // Transcribe action (2026-05-18). PATCHes each /api/recordings/[id]
+    // with the new text + provider + segments. Failures per-row are
+    // logged but don't abort the broader save.
+    if (stagedTranscripts.size > 0) {
+      await commitStagedTranscripts();
+    }
 
     // Second: if a cascade preview is loaded, commit it. The modal
     // Save unifies the prior two-step Apply+Save ceremony (LOCKED
@@ -1177,13 +1245,15 @@ export function AssetEditModal({
     }
   }
 
-  // Master Cancel — discard all staged recordings AND clear typed draft.
-  // Stays on the modal. No prompt: the subscriber explicitly clicked Cancel.
+  // Master Cancel — discard all staged recordings AND clear typed draft
+  // AND drop any staged re-transcriptions. Stays on the modal. No
+  // prompt: the subscriber explicitly clicked Cancel.
   function handleCancel() {
     audio.discard();
     voiceOver.discard();
     setTypedMode(false);
     setTypedDraft("");
+    setStagedTranscripts(new Map());
   }
 
   // Close — full dirty-form check across recording, typed input, and
@@ -1196,6 +1266,7 @@ export function AssetEditModal({
     const briefingDirty = audio.state === "staged" || audio.state === "recording";
     const voDirty = voiceOver.state === "staged" || voiceOver.state === "recording";
     const typedDirty = typedMode && typedDraft.trim().length > 0;
+    const transcribeDirty = stagedTranscripts.size > 0;
     const sortedEq = (a: string[], b: string[]) =>
       JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
     const tagsDirty = !sortedEq(tags, savedTags);
@@ -1207,12 +1278,19 @@ export function AssetEditModal({
     const scenesDirty = !sortedEq(sceneTypesArr, savedSceneTypesArr);
     const tagSelectionDirty = tagsDirty || brandsDirty || projectsDirty ||
       personasDirty || servicesDirty || branchesDirty || scenesDirty;
-    const isDirty = briefingDirty || voDirty || typedDirty || tagSelectionDirty;
+    const isDirty = briefingDirty || voDirty || typedDirty || transcribeDirty || tagSelectionDirty;
     if (isDirty) {
       // Build a specific message so subscriber knows WHAT they'd lose
       const parts: string[] = [];
       if (briefingDirty || voDirty) parts.push("a recording");
       if (typedDirty) parts.push("typed narrative");
+      if (transcribeDirty) {
+        parts.push(
+          stagedTranscripts.size === 1
+            ? "a re-transcription"
+            : `${stagedTranscripts.size} re-transcriptions`,
+        );
+      }
       if (tagSelectionDirty) parts.push("tag changes");
       const what = parts.length === 1 ? parts[0] : parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
       const ok = await confirmDialog({
@@ -1631,7 +1709,9 @@ export function AssetEditModal({
                     recording={recordings[0]}
                     isLatest
                     transcribing={transcribingId === recordings[0].id}
+                    staged={stagedTranscripts.get(recordings[0].id) || null}
                     onRetranscribe={() => retranscribe(recordings[0].id)}
+                    onRevertStaged={() => revertStagedTranscript(recordings[0].id)}
                   />
                   <div className="mt-1.5 flex gap-2">
                     <button
@@ -1665,7 +1745,9 @@ export function AssetEditModal({
                             recording={r}
                             isLatest={false}
                             transcribing={transcribingId === r.id}
+                            staged={stagedTranscripts.get(r.id) || null}
                             onRetranscribe={() => retranscribe(r.id)}
+                            onRevertStaged={() => revertStagedTranscript(r.id)}
                           />
                         ))}
                       </div>
@@ -1947,17 +2029,27 @@ export function AssetEditModal({
  * provider + when last transcribed, and a per-row Transcribe action
  * so subscribers can re-derive the transcript without re-recording.
  * Decouples capture from processing — same audio, fresh STT.
+ *
+ * When `staged` is non-null, the row shows the staged preview text
+ * instead of the persisted one, marks itself as pending Save, and
+ * exposes a Revert button. Persistence happens via the modal's Save
+ * action which PATCHes /api/recordings/[id] (decouples capture from
+ * processing AND processing from persistence — 2026-05-18).
  */
 function RecordingRowView({
   recording,
   isLatest,
   transcribing,
+  staged,
   onRetranscribe,
+  onRevertStaged,
 }: {
   recording: RecordingRow;
   isLatest: boolean;
   transcribing: boolean;
+  staged: { transcript: string; transcribe_provider: string } | null;
   onRetranscribe: () => void;
+  onRevertStaged: () => void;
 }) {
   const mimeExt = (() => {
     const m = (recording.mime_type || "").toLowerCase();
@@ -1984,37 +2076,56 @@ function RecordingRowView({
   // Re-transcribe only makes sense for stored-audio recordings.
   // Typed input has no storage_url — disable the button there.
   const canRetranscribe = Boolean(recording.storage_url) && !transcribing;
+  // When a staged preview exists, render the staged text in place of
+  // the persisted transcript. Visual treatment marks the row as
+  // pending Save and exposes a Revert affordance.
+  const displayText = staged ? staged.transcript : recording.transcript;
   return (
     <div
       className={`rounded p-2 ${
-        isLatest
+        staged
+          ? "border border-accent/40 bg-accent/5 text-[12px] text-foreground/90"
+          : isLatest
           ? "bg-background/40 text-[12px] text-foreground/90"
           : "border border-border bg-background/30 p-1.5 text-[11px] text-muted"
       }`}
     >
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span
-          className={`uppercase tracking-wide ${
-            isLatest ? "text-[9px] text-muted/70" : "text-[9px] text-muted/70"
-          }`}
-        >
+        <span className="text-[9px] uppercase tracking-wide text-muted/70">
           {fileLabel}
+          {staged && (
+            <span className="ml-2 rounded bg-accent/20 px-1 py-0.5 text-[8px] text-accent">
+              STAGED — pending Save
+            </span>
+          )}
         </span>
-        <button
-          type="button"
-          onClick={onRetranscribe}
-          disabled={!canRetranscribe}
-          className="text-[10px] text-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
-          title={
-            recording.storage_url
-              ? "Re-run transcription on this audio using the latest STT model + your current catalog vocabulary"
-              : "Typed input — no audio to re-transcribe"
-          }
-        >
-          {transcribing ? "Transcribing…" : "▶ Transcribe"}
-        </button>
+        <div className="flex items-center gap-2">
+          {staged && (
+            <button
+              type="button"
+              onClick={onRevertStaged}
+              className="text-[10px] text-muted hover:text-danger"
+              title="Discard this staged transcription; original transcript stays"
+            >
+              ↶ Revert
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRetranscribe}
+            disabled={!canRetranscribe}
+            className="text-[10px] text-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+            title={
+              recording.storage_url
+                ? "Re-run transcription on this audio using the latest STT model + your current catalog vocabulary"
+                : "Typed input — no audio to re-transcribe"
+            }
+          >
+            {transcribing ? "Transcribing…" : staged ? "▶ Re-transcribe" : "▶ Transcribe"}
+          </button>
+        </div>
       </div>
-      <div>{recording.transcript}</div>
+      <div>{displayText}</div>
       {recording.transcribed_at && (
         <div className="mt-1 text-[9px] text-muted/60">
           Last transcribed {new Date(recording.transcribed_at).toLocaleString()}

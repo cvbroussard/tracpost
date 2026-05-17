@@ -2,7 +2,14 @@
  * POST /api/recordings/:id/transcribe
  *
  * Re-runs transcription on an existing recording's stored audio.
- * Replaces the transcript field in-place. Used when:
+ * PREVIEW ONLY (2026-05-18) — returns the derived transcript text +
+ * provider WITHOUT writing to the database. The subscriber's modal
+ * stages the result and commits via the asset Save action (which
+ * PATCHes /api/recordings/:id with the transcript field). This keeps
+ * the form's dirty-state semantics intact and lets the subscriber
+ * Revert before committing.
+ *
+ * Used when:
  *   - We've upgraded the STT model (e.g. whisper-1 → gpt-4o-transcribe)
  *     and want to re-derive transcripts for existing recordings without
  *     forcing subscribers to re-record
@@ -12,13 +19,7 @@
  *     a fresh attempt
  *
  * Decouples capture from processing. The same audio file can be
- * transcribed multiple times.
- *
- * Per project_tracpost_recording_as_canonical.md — recordings are
- * the canonical narrative source. Re-transcribing updates the canonical
- * text without rotating the asset's analyze state — the cascade
- * artifact may now be stale, but cascade-commit doesn't re-fire
- * automatically. Subscriber clicks Analyze to refresh.
+ * transcribed multiple times without auto-persisting.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
@@ -66,30 +67,19 @@ export async function POST(
     // known proper nouns regardless of what the STT model produced.
     const normalizedText = await normalizeTranscriptCase(result.text, rec.site_id as string);
 
-    // In-place replacement — overwrite transcript + bump
-    // transcribed_at + record provider. Segments JSON updated when
-    // present (whisper-1 path) so voice-over playback re-syncs.
-    const segmentsJson =
-      result.segments && result.segments.length > 0
-        ? JSON.stringify({ segments: result.segments, language: result.language })
-        : null;
-
-    const [updated] = await sql`
-      UPDATE recordings
-      SET transcript = ${normalizedText},
-          transcribed_at = NOW(),
-          transcribe_provider = ${result.provider},
-          metadata = CASE
-            WHEN ${segmentsJson}::jsonb IS NULL THEN metadata
-            ELSE COALESCE(metadata, '{}'::jsonb) || ${segmentsJson}::jsonb
-          END
-      WHERE id = ${id}
-      RETURNING id, transcript, transcribed_at, transcribe_provider, source_asset_id
-    `;
-
+    // Preview only — return the new text + provider + segments
+    // without writing. Caller (asset modal) stages this in client
+    // state and commits via PATCH /api/recordings/[id] when the
+    // subscriber saves the asset.
     return NextResponse.json({
       ok: true,
-      recording: updated,
+      preview: {
+        id,
+        transcript: normalizedText,
+        transcribe_provider: result.provider,
+        segments: result.segments || [],
+        language: result.language ?? null,
+      },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

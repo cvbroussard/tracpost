@@ -11,8 +11,9 @@ export const runtime = "nodejs";
  * asset modal. Variants are produced asynchronously by the
  * /api/assets/[id]/render-variants endpoint after cascade commit.
  *
- * Response: { variants: [{ id, template_id, storage_url, status,
- *                          media_type, aspect_ratio, created_at }] }
+ * Response: { variants: [{ id, template_id, storage_url,
+ *                          variant_status, quality_score, generated_at,
+ *                          template_label, aspect_ratio }] }
  */
 export async function GET(
   req: NextRequest,
@@ -30,13 +31,13 @@ export async function GET(
   }
 
   const variants = await sql`
-    SELECT v.id, v.template_id, v.storage_url, v.status, v.media_type,
-           v.aspect_ratio, v.created_at,
-           t.label AS template_label, t.platform_id
+    SELECT v.id, v.template_id, v.storage_url, v.variant_status,
+           v.quality_score, v.generated_at,
+           t.label AS template_label, t.aspect_ratio
     FROM asset_variants v
     LEFT JOIN asset_templates t ON t.id = v.template_id
     WHERE v.source_asset_id = ${assetId}
-    ORDER BY t.platform_id NULLS LAST, t.label
+    ORDER BY t.label NULLS LAST
   `;
 
   return NextResponse.json({ variants });

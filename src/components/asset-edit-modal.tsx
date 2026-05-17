@@ -241,11 +241,11 @@ export function AssetEditModal({
     id: string;
     template_id: string | null;
     storage_url: string;
-    status: string;
-    media_type: string | null;
-    aspect_ratio: string | null;
+    variant_status: string;
+    quality_score: number | string | null;
+    generated_at: string;
     template_label: string | null;
-    platform_id: string | null;
+    aspect_ratio: string | null;
   }>>([]);
   useEffect(() => {
     if (!assetId) return;
@@ -1688,34 +1688,46 @@ export function AssetEditModal({
                 cascade commit; populates within 5-30s). When empty
                 (cascade hasn't committed yet, or render still pending)
                 this entire block hides. */}
-            {variants.length > 0 && (
-              <div className="mb-3">
-                <div className="mb-1.5 text-[10px] uppercase tracking-wide text-muted/70">
-                  Variants ({variants.length})
+            {variants.filter((v) => v.variant_status === "ready").length > 0 && (() => {
+              const readyVariants = variants.filter((v) => v.variant_status === "ready");
+              const pendingCount = variants.length - readyVariants.length;
+              return (
+                <div className="mb-3">
+                  <div className="mb-1.5 flex items-baseline gap-2 text-[10px] uppercase tracking-wide text-muted/70">
+                    <span>Variants ({readyVariants.length})</span>
+                    {pendingCount > 0 && (
+                      <span className="text-[9px] text-muted/50 normal-case tracking-normal">
+                        +{pendingCount} still rendering
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {readyVariants.map((v) => {
+                      const isVideo = /\.(mp4|mov|webm)(\?|$)/i.test(v.storage_url);
+                      return (
+                        <a
+                          key={v.id}
+                          href={v.storage_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group relative block overflow-hidden rounded border border-border bg-background hover:border-accent/60"
+                          title={`${v.template_label || v.template_id || "variant"}${v.aspect_ratio ? ` · ${v.aspect_ratio}` : ""}`}
+                        >
+                          {isVideo ? (
+                            <video src={v.storage_url} className="h-20 w-auto object-contain" muted />
+                          ) : (
+                            <img src={v.storage_url} alt="" className="h-20 w-auto object-contain" />
+                          )}
+                          <div className="absolute inset-x-0 bottom-0 bg-background/80 px-1 py-0.5 text-[9px] text-muted opacity-0 transition-opacity group-hover:opacity-100">
+                            {v.template_label || v.template_id || "variant"}
+                          </div>
+                        </a>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {variants.map((v) => (
-                    <a
-                      key={v.id}
-                      href={v.storage_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group relative block overflow-hidden rounded border border-border bg-background hover:border-accent/60"
-                      title={`${v.template_label || v.template_id || "variant"}${v.platform_id ? ` · ${v.platform_id}` : ""}${v.aspect_ratio ? ` · ${v.aspect_ratio}` : ""} · ${v.status}`}
-                    >
-                      {v.media_type?.startsWith("video") ? (
-                        <video src={v.storage_url} className="h-20 w-auto object-contain" muted />
-                      ) : (
-                        <img src={v.storage_url} alt="" className="h-20 w-auto object-contain" />
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 bg-background/80 px-1 py-0.5 text-[9px] text-muted opacity-0 transition-opacity group-hover:opacity-100">
-                        {v.template_label || v.platform_id || "variant"}
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Legacy stubs (Scene Composition, Story Angle, Brands,
                 Projects, People, Locations) all removed 2026-05-17 —

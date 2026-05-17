@@ -77,6 +77,18 @@ async function transcribeFromBlob(
     form.append("prompt", opts.prompt);
   }
 
+  // TEMP DIAGNOSTIC (2026-05-18) — visible in Vercel function logs.
+  // Verifies which model is actually being called and what prompt is
+  // reaching the API. Remove after the gpt-4o-transcribe payload
+  // question is resolved.
+  console.log(
+    `[transcribe] → OpenAI model=${model} response_format=${responseFormat} ` +
+    `file=${filename} size=${audioBlob.size}b promptLen=${opts.prompt?.length ?? 0}`
+  );
+  if (opts.prompt) {
+    console.log(`[transcribe] prompt: ${opts.prompt.slice(0, 500)}${opts.prompt.length > 500 ? "…" : ""}`);
+  }
+
   const res = await fetch(OPENAI_TRANSCRIPTION_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}` },

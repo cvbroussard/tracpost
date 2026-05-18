@@ -362,9 +362,25 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
         <JsonViewer
           value={{
             analysis: committed.raw_analysis,
-            brand_match: committed.raw_brand_match,
-            project_match: committed.raw_project_match,
-            service_area_match: committed.raw_service_area_match,
+            // Matchers default to their empty shape when the server
+            // returns null/undefined — guarantees the section renders
+            // with structure (matched: [], suggested_new: [], etc.)
+            // instead of vanishing. Subscriber sees that the matcher
+            // ran but found nothing, vs. ambiguity about whether the
+            // matcher fired at all.
+            brand_match: committed.raw_brand_match ?? {
+              matched: [],
+              suggested_new: [],
+            },
+            project_match: committed.raw_project_match ?? {
+              matched: [],
+              suggested_new: [],
+              geo_candidates: [],
+            },
+            service_area_match: committed.raw_service_area_match ?? {
+              matched: [],
+              suggested_new: [],
+            },
           }}
           defaultOpenDepth={1}
           className="mt-2 max-h-[28rem]"

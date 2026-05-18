@@ -141,7 +141,6 @@ export async function POST(
       transcript,
       asset.gps_lat as number | null,
       asset.gps_lng as number | null,
-      cascade.result.entities.locations,
     ),
   ]);
 

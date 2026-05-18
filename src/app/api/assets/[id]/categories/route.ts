@@ -92,10 +92,6 @@ export async function GET(
     const nerEntities = (analysis.entities ?? {}) as {
       brands?: Array<{ text: string; context_excerpt: string }>;
       projects?: Array<{ text: string; context_excerpt: string }>;
-      locations?: Array<{
-        text: string; context_excerpt: string; type: string;
-        geocodable: boolean; privacy_sensitive: boolean;
-      }>;
     };
     const nerBrandCandidates = (nerEntities.brands ?? []).map((b) => ({
       name: b.text,
@@ -132,9 +128,8 @@ export async function GET(
             transcript,
             asset.gps_lat as number | null,
             asset.gps_lng as number | null,
-            nerEntities.locations,
           )
-        : Promise.resolve({ matched: [], suggested_new: [] }),
+        : Promise.resolve({ matched: [] }),
     ]);
     committed = {
       scene_types: analysis.scene_types ?? [],
@@ -146,10 +141,6 @@ export async function GET(
       service_areas: serviceAreaMatch.matched.map((m) => ({
         name: m.name,
         source: m.source,
-      })),
-      service_area_suggestions: serviceAreaMatch.suggested_new.map((s) => ({
-        name: s.name,
-        kind: s.kind,
       })),
       // Raw cascade artifact — powers the JsonViewer inspector. Includes
       // everything the cascade produced (entities, asset_categories,

@@ -43,7 +43,6 @@ interface CommittedExtras {
   suggested_pillar: string | null;
   brands: Array<{ name: string; slug: string }>;
   service_areas: Array<{ name: string; source: "transcript" | "gps" }>;
-  service_area_suggestions: Array<{ name: string; kind: string }>;
   /** Full asset_analysis JSONB — what the cascade actually wrote. */
   raw_analysis: Record<string, unknown> | null;
   /** Matcher outputs (matched + suggested_new), recomputed at read
@@ -111,11 +110,6 @@ interface CascadePreview {
       place_id: string | null;
       kind: string;
       source: "transcript" | "gps";
-      context: string;
-    }>;
-    suggested_new: Array<{
-      name: string;
-      kind: string;
       context: string;
     }>;
   };
@@ -207,7 +201,7 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
         analysis: d.analysis,
         brand_match: d.brand_match,
         project_match: d.project_match ?? { matched: [], suggested_new: [], geo_candidates: [] },
-        service_area_match: d.service_area_match ?? { matched: [], suggested_new: [] },
+        service_area_match: d.service_area_match ?? { matched: [] },
       });
     } catch (e) {
       setCascadeError(e instanceof Error ? e.message : String(e));
@@ -385,7 +379,6 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
             },
             service_area_match: committed.raw_service_area_match ?? {
               matched: [],
-              suggested_new: [],
             },
           }}
           defaultOpenDepth={1}

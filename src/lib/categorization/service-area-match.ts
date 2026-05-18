@@ -1,29 +1,28 @@
 /**
  * Service area matcher — maps a site's GBP-declared service areas
- * against an asset's transcript + GPS + NER-extracted locations.
+ * against an asset's transcript + GPS.
  *
- * Per project_tracpost_service_areas_gbp_canonical memory + the
- * 2026-05-15 architecture (commits 94f0b4d viewport + bd4a90d "JIT at
- * gen time"): service areas live in service_areas_canonical with
- * cached viewports. Matching is three-pronged:
+ * Service areas are GBP-canonical (per project_tracpost_canonical_
+ * promotion_rule.md, 2026-05-18): the subscriber declares them in
+ * their Google Business Profile, TracPost reads them, never authors
+ * new ones. The matcher therefore has only one job — bind assets to
+ * the subscriber's existing GBP catalog via two signals:
  *
  *   1. Transcript substring match — area name appears in the transcript
  *      (fuzzy token match handles & ↔ and, capitalization, etc.)
  *   2. GPS viewport containment — asset's EXIF lat/lng falls inside the
  *      cached Place viewport (zero API calls, microseconds)
- *   3. NER location match — Haiku-extracted locations get fuzzy-matched
- *      against catalog (same matcher as pass 1, but operating on
- *      already-extracted location names instead of raw transcript)
  *
- * All three populate `matched`. Deduped by overlay_id. No persistence —
+ * Both populate `matched`. Deduped by overlay_id. No persistence —
  * matches are computed JIT on each cascade preview and at orchestrator
  * gen time (per the retired-asset-side-tagging decision).
  *
- * NER locations that DON'T find a catalog match surface as
- * `suggested_new` — same pattern as brand-match's suggested_new. Lets
- * subscribers see "you mentioned Shadyside; want to add it to GBP?"
- * Privacy-sensitive types (street_address) are filtered out — never
- * suggest a client home address as a service area.
+ * Pass 3 (NER → suggested_new) was retired 2026-05-18 per the canonical
+ * promotion rule. NER locations that don't match the GBP catalog get
+ * discarded silently — surfacing them as "promote new service area"
+ * would imply TracPost authors GBP entities, which it doesn't. If a
+ * subscriber wants to add Crafton as a service area, they declare it
+ * on Google; TracPost picks it up on next sync.
  */
 import "server-only";
 import { sql } from "@/lib/db";
@@ -51,41 +50,9 @@ export interface ServiceAreaCatalogMatch {
   context: string;
 }
 
-export interface SuggestedNewServiceArea {
-  /** Verbatim NER location text — what the subscriber said. */
-  name: string;
-  /** NER's classification: city | neighborhood | state | region | metro | zip. */
-  kind: string;
-  /** Sentence-level excerpt showing where in the transcript it was mentioned. */
-  context: string;
-}
-
 export interface ServiceAreaMatchResult {
   matched: ServiceAreaCatalogMatch[];
-  /** NER-extracted locations not present in the site's GBP service areas.
-   * UI surfaces these as "want to add this?" promote-to-GBP candidates. */
-  suggested_new: SuggestedNewServiceArea[];
 }
-
-/** NER location record shape (subset of NerEntities.locations). */
-export interface NerLocationCandidate {
-  text: string;
-  context_excerpt: string;
-  type: string;
-  geocodable: boolean;
-  privacy_sensitive: boolean;
-}
-
-/** NER location types that map cleanly to GBP service areas. Excludes
- * street_address (privacy) and landmark (too specific). */
-const SUGGESTABLE_LOCATION_TYPES = new Set([
-  "city",
-  "neighborhood",
-  "state",
-  "region",
-  "metro",
-  "zip",
-]);
 
 interface CatalogRow {
   overlay_id: string;
@@ -101,7 +68,6 @@ export async function matchServiceAreas(
   transcript: string,
   gpsLat?: number | null,
   gpsLng?: number | null,
-  nerLocations?: NerLocationCandidate[],
 ): Promise<ServiceAreaMatchResult> {
   // Per migration 120 (2026-05-15): site_service_areas table was dropped
   // when asset-side tagging was retired. Subscriber's declared GBP
@@ -117,7 +83,7 @@ export async function matchServiceAreas(
   const placeInfos = (site?.place_infos || []) as Array<{ placeId?: string; placeName?: string }>;
   const placeIds = placeInfos.map((p) => p.placeId).filter((id): id is string => Boolean(id));
   if (placeIds.length === 0) {
-    return { matched: [], suggested_new: [] };
+    return { matched: [] };
   }
 
   const canonicalRows = await sql`
@@ -152,7 +118,7 @@ export async function matchServiceAreas(
     })
     .filter((c) => c.name.length > 0);
   if (catalog.length === 0) {
-    return { matched: [], suggested_new: [] };
+    return { matched: [] };
   }
 
   const matched: ServiceAreaCatalogMatch[] = [];
@@ -209,67 +175,5 @@ export async function matchServiceAreas(
     }
   }
 
-  // Pass 3: NER locations as suggested_new candidates. Mirrors the
-  // brand-match.ts suggested_new pattern. NER caught "Shadyside" but
-  // Shadyside isn't in B²'s declared GBP service areas → surface as
-  // "want to add this?" promotion candidate. Filters out privacy-
-  // sensitive types (street_address). Dedupes against already-matched
-  // catalog entries (NER might re-extract a location the catalog scan
-  // already caught).
-  const suggested_new: SuggestedNewServiceArea[] = [];
-  if (nerLocations && nerLocations.length > 0) {
-    const matchedNamesLower = new Set(matched.map((m) => m.name.toLowerCase()));
-    const seenSuggestedLower = new Set<string>();
-    for (const loc of nerLocations) {
-      if (loc.privacy_sensitive) continue;
-      if (!SUGGESTABLE_LOCATION_TYPES.has(loc.type)) continue;
-      const textLower = loc.text.trim().toLowerCase();
-      if (textLower.length === 0) continue;
-      if (seenSuggestedLower.has(textLower)) continue;
-
-      // Check if this NER location is already represented in matched
-      // (catalog scan caught the same place via fuzzy-token match).
-      // Cheap check: exact lowercase name match against matched names.
-      // The fuzzy-token check below handles "Squirrel Hill" ↔ catalog
-      // "Squirrel Hill" without re-running findFuzzyTokenSpan.
-      if (matchedNamesLower.has(textLower)) {
-        seenSuggestedLower.add(textLower);
-        continue;
-      }
-
-      // Defensive: run fuzzy-token match of NER name against catalog
-      // names. Catches "Squirrel Hill" NER → catalog "Squirrel Hill,
-      // Pittsburgh, PA, USA" style drift (canonical names sometimes
-      // get long-formatted on Place API responses).
-      const nerTokens = tokenizeEntityName(loc.text);
-      const nerAsHaystack = nerTokens.map((word, i) => ({
-        word, start: i, end: i + 1,
-      }));
-      let catalogHit = false;
-      for (const entry of catalog) {
-        const entryTokens = tokenizeEntityName(entry.name);
-        if (entryTokens.length === 0) continue;
-        // Either direction counts as a match
-        const fwd = findFuzzyTokenSpan(nerAsHaystack, entryTokens);
-        const entryAsHaystack = entryTokens.map((word, i) => ({
-          word, start: i, end: i + 1,
-        }));
-        const rev = findFuzzyTokenSpan(entryAsHaystack, nerTokens);
-        if (fwd || rev) { catalogHit = true; break; }
-      }
-      if (catalogHit) {
-        seenSuggestedLower.add(textLower);
-        continue;
-      }
-
-      seenSuggestedLower.add(textLower);
-      suggested_new.push({
-        name: loc.text,
-        kind: loc.type,
-        context: loc.context_excerpt,
-      });
-    }
-  }
-
-  return { matched, suggested_new };
+  return { matched };
 }

@@ -37,12 +37,13 @@ interface Assignment {
   assigned_at: string;
 }
 
-interface CommittedExtras {
+export interface CommittedExtras {
   scene_types: string[];
   story_angles: string[];
   url_slug: string;
   suggested_pillar: string | null;
   brands: Array<{ name: string; slug: string }>;
+  projects: Array<{ name: string; slug: string }>;
   service_areas: Array<{ name: string; source: "transcript" | "gps" }>;
   /** Full asset_analysis JSONB — what the cascade actually wrote. */
   raw_analysis: Record<string, unknown> | null;
@@ -55,7 +56,7 @@ interface CommittedExtras {
   raw_service_area_match: Record<string, unknown> | null;
 }
 
-interface CategoriesResponse {
+export interface CategoriesResponse {
   asset: { id: string; hasTranscript: boolean };
   siteCategories: SiteCategory[];
   assignments: Assignment[];
@@ -130,10 +131,15 @@ interface AssetCategoriesSectionProps {
    * hasPreview). Refs alone don't re-render the parent — the bar uses
    * this to update its trigger button label + disabled state. */
   onStateChange?: (state: { isPreviewing: boolean; hasPreview: boolean }) => void;
+  /** Notified whenever the categories endpoint reloads (mount + after
+   * each cascade commit). Lets sibling surfaces — e.g. the tag
+   * confirmation strip above the variants — render off the same data
+   * without an extra fetch. */
+  onDataChange?: (data: CategoriesResponse) => void;
 }
 
 export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCategoriesSectionProps>(
-  function AssetCategoriesSection({ assetId, hideTrigger = false, className, onStateChange }, ref) {
+  function AssetCategoriesSection({ assetId, hideTrigger = false, className, onStateChange, onDataChange }, ref) {
   const [data, setData] = useState<CategoriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,13 +164,14 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
       if (!res.ok) throw new Error(`Failed to load (${res.status})`);
       const d = (await res.json()) as CategoriesResponse;
       setData(d);
+      onDataChange?.(d);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [assetId]);
+  }, [assetId, onDataChange]);
 
   useEffect(() => {
     load();

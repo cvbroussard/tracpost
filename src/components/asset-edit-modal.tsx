@@ -12,7 +12,8 @@ import {
   StagedPreview as AudioStagedPreview,
 } from "@/components/auto-tag-bar";
 import { SCENE_TYPES } from "@/lib/scene-types";
-import { AssetCategoriesSection, type AutoTagSectionHandle } from "@/components/asset-categories-section";
+import { AssetCategoriesSection, type AutoTagSectionHandle, type CategoriesResponse } from "@/components/asset-categories-section";
+import { AssetTagsStrip } from "@/components/asset-tags-strip";
 
 interface RecordingRow {
   id: string;
@@ -233,6 +234,13 @@ export function AssetEditModal({
     },
     [],
   );
+  // Shared categories data — fed by AssetCategoriesSection's onDataChange
+  // (mount + after each commit). Powers the AssetTagsStrip confirmation
+  // row above the variants; no extra fetch.
+  const [categoriesData, setCategoriesData] = useState<CategoriesResponse | null>(null);
+  const handleCategoriesData = useCallback((d: CategoriesResponse) => {
+    setCategoriesData(d);
+  }, []);
 
   // Variant thumbnails — rendered below the source media. Loaded on
   // mount + after Save (cascade fires variant render in background;
@@ -1442,6 +1450,7 @@ export function AssetEditModal({
                   hideTrigger
                   className=""
                   onStateChange={handleCascadeStateChange}
+                  onDataChange={handleCategoriesData}
                 />
               </AutoTagBar>
             </div>
@@ -1798,6 +1807,14 @@ export function AssetEditModal({
                 />
               )}
             </div>
+
+            {/* TAGS STRIP — confirmation row of what's currently attached
+                to this asset (primary + secondary categories, brands,
+                projects, service areas). Sits between source media and
+                variants so subscriber sees visual confirmation the
+                moment they click Save. Reads shared CategoriesResponse
+                (no extra fetch) and hides when nothing is attached. */}
+            <AssetTagsStrip data={categoriesData} />
 
             {/* VARIANT THUMBNAILS — strip of rendered platform variants
                 directly below the source media. Each variant is the

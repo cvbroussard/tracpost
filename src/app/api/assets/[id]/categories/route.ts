@@ -161,15 +161,6 @@ export async function GET(
       raw_project_match: projectMatch,
       raw_service_area_match: serviceAreaMatch,
     };
-    // TEMP DIAGNOSTIC (2026-05-18) — verify project_match shape reaching
-    // the client. Remove once the missing-project_match report is
-    // resolved.
-    console.log(
-      `[categories ${assetId.slice(0, 8)}] project_match keys=${Object.keys(projectMatch || {}).join(",")} ` +
-      `matched=${projectMatch?.matched?.length ?? "?"} ` +
-      `suggested=${projectMatch?.suggested_new?.length ?? "?"} ` +
-      `geo=${projectMatch?.geo_candidates?.length ?? "?"}`
-    );
   }
 
   return NextResponse.json({

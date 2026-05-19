@@ -134,7 +134,6 @@ function buildUserMessage(input: VisionInput): string {
     const e = input.ner.entities;
     if (e.brands.length) lines.push(`Brands mentioned: ${e.brands.map((b) => b.text).join(", ")}`);
     if (e.specialties.length) lines.push(`Specialties / work themes: ${e.specialties.map((s) => s.text).join(", ")}`);
-    if (e.locations.length) lines.push(`Locations: ${e.locations.map((l) => `${l.text} (${l.type})`).join(", ")}`);
     if (e.materials.length) lines.push(`Materials: ${e.materials.map((m) => m.text).join(", ")}`);
     if (input.ner.suggested_tags.length) lines.push(`NER suggested tags: ${input.ner.suggested_tags.join(", ")}`);
     lines.push("");

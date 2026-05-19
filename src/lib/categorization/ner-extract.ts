@@ -21,16 +21,9 @@ export interface EntityRecord {
   char_end: number;
 }
 
-export interface LocationRecord extends EntityRecord {
-  type: "city" | "neighborhood" | "street_address" | "landmark" | "state" | "region" | "unknown";
-  geocodable: boolean;
-  privacy_sensitive: boolean;
-}
-
 export interface NerEntities {
   brands: EntityRecord[];
   specialties: EntityRecord[];
-  locations: LocationRecord[];
   materials: EntityRecord[];
 }
 
@@ -49,7 +42,7 @@ export const NER_MODEL = "claude-haiku-4-5-20251001";
 
 const SYSTEM_PROMPT = `You extract structured entities and tag suggestions from a media asset's transcript (operator/subscriber narration during briefing).
 
-OUTPUT four entity arrays + suggested_tags. Each entity record has uniform fields plus type-specific extras for locations.
+OUTPUT three entity arrays + suggested_tags. Each entity record has uniform fields.
 
 ENTITY DEFINITIONS:
 
@@ -57,11 +50,11 @@ ENTITY DEFINITIONS:
 
 - **specialties** — Granular work-themes the subscriber mentions ("architectural millwork", "heritage kitchen restoration", "furniture-grade lacquer finishing"). These are NARROWER than GBP categories — they capture the subscriber's specific positioning and craft language. Industry-agnostic concept.
 
-- **locations** — Geographic references. Set type field to one of: city, neighborhood, street_address, landmark, state, region, unknown. Set geocodable=true if there's a unique resolvable geographic point. Set privacy_sensitive=true for street_address values (subscriber home or client home — caption generation must never include these).
-
 - **materials** — Materials, finishes, techniques ("oak", "lacquer paint", "walnut burl", "granite countertops", "limewash"). Construction-domain nouns specific enough to matter for SEO/captioning.
 
-DO NOT EXTRACT "projects" — project membership is set by the subscriber at upload time, not inferred from the transcript. If you see what looks like a project name, IGNORE it.
+DO NOT EXTRACT "projects" or "locations":
+- Project membership is set by the subscriber at upload time, not inferred from the transcript.
+- Geographic references (cities, neighborhoods, addresses) are handled by a separate matcher that binds against the subscriber's GBP-declared service areas. If you see geography in the transcript, IGNORE it.
 
 ENTITY RECORD SHAPE (all entities):
 {
@@ -69,13 +62,6 @@ ENTITY RECORD SHAPE (all entities):
   "context_excerpt": "...~50 chars before and after, ellipses if truncated...",
   "char_start": <integer index in transcript where text starts>,
   "char_end": <integer index where text ends>
-}
-
-LOCATION RECORD SHAPE (additional fields):
-{
-  ..., "type": "city|neighborhood|street_address|landmark|state|region|unknown",
-  "geocodable": true|false,
-  "privacy_sensitive": true|false
 }
 
 SUGGESTED_TAGS — A short array of 3-8 tag candidates derived from the transcript's narrative content (themes, angles, distinctive phrases). These will inform downstream tag selection but aren't authoritative. Use lowercase snake_case.
@@ -86,7 +72,6 @@ OUTPUT SHAPE (strict — entities MUST be nested under an "entities" object):
   "entities": {
     "brands":      [ { "text": "...", "context_excerpt": "...", "char_start": N, "char_end": N }, ... ],
     "specialties": [ { ... same shape ... }, ... ],
-    "locations":   [ { ..., "type": "city|...|unknown", "geocodable": true, "privacy_sensitive": false }, ... ],
     "materials":   [ { ... same shape ... }, ... ]
   },
   "suggested_tags": ["tag_one", "tag_two", ...]
@@ -94,12 +79,11 @@ OUTPUT SHAPE (strict — entities MUST be nested under an "entities" object):
 
 CRITICAL RULES:
 
-1. **WRAP entities** — the five entity arrays MUST live inside an "entities" object as shown above. Do NOT emit them at the top level.
+1. **WRAP entities** — the three entity arrays MUST live inside an "entities" object as shown above. Do NOT emit them at the top level.
 2. **NEVER INVENT** — only extract entities/tags genuinely present in the transcript. Empty arrays are fine.
 3. **CHAR_START/CHAR_END must be accurate integer positions** in the transcript string (0-indexed). Used downstream for highlighting.
 4. **CONTEXT_EXCERPT should include ~30 chars before and after** the match, joined with ellipses where the surrounding text exceeds that.
 5. **DON'T over-extract** — return only entities you're confident about. Quality over quantity.
-6. **LOCATIONS privacy_sensitive flag is load-bearing** — street_address must always set privacy_sensitive=true. City/neighborhood/state are NOT privacy_sensitive.
 
 OUTPUT: Return ONLY a JSON object matching the shape above. No prose, no markdown code fences. Strict JSON.`;
 
@@ -141,7 +125,6 @@ export async function extractNer(transcript: string): Promise<NerOutcome> {
       entities: {
         brands: e.brands ?? [],
         specialties: e.specialties ?? [],
-        locations: (e.locations ?? []) as LocationRecord[],
         materials: e.materials ?? [],
       },
       suggested_tags: parsed.suggested_tags ?? [],

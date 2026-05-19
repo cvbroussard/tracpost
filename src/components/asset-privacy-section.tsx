@@ -2,22 +2,21 @@
 
 /**
  * Asset privacy section — surfaces what will happen to detected faces
- * when this asset is published, per the site's face_policy.
+ * when this asset is published, per the site's adult + minor face
+ * policies (three-axis settings live at /dashboard/business/content-
+ * safeguards).
  *
- * Three jobs (per 2026-05-19 design):
- *   1. Transparency — subscriber sees that AI detected faces
- *   2. No-surprises publishing — they know exactly what the published
- *      variant will look like
- *   3. Action escape hatch — when state is weird (waiver unsigned,
- *      suppress mode), nudges toward the settings page
+ * Three jobs:
+ *   1. Transparency — subscriber sees AI detected faces and the per-face
+ *      adult/minor breakdown (per-face age estimation is imperfect; the
+ *      breakdown is what triggers per-face routing)
+ *   2. No-surprises publishing — they know exactly what the variant
+ *      renderer will do to each face category
+ *   3. Action escape hatch — when state needs attention (waiver
+ *      unsigned, suppress mode, no detection ran), nudges toward the
+ *      settings page or offers a manual detection trigger
  *
- * Read-only in v1. Per-asset overrides + per-face controls deferred.
- * Subscriber changes policy at /dashboard/business/content-safeguards; this
- * surface just reflects what's configured.
- *
- * Renders nothing while loading or when there's nothing meaningful to
- * say (asset hasn't been face-detected yet — could be a brand-new
- * upload still waiting on the async waitUntil).
+ * Read-only display. Per-asset overrides + per-face controls deferred.
  */
 
 import { useEffect, useState } from "react";
@@ -27,13 +26,23 @@ interface PrivacyState {
   ai_generated: boolean;
   face_detection: {
     face_count?: number;
-    faces?: unknown[];
+    faces?: Array<{
+      confidence?: number;
+      is_potential_minor?: boolean;
+      age_low?: number;
+      age_high?: number;
+    }>;
     detected_at?: string;
     provider?: string;
   } | null;
+  adult_face_count: number;
+  minor_face_count: number;
   site_face_policy: string;
   site_face_waiver_signed_at: string | null;
+  site_minor_face_policy: string;
+  site_minor_face_waiver_signed_at: string | null;
   effective_face_policy: string;
+  effective_minor_face_policy: string;
 }
 
 interface Props {
@@ -95,32 +104,31 @@ export function AssetPrivacySection({ assetId }: Props) {
   const isImage = state.media_type?.startsWith("image");
   const isVideo = state.media_type?.startsWith("video");
   const isAi = state.ai_generated;
-  const facesPresent = (state.face_detection?.face_count ?? 0) > 0;
+  const totalFaces = state.adult_face_count + state.minor_face_count;
+  const hasFaces = totalFaces > 0;
   const detectionRan = state.face_detection !== null;
 
-  // Choose scenario + treatment
-  let label: string;
-  let detail: string | null = null;
-  let tone: "neutral" | "warning" = "neutral";
-  let showSettingsLink = false;
-  let showWaiverLink = false;
-
   if (isAi) {
-    label = "Face detection skipped — AI-generated content";
-    detail = null;
-  } else if (isVideo) {
-    label = "Face detection skipped — video";
-    detail = "Video variants pass through your policy unchanged. Review before publishing.";
-  } else if (!isImage) {
-    // Audio, PDF, other — skip the section entirely
-    return null;
-  } else if (!detectionRan) {
-    // Image with no detection metadata. Two cases:
-    //   - New upload still waiting on the async waitUntil to land
-    //   - Legacy asset uploaded before piece 2 shipped
-    // Either way, surface the manual trigger. Subscribers backfill
-    // legacy assets on a per-asset basis as they touch them — assets
-    // that clearly have no people in scene can be skipped.
+    return (
+      <NeutralPanel
+        label="Face detection skipped — AI-generated content"
+        detail={null}
+      />
+    );
+  }
+
+  if (isVideo) {
+    return (
+      <NeutralPanel
+        label="Face detection skipped — video"
+        detail="Video variants pass through your policy unchanged. Review before publishing."
+      />
+    );
+  }
+
+  if (!isImage) return null;
+
+  if (!detectionRan) {
     return (
       <div className="mb-3 rounded border border-border bg-background px-3 py-2 text-[11px]">
         <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted/70">
@@ -142,69 +150,131 @@ export function AssetPrivacySection({ assetId }: Props) {
         </div>
       </div>
     );
-  } else if (!facesPresent) {
-    label = "No faces detected";
-    detail = null;
-  } else {
-    // Faces present — branch on effective policy + waiver state
-    const count = state.face_detection?.face_count ?? 0;
-    const noun = count === 1 ? "face" : "faces";
-    const policyChoseAsis = state.site_face_policy === "asis";
-    const waiverSigned = Boolean(state.site_face_waiver_signed_at);
-    const effective = state.effective_face_policy;
-
-    if (policyChoseAsis && !waiverSigned) {
-      // Subscriber wants as-is but hasn't signed → fall-back-to-blur
-      label = `${count} ${noun} detected`;
-      detail = "Will publish: blurred (you chose as-is but haven't signed the waiver)";
-      tone = "warning";
-      showWaiverLink = true;
-    } else if (effective === "asis") {
-      label = `${count} ${noun} detected`;
-      detail = "Will publish: as-is (waiver signed)";
-      showSettingsLink = true;
-    } else if (effective === "suppress") {
-      label = `${count} ${noun} detected`;
-      detail = "Will NOT auto-publish (your policy suppresses face assets)";
-      tone = "warning";
-      showSettingsLink = true;
-    } else if (effective === "box") {
-      label = `${count} ${noun} detected`;
-      detail = "Will publish: rectangle overlay (site default)";
-      showSettingsLink = true;
-    } else {
-      // blur
-      label = `${count} ${noun} detected`;
-      detail = "Will publish: blurred (site default)";
-      showSettingsLink = true;
-    }
   }
 
-  const containerClass =
-    tone === "warning"
-      ? "mb-3 rounded border border-warning/40 bg-warning/5 px-3 py-2 text-[11px]"
-      : "mb-3 rounded border border-border bg-background px-3 py-2 text-[11px]";
+  if (!hasFaces) {
+    return <NeutralPanel label="No faces detected" detail={null} />;
+  }
+
+  // Faces present — describe what each axis will do, with the minor
+  // axis getting its own line + accent treatment when minors are present.
+  const adultLine = state.adult_face_count > 0
+    ? describePolicyLine(
+        state.adult_face_count,
+        "adult",
+        state.site_face_policy,
+        state.effective_face_policy,
+        Boolean(state.site_face_waiver_signed_at),
+      )
+    : null;
+
+  const minorLine = state.minor_face_count > 0
+    ? describePolicyLine(
+        state.minor_face_count,
+        "minor",
+        state.site_minor_face_policy,
+        state.effective_minor_face_policy,
+        Boolean(state.site_minor_face_waiver_signed_at),
+      )
+    : null;
+
+  // Tone elevates when minors are detected OR any axis is in a warning
+  // state (fall-back or suppress).
+  const anyWarning =
+    Boolean(adultLine?.warning) ||
+    Boolean(minorLine?.warning) ||
+    state.minor_face_count > 0;
+
+  const containerClass = anyWarning
+    ? "mb-3 rounded border border-warning/40 bg-warning/5 px-3 py-2 text-[11px]"
+    : "mb-3 rounded border border-border bg-background px-3 py-2 text-[11px]";
 
   return (
     <div className={containerClass}>
       <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted/70">
-        <span>{tone === "warning" ? "⚠️" : "🔒"}</span>
+        <span>{anyWarning ? "⚠️" : "🔒"}</span>
         <span>Privacy</span>
       </div>
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="flex-1">
-          <div className="font-medium text-foreground">{label}</div>
-          {detail && <div className="mt-0.5 text-muted">{detail}</div>}
+      <div className="space-y-1.5">
+        <div className="font-medium text-foreground">
+          {totalFaces} face{totalFaces === 1 ? "" : "s"} detected
+          {state.minor_face_count > 0 && (
+            <span className="ml-1.5 rounded bg-warning/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-warning">
+              {state.minor_face_count} potential minor
+              {state.minor_face_count === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
-        {(showSettingsLink || showWaiverLink) && (
-          <a
-            href="/dashboard/business/content-safeguards"
-            className="shrink-0 text-[10px] text-accent hover:underline"
-          >
-            {showWaiverLink ? "Sign waiver →" : "Settings →"}
-          </a>
+        {adultLine && (
+          <div className="text-muted">
+            <span className="text-foreground/80">Adults:</span> {adultLine.text}
+          </div>
         )}
+        {minorLine && (
+          <div className="text-muted">
+            <span className="text-foreground/80">Potential minors:</span> {minorLine.text}
+          </div>
+        )}
+      </div>
+      <div className="mt-2 flex justify-end">
+        <a
+          href="/dashboard/business/content-safeguards"
+          className="text-[10px] text-accent hover:underline"
+        >
+          {anyWarning ? "Review settings →" : "Settings →"}
+        </a>
       </div>
     </div>
   );
+}
+
+function NeutralPanel({ label, detail }: { label: string; detail: string | null }) {
+  return (
+    <div className="mb-3 rounded border border-border bg-background px-3 py-2 text-[11px]">
+      <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted/70">
+        <span>🔒</span>
+        <span>Privacy</span>
+      </div>
+      <div className="font-medium text-foreground">{label}</div>
+      {detail && <div className="mt-0.5 text-muted">{detail}</div>}
+    </div>
+  );
+}
+
+/**
+ * Translate (stored policy, waiver state) into a one-line description
+ * of what the renderer will do, plus a warning flag for the modal's
+ * elevated-tone styling. Mirrors the resolution logic in
+ * face-transforms.ts so the modal's description stays in lockstep with
+ * actual render behavior.
+ */
+function describePolicyLine(
+  count: number,
+  axis: "adult" | "minor",
+  storedPolicy: string,
+  effectivePolicy: string,
+  waiverSigned: boolean,
+): { text: string; warning: boolean } {
+  const noun = count === 1 ? "face" : "faces";
+
+  if (storedPolicy === "asis" && !waiverSigned) {
+    return {
+      text: `will publish blurred — you chose as-is but the ${axis} face waiver isn't signed`,
+      warning: true,
+    };
+  }
+  switch (effectivePolicy) {
+    case "asis":
+      return { text: `will publish unaltered (${noun}, waiver signed)`, warning: false };
+    case "suppress":
+      return {
+        text: `will NOT auto-publish (${axis} ${noun} present, policy=suppress)`,
+        warning: true,
+      };
+    case "box":
+      return { text: `will publish with rectangle overlay`, warning: false };
+    case "blur":
+    default:
+      return { text: `will publish blurred (site default)`, warning: false };
+  }
 }

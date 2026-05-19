@@ -3,7 +3,6 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { runCascade, type PillarConfigEntry } from "@/lib/categorization/cascade-analyze";
 import { matchBrandsFromNer } from "@/lib/categorization/brand-match";
-import { matchProjectsFromNer } from "@/lib/categorization/project-match";
 import { matchServiceAreas } from "@/lib/categorization/service-area-match";
 import { getAssetNarrative } from "@/lib/asset-narrative";
 
@@ -116,26 +115,17 @@ export async function POST(
 
   // Local matchers — pure SQL + token math, no LLM. Mirror what
   // commit will write.
-  //   brand_match    — NER brands  → brands catalog → asset_brands
-  //   project_match  — NER projects → projects catalog → asset_projects
+  //   brand_match        — NER brands → brands catalog → asset_brands
   //   service_area_match — NER + transcript + GPS → JIT (no persist)
+  // Project matching retired 2026-05-18 (deliberate upload-time
+  // binding only; cascade has no business guessing project buckets).
   const nerBrandCandidates = cascade.result.entities.brands.map((b) => ({
     name: b.text,
     context: b.context_excerpt,
   }));
-  const nerProjectCandidates = cascade.result.entities.projects.map((p) => ({
-    name: p.text,
-    context: p.context_excerpt,
-  }));
 
-  const [brandMatch, projectMatch, serviceAreaMatch] = await Promise.all([
+  const [brandMatch, serviceAreaMatch] = await Promise.all([
     matchBrandsFromNer(asset.site_id as string, nerBrandCandidates),
-    matchProjectsFromNer(
-      asset.site_id as string,
-      nerProjectCandidates,
-      asset.gps_lat as number | null,
-      asset.gps_lng as number | null,
-    ),
     matchServiceAreas(
       asset.site_id as string,
       transcript,
@@ -148,7 +138,6 @@ export async function POST(
     ok: true,
     analysis: cascade.result,
     brand_match: brandMatch,
-    project_match: projectMatch,
     service_area_match: serviceAreaMatch,
   });
 }

@@ -33,35 +33,20 @@ import { renameR2Object, keyFromStorageUrl, R2_PUBLIC_DOMAIN, deleteObjectFromR2
 import { deriveSourceKey } from "@/lib/pipeline/asset-keys";
 import { purgeCdnCache } from "@/lib/cdn";
 import { matchBrandsFromNer } from "./brand-match";
-import { matchProjectsFromNer } from "./project-match";
 import type { CascadeAnalysis } from "./cascade-analyze";
 
 export interface CommitCascadeInput {
   assetId: string;
   analysis: CascadeAnalysis;
   /** Subscriber-approved promotions from the approval card. Optional;
-   * absent = legacy auto-binding-only path. Each list is applied AFTER
-   * the matched auto-binds run, so duplicates land in ON CONFLICT
-   * DO NOTHING / DO UPDATE branches cleanly. */
+   * absent = silent auto-binding only. Only brands have a cascade
+   * promotion path — projects are bound deliberately at upload time
+   * (per 2026-05-18 cascade-vs-deliberate split). */
   approvals?: {
     /** New brands to create + link to this asset. Name comes from NER
      * suggested_new; subscriber approved the promote. URL etc. are
      * left blank — enrichBrand fires async to fill them. */
     brands_to_create?: Array<{ name: string; context?: string }>;
-    /** New projects to create + link. place_id/gps come from the inline
-     * LocationPicker the subscriber used in the card row (optional). */
-    projects_to_create?: Array<{
-      name: string;
-      context?: string;
-      place_id?: string | null;
-      gps_lat?: number | null;
-      gps_lng?: number | null;
-      formatted_address?: string | null;
-    }>;
-    /** Existing project IDs the subscriber confirmed from geo_candidates
-     * (geofence-surfaced candidates that didn't get auto-bound because
-     * geo-only matches require confirmation). */
-    project_bindings?: string[];
   };
 }
 
@@ -75,10 +60,6 @@ export interface CommitCascadeResult {
   suggestedNewBrandCount: number;
   /** Brands the subscriber promoted via the approval card. */
   approvedBrandRows: number;
-  /** Projects the subscriber promoted via the approval card. */
-  approvedProjectRows: number;
-  /** Existing projects the subscriber bound from geo_candidates. */
-  approvedProjectBindings: number;
   slugApplied: string;
   renamed: boolean;
   variantCount: number;
@@ -179,51 +160,24 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
     brandRows++;
   }
 
-  // ── 2c. Project matching from NER hits ───────────────────────────
-  // Same NER-only philosophy as brands — projects only land when the
-  // subscriber actually named one in the transcript. Fuzzy-token +
-  // slug fallback against the site's projects catalog. Unmatched NER
-  // projects surface as suggested_new for promotion.
-  const nerProjectCandidates = analysis.entities.projects.map((p) => ({
-    name: p.text,
-    context: p.context_excerpt,
-  }));
-  // Pass GPS so the matcher's geo pass can populate geo_candidates
-  // for visibility in the JSON viewer. Note: we intentionally only
-  // auto-bind from `matched` (transcript signal). geo_candidates
-  // surface as plausible-but-unconfirmed and require manual binding
-  // per project_tracpost_project_geo_matcher (2026-05-18 design).
-  const projectMatch = await matchProjectsFromNer(
-    siteId,
-    nerProjectCandidates,
-    asset.gps_lat as number | null,
-    asset.gps_lng as number | null,
-  );
-  // Same destructive-replace pattern as brands. geo_candidates do NOT
-  // get auto-bound here (only `matched` does); they surface in the
-  // approval card for explicit subscriber confirmation. So a project
-  // that only matches by geo never lands as 'auto' — it lands as
-  // 'subscriber' via the project_bindings path below if the subscriber
-  // checks the box.
-  await sql`
-    DELETE FROM asset_projects
-    WHERE asset_id = ${assetId} AND assigned_by = 'auto'
-  `;
-  for (const m of projectMatch.matched) {
-    await sql`
-      INSERT INTO asset_projects (asset_id, project_id, assigned_by)
-      VALUES (${assetId}, ${m.project_id}, 'auto')
-      ON CONFLICT DO NOTHING
-    `;
-  }
+  // Project matching retired from the cascade 2026-05-18. Projects are
+  // deliberate subscriber buckets, set at upload time. The cascade
+  // still extracts entities.projects in the NER raw output (useful for
+  // narrative context, caption generation, transcript display) but
+  // does NOT bind to the projects catalog. Asset-to-project membership
+  // is the subscriber's call; auto-inference proved too messy (GPS
+  // ambiguity at multi-project addresses, NER hallucinations getting
+  // silently promoted on default-checked approval).
+  //
+  // The asset_projects.assigned_by column from migration 127 stays —
+  // no current writer stamps 'auto' but the column still preserves
+  // 'subscriber'/'operator' provenance for existing bindings and any
+  // future writer that wants destructive-replace semantics.
 
   // ── 2d. Apply subscriber approvals from the approval card ────────
-  // Three independent lists, all optional. Run AFTER auto-binds so ON
-  // CONFLICT collisions resolve naturally (approval that names an
-  // already-matched brand/project becomes a no-op insert).
+  // Only brand promotions remain in the cascade approval path. Run
+  // AFTER auto-binds so ON CONFLICT collisions resolve naturally.
   let approvedBrandRows = 0;
-  let approvedProjectRows = 0;
-  let approvedProjectBindings = 0;
 
   if (approvals?.brands_to_create && approvals.brands_to_create.length > 0) {
     // Mirror POST /api/brands: name → slug, ON CONFLICT DO UPDATE so
@@ -277,60 +231,6 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
     }
   }
 
-  if (approvals?.projects_to_create && approvals.projects_to_create.length > 0) {
-    for (const p of approvals.projects_to_create) {
-      const name = p.name.trim();
-      if (name.length === 0) continue;
-      const slug = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "_")
-        .replace(/^_|_$/g, "")
-        .slice(0, 40);
-      const [project] = await sql`
-        INSERT INTO projects (
-          site_id, name, slug, status, address,
-          place_id, gps_lat, gps_lng, caption_mode
-        )
-        VALUES (
-          ${siteId}, ${name}, ${slug}, 'active',
-          ${p.formatted_address || null},
-          ${p.place_id || null}, ${p.gps_lat ?? null}, ${p.gps_lng ?? null},
-          'seeding'
-        )
-        ON CONFLICT (site_id, slug) DO UPDATE SET
-          name = ${name},
-          address = COALESCE(projects.address, ${p.formatted_address || null}),
-          place_id = COALESCE(projects.place_id, ${p.place_id || null}),
-          gps_lat = COALESCE(projects.gps_lat, ${p.gps_lat ?? null}),
-          gps_lng = COALESCE(projects.gps_lng, ${p.gps_lng ?? null})
-        RETURNING id
-      `;
-      await sql`
-        INSERT INTO asset_projects (asset_id, project_id, assigned_by)
-        VALUES (${assetId}, ${project.id}, 'subscriber')
-        ON CONFLICT DO NOTHING
-      `;
-      approvedProjectRows++;
-    }
-  }
-
-  if (approvals?.project_bindings && approvals.project_bindings.length > 0) {
-    for (const projectId of approvals.project_bindings) {
-      // Validate the project belongs to this site (defense against
-      // crafted IDs from an inspector-modified request).
-      const [valid] = await sql`
-        SELECT 1 FROM projects WHERE id = ${projectId} AND site_id = ${siteId}
-      `;
-      if (!valid) continue;
-      const result = await sql`
-        INSERT INTO asset_projects (asset_id, project_id, assigned_by)
-        VALUES (${assetId}, ${projectId}, 'subscriber')
-        ON CONFLICT DO NOTHING
-        RETURNING asset_id
-      `;
-      if (result.length > 0) approvedProjectBindings++;
-    }
-  }
 
   // ── 3. Derive slug + new R2 key from cascade output ──────────────
   const slug = analysis.url_slug?.trim() || `asset-${assetId.replace(/-/g, "").slice(0, 8)}`;
@@ -441,8 +341,7 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
     `commitCascade ${assetId}: slug="${slug}" renamed=${renamed} ` +
       `categoryRows=${categoryRows} brandRows=${brandRows} ` +
       `suggestedNewBrands=${brandMatch.suggested_new.length} ` +
-      `approvedBrands=${approvedBrandRows} approvedProjects=${approvedProjectRows} ` +
-      `approvedBindings=${approvedProjectBindings} ` +
+      `approvedBrands=${approvedBrandRows} ` +
       `warnings=${warnings.length} (variants → separate endpoint)`,
   );
 
@@ -454,8 +353,6 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
     brandRows,
     suggestedNewBrandCount: brandMatch.suggested_new.length,
     approvedBrandRows,
-    approvedProjectRows,
-    approvedProjectBindings,
     slugApplied: slug,
     renamed,
     variantCount: 0, // Variants now render via separate endpoint; count not known at commit time.

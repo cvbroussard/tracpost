@@ -48,11 +48,10 @@ export interface CommittedExtras {
   /** Full asset_analysis JSONB — what the cascade actually wrote. */
   raw_analysis: Record<string, unknown> | null;
   /** Matcher outputs (matched + suggested_new), recomputed at read
-   * time so preview and committed share a uniform shape. brand/project
-   * results also live in asset_brands/asset_projects but this is the
+   * time so preview and committed share a uniform shape. brand
+   * results also live in asset_brands but this is the
    * inspector-friendly form. */
   raw_brand_match: Record<string, unknown> | null;
-  raw_project_match: Record<string, unknown> | null;
   raw_service_area_match: Record<string, unknown> | null;
 }
 
@@ -99,11 +98,6 @@ interface CascadePreview {
     matched: Array<{ brand_id: string; name: string; ner_text: string; context: string }>;
     suggested_new: Array<{ name: string; slug: string; context: string }>;
   };
-  project_match: {
-    matched: Array<{ project_id: string; name: string; slug: string; ner_text: string; context: string }>;
-    suggested_new: Array<{ name: string; slug: string; context: string }>;
-    geo_candidates: Array<{ project_id: string; name: string; slug: string; project_lat: number; project_lng: number; distance_m: number }>;
-  };
   service_area_match: {
     matched: Array<{
       overlay_id: string;
@@ -149,8 +143,6 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
   const [preview, setPreview] = useState<CascadePreview | null>(null);
   const [approvals, setApprovals] = useState<ApprovalSelection>({
     brands_to_create: [],
-    projects_to_create: [],
-    project_bindings: [],
   });
   const [showRawJson, setShowRawJson] = useState(false);
   const [committing, setCommitting] = useState(false);
@@ -214,30 +206,16 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
       const nextPreview: CascadePreview = {
         analysis: d.analysis,
         brand_match: d.brand_match,
-        project_match: d.project_match ?? { matched: [], suggested_new: [], geo_candidates: [] },
         service_area_match: d.service_area_match ?? { matched: [] },
       };
       setPreview(nextPreview);
-      // Seed approvals as all-checked. Low-friction default: subscriber
-      // unchecks rare misfires. Geo candidates that already auto-bound
-      // via matched are excluded (we filter against matched.project_id
-      // at render time too, defense in depth).
-      const matchedProjectIds = new Set(
-        nextPreview.project_match.matched.map((m) => m.project_id),
-      );
-      setApprovals({
-        brands_to_create: nextPreview.brand_match.suggested_new.map((b) => ({
-          name: b.name,
-          context: b.context,
-        })),
-        projects_to_create: nextPreview.project_match.suggested_new.map((p) => ({
-          name: p.name,
-          context: p.context,
-        })),
-        project_bindings: nextPreview.project_match.geo_candidates
-          .filter((c) => !matchedProjectIds.has(c.project_id))
-          .map((c) => c.project_id),
-      });
+      // Seed approvals empty (default-deselected). Per 2026-05-18: the
+      // autopilot endgame UX is explicit one-tap approval; the desktop
+      // card mirrors that posture. Subscriber must consciously check
+      // each suggestion. Prevents silent promotion of NER hallucinations
+      // — the failure mode that crystallized "Tudor addition" into the
+      // projects catalog before we caught it.
+      setApprovals({ brands_to_create: [] });
     } catch (e) {
       setCascadeError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -259,7 +237,7 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
       if (!res.ok) throw new Error(d.error || `Commit failed (${res.status})`);
       // Clear preview state + reload current assignments
       setPreview(null);
-      setApprovals({ brands_to_create: [], projects_to_create: [], project_bindings: [] });
+      setApprovals({ brands_to_create: [] });
       await load();
     } catch (e) {
       setCascadeError(e instanceof Error ? e.message : String(e));
@@ -270,7 +248,7 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
 
   function discardPreview() {
     setPreview(null);
-    setApprovals({ brands_to_create: [], projects_to_create: [], project_bindings: [] });
+    setApprovals({ brands_to_create: [] });
     setCascadeError(null);
   }
 
@@ -354,16 +332,7 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
           viewer IS the inspector). Save above commits via the
           imperative handle; Discard clears the preview here. */}
       {preview && (() => {
-        const matchedProjectIds = new Set(
-          preview.project_match.matched.map((m) => m.project_id),
-        );
-        const geoCandidatesForCard = preview.project_match.geo_candidates.filter(
-          (c) => !matchedProjectIds.has(c.project_id),
-        );
-        const hasApprovals =
-          preview.brand_match.suggested_new.length > 0 ||
-          preview.project_match.suggested_new.length > 0 ||
-          geoCandidatesForCard.length > 0;
+        const hasApprovals = preview.brand_match.suggested_new.length > 0;
         return (
           <>
             <div className="mb-2 flex items-center justify-between">
@@ -400,16 +369,6 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
               brandSuggestions={preview.brand_match.suggested_new.map((b) => ({
                 name: b.name,
                 context: b.context,
-              }))}
-              projectSuggestions={preview.project_match.suggested_new.map((p) => ({
-                name: p.name,
-                context: p.context,
-              }))}
-              geoCandidates={geoCandidatesForCard.map((c) => ({
-                project_id: c.project_id,
-                name: c.name,
-                slug: c.slug,
-                distance_m: c.distance_m,
               }))}
               value={approvals}
               onChange={setApprovals}
@@ -457,11 +416,6 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
                 brand_match: committed.raw_brand_match ?? {
                   matched: [],
                   suggested_new: [],
-                },
-                project_match: committed.raw_project_match ?? {
-                  matched: [],
-                  suggested_new: [],
-                  geo_candidates: [],
                 },
                 service_area_match: committed.raw_service_area_match ?? {
                   matched: [],

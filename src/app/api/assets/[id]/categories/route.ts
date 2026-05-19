@@ -3,7 +3,6 @@ import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { matchServiceAreas } from "@/lib/categorization/service-area-match";
 import { matchBrandsFromNer } from "@/lib/categorization/brand-match";
-import { matchProjectsFromNer } from "@/lib/categorization/project-match";
 import { getAssetNarrative } from "@/lib/asset-narrative";
 
 export const runtime = "nodejs";
@@ -83,26 +82,22 @@ export async function GET(
   if (analysis) {
     const narrative = await getAssetNarrative(assetId);
     const transcript = narrative.text.trim();
-    // Recompute all three matchers at read time. Same approach as the
-    // preview route — cheap (pure SQL + token math, no LLM), gives the
+    // Recompute matchers at read time. Same approach as the preview
+    // route — cheap (pure SQL + token math, no LLM), gives the
     // JsonViewer a uniform shape across preview and committed states.
-    // brand/project results also live in asset_brands/asset_projects
-    // but the matcher form (matched + suggested_new) is what callers
-    // expect to inspect.
+    // Brand results also live in asset_brands but the matcher form
+    // (matched + suggested_new) is what callers expect to inspect.
+    // Project matching retired 2026-05-18 — projects are deliberate
+    // subscriber buckets, not cascade output.
     const nerEntities = (analysis.entities ?? {}) as {
       brands?: Array<{ text: string; context_excerpt: string }>;
-      projects?: Array<{ text: string; context_excerpt: string }>;
     };
     const nerBrandCandidates = (nerEntities.brands ?? []).map((b) => ({
       name: b.text,
       context: b.context_excerpt,
     }));
-    const nerProjectCandidates = (nerEntities.projects ?? []).map((p) => ({
-      name: p.text,
-      context: p.context_excerpt,
-    }));
 
-    const [brandRows, projectRows, brandMatch, projectMatch, serviceAreaMatch] = await Promise.all([
+    const [brandRows, projectRows, brandMatch, serviceAreaMatch] = await Promise.all([
       sql`
         SELECT b.name, b.slug
         FROM asset_brands ab JOIN brands b ON b.id = ab.brand_id
@@ -116,12 +111,6 @@ export async function GET(
         ORDER BY p.name
       `,
       matchBrandsFromNer(asset.site_id as string, nerBrandCandidates),
-      matchProjectsFromNer(
-        asset.site_id as string,
-        nerProjectCandidates,
-        asset.gps_lat as number | null,
-        asset.gps_lng as number | null,
-      ),
       transcript.length > 0
         ? matchServiceAreas(
             asset.site_id as string,
@@ -142,14 +131,9 @@ export async function GET(
         name: m.name,
         source: m.source,
       })),
-      // Raw cascade artifact — powers the JsonViewer inspector. Includes
-      // everything the cascade produced (entities, asset_categories,
-      // scene_types, story_angles, caption_hints, etc.) alongside the
-      // three matcher results so callers see a uniform shape across
-      // preview and committed states.
+      // Raw cascade artifact — powers the JsonViewer inspector.
       raw_analysis: analysis,
       raw_brand_match: brandMatch,
-      raw_project_match: projectMatch,
       raw_service_area_match: serviceAreaMatch,
     };
   }

@@ -43,6 +43,19 @@ interface Props {
 export function AssetPrivacySection({ assetId }: Props) {
   const [state, setState] = useState<PrivacyState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detecting, setDetecting] = useState(false);
+  const [detectError, setDetectError] = useState<string | null>(null);
+
+  async function loadState() {
+    try {
+      const res = await fetch(`/api/assets/${assetId}/privacy`);
+      if (!res.ok) return;
+      const data = (await res.json()) as PrivacyState;
+      setState(data);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!assetId) return;
@@ -59,6 +72,23 @@ export function AssetPrivacySection({ assetId }: Props) {
     })();
     return () => { cancelled = true; };
   }, [assetId]);
+
+  async function runDetection() {
+    setDetecting(true);
+    setDetectError(null);
+    try {
+      const res = await fetch(`/api/assets/${assetId}/detect-faces`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Detection failed (${res.status})`);
+      }
+      await loadState();
+    } catch (e) {
+      setDetectError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDetecting(false);
+    }
+  }
 
   if (loading || !state) return null;
 
@@ -85,10 +115,33 @@ export function AssetPrivacySection({ assetId }: Props) {
     // Audio, PDF, other — skip the section entirely
     return null;
   } else if (!detectionRan) {
-    // Asset is an image but detection metadata isn't there yet (pending
-    // async waitUntil OR failed silently). Hide rather than show a
-    // misleading "no faces" message.
-    return null;
+    // Image with no detection metadata. Two cases:
+    //   - New upload still waiting on the async waitUntil to land
+    //   - Legacy asset uploaded before piece 2 shipped
+    // Either way, surface the manual trigger. Subscribers backfill
+    // legacy assets on a per-asset basis as they touch them — assets
+    // that clearly have no people in scene can be skipped.
+    return (
+      <div className="mb-3 rounded border border-border bg-background px-3 py-2 text-[11px]">
+        <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted/70">
+          <span>🔒</span>
+          <span>Privacy</span>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <div className="flex-1">
+            <div className="font-medium text-foreground">Face detection hasn&apos;t run yet</div>
+            {detectError && <div className="mt-0.5 text-danger">{detectError}</div>}
+          </div>
+          <button
+            onClick={runDetection}
+            disabled={detecting}
+            className="shrink-0 rounded bg-accent px-2 py-1 text-[10px] font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+          >
+            {detecting ? "Detecting…" : "Run detection"}
+          </button>
+        </div>
+      </div>
+    );
   } else if (!facesPresent) {
     label = "No faces detected";
     detail = null;

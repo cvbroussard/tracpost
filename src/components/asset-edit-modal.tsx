@@ -1467,10 +1467,10 @@ export function AssetEditModal({
             {(autoTagging || lastSuggestRunAt !== null) && (() => {
               // Services group dropped 2026-05-16 — categories now own
               // the structured-tag role (cascade asset_categories table).
+              // Personas dropped 2026-05-19 (full entity retirement).
               const groupConfig: Array<{ key: InspectorTagGroup; label: string; toggleSet: (fn: (prev: string[]) => string[]) => void; selectedSet: string[]; savedSet: string[] }> = [
                 { key: "brand", label: brandLabel || "Brands", toggleSet: setBrandIds, selectedSet: brandIds, savedSet: savedBrandIds },
                 { key: "project", label: projectLabel || "Projects", toggleSet: setProjectIds, selectedSet: projectIds, savedSet: savedProjectIds },
-                { key: "persona", label: personaLabel || "People", toggleSet: setPersonaIds, selectedSet: personaIds, savedSet: savedPersonaIds },
                 { key: "branch", label: branchLabel || "Locations", toggleSet: setBranchIds, selectedSet: branchIds, savedSet: savedBranchIds },
               ];
               const totalApplied = inspectorState

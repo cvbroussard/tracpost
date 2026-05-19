@@ -210,6 +210,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Face detection — fires for non-AI image uploads only. Writes to
+    // media_assets.metadata.face_detection so the privacy pipeline can
+    // blur/box/suppress at variant render time per the site's face_policy.
+    // Detection is a pixel fact, runs once per upload, never re-run on
+    // re-analysis. Per piece 2 of the privacy buildout.
+    //
+    // - HEIC: skip (no source bytes browsers/Rekognition can read until
+    //   conversion). The HEIC waitUntil block above converts to JPEG; a
+    //   future improvement could chain face detection after conversion.
+    //   For v1, HEIC uploads get face detection only if subscriber later
+    //   triggers a re-analysis after the converted URL exists.
+    // - Video: skip (poster-frame detection misleads — faces move).
+    //   Video face handling lives with the variant render piece (#4).
+    // - AI-generated: skip per shouldDetectFaces() — no real-person
+    //   likeness to protect.
+    const isImage = media_type.toLowerCase().startsWith("image");
+    if (isImage && !isHeic) {
+      const skipBecauseAi = aiGeneratedFinal === true;
+      if (!skipBecauseAi) {
+        waitUntil(
+          (async () => {
+            try {
+              const { detectFaces } = await import("@/lib/face-detect");
+              const result = await detectFaces(finalUrl);
+              await sql`
+                UPDATE media_assets
+                SET metadata = COALESCE(metadata, '{}'::jsonb)
+                  || ${JSON.stringify({ face_detection: result })}::jsonb,
+                  updated_at = NOW()
+                WHERE id = ${asset.id}
+              `;
+            } catch (err) {
+              console.warn(
+                "Face detection failed (non-fatal — privacy pipeline falls back to conservative):",
+                err instanceof Error ? err.message : err,
+              );
+            }
+          })(),
+        );
+      }
+    }
+
     // Log usage
     await sql`
       INSERT INTO usage_log (subscription_id, site_id, action, metadata)

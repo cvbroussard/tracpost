@@ -28,10 +28,17 @@ interface Props {
 
 const FACE_OPTIONS: Array<{ value: string; label: string; description: string; requiresWaiver: boolean }> = [
   {
+    value: "asis",
+    label: "Publish faces unaltered (default)",
+    description:
+      "Standard for most businesses. Crew photos, client testimonials, event recaps publish with faces as-is — matches normal industry practice. Because TracPost's autopilot is the publisher-of-record, you sign a one-time waiver acknowledging you have consent for the people in your uploads.",
+    requiresWaiver: true,
+  },
+  {
     value: "blur",
     label: "Blur faces",
     description:
-      "Every detected face is gaussian-blurred in published images. Safest option — recommended unless you have a specific reason to publish faces.",
+      "Every detected face is gaussian-blurred. Opt into this if your industry has stricter privacy norms — childcare, healthcare, addiction recovery, before/after cosmetic, litigation-prone fields. The conservative posture is its own protection; no waiver needed.",
     requiresWaiver: false,
   },
   {
@@ -45,32 +52,25 @@ const FACE_OPTIONS: Array<{ value: string; label: string; description: string; r
     value: "suppress",
     label: "Don't publish images with faces",
     description:
-      "Assets with detected faces are quarantined from publishing entirely. Most conservative; you'd manually override for the rare face-OK shot.",
+      "Assets with detected faces are quarantined from autopilot publishing. Most conservative; you'd manually compose for the rare face-OK shot.",
     requiresWaiver: false,
-  },
-  {
-    value: "asis",
-    label: "Publish faces unaltered",
-    description:
-      "Faces appear as-is in published images. You take 100% responsibility for the content — TracPost is not liable for consent issues. Requires waiver.",
-    requiresWaiver: true,
   },
 ];
 
 const IDENTITY_OPTIONS: Array<{ value: string; label: string; description: string; requiresWaiver: boolean }> = [
   {
+    value: "allow_names",
+    label: "Use proper names (default)",
+    description:
+      "Captions preserve real names from your transcripts (\"Mike installed the new cabinets\"). Matches normal business practice for crew attribution and testimonials. Your audio + transcript is the consent record — you mentioned the name in your own voice. One-time waiver acknowledges publisher-of-record responsibility.",
+    requiresWaiver: true,
+  },
+  {
     value: "anonymize",
     label: "Anonymize names",
     description:
-      "When you mention someone by name in your audio (e.g. \"Mary Johnson, one of our favorite clients\"), captions substitute generic role descriptors (\"our client\"). Safest option.",
+      "Captions substitute generic role descriptors (\"our client installed her new cabinets\") even when you mention real names. Opt into this if your industry handles sensitive client relationships or you prefer not to expose individuals by name in published copy.",
     requiresWaiver: false,
-  },
-  {
-    value: "allow_names",
-    label: "Use proper names",
-    description:
-      "Captions preserve real names from your transcripts. Useful for crew attribution and testimonials. You take responsibility for publishing names of people you've mentioned. Requires waiver.",
-    requiresWaiver: true,
   },
 ];
 

@@ -48,9 +48,14 @@ export default async function PrivacySettingsPage() {
       <header>
         <h1 className="text-lg font-semibold">Privacy</h1>
         <p className="mt-1 text-sm text-muted">
-          Two independent controls govern how TracPost handles people in your published content.
-          Faces in images are one axis; names in captions are the other. Defaults are conservative —
-          you can opt into more permissive options with explicit waivers.
+          Two independent controls govern how TracPost handles people in autopilot-published content.
+          Faces in images are one axis; names in captions are the other. Defaults match normal business
+          publishing — crew photos, client testimonials, event recaps run as-is. Opt into stricter
+          modes if your industry handles sensitive client relationships (childcare, healthcare, etc.).
+        </p>
+        <p className="mt-2 text-xs text-muted">
+          These policies apply to <strong>autopilot output only</strong>. When you manually compose and
+          publish through TracPost, your reviewed-and-accepted choice passes through unchanged.
         </p>
       </header>
 

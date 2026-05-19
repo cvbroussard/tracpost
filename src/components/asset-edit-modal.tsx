@@ -14,6 +14,7 @@ import {
 import { SCENE_TYPES } from "@/lib/scene-types";
 import { AssetCategoriesSection, type AutoTagSectionHandle, type CategoriesResponse } from "@/components/asset-categories-section";
 import { AssetTagsStrip } from "@/components/asset-tags-strip";
+import { AssetPrivacySection } from "@/components/asset-privacy-section";
 
 interface RecordingRow {
   id: string;
@@ -1830,6 +1831,14 @@ export function AssetEditModal({
                 moment they click Save. Reads shared CategoriesResponse
                 (no extra fetch) and hides when nothing is attached. */}
             <AssetTagsStrip data={categoriesData} />
+
+            {/* PRIVACY SECTION — surfaces face detection state + the
+                effective face publishing policy. Read-only (per-asset
+                override deferred from v1). Three jobs: transparency,
+                no-surprises publishing, action escape hatch when state
+                is weird (waiver unsigned, suppress mode). Hides when
+                detection hasn't run yet or for non-image media. */}
+            <AssetPrivacySection assetId={assetId} />
 
             {/* VARIANT THUMBNAILS — strip of rendered platform variants
                 directly below the source media. Each variant is the

@@ -255,6 +255,25 @@ export function MediaGrid({
                   AI
                 </span>
               )}
+              {(() => {
+                // Face count badge — bottom-right. Surfaces detected
+                // faces from the privacy pipeline so subscribers can
+                // visually scan / filter face-bearing assets. Click
+                // → modal Privacy section explains what happens at
+                // publish time.
+                const meta = (a.metadata as Record<string, unknown> | null) || {};
+                const fd = meta.face_detection as { face_count?: number } | undefined;
+                const count = fd?.face_count ?? 0;
+                if (count <= 0) return null;
+                return (
+                  <span
+                    className="absolute right-1.5 bottom-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white"
+                    title={`${count} face${count === 1 ? "" : "s"} detected`}
+                  >
+                    👤 {count}
+                  </span>
+                );
+              })()}
             </div>
             {/* Tile caption = recording transcript (canonical narrative).
                 Fixed-height container + line-clamp keeps every card the

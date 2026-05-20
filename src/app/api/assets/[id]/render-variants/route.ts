@@ -26,7 +26,7 @@ export const maxDuration = 300;
  *
  * Chained call ({templateId}): render that one video template, then fire
  * the next in sequence. The sequence is fixed and serial so the Director
- * Call's variety knob can read the prior template's thread_used — which
+ * Call's variety knob can read the prior template's camera_move — which
  * is persisted on its variant row before the next invocation fires.
  *
  * Idempotent: re-firing replaces variants. `variants_pending` flips

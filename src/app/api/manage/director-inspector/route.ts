@@ -94,12 +94,10 @@ export async function POST(req: NextRequest) {
 
   const input: DirectorInput = {
     imageUrl: context.imageUrl,
-    transcript: context.transcript,
     analysis: context.analysis,
-    contextNote: context.contextNote,
-    brandVoice: context.brandVoice,
+    brandTone: context.brandTone,
     template: tpl,
-    previousThreads: context.previousThreads,
+    previousCameraMoves: context.previousCameraMoves,
   };
 
   // Assembled prompt — shown verbatim. Pure function, no LLM call.
@@ -144,10 +142,9 @@ export async function POST(req: NextRequest) {
     template: tpl,
     templateSpec: DIRECTOR_TEMPLATE_SPECS[tpl],
     context: {
-      transcript: context.transcript,
       analysis: context.analysis,
-      brandVoice: context.brandVoice,
-      previousThreads: context.previousThreads,
+      brandTone: context.brandTone,
+      previousCameraMoves: context.previousCameraMoves,
     },
     directorPrompt,
     brief,

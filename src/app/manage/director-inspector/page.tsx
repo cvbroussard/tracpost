@@ -8,13 +8,14 @@ import { ManagePage } from "@/components/manage/manage-page";
  * pattern (project_tracpost_director_pattern). Sibling to the blog
  * Prompt Inspector, but for the two-hop video pipeline:
  *
- *   Script → Director Call (Sonnet 4.6) → the brief → Producer Call
- *   (Kling) → the render
+ *   Image + analysis → Director Call (Sonnet 4.6) → the brief →
+ *   Producer Call (Kling) → the render
  *
- * It assembles + shows the director prompt, runs the Director Call to
- * show the actual brief, and — on explicit request — fires the Producer
- * Call so you can watch the brief become a video. Single-template by
- * design, so one run fits the 300s budget.
+ * The Director is visual-only — it writes a camera move, not a story.
+ * This surface assembles + shows the director prompt, runs the Director
+ * Call to show the actual brief, and — on explicit request — fires the
+ * Producer Call so you can watch the brief become a video. Single-
+ * template by design, so one run fits the 300s budget.
  */
 
 const TEMPLATES = [
@@ -25,9 +26,8 @@ const TEMPLATES = [
 
 interface DirectorBrief {
   prompt: string;
-  threadUsed: string;
+  cameraMove: string;
   brandsMentioned: string[];
-  transcriptSnippet: string;
 }
 
 interface InspectorResponse {
@@ -36,10 +36,9 @@ interface InspectorResponse {
   template: string;
   templateSpec: { label: string; durationSeconds: number; guidance: string };
   context: {
-    transcript: string | null;
     analysis: Record<string, unknown> | null;
-    brandVoice: Record<string, unknown> | null;
-    previousThreads: string[];
+    brandTone: string | null;
+    previousCameraMoves: string[];
   };
   directorPrompt: string;
   brief: DirectorBrief | null;
@@ -126,7 +125,6 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
   const detectedVendors = Array.isArray(analysis.detected_vendors)
     ? (analysis.detected_vendors as string[])
     : [];
-  const brandVoice = result?.context.brandVoice || {};
 
   return (
     <div className="p-4 space-y-4">
@@ -134,9 +132,10 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card space-y-3">
         <h3 className="text-sm font-medium">Director Call</h3>
         <p className="text-[10px] text-muted leading-snug">
-          Hop 1 of the director pattern. Assembles the director prompt, runs the
-          Sonnet 4.6 Director Call, and returns the brief. Hop 2 (the Kling
-          Producer Call) fires only when you click Render.
+          Hop 1 of the director pattern. Visual-only — the Director writes a
+          camera move from the image + analysis. Assembles the director prompt,
+          runs the Sonnet 4.6 Director Call, and returns the brief. Hop 2 (the
+          Kling Producer Call) fires only when you click Render.
         </p>
         <div className="grid grid-cols-3 gap-3">
           <div>
@@ -155,7 +154,7 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
           </div>
           <div className="col-span-2">
             <label className="block text-[10px] text-muted mb-1">
-              Seed asset ID (optional — leave blank for the most recent triaged image)
+              Seed asset ID (optional — leave blank for the most recent analyzed image)
             </label>
             <input
               type="text"
@@ -214,15 +213,15 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
               {result.briefFailed || !result.brief ? (
                 <div className="text-xs text-danger">
                   Director Call returned no brief. Check the inputs below — a
-                  missing image or empty context can cause this.
+                  missing image or empty analysis can cause this.
                 </div>
               ) : (
                 <>
                   <p className="text-sm leading-relaxed">{result.brief.prompt}</p>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted">
                     <span>
-                      <span className="text-emerald-400 font-mono">thread:</span>{" "}
-                      {result.brief.threadUsed}
+                      <span className="text-emerald-400 font-mono">camera move:</span>{" "}
+                      {result.brief.cameraMove || "—"}
                     </span>
                     {result.brief.brandsMentioned.length > 0 && (
                       <span>
@@ -230,12 +229,6 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
                         {result.brief.brandsMentioned.join(", ")}
                       </span>
                     )}
-                    <span className="basis-full">
-                      <span className="text-emerald-400 font-mono">anchored on:</span>{" "}
-                      <span className="italic">
-                        &ldquo;{result.brief.transcriptSnippet}&rdquo;
-                      </span>
-                    </span>
                   </div>
                 </>
               )}
@@ -245,15 +238,12 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
           {/* Director Call inputs */}
           <div className="rounded-xl border border-border bg-surface p-4 shadow-card space-y-3">
             <h3 className="text-sm font-medium">Director Call inputs</h3>
+            <p className="text-[10px] text-muted leading-snug">
+              Visual-only. The transcript and copywriting voice traits route to
+              the audio/narration layer, not the Director.
+            </p>
             <div className="grid gap-3 md:grid-cols-2 text-xs">
-              <InputBlock label="Script (transcript)">
-                {result.context.transcript || (
-                  <span className="text-muted italic">
-                    (no transcript — director worked from the image + analysis)
-                  </span>
-                )}
-              </InputBlock>
-              <InputBlock label="Analysis JSON">
+              <InputBlock label="Analysis JSON — what's in the frame">
                 {description || sceneType || detectedVendors.length > 0 ? (
                   <div className="space-y-0.5">
                     {description && <div>{description}</div>}
@@ -270,29 +260,21 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
                   <span className="text-muted italic">(no analysis)</span>
                 )}
               </InputBlock>
-              <InputBlock label="Brand voice">
-                {Object.keys(brandVoice).length > 0 ? (
-                  <div className="space-y-0.5">
-                    {(brandVoice.tone as string) && (
-                      <div>tone: {brandVoice.tone as string}</div>
-                    )}
-                    {Array.isArray(brandVoice.distinctive_traits) && (
-                      <div className="text-muted">
-                        traits:{" "}
-                        {(brandVoice.distinctive_traits as string[]).join(", ")}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-muted italic">(no brand voice on file)</span>
-                )}
-              </InputBlock>
-              <InputBlock label="Variety constraint — threads already used">
-                {result.context.previousThreads.length > 0 ? (
-                  result.context.previousThreads.join(", ")
+              <InputBlock label="Brand tone — the camera register">
+                {result.context.brandTone ? (
+                  result.context.brandTone
                 ) : (
                   <span className="text-muted italic">
-                    none yet — any thread is open
+                    (no brand tone on file — neutral grounded register)
+                  </span>
+                )}
+              </InputBlock>
+              <InputBlock label="Variety constraint — camera moves already used">
+                {result.context.previousCameraMoves.length > 0 ? (
+                  result.context.previousCameraMoves.join(", ")
+                ) : (
+                  <span className="text-muted italic">
+                    none yet — any camera move is open
                   </span>
                 )}
               </InputBlock>

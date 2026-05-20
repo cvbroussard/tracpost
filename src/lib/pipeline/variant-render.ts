@@ -227,9 +227,9 @@ export async function renderTemplateVariant(
       ({ outputUrl, renderNotes } = await renderVideoVariant(sourceUrl, templateId, siteId, assetId));
     } else {
       // Still → video-output template uses the Director Call → Producer
-      // Call (Kling) path, which needs transcript + analysis + brand
-      // voice + prior threads. Gather them only when relevant — image-
-      // output templates (feed_square etc.) ignore directorContext.
+      // Call (Kling) path, which needs the analysis + brand tone + prior
+      // camera moves. Gather them only when relevant — image-output
+      // templates (feed_square etc.) ignore directorContext.
       const directorContext = VIDEO_OUTPUT_TEMPLATES.has(templateId)
         ? await gatherDirectorContext(assetId)
         : null;
@@ -400,7 +400,7 @@ async function renderImageVariant(
  * older Ken Burns treatment.
  *
  * The brief is recorded in render_settings.director for the audit trail
- * and so sibling renders can read thread_used as a variety constraint.
+ * and so sibling renders can read camera_move as a variety constraint.
  */
 async function renderVideoFromStill(
   sourceUrl: string,
@@ -417,12 +417,10 @@ async function renderVideoFromStill(
   if (directorContext) {
     const brief = await directVideoBrief({
       imageUrl: sourceUrl,
-      transcript: directorContext.transcript,
       analysis: directorContext.analysis,
-      contextNote: directorContext.contextNote,
-      brandVoice: directorContext.brandVoice,
+      brandTone: directorContext.brandTone,
       template: templateId,
-      previousThreads: directorContext.previousThreads,
+      previousCameraMoves: directorContext.previousCameraMoves,
     });
 
     if (brief) {
@@ -442,9 +440,8 @@ async function renderVideoFromStill(
             from: "image",
             director: {
               prompt: brief.prompt,
-              thread_used: brief.threadUsed,
+              camera_move: brief.cameraMove,
               brands_mentioned: brief.brandsMentioned,
-              transcript_snippet: brief.transcriptSnippet,
               template_context: templateId,
             },
           },

@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import { getVendorLinks } from "./vendor-enrichment";
+import { pillarsFromTags, type PillarConfig } from "@/lib/pillars";
 
 /**
  * Build a rich per-asset context block for the v2 prompts.
@@ -44,15 +45,21 @@ export interface AssetContext {
 export async function buildAssetContexts(
   assetIds: string[],
   heroAssetId: string,
+  siteId: string,
 ): Promise<AssetContext[]> {
   if (assetIds.length === 0) return [];
 
   const rows = await sql`
-    SELECT id, media_type, context_note, content_pillar, content_pillars,
+    SELECT id, media_type, context_note,
            content_tags, ai_analysis, transcription
     FROM media_assets
     WHERE id = ANY(${assetIds}::uuid[])
   `;
+
+  // Pillars are not stored on assets (LOCKED 2026-05-09) — they derive
+  // from content_tags + the site's pillar_config at read time.
+  const [pcRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${siteId}`;
+  const pillarConfig = (pcRow?.pillar_config || []) as PillarConfig;
 
   // Pull asset_brands for all in one batch
   const brandRows = await sql`
@@ -77,6 +84,7 @@ export async function buildAssetContexts(
     .filter((r): r is (typeof rows)[number] => Boolean(r))
     .map((r) => {
       const ai = (r.ai_analysis as Record<string, unknown> | null) || {};
+      const tags = Array.isArray(r.content_tags) ? (r.content_tags as string[]) : [];
       const mediaType = String(r.media_type || "image");
       const kind: "image" | "video" | "audio" = mediaType.startsWith("video")
         ? "video"
@@ -99,12 +107,8 @@ export async function buildAssetContexts(
           ? (ai.detected_personas as string[])
           : [],
         transcription: (r.transcription as string | null) || null,
-        contentPillars: Array.isArray(r.content_pillars)
-          ? (r.content_pillars as string[])
-          : (r.content_pillar ? [r.content_pillar as string] : []),
-        contentTags: Array.isArray(r.content_tags)
-          ? (r.content_tags as string[])
-          : [],
+        contentPillars: pillarsFromTags(tags, pillarConfig),
+        contentTags: tags,
         taggedVendors: brandsByAsset.get(r.id as string) || [],
       };
     });

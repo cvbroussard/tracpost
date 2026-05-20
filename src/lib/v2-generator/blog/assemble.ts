@@ -90,7 +90,7 @@ export async function assembleBlogPrompt(spec: BlogGenerateSpec): Promise<Assemb
   const assetIds = [spec.heroAssetId, ...(spec.bodyAssetIds || [])].filter(
     (id, i, arr) => arr.indexOf(id) === i,
   );
-  const assets = await buildAssetContexts(assetIds, spec.heroAssetId);
+  const assets = await buildAssetContexts(assetIds, spec.heroAssetId, spec.siteId);
   if (assets.length === 0) throw new Error(`No usable assets resolved for spec`);
 
   const heroAsset = assets.find((a) => a.isHero) || assets[0];

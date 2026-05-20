@@ -74,7 +74,11 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
     ...manifestAssetIds.filter((id) => id !== service.hero_asset_id),
   ].filter((id, i, arr) => arr.indexOf(id) === i);
 
-  const serviceAssets = await buildAssetContexts(allServiceAssetIds, service.hero_asset_id as string);
+  const serviceAssets = await buildAssetContexts(
+    allServiceAssetIds,
+    service.hero_asset_id as string,
+    service.site_id as string,
+  );
   const heroAsset = serviceAssets.find((a) => a.isHero) || serviceAssets[0];
   if (!heroAsset) throw new Error(`Service ${spec.serviceId} hero asset not resolvable`);
   const bodyServiceAssets = serviceAssets.filter((a) => !a.isHero).slice(0, 3);
@@ -105,7 +109,7 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
     if (projAssetRows.length === 0) continue;
     const projAssetIds = projAssetRows.map((r) => r.id as string);
     const projHeroId = (p.hero_asset_id as string) || projAssetIds[0];
-    const projAssets = await buildAssetContexts(projAssetIds, projHeroId);
+    const projAssets = await buildAssetContexts(projAssetIds, projHeroId, service.site_id as string);
     citedProjects.push({
       id: p.id as string,
       name: p.name as string,

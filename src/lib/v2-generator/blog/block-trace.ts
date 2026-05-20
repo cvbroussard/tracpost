@@ -430,9 +430,9 @@ function traceBlock(name: string, a: AssembledBlogPrompt): TraceEntry[] {
         {
           kind: "db",
           label: "media_assets",
-          detail: "Per-asset context: media_type, context_note, content_pillar(s), content_tags, ai_analysis, transcription.",
+          detail: "Per-asset context: media_type, context_note, content_tags, ai_analysis, transcription. Pillars are derived from content_tags + sites.pillar_config at read time (not stored on the asset).",
           table: "media_assets",
-          columns: ["media_type", "context_note", "content_pillar", "content_pillars", "content_tags", "ai_analysis", "transcription"],
+          columns: ["media_type", "context_note", "content_tags", "ai_analysis", "transcription"],
           filter: `id = ANY(<resolved asset ids>)`,
           file: ASSET_BUILDER_FILE,
         },

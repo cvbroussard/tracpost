@@ -106,72 +106,14 @@ export async function renderDefaultVariant(
 }
 
 /**
- * Render every applicable template variant for an asset. Called from the
- * briefing-flip handler so the asset is fully publish-ready across all
- * platforms the orchestrator might pick from.
- *
- * Per the eager-cheap / frugal-expensive policy:
- * - Image templates render in PARALLEL (sharp is fast, low memory).
- * - Video templates render SEQUENTIALLY (ffmpeg encoding is memory-heavy;
- *   serializing prevents Vercel function memory pressure).
- *
- * Skips templates that don't apply to the source media type:
- * - Audio sources only get the audiogram-style feed_square variant.
- * - Video → image templates (frame extraction) are skipped today; tracked
- *   as a follow-up. Stills get full coverage.
- *
- * Returns the array of successful render results. Failed renders are
- * captured in their own variant row's render_settings; callers can poll.
+ * Whole-asset variant rendering is orchestrated by the render-variants
+ * route (`/api/assets/[id]/render-variants`), NOT a single function
+ * here. The route self-chains — one video template per Vercel
+ * invocation — because each video template runs a Director Call + Kling
+ * Producer Call that can poll for minutes; three serial Kling renders
+ * in one invocation would blow the 300s budget. `renderTemplateVariant`
+ * below is the single-template primitive the route drives.
  */
-export async function renderAllVariantsForAsset(
-  assetId: string,
-): Promise<VariantRenderResult[]> {
-  const [asset] = await sql`
-    SELECT id, media_type FROM media_assets WHERE id = ${assetId}
-  `;
-  if (!asset) return [];
-
-  const sourceType = ((asset.media_type as string) || "").toLowerCase();
-  const isAudio = sourceType.startsWith("audio");
-  const isVideo = sourceType.startsWith("video");
-
-  if (isAudio) {
-    const r = await renderTemplateVariant(assetId, "feed_square");
-    return r ? [r] : [];
-  }
-
-  // Image-output templates — sharp-based, parallel-safe
-  const imageTemplates = ["feed_square", "feed_portrait", "pin_2x3"];
-  // Video-output templates — serialized: ffmpeg memory pressure (Ken
-  // Burns fallback) AND the variety knob (each Director Call reads the
-  // prior template's thread_used). Serialization is required, not just
-  // preferred.
-  //
-  // TIMEOUT RISK (flagged for #234 follow-up): each video template now
-  // runs a Producer Call (Kling) that polls up to 5 min. Three serial
-  // Kling renders can exceed the render-variants endpoint's 300s budget.
-  // Needs either one-template-per-invocation or async Kling polling
-  // before autopilot. See project_tracpost_variant_render_timeout_heal.
-  const videoTemplates = ["reel_9x16", "story_9x16", "long_16x9"];
-
-  const results: VariantRenderResult[] = [];
-
-  // Video → image template skipped pending frame extraction work; for
-  // STILL sources we render all six.
-  if (!isVideo) {
-    const imageResults = await Promise.all(
-      imageTemplates.map((t) => renderTemplateVariant(assetId, t)),
-    );
-    for (const r of imageResults) if (r) results.push(r);
-  }
-
-  for (const t of videoTemplates) {
-    const r = await renderTemplateVariant(assetId, t);
-    if (r) results.push(r);
-  }
-
-  return results;
-}
 
 /**
  * Render a specific template variant for an asset. Validates that the

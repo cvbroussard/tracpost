@@ -86,8 +86,11 @@ export async function generateVideoFromImage(
       return null;
     }
 
-    // Poll for completion (max 5 minutes)
-    const maxAttempts = 60;
+    // Poll for completion. Capped at ~3.5 min (was 5) so a single
+    // render — Director Call + this poll + download + R2 upload — fits
+    // inside the render-variants 300s function budget. A Kling task
+    // slower than this returns null → caller falls back to Ken Burns.
+    const maxAttempts = 42;
     const pollInterval = 5000;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -129,7 +132,7 @@ export async function generateVideoFromImage(
       // Still processing — continue polling
     }
 
-    console.warn("Kling task timed out after 5 minutes");
+    console.warn("Kling task timed out (~3.5 min poll cap) — caller falls back");
     return null;
   } catch (err) {
     console.warn("Kling video gen error:", err instanceof Error ? err.message : err);

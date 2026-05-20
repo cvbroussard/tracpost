@@ -12,6 +12,33 @@ import {
   type DetectedFaceBox,
   type EffectiveFacePolicy,
 } from "@/lib/privacy/face-transforms";
+import {
+  directVideoBrief,
+  DIRECTOR_TEMPLATE_SPECS,
+  type DirectorTemplate,
+  type NarrativeThread,
+} from "@/lib/video-gen/director";
+import { generateVideoFromImage } from "@/lib/video-gen/kling";
+import { getAssetNarrative } from "@/lib/asset-narrative";
+
+/** Templates that produce video output. Stills targeting one of these
+ * go through the Director Call → Producer Call (Kling) path; everything
+ * else is a sharp image crop. */
+const VIDEO_OUTPUT_TEMPLATES = new Set<string>(["reel_9x16", "story_9x16", "long_16x9"]);
+
+/**
+ * Director Call inputs gathered once per still→video render. Assembled
+ * in renderTemplateVariant (which already has the asset row) and handed
+ * to renderImageVariant. The director module itself does no DB work.
+ */
+interface DirectorContext {
+  transcript: string | null;
+  analysis: Record<string, unknown> | null;
+  contextNote: string | null;
+  brandVoice: Record<string, unknown> | null;
+  /** Threads already amplified for this asset (variety constraint). */
+  previousThreads: NarrativeThread[];
+}
 
 /**
  * Variant render worker (#163, #172).
@@ -127,7 +154,16 @@ export async function renderAllVariantsForAsset(
 
   // Image-output templates — sharp-based, parallel-safe
   const imageTemplates = ["feed_square", "feed_portrait", "pin_2x3"];
-  // Video-output templates — ffmpeg-based, serialize for memory
+  // Video-output templates — serialized: ffmpeg memory pressure (Ken
+  // Burns fallback) AND the variety knob (each Director Call reads the
+  // prior template's thread_used). Serialization is required, not just
+  // preferred.
+  //
+  // TIMEOUT RISK (flagged for #234 follow-up): each video template now
+  // runs a Producer Call (Kling) that polls up to 5 min. Three serial
+  // Kling renders can exceed the render-variants endpoint's 300s budget.
+  // Needs either one-template-per-invocation or async Kling polling
+  // before autopilot. See project_tracpost_variant_render_timeout_heal.
   const videoTemplates = ["reel_9x16", "story_9x16", "long_16x9"];
 
   const results: VariantRenderResult[] = [];
@@ -167,8 +203,10 @@ export async function renderTemplateVariant(
 
   const [asset] = await sql`
     SELECT ma.id, ma.site_id, ma.storage_url, ma.media_type, ma.metadata,
+           ma.ai_analysis, ma.context_note,
            s.face_policy, s.face_waiver_signed_at,
-           s.minor_face_policy, s.minor_face_waiver_signed_at
+           s.minor_face_policy, s.minor_face_waiver_signed_at,
+           s.brand_dna
     FROM media_assets ma JOIN sites s ON s.id = ma.site_id
     WHERE ma.id = ${assetId}
   `;
@@ -260,9 +298,17 @@ export async function renderTemplateVariant(
       // should review video before publishing (see Privacy settings).
       ({ outputUrl, renderNotes } = await renderVideoVariant(sourceUrl, templateId, siteId, assetId));
     } else {
+      // Still → video-output template uses the Director Call → Producer
+      // Call (Kling) path, which needs transcript + analysis + brand
+      // voice + prior threads. Gather them only when relevant — image-
+      // output templates (feed_square etc.) ignore directorContext.
+      const directorContext = VIDEO_OUTPUT_TEMPLATES.has(templateId)
+        ? await gatherDirectorContext(assetId, asset)
+        : null;
       ({ outputUrl, renderNotes } = await renderImageVariant(
         sourceUrl, templateId, siteId, assetId,
         { faces: detectedFaces, adultPolicy: adultFacePolicy, minorPolicy: minorFacePolicy },
+        directorContext,
       ));
     }
 
@@ -299,11 +345,6 @@ export async function renderTemplateVariant(
 }
 
 /**
- * Image source → image-or-video target. Stills always get the Ken Burns
- * motion treatment for video templates (reel_9x16, story_9x16) and a
- * sharp-based crop for image templates (feed_square, pin_2x3, etc.).
- */
-/**
  * Build a slug-derived variant key from the source asset's URL.
  * Falls back to a date-based key when source URL doesn't follow the
  * slug pattern yet (e.g. legacy asset that hasn't been backfilled).
@@ -324,6 +365,14 @@ function buildVariantKey(
   return `sites/${siteId}/variants/${date}/${templateId}-${Date.now()}.${ext}`;
 }
 
+/**
+ * Image source → image-or-video target.
+ *
+ * Video-output templates (reel/story/long) go through the Director Call
+ * → Producer Call (Kling) path — full generated motion from the still.
+ * Ken Burns is the fallback when either hop fails. Image-output
+ * templates (feed_square, feed_portrait, pin_2x3) get a sharp crop.
+ */
 async function renderImageVariant(
   sourceUrl: string,
   templateId: string,
@@ -334,27 +383,17 @@ async function renderImageVariant(
     adultPolicy: EffectiveFacePolicy;
     minorPolicy: EffectiveFacePolicy;
   },
+  directorContext: DirectorContext | null,
 ): Promise<{ outputUrl: string; renderNotes: Record<string, unknown> }> {
-  // Video-output templates: Ken Burns motion from the still. The duration
-  // is template-tuned — Reels lean longer, Stories shorter.
-  if (templateId === "reel_9x16" || templateId === "story_9x16" || templateId === "long_16x9") {
-    const aspect = templateId === "long_16x9" ? "16:9" : "9:16";
-    const durationPerImage = templateId === "story_9x16" ? 5 : templateId === "long_16x9" ? 8 : 4;
-    const url = await createKenBurnsVideo({
-      imageUrls: [sourceUrl],
-      outputAspect: aspect,
-      durationPerImage,
+  // Video-output templates: Director Call → Producer Call (Kling).
+  if (VIDEO_OUTPUT_TEMPLATES.has(templateId)) {
+    return renderVideoFromStill(
+      sourceUrl,
+      templateId as DirectorTemplate,
       siteId,
-    });
-    return {
-      outputUrl: url,
-      renderNotes: {
-        method: "ken_burns_motion",
-        aspect,
-        duration_seconds: durationPerImage,
-        from: "image",
-      },
-    };
+      sourceAssetId,
+      directorContext,
+    );
   }
 
   // Image-output templates: sharp-based crop with attention-aware position
@@ -419,6 +458,133 @@ async function renderImageVariant(
           minor_faces_treated: minorCount,
         },
       }),
+    },
+  };
+}
+
+/**
+ * Gather the Director Call inputs for a still→video render. Done in one
+ * place so renderTemplateVariant stays the single DB-touch point. The
+ * director module receives this fully-assembled and does no queries.
+ *
+ * previousThreads reads the threads already amplified for this asset
+ * (from sibling variants' audit trail) so the Director can deliberately
+ * pick a different one — the variety knob. Because renderAllVariantsForAsset
+ * renders the video templates sequentially and each persists its brief
+ * before the next starts, the Nth call sees the prior N-1 threads.
+ */
+async function gatherDirectorContext(
+  assetId: string,
+  asset: Record<string, unknown>,
+): Promise<DirectorContext> {
+  const narrative = await getAssetNarrative(assetId);
+
+  // Brand voice lives at brand_dna.signals.voice (per v2 brand DNA shape).
+  const brandDna = (asset.brand_dna as Record<string, unknown> | null) || {};
+  const signals = (brandDna.signals as Record<string, unknown> | null) || {};
+  const brandVoice = (signals.voice as Record<string, unknown> | null) || null;
+
+  const threadRows = await sql`
+    SELECT DISTINCT render_settings->'director'->>'thread_used' AS thread
+    FROM asset_variants
+    WHERE source_asset_id = ${assetId}
+      AND render_settings->'director'->>'thread_used' IS NOT NULL
+  `;
+  const previousThreads = threadRows
+    .map((r) => r.thread as string)
+    .filter(Boolean) as NarrativeThread[];
+
+  return {
+    transcript: narrative.text || null,
+    analysis: (asset.ai_analysis as Record<string, unknown> | null) || null,
+    contextNote: (asset.context_note as string | null) || null,
+    brandVoice,
+    previousThreads,
+  };
+}
+
+/**
+ * Still → video, the director pattern: Director Call (Sonnet 4.6 writes
+ * the brief) → Producer Call (Kling renders from the still + brief).
+ *
+ * Ken Burns is the fallback when EITHER hop returns null — a missing
+ * brief or a failed Kling task. Render-pipeline integrity beats creative
+ * quality: a briefed asset always gets a video variant, even if it's the
+ * older Ken Burns treatment.
+ *
+ * The brief is recorded in render_settings.director for the audit trail
+ * and so sibling renders can read thread_used as a variety constraint.
+ */
+async function renderVideoFromStill(
+  sourceUrl: string,
+  templateId: DirectorTemplate,
+  siteId: string,
+  sourceAssetId: string,
+  directorContext: DirectorContext | null,
+): Promise<{ outputUrl: string; renderNotes: Record<string, unknown> }> {
+  const aspect: "9:16" | "16:9" = templateId === "long_16x9" ? "16:9" : "9:16";
+  const spec = DIRECTOR_TEMPLATE_SPECS[templateId];
+
+  // Hop 1 — Director Call. Skipped only if context never got gathered
+  // (defensive; renderTemplateVariant always gathers it for video templates).
+  if (directorContext) {
+    const brief = await directVideoBrief({
+      imageUrl: sourceUrl,
+      transcript: directorContext.transcript,
+      analysis: directorContext.analysis,
+      contextNote: directorContext.contextNote,
+      brandVoice: directorContext.brandVoice,
+      template: templateId,
+      previousThreads: directorContext.previousThreads,
+    });
+
+    if (brief) {
+      // Hop 2 — Producer Call (Kling). Still becomes the first frame.
+      const video = await generateVideoFromImage(sourceUrl, brief.prompt, siteId, {
+        duration: String(spec.durationSeconds) as "5" | "10",
+        aspectRatio: aspect,
+      });
+
+      if (video) {
+        return {
+          outputUrl: video.url,
+          renderNotes: {
+            method: "director_kling",
+            aspect,
+            duration_seconds: video.duration,
+            from: "image",
+            director: {
+              prompt: brief.prompt,
+              thread_used: brief.threadUsed,
+              brands_mentioned: brief.brandsMentioned,
+              transcript_snippet: brief.transcriptSnippet,
+              template_context: templateId,
+            },
+          },
+        };
+      }
+    }
+  }
+
+  // Fallback — Ken Burns. Either the Director Call or the Producer Call
+  // returned null. The asset still gets a video variant.
+  console.warn(
+    `renderVideoFromStill: director/kling path unavailable for ${sourceAssetId}/${templateId} — falling back to Ken Burns`,
+  );
+  const durationPerImage = templateId === "story_9x16" ? 5 : templateId === "long_16x9" ? 8 : 4;
+  const url = await createKenBurnsVideo({
+    imageUrls: [sourceUrl],
+    outputAspect: aspect,
+    durationPerImage,
+    siteId,
+  });
+  return {
+    outputUrl: url,
+    renderNotes: {
+      method: "ken_burns_fallback",
+      aspect,
+      duration_seconds: durationPerImage,
+      from: "image",
     },
   };
 }

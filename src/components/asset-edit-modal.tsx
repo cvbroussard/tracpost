@@ -6,6 +6,7 @@ import type { PillarGroup } from "./tag-picker";
 // FaceOverlay retired 2026-05-19 with the personas entity removal.
 import { useAudioBriefing } from "@/hooks/use-audio-briefing";
 import { useAssetAnalysis, type InspectorTagGroup } from "@/hooks/use-asset-analysis";
+import { subscriberAssetAnalysisApi } from "@/lib/asset-analysis-api";
 import {
   AutoTagBar,
   PrimaryToggleButton as AudioToggleButton,
@@ -223,6 +224,7 @@ export function AssetEditModal({
   } = useAssetAnalysis({
     assetId,
     siteId,
+    api: subscriberAssetAnalysisApi,
     pillarConfig,
     brands,
     projects,

@@ -24,9 +24,53 @@ export type InspectorGroup = { applied_matches: InspectorMatch[]; suggested_new:
 export type InspectorTagGroup = "brand" | "service" | "project" | "persona" | "branch";
 export type InspectorState = Record<InspectorTagGroup, InspectorGroup>;
 
+/** Shape of the auto-tag-suggest response the hook consumes. */
+type TagSuggestion = { tagIds?: string[] };
+export interface AutoTagSuggestData {
+  story_angles?: TagSuggestion;
+  content_tags?: TagSuggestion;
+  scene_types?: unknown;
+  groups?: Partial<InspectorState>;
+  ner_warnings?: unknown;
+}
+
+/** A catalog entity returned by the analysis API (brand/service/etc). */
+export interface CreatedEntity {
+  id: string;
+  name?: string;
+  slug?: string;
+  url?: string | null;
+}
+
+/**
+ * The data layer for asset analysis — injected so the same hook runs under
+ * the subscriber-session API and the manager (tp_admin) API. The hook holds
+ * zero URL knowledge; each surface passes its own adapter (see
+ * src/lib/asset-analysis-api.ts).
+ */
+export interface AssetAnalysisApi {
+  /** Run cross-group NER + catalog matching for a transcript. */
+  suggestTags(input: {
+    transcript: string;
+    siteId: string;
+    assetId: string;
+  }): Promise<AutoTagSuggestData | null>;
+  /** Create a new catalog entity from a confirmed suggested-new pill. */
+  createEntity(input: {
+    group: InspectorTagGroup;
+    name: string;
+    siteId: string;
+    seedSource: "keyword_cue" | "audio_transcript";
+    seedRecordingId: string | null;
+    seedAssetId: string;
+  }): Promise<CreatedEntity | null>;
+}
+
 export interface UseAssetAnalysisParams {
   assetId: string;
   siteId: string;
+  /** Injected data layer — keeps the hook API-agnostic. */
+  api: AssetAnalysisApi;
   pillarConfig: PillarGroup[];
   brands: Brand[];
   projects: Project[];
@@ -55,15 +99,13 @@ export interface UseAssetAnalysisParams {
  *
  * Briefing (recording / transcription) stays in AssetEditModal; this hook
  * is everything from analysis onward. The transcript is an INPUT — callers
- * pass it to runAutoTagSuggest; the hook never captures audio.
- *
- * Behavior is identical to the prior inline implementation: AssetEditModal
- * destructures this hook into the same variable names, so its JSX and the
- * doSave / handleClose handlers are unchanged.
+ * pass it to runAutoTagSuggest; the hook never captures audio. All network
+ * I/O goes through the injected `api` adapter.
  */
 export function useAssetAnalysis({
   assetId,
   siteId,
+  api,
   pillarConfig,
   brands,
   projects,
@@ -191,27 +233,15 @@ export function useAssetAnalysis({
     setAutoAppliedTagCount(0);
     void recordingId;
     try {
-      const res = await fetch("/api/auto-tag-suggest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript,
-          site_id: siteId,
-          source_asset_id: assetId,
-        }),
-      });
-      if (!res.ok) {
-        console.warn("Auto-tag suggest HTTP", res.status, await res.text().catch(() => ""));
-        return;
-      }
-      const data = await res.json();
+      const data = await api.suggestTags({ transcript, siteId, assetId });
+      if (!data) return;
 
       // Story Angles: separate layer (editorial framing per-post). Apply
       // suggested pillar tags immediately to working Story Angle state.
       let appliedCount = 0;
       let appliedIds: string[] = [];
-      const tagSuggestion = data.story_angles || data.content_tags || {};
-      if (tagSuggestion.tagIds?.length > 0) {
+      const tagSuggestion: TagSuggestion = data.story_angles || data.content_tags || {};
+      if (tagSuggestion.tagIds?.length) {
         const allValidTagIds = new Set(pillarConfig.flatMap((p) => p.tags.map((t) => t.id)));
         const validNewTags = (tagSuggestion.tagIds as string[]).filter(
           (id) => allValidTagIds.has(id),
@@ -220,6 +250,9 @@ export function useAssetAnalysis({
           const before = new Set(prev);
           const merged = Array.from(new Set([...prev, ...validNewTags]));
           appliedCount = merged.length - before.size;
+          // Capture the IDs that were freshly applied (excludes tags
+          // that were already on the asset before this run) so the
+          // result card can render them as labeled pills.
           appliedIds = validNewTags.filter((id) => !before.has(id));
           return merged;
         });
@@ -272,86 +305,63 @@ export function useAssetAnalysis({
       setAutoTagging(false);
       setLastSuggestRunAt(Date.now());
     }
-  }, [siteId, assetId, pillarConfig]);
+  }, [siteId, assetId, pillarConfig, api]);
 
-  // Confirm a NEW-entity suggestion. Generic dispatcher across all groups —
-  // different POST endpoints + response shapes per group, but all share the
-  // post-create local-state sync pattern.
+  // Confirm a NEW-entity suggestion. The injected api.createEntity handles
+  // the per-group endpoint + response shape; this keeps only the local
+  // catalog / working-state sync + the suggested_new → applied promotion.
   async function confirmNewEntity(group: InspectorTagGroup, c: InspectorNew, recordingId: string | null) {
-    const endpointByGroup: Record<InspectorTagGroup, string> = {
-      brand: "/api/brands",
-      service: "/api/services",
-      project: "/api/projects",
-      persona: "/api/personas",
-      branch: "/api/branches",
-    };
-    const endpoint = endpointByGroup[group];
-    try {
-      const reqBody: Record<string, unknown> = {
-        name: c.name,
-        site_id: siteId,
-        seed_source: c.source === "keyword" ? "keyword_cue" : "audio_transcript",
-        seed_recording_id: recordingId,
-        seed_asset_id: assetId,
-      };
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reqBody),
-      });
-      if (!res.ok) {
-        console.warn(`${group} confirm HTTP ${res.status}`);
-        return;
-      }
-      const data = await res.json();
-      // Response shape varies per endpoint — extract entity defensively
-      const created = data.brand || data.service || data.project ||
-        data.persona || data.branch || data;
-      if (!created?.id) return;
-      const entry = { id: created.id as string, name: (created.name || c.name) as string, slug: (created.slug || c.slug) as string };
-      switch (group) {
-        case "brand":
-          setLocalBrands((prev) => prev.some((b) => b.id === entry.id) ? prev : [...prev, { ...entry, url: created.url || null } as Brand].sort((a, b) => a.name.localeCompare(b.name)));
-          setBrandIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          onBrandCreated?.({ ...entry, url: created.url || null } as Brand);
-          break;
-        case "service":
-          setLocalServices((prev) => prev.some((s) => s.id === entry.id) ? prev : [...prev, entry].sort((a, b) => a.name.localeCompare(b.name)));
-          setServiceIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          onServiceCreated?.(entry);
-          break;
-        case "project":
-          setLocalProjects((prev) => prev.some((p) => p.id === entry.id) ? prev : [...prev, entry as Project].sort((a, b) => a.name.localeCompare(b.name)));
-          setProjectIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          onProjectCreated?.(entry as Project);
-          break;
-        case "persona":
-          setLocalPersonas((prev) => prev.some((p) => p.id === entry.id) ? prev : [...prev, { id: entry.id, name: entry.name, type: "person" }].sort((a, b) => a.name.localeCompare(b.name)));
-          setPersonaIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          break;
-        case "branch":
-          setLocalBranches((prev) => prev.some((b) => b.id === entry.id) ? prev : [...prev, entry].sort((a, b) => a.name.localeCompare(b.name)));
-          setBranchIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          onBranchCreated?.(entry);
-          break;
-      }
-      // Promote suggested_new → applied_matches (visual graduation)
-      setInspectorState((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          [group]: {
-            applied_matches: [
-              ...prev[group].applied_matches,
-              { entity_id: entry.id, name: entry.name, match_text: c.name, match_start: -1, context_excerpt: c.context },
-            ],
-            suggested_new: prev[group].suggested_new.filter((s) => s.slug !== c.slug),
-          },
-        };
-      });
-    } catch (err) {
-      console.warn(`${group} confirm failed:`, err);
+    const created = await api.createEntity({
+      group,
+      name: c.name,
+      siteId,
+      seedSource: c.source === "keyword" ? "keyword_cue" : "audio_transcript",
+      seedRecordingId: recordingId,
+      seedAssetId: assetId,
+    });
+    if (!created?.id) return;
+    // Push to local catalog + working state; saved* graduates on next save.
+    const entry = { id: created.id, name: created.name || c.name, slug: created.slug || c.slug };
+    switch (group) {
+      case "brand":
+        setLocalBrands((prev) => prev.some((b) => b.id === entry.id) ? prev : [...prev, { ...entry, url: created.url || null } as Brand].sort((a, b) => a.name.localeCompare(b.name)));
+        setBrandIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
+        onBrandCreated?.({ ...entry, url: created.url || null } as Brand);
+        break;
+      case "service":
+        setLocalServices((prev) => prev.some((s) => s.id === entry.id) ? prev : [...prev, entry].sort((a, b) => a.name.localeCompare(b.name)));
+        setServiceIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
+        onServiceCreated?.(entry);
+        break;
+      case "project":
+        setLocalProjects((prev) => prev.some((p) => p.id === entry.id) ? prev : [...prev, entry as Project].sort((a, b) => a.name.localeCompare(b.name)));
+        setProjectIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
+        onProjectCreated?.(entry as Project);
+        break;
+      case "persona":
+        setLocalPersonas((prev) => prev.some((p) => p.id === entry.id) ? prev : [...prev, { id: entry.id, name: entry.name, type: "person" }].sort((a, b) => a.name.localeCompare(b.name)));
+        setPersonaIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
+        break;
+      case "branch":
+        setLocalBranches((prev) => prev.some((b) => b.id === entry.id) ? prev : [...prev, entry].sort((a, b) => a.name.localeCompare(b.name)));
+        setBranchIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
+        onBranchCreated?.(entry);
+        break;
     }
+    // Promote suggested_new → applied_matches (visual graduation)
+    setInspectorState((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        [group]: {
+          applied_matches: [
+            ...prev[group].applied_matches,
+            { entity_id: entry.id, name: entry.name, match_text: c.name, match_start: -1, context_excerpt: c.context },
+          ],
+          suggested_new: prev[group].suggested_new.filter((s) => s.slug !== c.slug),
+        },
+      };
+    });
   }
 
   function dismissAllSuggestions() {

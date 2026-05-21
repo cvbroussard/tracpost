@@ -33,6 +33,15 @@ interface NavGroup {
 
 const NAV_GROUPS: NavGroup[] = [
   {
+    label: "Media Production",
+    items: [
+      { label: "Analysis", path: "/media-production/analysis" },
+      { label: "Web Pages", path: "/media-production/web-pages" },
+      { label: "Standard Posts", path: "/media-production/standard-posts" },
+      { label: "Video", path: "/media-production/video" },
+    ],
+  },
+  {
     label: "Site Settings",
     items: [
       { label: "Brand Playbook", path: "/brand" },

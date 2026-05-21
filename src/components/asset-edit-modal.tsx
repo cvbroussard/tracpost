@@ -5,6 +5,7 @@ import { toast, confirm as confirmDialog } from "@/components/feedback";
 import type { PillarGroup } from "./tag-picker";
 // FaceOverlay retired 2026-05-19 with the personas entity removal.
 import { useAudioBriefing } from "@/hooks/use-audio-briefing";
+import { useAssetAnalysis, type InspectorTagGroup } from "@/hooks/use-asset-analysis";
 import {
   AutoTagBar,
   PrimaryToggleButton as AudioToggleButton,
@@ -12,7 +13,7 @@ import {
   StagedPreview as AudioStagedPreview,
 } from "@/components/auto-tag-bar";
 import { SCENE_TYPES } from "@/lib/scene-types";
-import { AssetCategoriesSection, type AutoTagSectionHandle, type CategoriesResponse } from "@/components/asset-categories-section";
+import { AssetCategoriesSection } from "@/components/asset-categories-section";
 import { AssetTagsStrip } from "@/components/asset-tags-strip";
 import { AssetPrivacySection } from "@/components/asset-privacy-section";
 
@@ -200,48 +201,48 @@ export function AssetEditModal({
   const [savingAi, setSavingAi] = useState(false);
   const _hasGeneratedText = !!(initialMetadata?.generated_text as Record<string, unknown>)?.generated_at;
   const [pillar, setPillar] = useState(initialPillar);
-  // Subscriber-controlled multi-arrays for Story Angle (via tags) and
-  // Scene Composition. Pillars are now DERIVED from tags rather than
-  // independently selected — tag click in the Story Angle card is the
-  // single source of truth. Scene types stay as their own array.
-  const [sceneTypesArr, setSceneTypesArr] = useState<string[]>(initialSceneTypes);
-  const [tags, setTags] = useState<string[]>(initialTags || []);
-  // saved* mirror for Story Angle tags — same three-state pattern as
-  // brands/projects/personas (per project_tracpost_three_state_pills.md).
-  // Auto-tag-suggest writes to `tags` directly; without a saved mirror,
-  // pre-save preselects look identical to saved truth.
-  const [savedTags, setSavedTags] = useState<string[]>(initialTags || []);
-  // pillarsArr derived from tags + pillarConfig (parents of selected tags).
-  // Computed inline at save time; no setter needed.
-  const pillarsArr = Array.from(
-    new Set(
-      tags
-        .map((tagId) => pillarConfig.find((p) => p.tags.some((t) => t.id === tagId))?.id)
-        .filter((id): id is string => Boolean(id)),
-    ),
-  );
-  // initialPillarsArr captures the seeded value to compute the save-time diff.
-  const initialPillarsArr = initialPillars.length > 0 ? initialPillars : initialPillar ? [initialPillar] : [];
-  // Imperative handle on AssetCategoriesSection — Auto-tag bar's
-  // trigger button calls cascadeRef.current?.triggerPreview() so the
-  // cascade fires from the bar while state stays inside the section.
-  const cascadeRef = useRef<AutoTagSectionHandle | null>(null);
-  const [cascadeBusy, setCascadeBusy] = useState(false);
-  const [cascadeHasPreview, setCascadeHasPreview] = useState(false);
-  const handleCascadeStateChange = useCallback(
-    (s: { isPreviewing: boolean; hasPreview: boolean }) => {
-      setCascadeBusy(s.isPreviewing);
-      setCascadeHasPreview(s.hasPreview);
-    },
-    [],
-  );
-  // Shared categories data — fed by AssetCategoriesSection's onDataChange
-  // (mount + after each commit). Powers the AssetTagsStrip confirmation
-  // row above the variants; no extra fetch.
-  const [categoriesData, setCategoriesData] = useState<CategoriesResponse | null>(null);
-  const handleCategoriesData = useCallback((d: CategoriesResponse) => {
-    setCategoriesData(d);
-  }, []);
+  // Analysis core — tag working-state, the cascade, and the auto-tag
+  // inspector — lives in useAssetAnalysis so the manager-side Analysis
+  // surface can reuse it. Destructured into the same names the modal's
+  // JSX + doSave + handleClose already use, so behavior is unchanged.
+  const {
+    sceneTypesArr, setSceneTypesArr, savedSceneTypesArr, setSavedSceneTypesArr,
+    tags, setTags, savedTags, setSavedTags,
+    pillarsArr, initialPillarsArr,
+    brandIds, setBrandIds, savedBrandIds, setSavedBrandIds,
+    projectIds, setProjectIds, savedProjectIds, setSavedProjectIds,
+    personaIds, savedPersonaIds, setSavedPersonaIds,
+    serviceIds, savedServiceIds, setSavedServiceIds,
+    branchIds, setBranchIds, savedBranchIds, setSavedBranchIds,
+    localBrands, localProjects,
+    cascadeRef, cascadeBusy, cascadeHasPreview, handleCascadeStateChange,
+    categoriesData, handleCategoriesData,
+    inspectorState, autoTagging, lastSuggestRunAt,
+    autoAppliedTagCount, autoAppliedTagIds, autoAppliedSceneTypeIds, nerWarnings,
+    runAutoTagSuggest, confirmNewEntity, dismissAllSuggestions,
+  } = useAssetAnalysis({
+    assetId,
+    siteId,
+    pillarConfig,
+    brands,
+    projects,
+    services,
+    branches,
+    personas: personaList,
+    initialTags,
+    initialSceneTypes,
+    initialPillars,
+    initialPillar,
+    initialBrandIds,
+    initialProjectIds,
+    initialServiceIds,
+    initialBranchIds,
+    initialPersonaIds,
+    onBrandCreated,
+    onProjectCreated,
+    onServiceCreated,
+    onBranchCreated,
+  });
 
   // Variant thumbnails — rendered below the source media. Loaded on
   // mount + after Save (cascade fires variant render in background;
@@ -266,46 +267,12 @@ export function AssetEditModal({
     return () => { cancelled = true; };
   }, [assetId, cascadeHasPreview]);
 
-  const [brandIds, setBrandIds] = useState<string[]>(initialBrandIds);
-  const [projectIds, setProjectIds] = useState<string[]>(initialProjectIds);
-  const [personaIds, setPersonaIds] = useState<string[]>(initialPersonaIds);
-  const [serviceIds, setServiceIds] = useState<string[]>(initialServiceIds);
-  const [branchIds, setBranchIds] = useState<string[]>(initialBranchIds);
-  // saved* mirror initialBrandIds/etc but advance on every successful save.
-  // Used to distinguish "confirmed" pills (saved truth, deep color) from
-  // "preselected" pills (auto-tag pending, light color, may be unchecked
-  // before save).
-  const [savedBrandIds, setSavedBrandIds] = useState<string[]>(initialBrandIds);
-  const [savedProjectIds, setSavedProjectIds] = useState<string[]>(initialProjectIds);
-  const [savedPersonaIds, setSavedPersonaIds] = useState<string[]>(initialPersonaIds);
-  const [savedServiceIds, setSavedServiceIds] = useState<string[]>(initialServiceIds);
-  const [savedBranchIds, setSavedBranchIds] = useState<string[]>(initialBranchIds);
-  const [savedSceneTypesArr, setSavedSceneTypesArr] = useState<string[]>(initialSceneTypes);
-  // Local catalog mirrors so quick-create flows can append to the picker
-  // without a server refetch.
-  const [localServices, setLocalServices] = useState(services);
-  const [localBranches, setLocalBranches] = useState(branches);
-  const [localPersonas, setLocalPersonas] = useState(personaList);
-
-  // Reset state when navigating to a different asset
+  // Reset briefing state when navigating to a different asset. The tag /
+  // analysis working-state reset is owned by useAssetAnalysis.
   useEffect(() => {
     setFaceData(initialFaces);
     setNote(initialNote);
     setPillar(initialPillar);
-    setSceneTypesArr(initialSceneTypes);
-    setTags(initialTags || []);
-    setSavedTags(initialTags || []);
-    setBrandIds(initialBrandIds);
-    setProjectIds(initialProjectIds);
-    setPersonaIds(initialPersonaIds);
-    setServiceIds(initialServiceIds);
-    setBranchIds(initialBranchIds);
-    setSavedBrandIds(initialBrandIds);
-    setSavedProjectIds(initialProjectIds);
-    setSavedPersonaIds(initialPersonaIds);
-    setSavedServiceIds(initialServiceIds);
-    setSavedBranchIds(initialBranchIds);
-    setSavedSceneTypesArr(initialSceneTypes);
     setVerifications(aiVerifications || []);
     setAiGenerated(initialAiGenerated);
     setTypedMode(false);
@@ -331,18 +298,6 @@ export function AssetEditModal({
     }
     setSavingAi(false);
   }
-  const [localBrands, setLocalBrands] = useState(brands);
-  const [localProjects, setLocalProjects] = useState(projects);
-  const [newBrandName, setNewBrandName] = useState("");
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newServiceName, setNewServiceName] = useState("");
-  const [newBranchName, setNewBranchName] = useState("");
-  const [newPersonaName, setNewPersonaName] = useState("");
-  const [creatingBrand, setCreatingBrand] = useState(false);
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [creatingService, setCreatingService] = useState(false);
-  const [creatingBranch, setCreatingBranch] = useState(false);
-  const [creatingPersona, setCreatingPersona] = useState(false);
   const [saving, setSaving] = useState(false);
   // Generate button removed — text generation is automatic in the
   // pipeline cron. Caption + pin_headline + display_caption + alt_text
@@ -568,31 +523,6 @@ export function AssetEditModal({
     return committed;
   }, [stagedTranscripts, refetchRecordings]);
 
-  // Auto-tag inspector state (LOCKED 2026-05-10).
-  // Per memory/project_tracpost_auto_tag_inspector_design.md: cross-group
-  // catalog scan + NER produces per-group results. Subscriber sees applied
-  // matches (existing-catalog hits, server-side auto-linked) and suggested
-  // new (NER proposals — brand-only). All matches additive, no suppression.
-  type InspectorMatch = { entity_id: string; name: string; match_text: string; match_start: number; context_excerpt: string };
-  type InspectorNew = { name: string; slug: string; context: string; source?: string; keyword?: string };
-  type InspectorGroup = { applied_matches: InspectorMatch[]; suggested_new: InspectorNew[] };
-  type InspectorTagGroup = "brand" | "service" | "project" | "persona" | "branch";
-  type InspectorState = Record<InspectorTagGroup, InspectorGroup>;
-  const [inspectorState, setInspectorState] = useState<InspectorState | null>(null);
-  const [autoTagging, setAutoTagging] = useState(false);
-  // Track that a suggestion run completed (success or no-result). Used
-  // to render the panel even when zero matches surfaced so subscriber can
-  // tell the system ran. Null = never ran this session.
-  const [lastSuggestRunAt, setLastSuggestRunAt] = useState<number | null>(null);
-  const [autoAppliedTagCount, setAutoAppliedTagCount] = useState(0);
-  // Track WHICH tag IDs were auto-applied so the result card can render
-  // them as labeled pills (not just a count). Resets per auto-tag run.
-  const [autoAppliedTagIds, setAutoAppliedTagIds] = useState<string[]>([]);
-  // Same idea for scene composition — track which scene_type IDs were
-  // freshly applied by this auto-tag run so the card can surface them.
-  const [autoAppliedSceneTypeIds, setAutoAppliedSceneTypeIds] = useState<string[]>([]);
-  const [nerWarnings, setNerWarnings] = useState<string[]>([]);
-
   function startReplaceTranscript() {
     const latest = recordings[0];
     if (!latest) return;
@@ -612,11 +542,6 @@ export function AssetEditModal({
     }
   }
 
-  // Track the last transcript we ran auto-tag-suggest against. Used to
-  // guard against double-firing when the same transcript reaches us
-  // BOTH eagerly (staged state, pre-commit) AND via onCommitted.
-  const lastProcessedTranscriptRef = useRef<string>("");
-
   // Scroll-to-top on asset change — when the modal swaps to the next asset
   // via Save & Next, the scrollable inner panel keeps the prior asset's
   // scroll offset, dropping the subscriber halfway down the new asset's
@@ -625,190 +550,6 @@ export function AssetEditModal({
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [assetId]);
-
-  const runAutoTagSuggest = useCallback(async (recordingId: string, transcript: string) => {
-    if (!transcript || transcript.trim().length < 5) return;
-    if (lastProcessedTranscriptRef.current === transcript) return;
-    lastProcessedTranscriptRef.current = transcript;
-    setAutoTagging(true);
-    setNerWarnings([]);
-    setAutoAppliedTagCount(0);
-    void recordingId;
-    try {
-      const res = await fetch("/api/auto-tag-suggest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript,
-          site_id: siteId,
-          source_asset_id: assetId,
-        }),
-      });
-      if (!res.ok) {
-        console.warn("Auto-tag suggest HTTP", res.status, await res.text().catch(() => ""));
-        return;
-      }
-      const data = await res.json();
-
-      // Story Angles: separate layer (editorial framing per-post). Apply
-      // suggested pillar tags immediately to working Story Angle state.
-      let appliedCount = 0;
-      let appliedIds: string[] = [];
-      const tagSuggestion = data.story_angles || data.content_tags || {};
-      if (tagSuggestion.tagIds?.length > 0) {
-        const allValidTagIds = new Set(pillarConfig.flatMap((p) => p.tags.map((t) => t.id)));
-        const validNewTags = (tagSuggestion.tagIds as string[]).filter(
-          (id) => allValidTagIds.has(id),
-        );
-        setTags((prev) => {
-          const before = new Set(prev);
-          const merged = Array.from(new Set([...prev, ...validNewTags]));
-          appliedCount = merged.length - before.size;
-          // Capture the IDs that were freshly applied (excludes tags
-          // that were already on the asset before this run) so the
-          // result card can render them as labeled pills.
-          appliedIds = validNewTags.filter((id) => !before.has(id));
-          return merged;
-        });
-      }
-      setAutoAppliedTagCount(appliedCount);
-      setAutoAppliedTagIds(appliedIds);
-
-      // Scene composition — Haiku call returns scene_type IDs that
-      // describe what's literally shown. Merge into working scene_types
-      // (additive within this run; tag UI shows the result for review).
-      const sceneTypesFromApi = Array.isArray(data.scene_types)
-        ? (data.scene_types as string[])
-        : [];
-      let appliedSceneIds: string[] = [];
-      if (sceneTypesFromApi.length > 0) {
-        setSceneTypesArr((prev) => {
-          const before = new Set(prev);
-          appliedSceneIds = sceneTypesFromApi.filter((id) => !before.has(id));
-          return Array.from(new Set([...prev, ...sceneTypesFromApi]));
-        });
-      }
-      setAutoAppliedSceneTypeIds(appliedSceneIds);
-
-      const groupsResp = (data.groups || {}) as Partial<InspectorState>;
-      const groups: InspectorState = {
-        brand: groupsResp.brand || { applied_matches: [], suggested_new: [] },
-        service: groupsResp.service || { applied_matches: [], suggested_new: [] },
-        project: groupsResp.project || { applied_matches: [], suggested_new: [] },
-        persona: groupsResp.persona || { applied_matches: [], suggested_new: [] },
-        branch: groupsResp.branch || { applied_matches: [], suggested_new: [] },
-      };
-
-      // Push applied-match IDs into each group's working state. Server
-      // already auto-linked to asset_*_join tables; this keeps the bottom
-      // pickers visually in sync (preselected pills) AND prevents doSave's
-      // DELETE+INSERT cascade from wiping what auto-tag just inserted.
-      const mergeIds = (
-        prev: string[],
-        applied: InspectorMatch[],
-      ): string[] => Array.from(new Set([...prev, ...applied.map((m) => m.entity_id)]));
-      if (groups.brand.applied_matches.length > 0) setBrandIds((prev) => mergeIds(prev, groups.brand.applied_matches));
-      if (groups.service.applied_matches.length > 0) setServiceIds((prev) => mergeIds(prev, groups.service.applied_matches));
-      if (groups.project.applied_matches.length > 0) setProjectIds((prev) => mergeIds(prev, groups.project.applied_matches));
-      if (groups.persona.applied_matches.length > 0) setPersonaIds((prev) => mergeIds(prev, groups.persona.applied_matches));
-      if (groups.branch.applied_matches.length > 0) setBranchIds((prev) => mergeIds(prev, groups.branch.applied_matches));
-
-      setInspectorState(groups);
-      setNerWarnings(Array.isArray(data.ner_warnings) ? data.ner_warnings : []);
-    } catch (err) {
-      console.warn("Auto-tag suggest failed:", err);
-    } finally {
-      setAutoTagging(false);
-      setLastSuggestRunAt(Date.now());
-    }
-  }, [siteId, assetId, pillarConfig]);
-
-  // Confirm a NEW-entity suggestion. Generic dispatcher across all 6
-  // groups — different POST endpoints + different response shapes per
-  // group, but all share the post-create local-state sync pattern
-  // (push to localXxx + working xxxIds + promote to applied_matches).
-  async function confirmNewEntity(group: InspectorTagGroup, c: InspectorNew, recordingId: string | null) {
-    const endpointByGroup: Record<InspectorTagGroup, string> = {
-      brand: "/api/brands",
-      service: "/api/services",
-      project: "/api/projects",
-      persona: "/api/personas",
-      branch: "/api/branches",
-    };
-    const endpoint = endpointByGroup[group];
-    try {
-      const reqBody: Record<string, unknown> = {
-        name: c.name,
-        site_id: siteId,
-        seed_source: c.source === "keyword" ? "keyword_cue" : "audio_transcript",
-        seed_recording_id: recordingId,
-        seed_asset_id: assetId,
-      };
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reqBody),
-      });
-      if (!res.ok) {
-        console.warn(`${group} confirm HTTP ${res.status}`);
-        return;
-      }
-      const data = await res.json();
-      // Response shape varies per endpoint — extract entity defensively
-      const created = data.brand || data.service || data.project ||
-        data.persona || data.branch || data;
-      if (!created?.id) return;
-      // Push to local catalog + working state + saved* graduate skip
-      // (saved* will graduate on next successful save)
-      const entry = { id: created.id as string, name: (created.name || c.name) as string, slug: (created.slug || c.slug) as string };
-      switch (group) {
-        case "brand":
-          setLocalBrands((prev) => prev.some((b) => b.id === entry.id) ? prev : [...prev, { ...entry, url: created.url || null } as Brand].sort((a, b) => a.name.localeCompare(b.name)));
-          setBrandIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          onBrandCreated?.({ ...entry, url: created.url || null } as Brand);
-          break;
-        case "service":
-          setLocalServices((prev) => prev.some((s) => s.id === entry.id) ? prev : [...prev, entry].sort((a, b) => a.name.localeCompare(b.name)));
-          setServiceIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          onServiceCreated?.(entry);
-          break;
-        case "project":
-          setLocalProjects((prev) => prev.some((p) => p.id === entry.id) ? prev : [...prev, entry as Project].sort((a, b) => a.name.localeCompare(b.name)));
-          setProjectIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          onProjectCreated?.(entry as Project);
-          break;
-        case "persona":
-          setLocalPersonas((prev) => prev.some((p) => p.id === entry.id) ? prev : [...prev, { id: entry.id, name: entry.name, type: "person" }].sort((a, b) => a.name.localeCompare(b.name)));
-          setPersonaIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          break;
-        case "branch":
-          setLocalBranches((prev) => prev.some((b) => b.id === entry.id) ? prev : [...prev, entry].sort((a, b) => a.name.localeCompare(b.name)));
-          setBranchIds((prev) => prev.includes(entry.id) ? prev : [...prev, entry.id]);
-          onBranchCreated?.(entry);
-          break;
-      }
-      // Promote suggested_new → applied_matches (visual graduation)
-      setInspectorState((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          [group]: {
-            applied_matches: [
-              ...prev[group].applied_matches,
-              { entity_id: entry.id, name: entry.name, match_text: c.name, match_start: -1, context_excerpt: c.context },
-            ],
-            suggested_new: prev[group].suggested_new.filter((s) => s.slug !== c.slug),
-          },
-        };
-      });
-    } catch (err) {
-      console.warn(`${group} confirm failed:`, err);
-    }
-  }
-
-  function dismissAllSuggestions() {
-    setInspectorState(null);
-  }
 
   // Keyboard navigation — minimal pass.
   // Recording-bar keyboard re-wire (Space=briefing, V=voice-over, etc.) is
@@ -975,113 +716,7 @@ export function AssetEditModal({
       } catch { /* ignore */ }
       setSuggesting(false);
     }, 800);
-  }, [siteId]);
-
-  async function quickCreateBrand() {
-    if (!newBrandName.trim()) return;
-    setCreatingBrand(true);
-    try {
-      const res = await fetch("/api/brands", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newBrandName.trim(), site_id: siteId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLocalBrands((prev) => [...prev, data.brand].sort((a: Brand, b: Brand) => a.name.localeCompare(b.name)));
-        setBrandIds((prev) => [...prev, data.brand.id]);
-        setNewBrandName("");
-        onBrandCreated?.(data.brand);
-      }
-    } catch { /* ignore */ }
-    setCreatingBrand(false);
-  }
-
-  async function quickCreateProject() {
-    if (!newProjectName.trim()) return;
-    setCreatingProject(true);
-    try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newProjectName.trim(), site_id: siteId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLocalProjects((prev) => [...prev, data.project].sort((a: Project, b: Project) => a.name.localeCompare(b.name)));
-        setProjectIds((prev) => [...prev, data.project.id]);
-        setNewProjectName("");
-        onProjectCreated?.(data.project);
-      }
-    } catch { /* ignore */ }
-    setCreatingProject(false);
-  }
-
-  async function quickCreateService() {
-    if (!newServiceName.trim()) return;
-    setCreatingService(true);
-    try {
-      const res = await fetch("/api/services", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newServiceName.trim(), site_id: siteId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const created = data.service || data;
-        setLocalServices((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-        setServiceIds((prev) => [...prev, created.id]);
-        setNewServiceName("");
-        onServiceCreated?.(created);
-      }
-    } catch { /* ignore */ }
-    setCreatingService(false);
-  }
-
-  async function quickCreateBranch() {
-    if (!newBranchName.trim()) return;
-    setCreatingBranch(true);
-    try {
-      const res = await fetch("/api/branches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newBranchName.trim(), site_id: siteId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const created = data.branch || data;
-        setLocalBranches((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-        setBranchIds((prev) => [...prev, created.id]);
-        setNewBranchName("");
-        onBranchCreated?.(created);
-      }
-    } catch { /* ignore */ }
-    setCreatingBranch(false);
-  }
-
-  async function quickCreatePersona() {
-    if (!newPersonaName.trim()) return;
-    setCreatingPersona(true);
-    try {
-      const res = await fetch("/api/personas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newPersonaName.trim(),
-          site_id: siteId,
-          type: "person",
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const created = data.persona || data;
-        setLocalPersonas((prev) => [...prev, { id: created.id as string, name: created.name as string, type: (created.type as string) || "person" }].sort((a, b) => a.name.localeCompare(b.name)));
-        setPersonaIds((prev) => [...prev, created.id]);
-        setNewPersonaName("");
-      }
-    } catch { /* ignore */ }
-    setCreatingPersona(false);
-  }
+  }, [siteId, setTags]);
 
   /**
    * Subscriber confirms or rejects an AI suggestion (#167). Optimistic UI;

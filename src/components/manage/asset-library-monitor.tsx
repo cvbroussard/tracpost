@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { AnalysisModal } from "@/components/manage/analysis-modal";
 
 interface Asset {
   id: string;
@@ -39,13 +40,6 @@ function stageMeta(status: string) {
   return STAGE_META[status] ?? { label: status || "unknown", badge: "bg-black/60 text-white" };
 }
 
-function qualityColor(q: number | null): string {
-  if (!q) return "text-muted";
-  if (q >= 0.8) return "text-success";
-  if (q >= 0.5) return "text-warning";
-  return "text-danger";
-}
-
 export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [counts, setCounts] = useState<Counts | null>(null);
@@ -54,7 +48,6 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
   const [selected, setSelected] = useState<Asset | null>(null);
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/manage/media?site_id=${siteId}`)
       .then(r => r.ok ? r.json() : { assets: [], counts: {} })
       .then(d => { setAssets(d.assets); setCounts(d.counts); })
@@ -132,10 +125,9 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
         ))}
       </div>
 
-      {/* Operator note: this view is monitor-only. Briefing happens in the
-          subscriber's media library at /dashboard/media (see briefing-required
-          principle). When a subscriber's pending_briefing count is high,
-          coach them via the customer-success channel — don't brief for them. */}
+      {/* The grid monitors the raw-material pool; click a thumbnail to open
+          the per-asset Analysis modal. Briefing (recording) stays subscriber-
+          side at /dashboard/media — coach, don't brief for them. */}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "6px" }}>
         {filtered.map(asset => {
@@ -184,94 +176,9 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
         })}
       </div>
 
-      {selected && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setSelected(null)}>
-        <div className="w-full max-w-2xl mx-4" onClick={e => e.stopPropagation()}>
-      {(() => {
-        const idx = filtered.findIndex(a => a.id === selected.id);
-        const hasPrev = idx > 0;
-        const hasNext = idx < filtered.length - 1;
-        const selStage = stageMeta(selected.status);
-        function nav(dir: -1 | 1) {
-          const next = filtered[idx + dir];
-          if (next) { setSelected(next); }
-        }
-
-        return (
-          <div className="rounded-xl border border-accent/30 bg-surface p-4 shadow-card">
-            <div className="mb-3 flex items-center gap-2 rounded border border-muted/30 bg-muted/5 px-2.5 py-1.5">
-              <span className="text-[9px] font-mono uppercase tracking-wide text-muted">monitor only</span>
-              <span className="text-[10px] text-muted leading-snug">
-                Operator view — coach the subscriber to brief their own assets. Edits happen in /dashboard/media.
-              </span>
-            </div>
-            <div className="flex gap-4">
-              <div className="shrink-0 space-y-2" style={{ width: 280 }}>
-                {selected.type === "video" ? (
-                  <video src={selected.url} controls preload="metadata" className="rounded-lg w-full" />
-                ) : (
-                  <img src={selected.url} alt={selected.context || ""} className="rounded-lg w-full" loading="lazy" />
-                )}
-
-                {/* Tags below image */}
-                <div className="space-y-1">
-                  {selected.projects.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {selected.projects.map((p, i) => (
-                        <span key={i} className="rounded bg-accent/10 px-1.5 py-0.5 text-[9px] text-accent">{p}</span>
-                      ))}
-                    </div>
-                  )}
-                  {selected.brands.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {selected.brands.map((b, i) => (
-                        <span key={i} className="rounded bg-success/10 px-1.5 py-0.5 text-[9px] text-success">{b}</span>
-                      ))}
-                    </div>
-                  )}
-                  {selected.projects.length === 0 && selected.brands.length === 0 && (
-                    <p className="text-[9px] text-muted">No tags</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex-1 space-y-3">
-                {/* Meta */}
-                <div className="flex items-center gap-2 text-xs flex-wrap">
-                  <span className={`font-medium ${qualityColor(selected.quality)}`}>
-                    Quality: {selected.quality ? Math.round(selected.quality * 100) + "%" : "—"}
-                  </span>
-                  <span className="text-muted">·</span>
-                  <span className="text-muted capitalize">{selected.source}</span>
-                  <span className="text-muted">·</span>
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${selStage.badge}`}>{selStage.label}</span>
-                  {selected.autoContext && <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[9px] text-warning">Auto-generated</span>}
-                </div>
-
-                {/* Context note (read-only, collapsed — marginal value at the monitor stage) */}
-                <details>
-                  <summary className="cursor-pointer select-none text-[10px] text-muted">
-                    Context note {selected.context ? "" : "· none"}
-                  </summary>
-                  <div className="mt-1 w-full rounded border border-border bg-background px-2.5 py-1.5 text-xs min-h-[3em] whitespace-pre-wrap">
-                    {selected.context || <span className="text-muted italic">No briefing yet</span>}
-                  </div>
-                </details>
-
-                {/* Pagination only — no save/edit per operator-monitor-only policy */}
-                <div className="flex items-center justify-end">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted mr-1">{idx + 1} of {filtered.length}</span>
-                    <button onClick={() => nav(-1)} disabled={!hasPrev} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground disabled:opacity-30">←</button>
-                    <button onClick={() => nav(1)} disabled={!hasNext} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground disabled:opacity-30">→</button>
-                    <button onClick={() => setSelected(null)} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground ml-1">✕</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-        </div>
-      </div>)}
+      {selected && (
+        <AnalysisModal key={selected.id} assetId={selected.id} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }

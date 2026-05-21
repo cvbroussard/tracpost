@@ -6,7 +6,7 @@ import { AssetLibraryMonitor } from "@/components/manage/asset-library-monitor";
 export default function MediaProductionAnalysisPage() {
   return (
     <ManagePage title="Analysis" requireSite>
-      {({ siteId }) => <AssetLibraryMonitor siteId={siteId} />}
+      {({ siteId }) => <AssetLibraryMonitor key={siteId} siteId={siteId} />}
     </ManagePage>
   );
 }

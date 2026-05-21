@@ -10,7 +10,7 @@ import { AssetLibraryMonitor } from "@/components/manage/asset-library-monitor";
 export default function Page() {
   return (
     <ManagePage title="Media" requireSite>
-      {({ siteId }) => <AssetLibraryMonitor siteId={siteId} />}
+      {({ siteId }) => <AssetLibraryMonitor key={siteId} siteId={siteId} />}
     </ManagePage>
   );
 }

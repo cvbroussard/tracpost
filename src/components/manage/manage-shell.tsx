@@ -59,7 +59,6 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Monitor",
     items: [
-      { label: "Media", path: "/media" },
       { label: "Blog", path: "/blog" },
       { label: "SEO", path: "/seo" },
       { label: "Analytics", path: "/analytics" },

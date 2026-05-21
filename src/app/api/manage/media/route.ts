@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE source = 'upload')::int AS uploads,
       COUNT(*) FILTER (WHERE source = 'ai_generated')::int AS ai,
-      COUNT(*) FILTER (WHERE processing_stage = 'briefed')::int AS triaged,
+      COUNT(*) FILTER (WHERE processing_stage = 'briefed')::int AS briefed,
       COUNT(*) FILTER (WHERE processing_stage = 'onboarded')::int AS pending_briefing,
       COUNT(*) FILTER (WHERE context_note IS NOT NULL)::int AS with_context,
       COUNT(*) FILTER (WHERE context_note IS NULL)::int AS without_context,

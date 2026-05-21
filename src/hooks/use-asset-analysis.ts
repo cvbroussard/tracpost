@@ -408,3 +408,6 @@ export function useAssetAnalysis({
     dismissAllSuggestions,
   };
 }
+
+/** The full return shape of useAssetAnalysis — passed to AnalyzeResultsPanel. */
+export type AssetAnalysis = ReturnType<typeof useAssetAnalysis>;

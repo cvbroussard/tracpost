@@ -5,15 +5,15 @@ import { toast, confirm as confirmDialog } from "@/components/feedback";
 import type { PillarGroup } from "./tag-picker";
 // FaceOverlay retired 2026-05-19 with the personas entity removal.
 import { useAudioBriefing } from "@/hooks/use-audio-briefing";
-import { useAssetAnalysis, type InspectorTagGroup } from "@/hooks/use-asset-analysis";
+import { useAssetAnalysis } from "@/hooks/use-asset-analysis";
 import { subscriberAssetAnalysisApi } from "@/lib/asset-analysis-api";
+import { AnalyzeResultsPanel } from "@/components/analyze-results-panel";
 import {
   AutoTagBar,
   PrimaryToggleButton as AudioToggleButton,
   StateIndicator as AudioStateIndicator,
   StagedPreview as AudioStagedPreview,
 } from "@/components/auto-tag-bar";
-import { SCENE_TYPES } from "@/lib/scene-types";
 import { AssetCategoriesSection } from "@/components/asset-categories-section";
 import { AssetTagsStrip } from "@/components/asset-tags-strip";
 import { AssetPrivacySection } from "@/components/asset-privacy-section";
@@ -206,22 +206,7 @@ export function AssetEditModal({
   // inspector — lives in useAssetAnalysis so the manager-side Analysis
   // surface can reuse it. Destructured into the same names the modal's
   // JSX + doSave + handleClose already use, so behavior is unchanged.
-  const {
-    sceneTypesArr, setSceneTypesArr, savedSceneTypesArr, setSavedSceneTypesArr,
-    tags, setTags, savedTags, setSavedTags,
-    pillarsArr, initialPillarsArr,
-    brandIds, setBrandIds, savedBrandIds, setSavedBrandIds,
-    projectIds, setProjectIds, savedProjectIds, setSavedProjectIds,
-    personaIds, savedPersonaIds, setSavedPersonaIds,
-    serviceIds, savedServiceIds, setSavedServiceIds,
-    branchIds, setBranchIds, savedBranchIds, setSavedBranchIds,
-    localBrands, localProjects,
-    cascadeRef, cascadeBusy, cascadeHasPreview, handleCascadeStateChange,
-    categoriesData, handleCategoriesData,
-    inspectorState, autoTagging, lastSuggestRunAt,
-    autoAppliedTagCount, autoAppliedTagIds, autoAppliedSceneTypeIds, nerWarnings,
-    runAutoTagSuggest, confirmNewEntity, dismissAllSuggestions,
-  } = useAssetAnalysis({
+  const analysis = useAssetAnalysis({
     assetId,
     siteId,
     api: subscriberAssetAnalysisApi,
@@ -245,6 +230,23 @@ export function AssetEditModal({
     onServiceCreated,
     onBranchCreated,
   });
+  // Only the names the modal itself still uses (doSave / handleClose /
+  // suggestFromNote / hashtag / AutoTagBar). The auto-tag inspector's state
+  // is consumed by <AnalyzeResultsPanel>, which takes the whole `analysis`.
+  const {
+    sceneTypesArr, savedSceneTypesArr, setSavedSceneTypesArr,
+    tags, setTags, savedTags, setSavedTags,
+    pillarsArr, initialPillarsArr,
+    brandIds, setBrandIds, savedBrandIds, setSavedBrandIds,
+    projectIds, setProjectIds, savedProjectIds, setSavedProjectIds,
+    personaIds, savedPersonaIds, setSavedPersonaIds,
+    serviceIds, savedServiceIds, setSavedServiceIds,
+    branchIds, savedBranchIds, setSavedBranchIds,
+    localBrands, localProjects,
+    cascadeRef, cascadeBusy, cascadeHasPreview, handleCascadeStateChange,
+    categoriesData, handleCategoriesData,
+    runAutoTagSuggest,
+  } = analysis;
 
   // Variant thumbnails — rendered below the source media. Loaded on
   // mount + after Save (cascade fires variant render in background;
@@ -1093,196 +1095,15 @@ export function AssetEditModal({
               </AutoTagBar>
             </div>
 
-            {/* AUTO-TAG INSPECTOR — surfaces after audio.commit().
-                Per project_tracpost_auto_tag_inspector_design.md
-                (LOCKED 2026-05-10): cross-group catalog scan + NER
-                produces per-group {applied_matches, suggested_new}.
-                All hits surface, no suppression. Story Angles are a
-                separate layer (editorial framing per-post, not asset
-                descriptors) — applied silently to working tag state.
-                Panel renders even when zero matches surfaced so
-                subscriber can tell the system ran. */}
-            {(autoTagging || lastSuggestRunAt !== null) && (() => {
-              // Services group dropped 2026-05-16 — categories now own
-              // the structured-tag role (cascade asset_categories table).
-              // Personas dropped 2026-05-19 (full entity retirement).
-              const groupConfig: Array<{ key: InspectorTagGroup; label: string; toggleSet: (fn: (prev: string[]) => string[]) => void; selectedSet: string[]; savedSet: string[] }> = [
-                { key: "brand", label: brandLabel || "Brands", toggleSet: setBrandIds, selectedSet: brandIds, savedSet: savedBrandIds },
-                { key: "project", label: projectLabel || "Projects", toggleSet: setProjectIds, selectedSet: projectIds, savedSet: savedProjectIds },
-                { key: "branch", label: branchLabel || "Locations", toggleSet: setBranchIds, selectedSet: branchIds, savedSet: savedBranchIds },
-              ];
-              const totalApplied = inspectorState
-                ? groupConfig.reduce((sum, g) => sum + (inspectorState[g.key]?.applied_matches.length || 0), 0)
-                : 0;
-              const totalNew = inspectorState
-                ? groupConfig.reduce((sum, g) => sum + (inspectorState[g.key]?.suggested_new.length || 0), 0)
-                : 0;
-              return (
-              <div className="mb-3 rounded border border-accent/40 bg-accent/5 px-3 py-2.5">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-accent">
-                    {autoTagging ? "✨ Analyzing your recording…" : "✨ Analyze results"}
-                  </span>
-                  {!autoTagging && (
-                    <button
-                      type="button"
-                      onClick={dismissAllSuggestions}
-                      className="text-[10px] text-muted hover:text-foreground"
-                    >
-                      Dismiss
-                    </button>
-                  )}
-                </div>
-                {!autoTagging && (autoAppliedTagCount > 0 || totalApplied > 0) && (
-                  <div className="mb-2 text-[10px] text-success">
-                    {autoAppliedTagCount > 0 && `Applied ${autoAppliedTagCount} Story Angle tag${autoAppliedTagCount > 1 ? "s" : ""}`}
-                    {autoAppliedTagCount > 0 && totalApplied > 0 && " · "}
-                    {totalApplied > 0 && `Linked ${totalApplied} existing tag${totalApplied > 1 ? "s" : ""} to this asset`}
-                  </div>
-                )}
-                {!autoTagging && nerWarnings.length > 0 && (
-                  <div className="mb-2 text-[10px] text-warning">
-                    ⚠ Heads up — review these auto-matches before saving (uncheck any that look wrong): {nerWarnings.join(" · ")}
-                  </div>
-                )}
-                {/* Story Angle pills — same shape as the per-group sections
-                    below, but rendered separately because story angles flow
-                    into content_tags (not asset_* join tables). Surfaces
-                    WHICH tags were applied, not just the count. */}
-                {!autoTagging && autoAppliedTagIds.length > 0 && (() => {
-                  const labelByTagId = new Map(
-                    pillarConfig.flatMap((p) => p.tags.map((t) => [t.id, t.label] as const))
-                  );
-                  return (
-                    <div className="mb-2">
-                      <div className="mb-0.5 text-[10px] uppercase tracking-wide text-muted">Story Angles</div>
-                      <div className="flex flex-wrap items-start gap-1.5">
-                        {autoAppliedTagIds.map((tagId) => {
-                          const label = labelByTagId.get(tagId) || tagId;
-                          const stillSelected = tags.includes(tagId);
-                          return (
-                            <button
-                              key={`story:${tagId}`}
-                              type="button"
-                              onClick={() => setTags((prev) => stillSelected ? prev.filter((id) => id !== tagId) : [...prev, tagId])}
-                              className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
-                                stillSelected
-                                  ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                                  : "bg-surface-hover text-muted hover:text-foreground"
-                              }`}
-                            >
-                              ✓ {label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-                {/* Scene Composition pills — closed-enum visual depiction
-                    layer (after / wide_shot / lifestyle / etc). Same Haiku
-                    call as Story Angles produces both. */}
-                {!autoTagging && autoAppliedSceneTypeIds.length > 0 && (
-                  <div className="mb-2">
-                    <div className="mb-0.5 text-[10px] uppercase tracking-wide text-muted">Scene Composition</div>
-                    <div className="flex flex-wrap items-start gap-1.5">
-                      {autoAppliedSceneTypeIds.map((sceneId) => {
-                        const scene = SCENE_TYPES.find((s) => s.id === sceneId);
-                        const label = scene?.label || sceneId;
-                        const stillSelected = sceneTypesArr.includes(sceneId);
-                        return (
-                          <button
-                            key={`scene:${sceneId}`}
-                            type="button"
-                            onClick={() => setSceneTypesArr((prev) => stillSelected ? prev.filter((id) => id !== sceneId) : [...prev, sceneId])}
-                            title={scene?.description}
-                            className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
-                              stillSelected
-                                ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                                : "bg-surface-hover text-muted hover:text-foreground"
-                            }`}
-                          >
-                            ✓ {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {!autoTagging && inspectorState && groupConfig.map((g) => {
-                  const groupData = inspectorState[g.key];
-                  if (!groupData) return null;
-                  if (groupData.applied_matches.length === 0 && groupData.suggested_new.length === 0) return null;
-                  return (
-                    <div key={g.key} className="mb-2">
-                      <div className="mb-0.5 text-[10px] uppercase tracking-wide text-muted">{g.label}</div>
-                      <div className="flex flex-wrap items-start gap-1.5">
-                        {groupData.applied_matches.map((m) => {
-                          const selected = g.selectedSet.includes(m.entity_id);
-                          const confirmed = selected && g.savedSet.includes(m.entity_id);
-                          const preselected = selected && !confirmed;
-                          // Provenance: match_text "📍 GPS" → GPS-derived
-                          // (asset's EXIF coords matched a service area's
-                          // viewport). Anything else → transcript-derived
-                          // (NER + catalog match against subscriber's words).
-                          // Badge tells subscriber WHY each tag was suggested
-                          // so they can apply intuition for confirm/reject —
-                          // and resolve any conflict between signals at the
-                          // single Save decision boundary.
-                          const isGpsDerived = m.match_text === "📍 GPS";
-                          const provenanceBadge = isGpsDerived ? "📍" : "🎤";
-                          const provenanceTitle = isGpsDerived
-                            ? `From photo location: ${m.context_excerpt}`
-                            : `From transcript: ${m.context_excerpt}`;
-                          return (
-                            <button
-                              key={`applied:${m.entity_id}`}
-                              type="button"
-                              onClick={() => g.toggleSet((prev) => selected ? prev.filter((id) => id !== m.entity_id) : [...prev, m.entity_id])}
-                              title={provenanceTitle}
-                              className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
-                                confirmed
-                                  ? "bg-accent text-white"
-                                  : preselected
-                                    ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                                    : "bg-surface-hover text-muted hover:text-foreground"
-                              }`}
-                            >
-                              ✓ {m.name} <span className="opacity-60 text-[9px]">{provenanceBadge}</span>
-                            </button>
-                          );
-                        })}
-                        {groupData.suggested_new.map((s) => (
-                          <button
-                            key={`new:${s.slug}`}
-                            type="button"
-                            onClick={() => void confirmNewEntity(g.key, s, recordings[0]?.id || null)}
-                            title={s.source === "keyword" ? `Keyword "${s.keyword}" — ${s.context}` : s.context}
-                            className="rounded bg-surface-hover px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-accent/20 hover:text-accent"
-                          >
-                            + {s.name}
-                            {s.source === "keyword" && (
-                              <span className="ml-1 text-[9px] text-muted">({s.keyword})</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                {!autoTagging && totalApplied === 0 && totalNew === 0 && autoAppliedTagCount === 0 && (
-                  <div className="text-[10px] italic text-muted">
-                    No tag matches detected in this recording. (Try mentioning specific brand names, project names, service names, or city names if you expected suggestions.)
-                  </div>
-                )}
-                {!autoTagging && (totalApplied > 0 || totalNew > 0) && (
-                  <div className="mt-1 text-[10px] text-muted">
-                    Tap ✓ pills to uncheck false matches. Tap + pills to add new entries. Save to commit.
-                  </div>
-                )}
-              </div>
-              );
-            })()}
+            {/* AUTO-TAG INSPECTOR — Analyze results (see AnalyzeResultsPanel). */}
+            <AnalyzeResultsPanel
+              analysis={analysis}
+              pillarConfig={pillarConfig}
+              brandLabel={brandLabel}
+              projectLabel={projectLabel}
+              branchLabel={branchLabel}
+              latestRecordingId={recordings[0]?.id ?? null}
+            />
 
             {/* TRANSCRIPTION SECTION — top of the content stack
                 (2026-05-11 reorder). Renders right under the

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { authenticateRequest } from "@/lib/auth";
 import { renderTemplateVariant } from "@/lib/pipeline/variant-render";
 
 export const runtime = "nodejs";
@@ -88,15 +88,18 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticateRequest(req);
+  if (auth instanceof NextResponse) return auth;
 
   const { id: assetId } = await params;
   const [asset] = await sql`
     SELECT id, site_id, media_type FROM media_assets WHERE id = ${assetId}
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
-  if (!session.sites.some((s) => s.id === asset.site_id)) {
+  const [owned] = await sql`
+    SELECT id FROM sites WHERE id = ${asset.site_id} AND subscription_id = ${auth.subscriptionId}
+  `;
+  if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
   }
 

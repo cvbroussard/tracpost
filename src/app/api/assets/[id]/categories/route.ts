@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { authenticateRequest } from "@/lib/auth";
 import { matchServiceAreas } from "@/lib/categorization/service-area-match";
 import { matchBrandsFromNer } from "@/lib/categorization/brand-match";
 import { getAssetNarrative } from "@/lib/asset-narrative";
@@ -43,8 +43,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticateRequest(req);
+  if (auth instanceof NextResponse) return auth;
 
   const { id: assetId } = await params;
 
@@ -56,7 +56,10 @@ export async function GET(
     FROM media_assets ma WHERE ma.id = ${assetId}
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
-  if (!session.sites.some((s) => s.id === asset.site_id)) {
+  const [owned] = await sql`
+    SELECT id FROM sites WHERE id = ${asset.site_id} AND subscription_id = ${auth.subscriptionId}
+  `;
+  if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
   }
 
@@ -150,8 +153,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticateRequest(req);
+  if (auth instanceof NextResponse) return auth;
 
   const { id: assetId } = await params;
   let body: { action?: string; gcid?: string };
@@ -166,7 +169,10 @@ export async function POST(
 
   const [asset] = await sql`SELECT site_id FROM media_assets WHERE id = ${assetId}`;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
-  if (!session.sites.some((s) => s.id === asset.site_id)) {
+  const [owned] = await sql`
+    SELECT id FROM sites WHERE id = ${asset.site_id} AND subscription_id = ${auth.subscriptionId}
+  `;
+  if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
   }
 
@@ -176,7 +182,7 @@ export async function POST(
   `;
   if (!valid) return NextResponse.json({ error: "gcid not in site's category set" }, { status: 400 });
 
-  const assignedBy = session.role === "operator" || session.role === "admin" ? "operator" : "subscriber";
+  const assignedBy = auth.actingAsAdmin ? "operator" : "subscriber";
 
   if (action === "add") {
     const [existing] = await sql`

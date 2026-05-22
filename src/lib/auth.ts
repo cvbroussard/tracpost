@@ -16,6 +16,10 @@ export interface AuthContext {
   subscriptionId: string;
   plan: string;
   role: string;
+  /** True when an admin authenticated via Path 3 (acting on a
+   *  subscriber's behalf) — lets routes attribute writes to the
+   *  operator rather than the owner. */
+  actingAsAdmin?: boolean;
 }
 
 /**
@@ -83,6 +87,7 @@ export async function authenticateRequest(
           subscriptionId: sub.subscription_id as string,
           plan: (sub.plan as string) || "free",
           role: (sub.role as string) || "owner",
+          actingAsAdmin: true,
         };
       }
     }

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { AnalysisModal } from "@/components/manage/analysis-modal";
+import { lifecycleBadge } from "@/lib/lifecycle-badge";
+import { cdnImage } from "@/lib/cdn-image";
 
 interface Asset {
   id: string;
@@ -25,19 +27,6 @@ interface Counts {
   with_context: number;
   without_context: number;
   avg_quality: number;
-}
-
-// processing_stage enum (migration #235): uploaded → onboarded → briefed → analyzed, plus failed.
-const STAGE_META: Record<string, { label: string; badge: string }> = {
-  uploaded:  { label: "Uploaded",       badge: "bg-black/60 text-white" },
-  onboarded: { label: "Needs briefing", badge: "bg-amber-500 text-white" },
-  briefed:   { label: "Briefed",        badge: "bg-accent text-white" },
-  analyzed:  { label: "Analyzed",       badge: "bg-success text-white" },
-  failed:    { label: "Failed",         badge: "bg-danger text-white" },
-};
-
-function stageMeta(status: string) {
-  return STAGE_META[status] ?? { label: status || "unknown", badge: "bg-black/60 text-white" };
 }
 
 export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
@@ -131,7 +120,7 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "6px" }}>
         {filtered.map(asset => {
-          const stage = stageMeta(asset.status);
+          const stage = lifecycleBadge(asset.status);
           return (
             <div
               key={asset.id}
@@ -154,7 +143,7 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
                 </>
               ) : (
                 <img
-                  src={asset.url}
+                  src={cdnImage(asset.url, { width: 320 })}
                   alt={asset.context || ""}
                   loading="lazy"
                   style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: "0" }}
@@ -163,7 +152,7 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
               <span className="absolute top-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[8px] font-mono text-white">
                 {asset.quality ? Math.round(asset.quality * 100) : "—"}
               </span>
-              <span className={`absolute top-1 left-1 rounded px-1 py-0.5 text-[8px] font-medium leading-none ${stage.badge}`}>
+              <span className={`absolute top-1 left-1 rounded px-1 py-0.5 text-[8px] font-medium leading-none ${stage.className}`}>
                 {stage.label}
               </span>
               {!asset.context && (

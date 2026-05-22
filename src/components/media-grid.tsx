@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { AssetEditModal } from "./asset-edit-modal";
 import type { PillarGroup } from "./tag-picker";
+import { lifecycleBadge } from "@/lib/lifecycle-badge";
+import { cdnImage } from "@/lib/cdn-image";
 
 interface Asset {
   id: string;
@@ -33,30 +35,6 @@ interface Asset {
   archived_at: string | null;
   briefable_at: string | null;
   scene_types: string[] | null;
-}
-
-// Subscriber-facing stage badge. Reads processing_stage directly — since
-// the 2026-05-20 reframe that column IS the clean, subscriber-meaningful
-// state machine (uploaded → onboarded → briefed → analyzed, + failed).
-//
-// The badge names the stage the asset has COMPLETED — stage-completion
-// framing, not "next step needed." An un-briefed asset reads "onboarded"
-// (it IS onboarded), not "needs brief." Colour still progresses
-// early → done so the grid is scannable.
-function lifecycleBadge(a: { processing_stage: string }) {
-  switch (a.processing_stage) {
-    case "analyzed":
-      return { label: "analyzed", className: "bg-success/70 text-white" };
-    case "briefed":
-      return { label: "briefed", className: "bg-accent/70 text-white" };
-    case "failed":
-      return { label: "failed", className: "bg-red-500/80 text-white" };
-    case "uploaded":
-      return { label: "uploaded", className: "bg-slate-500/70 text-white" };
-    case "onboarded":
-    default:
-      return { label: "onboarded", className: "bg-amber-500/80 text-white" };
-  }
 }
 
 interface Brand {
@@ -230,14 +208,14 @@ export function MediaGrid({
                 </div>
               ) : (
                 <img
-                  src={a.storage_url}
+                  src={cdnImage(a.storage_url, { width: 400 })}
                   alt={a.context_note || ""}
                   className="h-full w-full object-cover"
                   loading="lazy"
                 />
               )}
               {(() => {
-                const b = lifecycleBadge(a);
+                const b = lifecycleBadge(a.processing_stage);
                 return (
                   <span
                     className={`absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${b.className}`}

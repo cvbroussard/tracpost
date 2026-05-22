@@ -27,6 +27,9 @@ export async function GET(req: NextRequest) {
       ROUND(AVG(quality_score)::numeric, 2) AS avg_quality
     FROM media_assets
     WHERE site_id = ${siteId}
+      AND archived_at IS NULL
+      AND source IS DISTINCT FROM 'brand_logo'
+      AND media_type != 'pdf'
   `;
 
   const assets = await sql`
@@ -37,8 +40,10 @@ export async function GET(req: NextRequest) {
            (SELECT array_agg(p.name) FROM asset_projects ap JOIN projects p ON p.id = ap.project_id WHERE ap.asset_id = ma.id) AS projects
     FROM media_assets ma
     WHERE ma.site_id = ${siteId}
+      AND ma.archived_at IS NULL
+      AND ma.source IS DISTINCT FROM 'brand_logo'
       AND ma.media_type != 'pdf'
-    ORDER BY ma.quality_score DESC NULLS LAST
+    ORDER BY ma.date_taken DESC NULLS LAST, ma.created_at DESC
     LIMIT 200
   `;
 

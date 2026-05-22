@@ -2,7 +2,6 @@ import { sql } from "@/lib/db";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { parseContextNote } from "@/lib/context-note-parser";
-import { waitUntil } from "@vercel/functions";
 
 /**
  * PATCH /api/assets/:id — Update an asset's context note or pillar.
@@ -186,44 +185,10 @@ export async function PATCH(
       })})
     `;
 
-    // Briefing flip: if asset is in 'onboarded' and now has a
-    // substantive context_note (>= 40 chars per the readiness primitive
-    // floor), promote to 'briefed'. This is the human-briefing action
-    // that gates orchestrator pool entry per migrate-099. A subscriber
-    // saving a thin or empty caption keeps the asset in onboarded.
-    const [latest] = await sql`
-      SELECT processing_stage, context_note FROM media_assets WHERE id = ${id}
-    `;
-    if (latest?.processing_stage === "onboarded") {
-      const note = (latest.context_note as string) || "";
-      if (note.trim().length >= 40) {
-        await sql`
-          UPDATE media_assets
-          SET processing_stage = 'briefed',
-              triaged_at = COALESCE(triaged_at, NOW()),
-              metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
-                'briefed_at', NOW()::text,
-                'briefed_by_subscription_id', ${auth.subscriptionId}
-              )
-          WHERE id = ${id} AND processing_stage = 'onboarded'
-        `;
-
-        // Manual-first cascade (LOCKED 2026-05-16):
-        // Save persists the form + flips processing_stage. It does NOT
-        // auto-fire the cascade (asset_analysis, slug derivation, R2
-        // rename, variant render). Subscriber must explicitly click the
-        // Auto-tag preview/Apply flow in the modal to produce a
-        // consumable asset. Until then, the asset is briefed (has
-        // narrative) but not consumable (no asset_analysis), which the
-        // orchestrator/generator pool queries correctly gate on.
-        //
-        // Rationale: matches Select → Recommend → Review → Trigger
-        // subscriber pattern; avoids spending ~$0.025 LLM + ~10s
-        // R2/variant work on every save (including typo edits); keeps
-        // the cascade preview as the explicit "make this consumable"
-        // ceremony.
-      }
-    }
+    // Briefing flip relocated 2026-05-22 → promoteToBriefedIfReady, called
+    // from the recording-write paths (/api/recordings). The brief is a
+    // recording, not a context_note; the stage flip belongs with the
+    // recording commit, not this analyze-era asset PATCH.
 
     // Update caption source and project snapshot if this is a project asset
     if (context_note !== undefined && typeof context_note === "string" && context_note.trim()) {

@@ -29,6 +29,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { waitUntil } from "@vercel/functions";
+import { promoteToBriefedIfReady } from "@/lib/promote-briefed";
 
 const VALID_SOURCES = new Set([
   "briefing",
@@ -144,6 +145,21 @@ export async function POST(req: NextRequest) {
                 transcribe_provider, created_at
     `;
 
+    // Promote onboarded → briefed once a substantive brief exists. The
+    // helper self-gates on a recording with transcript ≥ 40 chars, so for
+    // typed + precomputed-spoken it fires now; for async-spoken the
+    // transcript lands later and the waitUntil block below calls it again.
+    if (source_asset_id) {
+      try {
+        await promoteToBriefedIfReady(source_asset_id as string, auth.subscriptionId);
+      } catch (err) {
+        console.warn(
+          `Briefed promotion failed for asset ${source_asset_id}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
     // Async Whisper only for the legacy / no-preview spoken path.
     // Typed and precomputed paths already have a transcript persisted.
     if (isAsyncSpoken && shouldTranscribe) {
@@ -184,6 +200,12 @@ export async function POST(req: NextRequest) {
                   metadata = COALESCE(metadata, '{}'::jsonb) || ${segmentsJson}::jsonb
               WHERE id = ${recording.id}
             `;
+            // Transcript just landed — re-check the briefed promotion
+            // (covers the async-spoken path, where the transcript was
+            // null at insert time).
+            if (source_asset_id) {
+              await promoteToBriefedIfReady(source_asset_id as string, auth.subscriptionId);
+            }
           } catch (err) {
             console.warn(
               `Transcription failed for recording ${recording.id}:`,

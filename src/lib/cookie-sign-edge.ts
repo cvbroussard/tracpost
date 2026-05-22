@@ -14,24 +14,39 @@
  * produced by `signCookie()` verify here.
  */
 
-const SECRET =
-  process.env.SESSION_TOKEN_SECRET ||
-  process.env.META_APP_SECRET ||
-  "tracpost-dev-secret";
+/**
+ * Resolve the signing secret. Read PER CALL — never at module scope. In the
+ * Edge runtime, .env.local vars are NOT in process.env at module-evaluation
+ * time, only at request time. A module-level `const SECRET = process.env...`
+ * captures the "tracpost-dev-secret" fallback and then silently rejects
+ * every cookie that the Node route signed with the real secret.
+ */
+function resolveSecret(): string {
+  return (
+    process.env.SESSION_TOKEN_SECRET ||
+    process.env.META_APP_SECRET ||
+    "tracpost-dev-secret"
+  );
+}
 
-let cachedKey: Promise<CryptoKey> | null = null;
+// Cache the imported CryptoKey keyed by the secret value — keying by value
+// means a stale fallback secret can never poison a later correct lookup.
+const keyCache = new Map<string, Promise<CryptoKey>>();
 
 function getKey(): Promise<CryptoKey> {
-  if (!cachedKey) {
-    cachedKey = crypto.subtle.importKey(
+  const secret = resolveSecret();
+  let key = keyCache.get(secret);
+  if (!key) {
+    key = crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(SECRET),
+      new TextEncoder().encode(secret),
       { name: "HMAC", hash: "SHA-256" },
       false,
       ["verify"],
     );
+    keyCache.set(secret, key);
   }
-  return cachedKey;
+  return key;
 }
 
 function b64urlToArrayBuffer(s: string): ArrayBuffer {

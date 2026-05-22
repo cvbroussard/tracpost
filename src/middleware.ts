@@ -423,6 +423,12 @@ async function gateAdmin(
 }
 
 export const config = {
+  // Run on the Node.js runtime, not Edge. The Edge bundle does not reliably
+  // expose non-public env vars (e.g. META_APP_SECRET) to imported lib
+  // modules like cookie-sign-edge.ts — the cookie verifier silently fell
+  // back to the dev secret and rejected every valid admin/session cookie.
+  // Node middleware reads process.env normally.
+  runtime: "nodejs",
   matcher: [
     "/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|icon\\.png).*)",
   ],

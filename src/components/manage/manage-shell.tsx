@@ -36,9 +36,11 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Media Production",
     items: [
       { label: "Analysis", path: "/media-production/analysis" },
+      { label: "Motion Gen", path: "/motion-gen" },
       { label: "Web Pages", path: "/media-production/web-pages" },
       { label: "Standard Posts", path: "/media-production/standard-posts" },
       { label: "Video", path: "/media-production/video" },
+      { label: "Components", path: "/components" },
     ],
   },
   {
@@ -49,7 +51,6 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Media Generation", path: "/media-gen" },
       { label: "Blog", path: "/blog-config" },
       { label: "Prompt Inspector", path: "/prompt-inspector" },
-      { label: "Director Inspector", path: "/director-inspector" },
       { label: "Social", path: "/social-config" },
       { label: "Connections", path: "/connections" },
       { label: "GBP", path: "/gbp" },

@@ -109,28 +109,6 @@ export function AssetEditModal({
   const [projectIds, setProjectIds] = useState<string[]>(initialProjectIds);
   const [savedProjectIds, setSavedProjectIds] = useState<string[]>(initialProjectIds);
 
-  // Variant thumbnails — rendered below the source media. Loaded on
-  // mount. Cheap GET.
-  const [variants, setVariants] = useState<Array<{
-    id: string;
-    template_id: string | null;
-    storage_url: string;
-    variant_status: string;
-    quality_score: number | string | null;
-    generated_at: string;
-    template_label: string | null;
-    aspect_ratio: string | null;
-  }>>([]);
-  useEffect(() => {
-    if (!assetId) return;
-    let cancelled = false;
-    void fetch(`/api/assets/${assetId}/variants`)
-      .then((r) => (r.ok ? r.json() : { variants: [] }))
-      .then((d) => { if (!cancelled) setVariants(d.variants ?? []); })
-      .catch(() => { /* non-fatal */ });
-    return () => { cancelled = true; };
-  }, [assetId]);
-
   // Reset briefing + project-binding state when navigating to a
   // different asset.
   useEffect(() => {
@@ -716,7 +694,7 @@ export function AssetEditModal({
               2. Transcription Section (latest expanded + earlier collapsed)
               3. Media render
               4. Project binding picker
-              5. Privacy section + variant thumbnails */}
+              5. Privacy section */}
         <div className="px-6 pt-4">
 
             {/* ACTION BAR — sticky top. Left cluster: V/O capture for
@@ -913,53 +891,6 @@ export function AssetEditModal({
                 is weird (waiver unsigned, suppress mode). Hides when
                 detection hasn't run yet or for non-image media. */}
             <AssetPrivacySection assetId={assetId} />
-
-            {/* VARIANT THUMBNAILS — strip of rendered platform variants
-                directly below the source media. Each variant is the
-                source asset re-rendered into a per-platform aspect
-                ratio + format by sharp/ffmpeg. When empty (no variants
-                rendered yet, or render still pending) this entire block
-                hides. */}
-            {variants.filter((v) => v.variant_status === "ready").length > 0 && (() => {
-              const readyVariants = variants.filter((v) => v.variant_status === "ready");
-              const pendingCount = variants.length - readyVariants.length;
-              return (
-                <div className="mb-3">
-                  <div className="mb-1.5 flex items-baseline gap-2 text-[10px] uppercase tracking-wide text-muted/70">
-                    <span>Variants ({readyVariants.length})</span>
-                    {pendingCount > 0 && (
-                      <span className="text-[9px] text-muted/50 normal-case tracking-normal">
-                        +{pendingCount} still rendering
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {readyVariants.map((v) => {
-                      const isVideo = /\.(mp4|mov|webm)(\?|$)/i.test(v.storage_url);
-                      return (
-                        <a
-                          key={v.id}
-                          href={v.storage_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group relative block overflow-hidden rounded border border-border bg-background hover:border-accent/60"
-                          title={`${v.template_label || v.template_id || "variant"}${v.aspect_ratio ? ` · ${v.aspect_ratio}` : ""}`}
-                        >
-                          {isVideo ? (
-                            <video src={v.storage_url} className="h-20 w-auto object-contain" muted />
-                          ) : (
-                            <img src={v.storage_url} alt="" className="h-20 w-auto object-contain" />
-                          )}
-                          <div className="absolute inset-x-0 bottom-0 bg-background/80 px-1 py-0.5 text-[9px] text-muted opacity-0 transition-opacity group-hover:opacity-100">
-                            {v.template_label || v.template_id || "variant"}
-                          </div>
-                        </a>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
 
             {/* Analyze (auto-tag cascade + inspector) excised from the
                 subscriber modal 2026-05-22 — analyze now runs operator-

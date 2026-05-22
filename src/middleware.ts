@@ -414,11 +414,15 @@ async function gateAdmin(
     return null;
   }
 
-  // Redirect to admin login
+  // Redirect to admin login, preserving the intended destination as ?next
+  // so the login page can return the operator there (e.g. /manage) rather
+  // than always falling to the /admin default.
   const isLocal = req.headers.get("host")?.includes("localhost");
   const loginPath = isLocal ? "/admin-login" : "/login";
+  const intended = req.nextUrl.pathname + req.nextUrl.search;
   const url = req.nextUrl.clone();
   url.pathname = loginPath;
+  url.search = `?next=${encodeURIComponent(intended)}`;
   return NextResponse.redirect(url);
 }
 

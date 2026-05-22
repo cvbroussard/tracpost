@@ -64,6 +64,12 @@ export interface AssetAnalysisApi {
     seedRecordingId: string | null;
     seedAssetId: string;
   }): Promise<CreatedEntity | null>;
+  /** Cascade data layer. These return the raw Response so the caller
+   *  keeps its own status / d.ok / error-message handling — the adapter
+   *  owns only the URL and the manager's ?subscription_id suffix. */
+  fetchCategories(assetId: string): Promise<Response>;
+  cascadePreview(assetId: string, body?: Record<string, unknown>): Promise<Response>;
+  cascadeCommit(assetId: string, body: Record<string, unknown>): Promise<Response>;
 }
 
 export interface UseAssetAnalysisParams {

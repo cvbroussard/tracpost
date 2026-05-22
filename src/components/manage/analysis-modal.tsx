@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { toast } from "@/components/feedback";
 import { useAssetAnalysis } from "@/hooks/use-asset-analysis";
 import { makeManageAnalysisApi } from "@/lib/asset-analysis-api";
-import { AnalyzeResultsPanel } from "@/components/analyze-results-panel";
+import { AssetCategoriesSection } from "@/components/asset-categories-section";
 import type { PillarGroup } from "@/components/tag-picker";
 
 /** Shape returned by GET /api/manage/asset-analysis/[assetId]. */
@@ -37,14 +37,14 @@ interface AnalysisContext {
 
 /**
  * Manager-side Media Production › Analysis modal. Opened from the asset-
- * library grid; reuses useAssetAnalysis + AnalyzeResultsPanel so the
- * operator reviews + corrects an asset's auto-tag analysis. Briefing
+ * library grid; the operator runs the full multimodal cascade
+ * (AssetCategoriesSection) on an asset and commits it. Briefing
  * (recording) is subscriber-only — this modal shows the transcript
  * read-only as the analysis input.
  *
- * The asset_categories cascade is intentionally absent for now — its routes
- * are subscriber-session-only; it returns once those migrate to
- * authenticateRequest. Sign-off is likewise deferred.
+ * The cascade routes authenticate the operator via authenticateRequest
+ * Path 3 (?subscription_id=) — the manager adapter appends that suffix.
+ * Sign-off is deferred.
  */
 export function AnalysisModal({ assetId, onClose }: { assetId: string; onClose: () => void }) {
   const [ctx, setCtx] = useState<AnalysisContext | null>(null);
@@ -118,34 +118,15 @@ function AnalysisModalBody({ ctx, onClose }: { ctx: AnalysisContext; onClose: ()
 
   const isVideo = ctx.asset.mediaType?.startsWith("video") || ctx.asset.mediaType === "video";
   const hasTranscript = ctx.transcript.trim().length >= 5;
-  const analyzeDisabled = !hasTranscript || analysis.autoTagging || analysis.lastSuggestRunAt !== null;
+  const analyzeDisabled = !hasTranscript || analysis.cascadeBusy;
 
-  const sortedJson = (a: string[]) => JSON.stringify([...a].sort());
-
+  // Save commits the loaded cascade preview (no-op if none) — cascade-
+  // commit persists asset_analysis, categories, brands, the SEO rename,
+  // and flips processing_stage to 'analyzed'.
   async function handleSave() {
     setSaving(true);
     try {
-      const body: Record<string, unknown> = {};
-      if (sortedJson(analysis.sceneTypesArr) !== sortedJson(ctx.asset.sceneTypes)) body.scene_types = analysis.sceneTypesArr;
-      if (JSON.stringify(analysis.tags) !== JSON.stringify(ctx.asset.tags)) body.content_tags = analysis.tags;
-      if (sortedJson(analysis.brandIds) !== sortedJson(ctx.asset.brandIds)) body.brand_ids = analysis.brandIds;
-      if (sortedJson(analysis.projectIds) !== sortedJson(ctx.asset.projectIds)) body.project_ids = analysis.projectIds;
-      if (sortedJson(analysis.serviceIds) !== sortedJson(ctx.asset.serviceIds)) body.service_ids = analysis.serviceIds;
-      if (sortedJson(analysis.branchIds) !== sortedJson(ctx.asset.branchIds)) body.branch_ids = analysis.branchIds;
-      if (Object.keys(body).length > 0) {
-        const res = await fetch(
-          `/api/assets/${ctx.asset.id}?subscription_id=${encodeURIComponent(ctx.subscriptionId)}`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          },
-        );
-        if (!res.ok) {
-          toast.error("Failed to save analysis");
-          return;
-        }
-      }
+      await analysis.cascadeRef.current?.commitPreview();
       onClose();
     } catch {
       toast.error("Failed to save analysis");
@@ -179,22 +160,21 @@ function AnalysisModalBody({ ctx, onClose }: { ctx: AnalysisContext; onClose: ()
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { void analysis.runAutoTagSuggest(ctx.latestRecordingId ?? "", ctx.transcript); }}
+            onClick={() => analysis.cascadeRef.current?.triggerPreview()}
             disabled={analyzeDisabled}
             className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40"
           >
-            {analysis.autoTagging ? "Analyzing…" : analysis.lastSuggestRunAt !== null ? "Analyzed" : "⚡ Analyze"}
+            {analysis.cascadeBusy ? "Analyzing…" : "⚡ Analyze"}
           </button>
           {!hasTranscript && <span className="text-[10px] text-muted">Needs a transcript to analyze.</span>}
         </div>
 
-        <AnalyzeResultsPanel
-          analysis={analysis}
-          pillarConfig={ctx.pillarConfig}
-          brandLabel={ctx.brandLabel}
-          projectLabel={ctx.projectLabel}
-          branchLabel={ctx.branchLabel}
-          latestRecordingId={ctx.latestRecordingId}
+        <AssetCategoriesSection
+          ref={analysis.cascadeRef}
+          assetId={ctx.asset.id}
+          api={api}
+          hideTrigger
+          onStateChange={analysis.handleCascadeStateChange}
         />
       </div>
 

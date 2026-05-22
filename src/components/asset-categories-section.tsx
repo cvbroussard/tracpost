@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { JsonViewer } from "./json-viewer";
 import { AssetApprovalCard, type ApprovalSelection } from "./asset-approval-card";
+import type { AssetAnalysisApi } from "@/hooks/use-asset-analysis";
 
 /**
  * Imperative handle exposed via ref. The Auto-tag bar's trigger button
@@ -113,6 +114,9 @@ interface CascadePreview {
 
 interface AssetCategoriesSectionProps {
   assetId: string;
+  /** Injected data layer — the subscriber adapter or the manager
+   *  (?subscription_id) adapter. Keeps this component URL-agnostic. */
+  api: AssetAnalysisApi;
   /** When true, the section's internal "⚡ Auto-tag this asset" trigger
    * button is suppressed. Use this when the Auto-tag bar renders its own
    * trigger button (the canonical surface 2026-05-16). The bar drives
@@ -133,7 +137,7 @@ interface AssetCategoriesSectionProps {
 }
 
 export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCategoriesSectionProps>(
-  function AssetCategoriesSection({ assetId, hideTrigger = false, className, onStateChange, onDataChange }, ref) {
+  function AssetCategoriesSection({ assetId, api, hideTrigger = false, className, onStateChange, onDataChange }, ref) {
   const [data, setData] = useState<CategoriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +156,7 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
     if (!assetId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/assets/${assetId}/categories`);
+      const res = await api.fetchCategories(assetId);
       if (!res.ok) throw new Error(`Failed to load (${res.status})`);
       const d = (await res.json()) as CategoriesResponse;
       setData(d);
@@ -163,7 +167,7 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
     } finally {
       setLoading(false);
     }
-  }, [assetId, onDataChange]);
+  }, [assetId, api, onDataChange]);
 
   useEffect(() => {
     load();
@@ -194,11 +198,7 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
     setCascadeError(null);
     setPreview(null);
     try {
-      const res = await fetch(`/api/assets/${assetId}/categorize/preview`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-      });
+      const res = await api.cascadePreview(assetId);
       const d = await res.json();
       if (!res.ok || !d.ok) {
         throw new Error(d.error || `Preview failed (${res.status})`);
@@ -228,10 +228,9 @@ export const AssetCategoriesSection = forwardRef<AutoTagSectionHandle, AssetCate
     setCommitting(true);
     setCascadeError(null);
     try {
-      const res = await fetch(`/api/assets/${assetId}/categorize/commit`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ analysis: preview.analysis, approvals }),
+      const res = await api.cascadeCommit(assetId, {
+        analysis: preview.analysis,
+        approvals,
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || `Commit failed (${res.status})`);

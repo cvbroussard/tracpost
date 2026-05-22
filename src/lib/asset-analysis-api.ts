@@ -65,6 +65,26 @@ function makeAnalysisApi(query: string): AssetAnalysisApi {
         return null;
       }
     },
+
+    async fetchCategories(assetId) {
+      return fetch(`/api/assets/${assetId}/categories${query}`);
+    },
+
+    async cascadePreview(assetId, body) {
+      return fetch(`/api/assets/${assetId}/categorize/preview${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body ?? {}),
+      });
+    },
+
+    async cascadeCommit(assetId, body) {
+      return fetch(`/api/assets/${assetId}/categorize/commit${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    },
   };
 }
 

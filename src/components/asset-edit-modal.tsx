@@ -1087,6 +1087,7 @@ export function AssetEditModal({
                 <AssetCategoriesSection
                   ref={cascadeRef}
                   assetId={assetId}
+                  api={subscriberAssetAnalysisApi}
                   hideTrigger
                   className=""
                   onStateChange={handleCascadeStateChange}

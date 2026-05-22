@@ -3,20 +3,15 @@
 /**
  * AutoTagBar — sticky top toolbar of the asset modal.
  *
- * Replaces the prior RecordingBar (2026-05-16) — the Record button moved
- * into the Transcription card and the bar's identity is now Auto-tag.
+ * The analyze cascade was excised (briefing-only modal); the bar now
+ * carries the Voice Over capture control + the navigation/save cluster.
  *
  * Layout:
  *   ┌─────────────────────────────────────────────────────────────────────┐
- *   │ [⚡ Auto-tag] [Voice Over]  | [Cancel] [Save] [Save & Next] [Close] │
- *   ├─────────────────────────────────────────────────────────────────────┤
- *   │ Cascade preview body (renders when subscriber clicks Auto-tag)      │
- *   │   ↳ Auto-tag card body (categories, scenes, brands, preview/apply)  │
+ *   │ [Voice Over]            | [Cancel] [Save] [Save & Next] [Close]     │
  *   └─────────────────────────────────────────────────────────────────────┘
  *
  * Capture cluster (left):
- *   - Auto-tag: triggers the cascade preview (fires the imperative
- *     `triggerPreview()` exposed by AssetCategoriesSection via ref).
  *   - Voice Over: only rendered for video assets. Capture controls for
  *     V/O still live here because they couple to the video player.
  *
@@ -25,13 +20,9 @@
  *   - Save: commit + stay on this asset
  *   - Save & Next: commit + advance to next asset
  *   - Close: dirty-form check + close modal (#183)
- *
- * Body slot: children prop. Parent passes <AssetCategoriesSection ref=...
- * hideTrigger /> so the cascade preview + assignments render inline.
  */
 
 import type { BriefingState } from "@/hooks/use-audio-briefing";
-import type { ReactNode } from "react";
 
 interface RecordingHook {
   supported: boolean;
@@ -52,13 +43,6 @@ interface AutoTagBarProps {
   /** Voice-over recording hook. Only used when isVideo is true. */
   voiceOver?: RecordingHook;
   isVideo: boolean;
-  /** Auto-tag trigger — bar's left-cluster button fires this. */
-  onAutoTag: () => void;
-  /** Disable Auto-tag button (e.g., preview in flight). */
-  autoTagDisabled?: boolean;
-  /** Label override for the Auto-tag button (e.g. "Analyzing…" while
-   * preview is running). Default: "⚡ Auto-tag". */
-  autoTagLabel?: string;
   /** Cancel: discard all staged recordings + typed draft, stay on modal. */
   onCancel: () => void;
   /** Save: commit staged recordings + asset PATCH, stay on this asset. */
@@ -72,10 +56,6 @@ interface AutoTagBarProps {
   saving: boolean;
   hasNext: boolean;
   hasPrev?: boolean;
-  /** Body content — typically the cascade preview / assignments
-   * rendering of <AssetCategoriesSection>. Renders below the button row
-   * and grows the bar to fit. */
-  children?: ReactNode;
 }
 
 function fmtMs(ms: number): string {
@@ -208,9 +188,6 @@ export function AutoTagBar({
   audio,
   voiceOver,
   isVideo,
-  onAutoTag,
-  autoTagDisabled,
-  autoTagLabel = "⚡ Analyze",
   onCancel,
   onSave,
   onSaveAndNext,
@@ -219,7 +196,6 @@ export function AutoTagBar({
   saving,
   hasNext,
   hasPrev,
-  children,
 }: AutoTagBarProps) {
   const anyActive =
     audio.state === "recording" ||
@@ -231,18 +207,9 @@ export function AutoTagBar({
 
   return (
     <div className="rounded border border-accent/30 bg-accent/5 px-3 py-2.5">
-      {/* Button row — Auto-tag (+V/O for video) left, actions right */}
+      {/* Button row — Voice Over (for video) left, actions right */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onAutoTag}
-            disabled={autoTagDisabled}
-            className="rounded bg-accent px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-            title="Run cascade analysis (multimodal AI: transcript + image → ranked categories, brands, slug, scene, story angles) — ~$0.025, ~10s"
-          >
-            {autoTagLabel}
-          </button>
           {isVideo && voiceOver && (
             <PrimaryToggleButton audio={voiceOver} idleLabel="Voice Over" />
           )}
@@ -310,9 +277,6 @@ export function AutoTagBar({
           <StagedPreview label="Voice-over" audio={voiceOver} />
         </div>
       )}
-
-      {/* Cascade preview body / assignments — grows the bar as needed */}
-      {children && <div className="mt-3 border-t border-accent/20 pt-3">{children}</div>}
     </div>
   );
 }

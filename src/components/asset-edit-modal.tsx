@@ -2,20 +2,14 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { toast, confirm as confirmDialog } from "@/components/feedback";
-import type { PillarGroup } from "./tag-picker";
 // FaceOverlay retired 2026-05-19 with the personas entity removal.
 import { useAudioBriefing } from "@/hooks/use-audio-briefing";
-import { useAssetAnalysis } from "@/hooks/use-asset-analysis";
-import { subscriberAssetAnalysisApi } from "@/lib/asset-analysis-api";
-import { AnalyzeResultsPanel } from "@/components/analyze-results-panel";
 import {
   AutoTagBar,
   PrimaryToggleButton as AudioToggleButton,
   StateIndicator as AudioStateIndicator,
   StagedPreview as AudioStagedPreview,
 } from "@/components/auto-tag-bar";
-import { AssetCategoriesSection } from "@/components/asset-categories-section";
-import { AssetTagsStrip } from "@/components/asset-tags-strip";
 import { AssetPrivacySection } from "@/components/asset-privacy-section";
 
 interface RecordingRow {
@@ -30,13 +24,6 @@ interface RecordingRow {
   created_at: string;
 }
 
-interface Brand {
-  id: string;
-  name: string;
-  slug: string;
-  url: string | null;
-}
-
 interface Project {
   id: string;
   name: string;
@@ -48,36 +35,9 @@ interface AssetEditModalProps {
   siteId: string;
   imageUrl: string;
   mediaType: string;
-  initialNote: string;
-  initialPillar: string;
-  /** Multi-pillar array — Story Angle column. AI seeds with [primary], subscriber multi-selects from full menu. */
-  initialPillars?: string[];
-  /** Multi-scene-type array — Scene Composition column. AI pre-fills, subscriber edits. */
-  initialSceneTypes?: string[];
-  initialTags: string[];
-  pillarConfig: PillarGroup[];
-  availablePillars?: string[];
-  brands?: Brand[];
   projects?: Project[];
-  /** Site's services catalog (rows from `services` table) — for the
-      Services picker (Row 6) and the auto-tag inspector. */
-  services?: Array<{ id: string; name: string; slug: string }>;
-  /** Site's branches catalog (rows from `branches` table) — for the
-      Branches picker (Row 7). */
-  branches?: Array<{ id: string; name: string; slug: string }>;
-  brandLabel?: string | null;
-  projectLabel?: string | null;
-  serviceLabel?: string | null;
-  branchLabel?: string | null;
-  initialBrandIds?: string[];
   initialProjectIds?: string[];
-  initialServiceIds?: string[];
-  initialBranchIds?: string[];
-  personaLabel?: string | null;
-  initialPersonaIds?: string[];
   source?: string | null;
-  qualityScore?: number | null;
-  sceneType?: string | null;
   /** ISO timestamp when subscriber archived this asset, null if active. Per
       project_tracpost_deletion_policy.md, archive is soft-delete: hidden
       from library + orchestrator pool but data persists until subscription
@@ -88,8 +48,6 @@ interface AssetEditModalProps {
       Was previously per-item toggle on the capture-page staging UI; now
       lives here in the modal where other asset metadata is managed. */
   initialAiGenerated?: boolean;
-  /** AI's suggested content pillar (auto-applied; subscriber confirms via #167) */
-  aiSuggestedPillar?: string | null;
   /**
    * Existing verification records on this asset. Each entry tracks whether
    * subscriber has confirmed or rejected an AI suggestion. Verifications
@@ -102,36 +60,10 @@ interface AssetEditModalProps {
     verified_at?: string;
   }> | null;
   captionSource?: string | null;
-  faces?: Array<{
-    box: { x: number; y: number; width: number; height: number };
-    score: number;
-    personaId: string | null;
-    personaName: string | null;
-    distance: number | null;
-    embedding: number[];
-    index: number;
-  }> | null;
-  faceDetectionWidth?: number;
-  faceDetectionHeight?: number;
-  personas?: Array<{ id: string; name: string; type: string }>;
   initialMetadata?: Record<string, unknown> | null;
   onClose: () => void;
-  onSaved: (
-    note: string,
-    pillar: string,
-    tags: string[],
-    brandIds?: string[],
-    projectIds?: string[],
-    personaIds?: string[],
-    serviceIds?: string[],
-    branchIds?: string[],
-    sceneTypes?: string[],
-  ) => void;
+  onSaved: () => void;
   onDeleted?: () => void;
-  onBrandCreated?: (brand: Brand) => void;
-  onProjectCreated?: (project: Project) => void;
-  onServiceCreated?: (service: { id: string; name: string; slug: string }) => void;
-  onBranchCreated?: (branch: { id: string; name: string; slug: string }) => void;
   onNext?: () => void;
   onPrev?: () => void;
   hasNext?: boolean;
@@ -143,53 +75,22 @@ export function AssetEditModal({
   siteId,
   imageUrl,
   mediaType,
-  initialNote,
-  initialPillar,
-  initialPillars = [],
-  initialSceneTypes = [],
-  initialTags,
-  pillarConfig,
-  brands = [],
   projects = [],
-  services = [],
-  branches = [],
-  brandLabel,
-  projectLabel,
-  serviceLabel,
-  branchLabel,
-  initialBrandIds = [],
   initialProjectIds = [],
-  initialServiceIds = [],
-  initialBranchIds = [],
-  personaLabel,
-  initialPersonaIds = [],
   source,
-  qualityScore,
-  sceneType,
   archivedAt,
   initialAiGenerated = false,
-  aiSuggestedPillar,
   aiVerifications,
   captionSource,
-  faces: initialFaces = null,
-  faceDetectionWidth,
-  faceDetectionHeight,
-  personas: personaList = [],
+  initialMetadata,
   onClose,
   onSaved,
   onDeleted,
-  initialMetadata,
-  onBrandCreated,
-  onProjectCreated,
-  onServiceCreated,
-  onBranchCreated,
   onNext,
   onPrev,
   hasNext = false,
   hasPrev = false,
 }: AssetEditModalProps) {
-  const [faceData, setFaceData] = useState(initialFaces);
-  const [note, setNote] = useState(initialNote);
   // Local verifications state — initialized from props, mutated optimistically
   // when subscriber clicks confirm/reject (#167). Server PATCH happens
   // immediately; on failure we revert.
@@ -201,56 +102,15 @@ export function AssetEditModal({
   const [aiGenerated, setAiGenerated] = useState(initialAiGenerated);
   const [savingAi, setSavingAi] = useState(false);
   const _hasGeneratedText = !!(initialMetadata?.generated_text as Record<string, unknown>)?.generated_at;
-  const [pillar, setPillar] = useState(initialPillar);
-  // Analysis core — tag working-state, the cascade, and the auto-tag
-  // inspector — lives in useAssetAnalysis so the manager-side Analysis
-  // surface can reuse it. Destructured into the same names the modal's
-  // JSX + doSave + handleClose already use, so behavior is unchanged.
-  const analysis = useAssetAnalysis({
-    assetId,
-    siteId,
-    api: subscriberAssetAnalysisApi,
-    pillarConfig,
-    brands,
-    projects,
-    services,
-    branches,
-    personas: personaList,
-    initialTags,
-    initialSceneTypes,
-    initialPillars,
-    initialPillar,
-    initialBrandIds,
-    initialProjectIds,
-    initialServiceIds,
-    initialBranchIds,
-    initialPersonaIds,
-    onBrandCreated,
-    onProjectCreated,
-    onServiceCreated,
-    onBranchCreated,
-  });
-  // Only the names the modal itself still uses (doSave / handleClose /
-  // suggestFromNote / hashtag / AutoTagBar). The auto-tag inspector's state
-  // is consumed by <AnalyzeResultsPanel>, which takes the whole `analysis`.
-  const {
-    sceneTypesArr, savedSceneTypesArr, setSavedSceneTypesArr,
-    tags, setTags, savedTags, setSavedTags,
-    pillarsArr, initialPillarsArr,
-    brandIds, setBrandIds, savedBrandIds, setSavedBrandIds,
-    projectIds, setProjectIds, savedProjectIds, setSavedProjectIds,
-    personaIds, savedPersonaIds, setSavedPersonaIds,
-    serviceIds, savedServiceIds, setSavedServiceIds,
-    branchIds, savedBranchIds, setSavedBranchIds,
-    localBrands, localProjects,
-    cascadeRef, cascadeBusy, cascadeHasPreview, handleCascadeStateChange,
-    categoriesData, handleCategoriesData,
-    runAutoTagSuggest,
-  } = analysis;
+  // Project binding — single-project manual assignment. The cascade
+  // never touched projects, so this stays subscriber-managed local state
+  // (analyze excised 2026-05-22). savedProjectIds mirrors the persisted
+  // value for the unsaved-indicator + dirty-check.
+  const [projectIds, setProjectIds] = useState<string[]>(initialProjectIds);
+  const [savedProjectIds, setSavedProjectIds] = useState<string[]>(initialProjectIds);
 
   // Variant thumbnails — rendered below the source media. Loaded on
-  // mount + after Save (cascade fires variant render in background;
-  // re-fetch happens via cascadeHasPreview transitions). Cheap GET.
+  // mount. Cheap GET.
   const [variants, setVariants] = useState<Array<{
     id: string;
     template_id: string | null;
@@ -269,16 +129,15 @@ export function AssetEditModal({
       .then((d) => { if (!cancelled) setVariants(d.variants ?? []); })
       .catch(() => { /* non-fatal */ });
     return () => { cancelled = true; };
-  }, [assetId, cascadeHasPreview]);
+  }, [assetId]);
 
-  // Reset briefing state when navigating to a different asset. The tag /
-  // analysis working-state reset is owned by useAssetAnalysis.
+  // Reset briefing + project-binding state when navigating to a
+  // different asset.
   useEffect(() => {
-    setFaceData(initialFaces);
-    setNote(initialNote);
-    setPillar(initialPillar);
     setVerifications(aiVerifications || []);
     setAiGenerated(initialAiGenerated);
+    setProjectIds(initialProjectIds);
+    setSavedProjectIds(initialProjectIds);
     setTypedMode(false);
     setTypedDraft("");
     setReplaceTargetId(null);
@@ -313,12 +172,7 @@ export function AssetEditModal({
   const [replacing, setReplacing] = useState(false);
   const [replaceError, setReplaceError] = useState<string | null>(null);
   const replaceFileRef = useRef<HTMLInputElement>(null);
-  const [suggesting, setSuggesting] = useState(false);
-  // Story Angle card owns all pillar tag selection — no under-image
-  // split, no separate bottom Tags section. Pillar selection derived
-  // from tags. (Earlier `showFullPicker`, `sortedPillarsByTagCount`,
-  // `pillarsUnderImage`, `pillarsBelowFold` retired with the restructure.)
-  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref for the typed-briefing textarea (Type instead path).
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Replace transcript workflow: subscriber clicks "Replace this
@@ -339,13 +193,10 @@ export function AssetEditModal({
     sourceAssetId: assetId,
     source: "briefing",
     onCommitted: useCallback(
-      (recordingId: string, transcript: string) => {
+      (recordingId: string) => {
         // Bust the local recordings cache so the Transcription Section
         // picks up the new latest. Latest wins.
         void refetchRecordings();
-        // Fire audio-first auto-tagging suggestions per
-        // auto_tagging_audit (LOCKED 2026-05-10).
-        void runAutoTagSuggest(recordingId, transcript);
         // Replace workflow: if the subscriber initiated this recording
         // via the "Replace transcript" button, archive the prior
         // latest so the new one cleanly takes its place. Asset stays
@@ -358,8 +209,8 @@ export function AssetEditModal({
           })();
         }
       },
-      // refetchRecordings + runAutoTagSuggest + replaceTargetId
-      // declared below; the callback only fires after audio.commit().
+      // refetchRecordings + replaceTargetId declared below; the
+      // callback only fires after audio.commit().
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [replaceTargetId],
     ),
@@ -442,10 +293,8 @@ export function AssetEditModal({
   // currently being re-processed. Staged map holds preview results
   // keyed by recording_id — populated by Transcribe, consumed by
   // Save (which PATCHes each one), cleared by Revert. Form is dirty
-  // whenever staged.size > 0. Banner indicates any transcript was
-  // refreshed in-session — prompts subscriber to re-Analyze after.
+  // whenever staged.size > 0.
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
-  const [transcriptRefreshed, setTranscriptRefreshed] = useState(false);
   type StagedTranscript = {
     transcript: string;
     transcribe_provider: string;
@@ -478,7 +327,6 @@ export function AssetEditModal({
           });
           return next;
         });
-        setTranscriptRefreshed(true);
       }
     } catch (err) {
       console.warn("Re-transcribe failed:", err);
@@ -621,107 +469,6 @@ export function AssetEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audio.state, hasNext, hasPrev, saving, onClose]);
 
-  // Vendor hashtag autocomplete state
-  const [hashQuery, setHashQuery] = useState<string | null>(null);
-  const [hashIndex, setHashIndex] = useState(0);
-  const [hashStart, setHashStart] = useState(0);
-
-  // Hashtag autocomplete uses brands
-  const hashMatches = hashQuery !== null
-    ? localBrands.filter((v) =>
-        v.slug.startsWith(hashQuery.toLowerCase()) ||
-        v.name.toLowerCase().startsWith(hashQuery.toLowerCase())
-      ).slice(0, 6)
-    : [];
-
-  function handleNoteChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const val = e.target.value;
-    setNote(val);
-    suggestFromNote(val);
-
-    // Detect # autocomplete trigger
-    const pos = e.target.selectionStart;
-    const before = val.slice(0, pos);
-    const hashMatch = before.match(/#([a-zA-Z0-9_]*)$/);
-    if (hashMatch) {
-      setHashQuery(hashMatch[1]);
-      setHashStart(pos - hashMatch[0].length);
-      setHashIndex(0);
-    } else {
-      setHashQuery(null);
-    }
-  }
-
-  function handleNoteKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (hashQuery === null || hashMatches.length === 0) return;
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHashIndex((i) => Math.min(i + 1, hashMatches.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHashIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" || e.key === "Tab") {
-      e.preventDefault();
-      insertBrandTag(hashMatches[hashIndex]);
-    } else if (e.key === "Escape") {
-      setHashQuery(null);
-    }
-  }
-
-  function insertBrandTag(brand: Brand) {
-    const before = note.slice(0, hashStart);
-    const after = note.slice(textareaRef.current?.selectionStart || hashStart + (hashQuery?.length || 0) + 1);
-    const inserted = `#${brand.slug} `;
-    const newNote = before + inserted + after;
-    setNote(newNote);
-    setHashQuery(null);
-
-    // Auto-add brand to selection
-    setBrandIds((prev) =>
-      prev.includes(brand.id) ? prev : [...prev, brand.id]
-    );
-
-    // Restore cursor position
-    requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        const pos = hashStart + inserted.length;
-        textareaRef.current.selectionStart = pos;
-        textareaRef.current.selectionEnd = pos;
-        textareaRef.current.focus();
-      }
-    });
-  }
-
-  // Debounced AI tag suggestion
-  const suggestFromNote = useCallback((text: string) => {
-    if (suggestTimer.current) clearTimeout(suggestTimer.current);
-    if (text.length < 50) return;
-
-    suggestTimer.current = setTimeout(async () => {
-      setSuggesting(true);
-      try {
-        const res = await fetch("/api/suggest-tags", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ siteId, contextNote: text }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.pillarId) setPillar(data.pillarId);
-          if (data.tagIds?.length > 0) {
-            // Merge new suggestions with existing — don't overwrite
-            setTags((prev) => {
-              const merged = new Set([...prev, ...data.tagIds]);
-              return Array.from(merged);
-            });
-          }
-        }
-      } catch { /* ignore */ }
-      setSuggesting(false);
-    }, 800);
-  }, [siteId, setTags]);
-
   /**
    * Subscriber confirms or rejects an AI suggestion (#167). Optimistic UI;
    * server PATCH writes to metadata.ai_verifications. Confirmed/rejected
@@ -769,25 +516,7 @@ export function AssetEditModal({
       await commitStagedTranscripts();
     }
 
-    // Second: if a cascade preview is loaded, commit it. The modal
-    // Save unifies the prior two-step Apply+Save ceremony (LOCKED
-    // 2026-05-16): a loaded preview is a dirty region, Save persists
-    // it the same way Save persists a staged recording. No-op when no
-    // preview is loaded. Ordering: AFTER recording commit so the
-    // transcript-DB row exists before cascade-commit's
-    // asset_analysis write (defensive, the cascade artifact already
-    // contains the transcript text so this is for downstream readers).
-    if (cascadeRef.current?.hasPreview) {
-      try {
-        await cascadeRef.current.commitPreview();
-      } catch (err) {
-        console.error("Cascade commit failed during Save:", err);
-        // Non-fatal — the asset PATCH below still runs, subscriber
-        // can re-trigger Auto-tag from the bar to retry.
-      }
-    }
-
-    // Third: typed-input path. If the subscriber typed in the
+    // Second: typed-input path. If the subscriber typed in the
     // "Type instead" textarea and the text differs from the current
     // narrative, persist as a typed-input recording.
     if (typedMode && typedDraft.trim()) {
@@ -811,58 +540,20 @@ export function AssetEditModal({
       }
     }
 
-    // Fourth: the asset PATCH for tags / scene types / brands / etc.
-    const body: Record<string, unknown> = {};
-    // pillar / pillars no longer sent on save. Pillar membership derives
-    // from content_tags at read time.
-    void pillar; void pillarsArr; void initialPillarsArr;
-    if (JSON.stringify([...sceneTypesArr].sort()) !== JSON.stringify([...savedSceneTypesArr].sort())) {
-      body.scene_types = sceneTypesArr;
-    }
-    if (JSON.stringify(tags) !== JSON.stringify(initialTags || [])) body.content_tags = tags;
-    if (JSON.stringify(brandIds.sort()) !== JSON.stringify(initialBrandIds.sort())) body.brand_ids = brandIds;
-    if (JSON.stringify(projectIds.sort()) !== JSON.stringify(initialProjectIds.sort())) body.project_ids = projectIds;
-    if (JSON.stringify(personaIds.sort()) !== JSON.stringify(initialPersonaIds.sort())) body.persona_ids = personaIds;
-    if (JSON.stringify(serviceIds.sort()) !== JSON.stringify(initialServiceIds.sort())) body.service_ids = serviceIds;
-    if (JSON.stringify(branchIds.sort()) !== JSON.stringify(initialBranchIds.sort())) body.branch_ids = branchIds;
-
-    if (Object.keys(body).length === 0) {
-      // Nothing to PATCH but the recording commit may have changed truth.
-      // Graduate any preselected pills to confirmed (parent re-render will
-      // also flow updated initialBrandIds back, but graduating locally now
-      // keeps the visual transition snappy).
-      setSavedBrandIds(brandIds);
+    // Third: project binding. Single-project manual assignment — the
+    // only non-briefing field this modal still persists (analyze excised
+    // 2026-05-22). PATCH only when the binding actually changed.
+    if ((projectIds[0] || null) !== (savedProjectIds[0] || null)) {
+      const res = await fetch(`/api/assets/${assetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_ids: projectIds }),
+      });
+      if (!res.ok) return false;
       setSavedProjectIds(projectIds);
-      setSavedPersonaIds(personaIds);
-      setSavedServiceIds(serviceIds);
-      setSavedBranchIds(branchIds);
-      setSavedTags(tags);
-      setSavedSceneTypesArr(sceneTypesArr);
-      onSaved(note, pillar, tags, brandIds, projectIds, personaIds, serviceIds, branchIds, sceneTypesArr);
-      return true;
     }
 
-    const res = await fetch(`/api/assets/${assetId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) return false;
-
-    // Critical: BOTH save paths must update saved* mirrors. Missing
-    // setSavedTags here was the bug behind story angle pills staying
-    // light-blue (preselect state) after a successful save — they
-    // never graduated to deep-blue (confirmed state) because savedTags
-    // wasn't catching up to working state. Same for sceneTypesArr.
-    setSavedBrandIds(brandIds);
-    setSavedProjectIds(projectIds);
-    setSavedPersonaIds(personaIds);
-    setSavedServiceIds(serviceIds);
-    setSavedBranchIds(branchIds);
-    setSavedTags(tags);
-    setSavedSceneTypesArr(sceneTypesArr);
-    onSaved(note, pillar, tags, brandIds, projectIds, personaIds, serviceIds, branchIds, sceneTypesArr);
+    onSaved();
     return true;
   }
 
@@ -884,7 +575,11 @@ export function AssetEditModal({
     if (!onNext) return;
     setSaving(true);
     try {
-      await doSave();
+      const ok = await doSave();
+      if (!ok) {
+        toast.error("Failed to save changes");
+        return;
+      }
       onNext();
     } catch {
       toast.error("Failed to save changes");
@@ -904,42 +599,35 @@ export function AssetEditModal({
     setStagedTranscripts(new Map());
   }
 
-  // Close — full dirty-form check across recording, typed input, and
-  // every tag working-state diff. The auto-tag inspector eagerly
-  // populates working state via 'Suggest tags' (preselected pills);
-  // closing without save would silently discard those changes.
+  // Close — dirty-form check across recording, typed input, staged
+  // re-transcriptions, and the project binding. Closing without save
+  // would silently discard those changes.
   // Uses the in-app confirm dialog (styled via @/components/feedback)
   // instead of window.confirm — async via Promise.
   async function handleClose() {
-    const briefingDirty = audio.state === "staged" || audio.state === "recording";
-    const voDirty = voiceOver.state === "staged" || voiceOver.state === "recording";
-    const typedDirty = typedMode && typedDraft.trim().length > 0;
-    const transcribeDirty = stagedTranscripts.size > 0;
-    const sortedEq = (a: string[], b: string[]) =>
-      JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
-    const tagsDirty = !sortedEq(tags, savedTags);
-    const brandsDirty = !sortedEq(brandIds, savedBrandIds);
-    const projectsDirty = !sortedEq(projectIds, savedProjectIds);
-    const personasDirty = !sortedEq(personaIds, savedPersonaIds);
-    const servicesDirty = !sortedEq(serviceIds, savedServiceIds);
-    const branchesDirty = !sortedEq(branchIds, savedBranchIds);
-    const scenesDirty = !sortedEq(sceneTypesArr, savedSceneTypesArr);
-    const tagSelectionDirty = tagsDirty || brandsDirty || projectsDirty ||
-      personasDirty || servicesDirty || branchesDirty || scenesDirty;
-    const isDirty = briefingDirty || voDirty || typedDirty || transcribeDirty || tagSelectionDirty;
+    const briefDirty =
+      audio.state === "staged" || audio.state === "recording" ||
+      voiceOver.state === "staged" || voiceOver.state === "recording" ||
+      stagedTranscripts.size > 0 ||
+      (typedMode && typedDraft.trim().length > 0);
+    const projectDirty = (projectIds[0] || null) !== (savedProjectIds[0] || null);
+    const isDirty = briefDirty || projectDirty;
     if (isDirty) {
       // Build a specific message so subscriber knows WHAT they'd lose
       const parts: string[] = [];
-      if (briefingDirty || voDirty) parts.push("a recording");
-      if (typedDirty) parts.push("typed narrative");
-      if (transcribeDirty) {
+      if (audio.state === "staged" || audio.state === "recording" ||
+          voiceOver.state === "staged" || voiceOver.state === "recording") {
+        parts.push("a recording");
+      }
+      if (typedMode && typedDraft.trim().length > 0) parts.push("typed narrative");
+      if (stagedTranscripts.size > 0) {
         parts.push(
           stagedTranscripts.size === 1
             ? "a re-transcription"
             : `${stagedTranscripts.size} re-transcriptions`,
         );
       }
-      if (tagSelectionDirty) parts.push("tag changes");
+      if (projectDirty) parts.push("a project change");
       const what = parts.length === 1 ? parts[0] : parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
       const ok = await confirmDialog({
         title: "Unsaved changes",
@@ -953,9 +641,6 @@ export function AssetEditModal({
     }
     onClose();
   }
-
-
-  const totalTagged = initialBrandIds.length + initialProjectIds.length;
 
   return (
     <div
@@ -972,11 +657,12 @@ export function AssetEditModal({
         <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-surface px-6 py-3">
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-semibold">Edit Source Asset</h3>
-            {/* Briefing-readiness pill (was below the textarea; promoted
-                here so subscribers see the autopilot-eligibility state at
-                the top of the modal). Only renders when there's a positive
-                readiness signal. */}
-            {note.trim().length >= 40 && (
+            {/* Briefing-readiness pill — promoted here so subscribers see
+                the autopilot-eligibility state at the top of the modal.
+                Re-pointed to transcript presence (the canonical narrative)
+                now that the legacy note is gone. Only renders when there's
+                a positive readiness signal. */}
+            {recordings.some((r) => (r.transcript || "").trim().length >= 40) && (
               <span className="rounded bg-success/20 px-1.5 py-0.5 text-[10px] font-medium text-success">
                 ✓ Ready for autopilot
               </span>
@@ -999,11 +685,6 @@ export function AssetEditModal({
                   : "bg-success/20 text-success"
               }`}>
                 {captionSource === "ai" ? "AI caption" : captionSource === "corrected" ? "corrected" : "manual"}
-              </span>
-            )}
-            {totalTagged > 0 && (
-              <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">
-                {totalTagged} tagged
               </span>
             )}
             <button
@@ -1030,51 +711,22 @@ export function AssetEditModal({
           </div>
         </div>
 
-        {/* Content — restructured 2026-05-11 (second pass). New stack:
-              1. RecordingBar (image=1 group; video=2 groups: briefing + V/O)
-              2. Auto-tag inspector (when active — surfaces ✨ Suggest tags results)
-              3. Transcription Section (latest expanded + earlier collapsed)
-              4. Scene Section (image LEFT, Scene Composition RIGHT)
-              5. Legacy Context Note (handwritten cue card — read while recording)
-              6. Story Angle Section (full-width)
-            Tool selectors (brand/project/persona/etc.) follow below.
-            Subscriber's read-flow: see narrative source first, review what's
-            in the image, then read the cue card for the NEXT take. */}
+        {/* Content — briefing-only stack (analyze excised 2026-05-22):
+              1. AutoTagBar (V/O for video + Cancel/Save/Save&Next/Close)
+              2. Transcription Section (latest expanded + earlier collapsed)
+              3. Media render
+              4. Project binding picker
+              5. Privacy section + variant thumbnails */}
         <div className="px-6 pt-4">
 
-            {/* AUTO-TAG BAR — sticky top, was RecordingBar (2026-05-16
-                identity flip). Left cluster: Auto-tag trigger button
-                (+ V/O for video). Right cluster: Cancel/Save/Save&Next/
-                Close. Body slot: cascade preview + assignments rendered
-                inline so the bar grows to accommodate. The Record button
-                lives in the Transcription card below now. */}
+            {/* ACTION BAR — sticky top. Left cluster: V/O capture for
+                video. Right cluster: Cancel/Save/Save&Next/Close. The
+                Record button lives in the Transcription card below. */}
             <div className="sticky top-[57px] z-10 -mx-6 mb-3 border-b border-border bg-surface px-6 py-2">
               <AutoTagBar
                 audio={audio}
                 voiceOver={voiceOver}
                 isVideo={mediaType?.startsWith("video") || mediaType === "video"}
-                onAutoTag={() => {
-                  // Clear stale-transcript banner — subscriber is
-                  // acting on it by re-running Analyze.
-                  setTranscriptRefreshed(false);
-                  cascadeRef.current?.triggerPreview();
-                }}
-                autoTagDisabled={
-                  cascadeBusy ||
-                  // Gate on transcript existence — the cascade is
-                  // transcript-first (Stage 1 NER hard-requires it).
-                  // Subscriber must record (or type) before auto-tag is
-                  // available.
-                  !(recordings.some((r) => (r.transcript || "").trim().length > 0) ||
-                    audio.state === "staged")
-                }
-                autoTagLabel={
-                  cascadeBusy
-                    ? "Analyzing…"
-                    : cascadeHasPreview
-                    ? "⚡ Re-analyze"
-                    : "⚡ Analyze"
-                }
                 onCancel={handleCancel}
                 onSave={handleSaveStay}
                 onSaveAndNext={handleSaveAndNext}
@@ -1083,28 +735,8 @@ export function AssetEditModal({
                 saving={saving}
                 hasNext={hasNext && !!onNext}
                 hasPrev={hasPrev && !!onPrev}
-              >
-                <AssetCategoriesSection
-                  ref={cascadeRef}
-                  assetId={assetId}
-                  api={subscriberAssetAnalysisApi}
-                  hideTrigger
-                  className=""
-                  onStateChange={handleCascadeStateChange}
-                  onDataChange={handleCategoriesData}
-                />
-              </AutoTagBar>
+              />
             </div>
-
-            {/* AUTO-TAG INSPECTOR — Analyze results (see AnalyzeResultsPanel). */}
-            <AnalyzeResultsPanel
-              analysis={analysis}
-              pillarConfig={pillarConfig}
-              brandLabel={brandLabel}
-              projectLabel={projectLabel}
-              branchLabel={branchLabel}
-              latestRecordingId={recordings[0]?.id ?? null}
-            />
 
             {/* TRANSCRIPTION SECTION — top of the content stack
                 (2026-05-11 reorder). Renders right under the
@@ -1151,11 +783,7 @@ export function AssetEditModal({
                 <textarea
                   ref={textareaRef}
                   value={typedDraft}
-                  onChange={(e) => {
-                    setTypedDraft(e.target.value);
-                    handleNoteChange(e);
-                  }}
-                  onKeyDown={handleNoteKeyDown}
+                  onChange={(e) => setTypedDraft(e.target.value)}
                   className="w-full text-sm"
                   style={{ minHeight: 80 }}
                   placeholder="Type the narrative for this asset…"
@@ -1167,11 +795,6 @@ export function AssetEditModal({
                   {replaceTargetId && (
                     <div className="mb-1.5 rounded border border-warning/40 bg-warning/10 px-2 py-1 text-[10px] text-warning">
                       ⚠ Replace mode: this transcript will be archived when you save your new recording. Asset stays briefed.
-                    </div>
-                  )}
-                  {transcriptRefreshed && (
-                    <div className="mb-1.5 rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] text-accent">
-                      ✨ Transcript updated — click <span className="font-semibold">⚡ Analyze</span> above to refresh tags from the new text.
                     </div>
                   )}
                   <RecordingRowView
@@ -1261,7 +884,7 @@ export function AssetEditModal({
                 project-specific transcript). Lifts the picker out of
                 the dead auto-tag inspector surface so it's always
                 visible and always editable. */}
-            {localProjects.length > 0 && (
+            {projects.length > 0 && (
               <div className="mb-3 flex items-center gap-2 rounded border border-border bg-background px-3 py-2 text-[11px]">
                 <span className="text-muted">Project:</span>
                 <select
@@ -1273,7 +896,7 @@ export function AssetEditModal({
                   className="flex-1 rounded border border-border bg-surface px-2 py-1 text-xs text-foreground"
                 >
                   <option value="">— Unassigned —</option>
-                  {localProjects.map((p) => (
+                  {projects.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
@@ -1282,14 +905,6 @@ export function AssetEditModal({
                 )}
               </div>
             )}
-
-            {/* TAGS STRIP — confirmation row of what's currently attached
-                to this asset (primary + secondary categories, brands,
-                projects, service areas). Sits between source media and
-                variants so subscriber sees visual confirmation the
-                moment they click Save. Reads shared CategoriesResponse
-                (no extra fetch) and hides when nothing is attached. */}
-            <AssetTagsStrip data={categoriesData} />
 
             {/* PRIVACY SECTION — surfaces face detection state + the
                 effective face publishing policy. Read-only (per-asset
@@ -1302,10 +917,9 @@ export function AssetEditModal({
             {/* VARIANT THUMBNAILS — strip of rendered platform variants
                 directly below the source media. Each variant is the
                 source asset re-rendered into a per-platform aspect
-                ratio + format by sharp/ffmpeg (fires async after
-                cascade commit; populates within 5-30s). When empty
-                (cascade hasn't committed yet, or render still pending)
-                this entire block hides. */}
+                ratio + format by sharp/ffmpeg. When empty (no variants
+                rendered yet, or render still pending) this entire block
+                hides. */}
             {variants.filter((v) => v.variant_status === "ready").length > 0 && (() => {
               const readyVariants = variants.filter((v) => v.variant_status === "ready");
               const pendingCount = variants.length - readyVariants.length;
@@ -1347,13 +961,10 @@ export function AssetEditModal({
               );
             })()}
 
-            {/* Legacy stubs (Scene Composition, Story Angle, Brands,
-                Projects, People, Locations) all removed 2026-05-17 —
-                the cascade Auto-tag card at the top of the modal now
-                surfaces every value those stubs would have shown,
-                read-only. State vars + PATCH payload fields stay in
-                the component as no-op tombstones until the cascade
-                proves out across all subscriber sites. */}
+            {/* Analyze (auto-tag cascade + inspector) excised from the
+                subscriber modal 2026-05-22 — analyze now runs operator-
+                side. The modal is briefing-only; the single-project
+                picker above is the one kept non-briefing surface. */}
         </div>
 
         {/* Asset Studio enhancement tools removed from the source-asset modal

@@ -54,28 +54,16 @@ type SimpleEntity = { id: string; name: string; slug: string };
 
 export function MediaGrid({
   initialAssets,
-  availablePillars,
-  pillarConfig,
   siteId,
-  brands = [],
   projects = [],
-  services = [],
-  branches = [],
-  brandLabel = null,
-  projectLabel = null,
-  serviceLabel = null,
-  branchLabel = null,
-  assetBrandMap = {},
   assetProjectMap = {},
-  assetPersonaMap = {},
-  assetServiceMap = {},
-  assetBranchMap = {},
-  personaLabel = null,
-  personaList = [],
 }: {
   initialAssets: Asset[];
-  availablePillars: string[];
-  pillarConfig: PillarGroup[];
+  /** Pillar inputs + catalog/label/map props retained on the public
+      interface for the dashboard page caller, but the briefing-only
+      modal (analyze excised 2026-05-22) no longer consumes them. */
+  availablePillars?: string[];
+  pillarConfig?: PillarGroup[];
   siteId: string;
   brands?: Brand[];
   projects?: Project[];
@@ -96,48 +84,15 @@ export function MediaGrid({
   const [assets, setAssets] = useState(initialAssets);
   const [editing, setEditing] = useState<Asset | null>(null);
   const [lastEdited, setLastEdited] = useState<string | null>(null);
-  const [liveBrands, setLiveBrands] = useState(brands);
-  const [liveProjects, setLiveProjects] = useState(projects);
-  const [liveServices, setLiveServices] = useState(services);
-  const [liveBranches, setLiveBranches] = useState(branches);
-  const [liveBrandMap, setLiveBrandMap] = useState(assetBrandMap);
-  const [liveProjectMap, setLiveProjectMap] = useState(assetProjectMap);
-  const [livePersonaMap, setLivePersonaMap] = useState(assetPersonaMap);
-  const [liveServiceMap, setLiveServiceMap] = useState(assetServiceMap);
-  const [liveBranchMap, setLiveBranchMap] = useState(assetBranchMap);
+  const [liveProjects] = useState(projects);
+  const [liveProjectMap] = useState(assetProjectMap);
 
-  function handleSaved(note: string, _pillar: string, tags: string[], brandIds?: string[], projectIds?: string[], personaIds?: string[], serviceIds?: string[], branchIds?: string[], sceneTypes?: string[]) {
-    if (!editing) return;
-    // pillar param retained in signature for back-compat with the modal
-    // callback contract, but ignored here — pillars derive from tags now
-    // and aren't stored on the Asset row.
-    setAssets((prev) =>
-      prev.map((a) =>
-        a.id === editing.id
-          ? {
-              ...a,
-              context_note: note,
-              content_tags: tags.length > 0 ? tags : a.content_tags,
-              scene_types: sceneTypes !== undefined ? sceneTypes : a.scene_types,
-            }
-          : a
-      )
-    );
-    if (brandIds) {
-      setLiveBrandMap((prev) => ({ ...prev, [editing.id]: brandIds }));
-    }
-    if (projectIds) {
-      setLiveProjectMap((prev) => ({ ...prev, [editing.id]: projectIds }));
-    }
-    if (personaIds) {
-      setLivePersonaMap((prev) => ({ ...prev, [editing.id]: personaIds }));
-    }
-    if (serviceIds) {
-      setLiveServiceMap((prev) => ({ ...prev, [editing.id]: serviceIds }));
-    }
-    if (branchIds) {
-      setLiveBranchMap((prev) => ({ ...prev, [editing.id]: branchIds }));
-    }
+  // Briefing-only modal (analyze excised 2026-05-22): the modal persists
+  // its own changes (recordings + project binding) via API and signals
+  // completion with a no-arg callback. Tile state stays as-is — the grid
+  // re-fetches on the next navigation.
+  function handleSaved() {
+    /* no-op refresh hook — kept for future tile re-fetch wiring */
   }
 
   return (
@@ -282,54 +237,13 @@ export function MediaGrid({
           siteId={siteId}
           imageUrl={editing.storage_url}
           mediaType={editing.media_type}
-          initialNote={editing.context_note || ""}
-          initialPillar=""
-          initialPillars={[]}
-          initialSceneTypes={editing.scene_types || []}
-          initialTags={editing.content_tags || []}
-          pillarConfig={pillarConfig}
-          brands={liveBrands}
           projects={liveProjects}
-          services={liveServices}
-          branches={liveBranches}
-          brandLabel={brandLabel}
-          projectLabel={projectLabel}
-          serviceLabel={serviceLabel}
-          branchLabel={branchLabel}
-          initialBrandIds={liveBrandMap[editing.id] || []}
           initialProjectIds={liveProjectMap[editing.id] || []}
-          initialServiceIds={liveServiceMap[editing.id] || []}
-          initialBranchIds={liveBranchMap[editing.id] || []}
-          personaLabel={personaLabel}
-          initialPersonaIds={livePersonaMap[editing.id] || []}
-          onBrandCreated={(brand) => setLiveBrands((prev) => [...prev, brand].sort((a, b) => a.name.localeCompare(b.name)))}
-          onProjectCreated={(project) => setLiveProjects((prev) => [...prev, project].sort((a, b) => a.name.localeCompare(b.name)))}
-          onServiceCreated={(service) => setLiveServices((prev) => [...prev, service].sort((a, b) => a.name.localeCompare(b.name)))}
-          onBranchCreated={(branch) => setLiveBranches((prev) => [...prev, branch].sort((a, b) => a.name.localeCompare(b.name)))}
           captionSource={((editing.metadata as Record<string, unknown>)?.caption_source as string) || null}
           initialMetadata={editing.metadata as Record<string, unknown> | null}
-          faces={(() => {
-            const meta = (editing.metadata || {}) as Record<string, unknown>;
-            const fd = meta.faces as { faces: Array<Record<string, unknown>>; detectionWidth?: number; detectionHeight?: number } | undefined;
-            return (fd?.faces || null) as Array<{ box: { x: number; y: number; width: number; height: number }; score: number; personaId: string | null; personaName: string | null; distance: number | null; embedding: number[]; index: number }> | null;
-          })()}
-          faceDetectionWidth={(() => {
-            const meta = (editing.metadata || {}) as Record<string, unknown>;
-            const fd = meta.faces as { detectionWidth?: number } | undefined;
-            return fd?.detectionWidth;
-          })()}
-          faceDetectionHeight={(() => {
-            const meta = (editing.metadata || {}) as Record<string, unknown>;
-            const fd = meta.faces as { detectionHeight?: number } | undefined;
-            return fd?.detectionHeight;
-          })()}
-          personas={personaList}
           source={editing.source}
-          qualityScore={Number(editing.quality_score) || null}
-          sceneType={(editing.ai_analysis as Record<string, unknown>)?.scene_type as string || null}
           archivedAt={editing.archived_at}
           initialAiGenerated={Boolean((editing.metadata as Record<string, unknown> | null)?.ai_generated)}
-          aiSuggestedPillar={null}
           aiVerifications={(() => {
             const meta = (editing.metadata || {}) as Record<string, unknown>;
             const v = meta.ai_verifications;

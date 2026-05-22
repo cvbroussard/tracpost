@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const BUCKET = process.env.R2_BUCKET_NAME!;
@@ -85,22 +85,27 @@ export async function deleteObjectFromR2(key: string): Promise<void> {
 }
 
 /**
- * Server-side rename of an R2 object. R2 doesn't support native rename,
- * so this is implemented as CopyObject + DeleteObject. Bytes never leave
- * R2's network — EXIF, color profiles, all metadata preserved byte-perfect.
+ * Server-side rename of an R2 object to a new (SEO-shaped) key. R2 has no
+ * native rename, so this copies the bytes to newKey and verifies the copy
+ * landed. Bytes never leave R2 — EXIF, color profiles, all metadata
+ * preserved byte-perfect.
  *
- * Per the URL-naming architecture (LOCKED 2026-05-08): used by
- * processBriefedAsset to rename source assets from throwaway upload-time
- * keys to AI-generated SEO-shaped keys at briefing flip.
+ * The old key is deliberately NOT deleted. Copy + delete + the caller's DB
+ * update are three non-atomic steps across two systems with no safe
+ * rollback; an inline delete of the only original — gated on an unverified
+ * copy or a not-yet-committed DB write — can destroy an irreplaceable asset
+ * (it did: squirrel-hill, 2026-05-20). The old key is left as a harmless
+ * orphan, cleared by the per-site wipe at cancellation, consistent with the
+ * soft-delete policy. Worst case of a failed rename is now a duplicate,
+ * never a loss. Do not re-add the delete.
  *
- * Returns the new public URL. Throws if either the copy or delete fails;
- * caller decides whether to retry or mark the rename failed.
+ * Returns the new public URL. Throws if the copy or its verification fails
+ * — the caller must then keep pointing at oldKey, which is still intact.
  */
 export async function renameR2Object(oldKey: string, newKey: string): Promise<string> {
   if (oldKey === newKey) {
     return `${PUBLIC_DOMAIN}/${newKey}`;
   }
-  // Copy first; if this fails the original object is still intact.
   await r2.send(
     new CopyObjectCommand({
       Bucket: BUCKET,
@@ -110,11 +115,12 @@ export async function renameR2Object(oldKey: string, newKey: string): Promise<st
       CacheControl: "public, max-age=31536000, immutable",
     }),
   );
-  // Only delete the old key after copy succeeds.
+  // Verify the bytes actually landed — CopyObject can report success
+  // without durably writing. Nothing repoints at newKey until this passes.
   await r2.send(
-    new DeleteObjectCommand({
+    new HeadObjectCommand({
       Bucket: BUCKET,
-      Key: oldKey,
+      Key: newKey,
     }),
   );
   return `${PUBLIC_DOMAIN}/${newKey}`;

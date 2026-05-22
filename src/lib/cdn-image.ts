@@ -7,14 +7,17 @@
  * given size generates + edge-caches that variant; later requests are
  * cache hits — no pre-generation, no extra R2 storage, no backfill.
  *
- * Gated by NEXT_PUBLIC_CDN_IMAGE_RESIZING: this ships with the flag off, so
- * cdnImage() is a pass-through and grids keep serving originals. Enable
- * "Image Resizing" on the Cloudflare zone, then set the flag to "true" —
- * one coordinated switch, no risk of /cdn-cgi/image/ URLs resolving before
- * the feature is live.
+ * Two entry points:
+ *  - cdnImage()       — display path. Gated by NEXT_PUBLIC_CDN_IMAGE_RESIZING
+ *                       so it can ship ahead of the dashboard toggle; a
+ *                       pass-through while the flag is off.
+ *  - cdnImageForced() — always on. For server-side callers that need a hard
+ *                       size guarantee regardless of the display rollout —
+ *                       e.g. capping an image under an LLM API's per-image
+ *                       byte limit. Image Resizing must be live on the zone.
  *
- * Only rewrites assets.tracpost.com image URLs; external hosts, blob URLs
- * and already-transformed URLs are returned untouched. Not for video —
+ * Both rewrite only assets.tracpost.com image URLs; external hosts, blob
+ * URLs and already-transformed URLs pass through untouched. Not for video —
  * Image Resizing transforms images only.
  */
 const ASSET_HOST = "https://assets.tracpost.com/";
@@ -25,21 +28,22 @@ export interface CdnImageOptions {
   height?: number;
   /** 1–100; defaults to 75. */
   quality?: number;
-  /** "cover" (default) crops to fill the box; "contain" fits inside. */
+  /** "cover" (default) crops to fill the box; "contain"/"scale-down" fit inside. */
   fit?: "cover" | "contain" | "scale-down";
+  /** Output format; defaults to "auto" (WebP/AVIF negotiated by Accept header). */
+  format?: "auto" | "jpeg" | "webp" | "png";
 }
 
-export function cdnImage(
-  url: string | null | undefined,
-  opts: CdnImageOptions = {},
-): string {
-  if (!url) return "";
-  if (!ENABLED) return url;
+/**
+ * Build a /cdn-cgi/image/ transform URL. Non-asset-host URLs and
+ * already-transformed URLs are returned untouched.
+ */
+function buildCdnUrl(url: string, opts: CdnImageOptions): string {
   if (!url.startsWith(ASSET_HOST) || url.includes("/cdn-cgi/image/")) return url;
 
   const key = url.slice(ASSET_HOST.length);
   const params = [
-    "format=auto",
+    `format=${opts.format ?? "auto"}`,
     `fit=${opts.fit ?? "cover"}`,
     opts.width ? `width=${opts.width}` : "",
     opts.height ? `height=${opts.height}` : "",
@@ -49,4 +53,30 @@ export function cdnImage(
     .join(",");
 
   return `${ASSET_HOST}cdn-cgi/image/${params}/${key}`;
+}
+
+/**
+ * Display-path resizer — gated by NEXT_PUBLIC_CDN_IMAGE_RESIZING. Returns
+ * the original URL untouched while the flag is off.
+ */
+export function cdnImage(
+  url: string | null | undefined,
+  opts: CdnImageOptions = {},
+): string {
+  if (!url) return "";
+  if (!ENABLED) return url;
+  return buildCdnUrl(url, opts);
+}
+
+/**
+ * Always-on resizer — NOT gated on the display flag. For server-side
+ * callers that must guarantee a bounded image size (e.g. staying under
+ * Claude's 5 MB per-image limit). Requires Image Resizing live on the zone.
+ */
+export function cdnImageForced(
+  url: string | null | undefined,
+  opts: CdnImageOptions = {},
+): string {
+  if (!url) return "";
+  return buildCdnUrl(url, opts);
 }

@@ -18,6 +18,7 @@
  * asset_categories.primary which has special DB semantics.
  */
 import "server-only";
+import { cdnImageForced } from "@/lib/cdn-image";
 import Anthropic from "@anthropic-ai/sdk";
 import { SCENE_TYPES, SCENE_TYPE_IDS } from "@/lib/scene-types";
 import type { NerResult } from "./ner-extract";
@@ -185,7 +186,18 @@ function buildUserMessage(input: VisionInput): string {
 async function fetchImageBase64(
   url: string,
 ): Promise<{ data: string; mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" }> {
-  const res = await fetch(url);
+  // Claude rejects images over 5 MB. Fetch a CDN-resized copy capped at
+  // 1568px (Claude downscales beyond that anyway) and transcoded to JPEG,
+  // so the call is reliable regardless of the source asset's byte size.
+  const res = await fetch(
+    cdnImageForced(url, {
+      width: 1568,
+      height: 1568,
+      fit: "scale-down",
+      format: "jpeg",
+      quality: 85,
+    }),
+  );
   if (!res.ok) throw new Error(`Failed to fetch asset image (${res.status})`);
   const buf = Buffer.from(await res.arrayBuffer());
   const contentType = res.headers.get("content-type") || "image/jpeg";

@@ -13,7 +13,7 @@ import {
   type EffectiveFacePolicy,
 } from "@/lib/privacy/face-transforms";
 import {
-  directVideoBrief,
+  directShot,
   DIRECTOR_TEMPLATE_SPECS,
   type DirectorTemplate,
 } from "@/lib/video-gen/director";
@@ -415,7 +415,7 @@ async function renderVideoFromStill(
   // Hop 1 — Director Call. Skipped only if context never got gathered
   // (defensive; renderTemplateVariant always gathers it for video templates).
   if (directorContext) {
-    const brief = await directVideoBrief({
+    const { direction } = await directShot({
       imageUrl: sourceUrl,
       analysis: directorContext.analysis,
       brandTone: directorContext.brandTone,
@@ -423,9 +423,9 @@ async function renderVideoFromStill(
       previousCameraMoves: directorContext.previousCameraMoves,
     });
 
-    if (brief) {
+    if (direction) {
       // Hop 2 — Producer Call (Kling). Still becomes the first frame.
-      const video = await generateVideoFromImage(sourceUrl, brief.prompt, siteId, {
+      const video = await generateVideoFromImage(sourceUrl, direction.renderPrompt, siteId, {
         duration: String(spec.durationSeconds) as "5" | "10",
         aspectRatio: aspect,
       });
@@ -439,9 +439,9 @@ async function renderVideoFromStill(
             duration_seconds: video.duration,
             from: "image",
             director: {
-              prompt: brief.prompt,
-              camera_move: brief.cameraMove,
-              brands_mentioned: brief.brandsMentioned,
+              prompt: direction.renderPrompt,
+              camera_move: direction.cameraMove,
+              brands_mentioned: direction.brandsMentioned,
               template_context: templateId,
             },
           },

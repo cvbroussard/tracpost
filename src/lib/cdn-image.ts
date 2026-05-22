@@ -80,3 +80,33 @@ export function cdnImageForced(
   if (!url) return "";
   return buildCdnUrl(url, opts);
 }
+
+/**
+ * Always-on aspect-crop for video-producer inputs. Center-crops the
+ * source to the requested aspect via Cloudflare cover-fit, returning
+ * a JPEG URL ready to hand to Kling / Runway / Veo / etc.
+ *
+ * Why this exists: every image-to-video producer derives its output
+ * aspect from the input image (Kling outright ignores aspect_ratio
+ * when an image is provided; Veo letterboxes a mismatched source
+ * inside the requested canvas). Pre-cropping the source removes that
+ * surprise — the producer always sees a frame already in the target
+ * shape, so frame 1 == requested aspect.
+ *
+ * Subject-aware crop (Smart Rotate, #176) is the future upgrade for
+ * cases where the subject isn't centred; until then, centre crop is
+ * the v1 and is a pure derivation — no storage, no media_components
+ * row, just a CDN URL.
+ */
+export function cdnImageCroppedToAspect(
+  url: string | null | undefined,
+  aspect: "16:9" | "9:16",
+  quality: number = 90,
+): string {
+  if (!url) return "";
+  const dims =
+    aspect === "16:9"
+      ? { width: 1280, height: 720 }
+      : { width: 720, height: 1280 };
+  return cdnImageForced(url, { ...dims, fit: "cover", format: "jpeg", quality });
+}

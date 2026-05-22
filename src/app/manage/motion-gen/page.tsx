@@ -1,21 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ManagePage } from "@/components/manage/manage-page";
 
 /**
- * Director Inspector — the prompt-engineering workbench for the director
+ * Motion Gen — the still-to-motion video generator built on the director
  * pattern (project_tracpost_director_pattern). Sibling to the blog
  * Prompt Inspector, but for the two-hop video pipeline:
  *
- *   Image + analysis → Director Call (Sonnet 4.6) → the brief →
- *   Producer Call (Kling) → the render
+ *   Image + analysis → Director Call (Sonnet 4.6) → the shot direction →
+ *   Producer Call (Kling / Veo) → the render
  *
  * The Director is visual-only — it writes a camera move, not a story.
- * This surface assembles + shows the director prompt, runs the Director
- * Call to show the actual brief, and — on explicit request — fires the
- * Producer Call so you can watch the brief become a video. Single-
- * template by design, so one run fits the 300s budget.
+ * This surface assembles + shows the director instructions, runs the
+ * Director Call to show the actual shot direction, and — on explicit
+ * request — fires the Producer Call so you can watch that direction
+ * become a video. Single-template by design, so one run fits the 300s
+ * budget.
  */
 
 const TEMPLATES = [
@@ -24,8 +25,21 @@ const TEMPLATES = [
   { value: "long_16x9", label: "Long — 16:9, 10s" },
 ];
 
-interface DirectorBrief {
-  prompt: string;
+// Producer-model picker (Hop 2). Gemini/Veo was tested 2026-05-22 and
+// pulled (scene drift: brand swap, narrative invention, no frame-to-frame
+// identity, weak camera adherence). Multi-model dispatch + gemini-veo.ts
+// client stay in place so the next candidate plugs in by adding a row.
+const PRODUCER_MODELS = [
+  { value: "kling", label: "Kling" },
+  { value: "runway", label: "Runway (Gen-4 Turbo)" },
+];
+
+function producerLabel(value: string): string {
+  return PRODUCER_MODELS.find((m) => m.value === value)?.label || value;
+}
+
+interface ShotDirection {
+  renderPrompt: string;
   cameraMove: string;
   brandsMentioned: string[];
 }
@@ -40,9 +54,11 @@ interface InspectorResponse {
     brandTone: string | null;
     previousCameraMoves: string[];
   };
-  directorPrompt: string;
-  brief: DirectorBrief | null;
-  briefFailed: boolean;
+  directorInstructions: string;
+  direction: ShotDirection | null;
+  directionFailed: boolean;
+  directionError?: string | null;
+  producerModel?: string;
   render: { url: string; durationSeconds: number } | null;
   producerError: string | null;
 }
@@ -54,15 +70,42 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<InspectorResponse | null>(null);
-  const [promptOpen, setPromptOpen] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
+  const [producerModel, setProducerModel] = useState("kling");
+  const [assets, setAssets] = useState<{ id: string; label: string }[]>([]);
+
+  // Load the recent-analyzed list for the source picker. Re-runs on site
+  // switch; failures are non-fatal — the picker just keeps the default.
+  useEffect(() => {
+    if (siteId === "all") {
+      setAssets([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/manage/motion-gen?siteId=${encodeURIComponent(siteId)}`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data.assets)) setAssets(data.assets);
+      } catch {
+        /* non-fatal */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [siteId]);
 
   async function runDirector() {
     setLoading(true);
     setError(null);
     setResult(null);
-    setPromptOpen(false);
+    setInstructionsOpen(false);
     try {
-      const res = await fetch("/api/manage/director-inspector", {
+      const res = await fetch("/api/manage/motion-gen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -85,18 +128,20 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
   }
 
   async function runProducer() {
-    if (!result?.brief) return;
+    if (!result?.direction) return;
     setRendering(true);
     setError(null);
     try {
-      const res = await fetch("/api/manage/director-inspector", {
+      const res = await fetch("/api/manage/motion-gen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           siteId,
           assetId: result.assetId,
           template: result.template,
-          briefPrompt: result.brief.prompt,
+          renderPrompt: result.direction.renderPrompt,
+          shotDirection: result.direction,
+          producerModel,
           runProducer: true,
         }),
       });
@@ -106,10 +151,15 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
         return;
       }
       // Merge the render result into the existing result — keep the
-      // brief the operator reviewed on screen.
+      // shot direction the operator reviewed on screen.
       setResult((prev) =>
         prev
-          ? { ...prev, render: data.render, producerError: data.producerError }
+          ? {
+              ...prev,
+              render: data.render,
+              producerError: data.producerError,
+              producerModel: data.producerModel,
+            }
           : prev,
       );
     } catch (e) {
@@ -133,9 +183,10 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
         <h3 className="text-sm font-medium">Director Call</h3>
         <p className="text-[10px] text-muted leading-snug">
           Hop 1 of the director pattern. Visual-only — the Director writes a
-          camera move from the image + analysis. Assembles the director prompt,
-          runs the Sonnet 4.6 Director Call, and returns the brief. Hop 2 (the
-          Kling Producer Call) fires only when you click Render.
+          camera move from the image + analysis. Assembles the director
+          instructions, runs the Sonnet 4.6 Director Call, and returns the
+          shot direction. Hop 2 (the Producer Call) fires only when you click
+          Render.
         </p>
         <div className="grid grid-cols-3 gap-3">
           <div>
@@ -154,15 +205,21 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
           </div>
           <div className="col-span-2">
             <label className="block text-[10px] text-muted mb-1">
-              Seed asset ID (optional — leave blank for the most recent analyzed image)
+              Source asset — one of the {assets.length} most recent analyzed images
             </label>
-            <input
-              type="text"
+            <select
               value={seedAssetId}
               onChange={(e) => setSeedAssetId(e.target.value)}
-              placeholder="UUID of a media_asset"
-              className="w-full rounded border border-border bg-background px-2 py-1 text-xs font-mono"
-            />
+              disabled={loading || siteId === "all"}
+              className="w-full rounded border border-border bg-background px-2 py-1 text-xs disabled:opacity-50"
+            >
+              <option value="">Most recent analyzed image</option>
+              {assets.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -182,7 +239,7 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
 
       {result && (
         <>
-          {/* Source asset + the brief side by side */}
+          {/* Source asset + the shot direction side by side */}
           <div className="grid gap-4 md:grid-cols-[200px_1fr]">
             {/* Source still */}
             <div className="rounded-xl border border-border bg-surface p-3 shadow-card">
@@ -200,33 +257,45 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
               </div>
             </div>
 
-            {/* The brief */}
+            {/* The shot direction */}
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 shadow-card">
               <div className="flex items-center gap-2 mb-2">
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-500/20 text-emerald-400">
-                  THE BRIEF
+                  SHOT DIRECTION
                 </span>
                 <span className="text-[10px] text-muted">
                   {result.templateSpec.label} · {result.templateSpec.durationSeconds}s
                 </span>
               </div>
-              {result.briefFailed || !result.brief ? (
-                <div className="text-xs text-danger">
-                  Director Call returned no brief. Check the inputs below — a
-                  missing image or empty analysis can cause this.
+              {result.directionFailed || !result.direction ? (
+                <div className="space-y-1.5">
+                  <div className="text-xs text-danger">
+                    Director Call returned no shot direction.
+                  </div>
+                  {result.directionError ? (
+                    <div className="rounded border border-danger/30 bg-danger/5 p-2 text-[10px] font-mono text-danger break-words">
+                      {result.directionError}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-muted">
+                      No error detail returned — check the inputs below.
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
-                  <p className="text-sm leading-relaxed">{result.brief.prompt}</p>
+                  <p className="text-sm leading-relaxed">
+                    {result.direction.renderPrompt}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted">
                     <span>
                       <span className="text-emerald-400 font-mono">camera move:</span>{" "}
-                      {result.brief.cameraMove || "—"}
+                      {result.direction.cameraMove || "—"}
                     </span>
-                    {result.brief.brandsMentioned.length > 0 && (
+                    {result.direction.brandsMentioned.length > 0 && (
                       <span>
                         <span className="text-emerald-400 font-mono">brands:</span>{" "}
-                        {result.brief.brandsMentioned.join(", ")}
+                        {result.direction.brandsMentioned.join(", ")}
                       </span>
                     )}
                   </div>
@@ -281,50 +350,74 @@ function DirectorInspectorContent({ siteId }: { siteId: string }) {
             </div>
           </div>
 
-          {/* The assembled director prompt */}
+          {/* The assembled director instructions */}
           <div className="rounded-xl border border-border bg-surface shadow-card overflow-hidden">
             <button
-              onClick={() => setPromptOpen((o) => !o)}
+              onClick={() => setInstructionsOpen((o) => !o)}
               className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-surface-hover text-left"
             >
               <span className="text-sm font-medium">
-                Assembled director prompt — what Sonnet 4.6 receives
+                Assembled director instructions — what Sonnet 4.6 receives
               </span>
               <span className="text-xs text-muted">
-                {result.directorPrompt.length.toLocaleString()} chars{" "}
-                {promptOpen ? "▾" : "▸"}
+                {result.directorInstructions.length.toLocaleString()} chars{" "}
+                {instructionsOpen ? "▾" : "▸"}
               </span>
             </button>
-            {promptOpen && (
+            {instructionsOpen && (
               <pre className="border-t border-border bg-background p-3 text-[10px] font-mono whitespace-pre-wrap leading-relaxed max-h-[32rem] overflow-y-auto">
-                {result.directorPrompt}
+                {result.directorInstructions}
               </pre>
             )}
           </div>
 
           {/* Producer Call */}
           <div className="rounded-xl border border-border bg-surface p-4 shadow-card space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-medium">Producer Call (Kling)</h3>
+                <h3 className="text-sm font-medium">Producer Call</h3>
                 <p className="text-[10px] text-muted">
-                  Hop 2 — renders the brief above into video. ~$0.20, up to a few
-                  minutes.
+                  Hop 2 — renders the shot direction above into video, up to a
+                  few minutes. Render it with each model to compare outputs.
                 </p>
               </div>
-              <button
-                onClick={runProducer}
-                disabled={rendering || !result.brief}
-                className="bg-violet-600 px-3 py-1.5 text-xs font-medium text-white rounded hover:bg-violet-500 disabled:opacity-50"
-              >
-                {rendering ? "Rendering…" : "Render with Kling"}
-              </button>
+              <div className="flex items-end gap-2 shrink-0">
+                <div>
+                  <label className="block text-[10px] text-muted mb-1">Model</label>
+                  <select
+                    value={producerModel}
+                    onChange={(e) => setProducerModel(e.target.value)}
+                    disabled={rendering}
+                    className="rounded border border-border bg-background px-2 py-1 text-xs disabled:opacity-50"
+                  >
+                    {PRODUCER_MODELS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={runProducer}
+                  disabled={rendering || !result.direction}
+                  className="bg-violet-600 px-3 py-1.5 text-xs font-medium text-white rounded hover:bg-violet-500 disabled:opacity-50"
+                >
+                  {rendering
+                    ? "Rendering…"
+                    : `Render with ${producerLabel(producerModel)}`}
+                </button>
+              </div>
             </div>
             {result.producerError && (
               <div className="text-[10px] text-danger">{result.producerError}</div>
             )}
             {result.render && (
               <div>
+                {result.producerModel && (
+                  <div className="mb-1 text-[10px] text-muted">
+                    Rendered with {producerLabel(result.producerModel)}
+                  </div>
+                )}
                 <video
                   src={result.render.url}
                   controls
@@ -361,7 +454,7 @@ function InputBlock({
 
 export default function Page() {
   return (
-    <ManagePage title="Director Inspector" requireSite>
+    <ManagePage title="Motion Gen" requireSite>
       {({ siteId }) => <DirectorInspectorContent siteId={siteId} />}
     </ManagePage>
   );

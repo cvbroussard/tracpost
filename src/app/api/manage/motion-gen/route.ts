@@ -1,41 +1,52 @@
+import { randomUUID } from "node:crypto";
 import { verifyCookie } from "@/lib/cookie-sign";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { gatherDirectorContext } from "@/lib/video-gen/director-context";
 import {
-  buildDirectorPrompt,
-  directVideoBrief,
+  buildDirectorInstructions,
+  directShot,
+  DIRECTOR_MODEL,
   DIRECTOR_TEMPLATE_SPECS,
   type DirectorTemplate,
   type DirectorInput,
 } from "@/lib/video-gen/director";
 import { generateVideoFromImage } from "@/lib/video-gen/kling";
+import { generateVideoFromImageVeo } from "@/lib/video-gen/gemini-veo";
+import { generateVideoFromImageRunway } from "@/lib/video-gen/runway";
 
 export const runtime = "nodejs";
-// Producer Call (Kling) polls up to 5 min — needs the full budget when
-// runProducer is set. The Director-Call-only path returns in ~15-30s.
+// The Producer Call (Kling or Veo) polls for minutes — needs the full
+// budget when runProducer is set. The Director-Call-only path returns in
+// ~15-30s.
 export const maxDuration = 300;
 
 /**
- * POST /api/manage/director-inspector
+ * POST /api/manage/motion-gen
  *
- * The director-prompt inspector's backend. A two-hop tool:
+ * The Motion Gen inspector's backend. A two-hop tool:
  *   - Always: gather Director Call inputs, build + return the assembled
- *     director prompt, and run the Director Call (Hop 1, ~$0.015) to
- *     return the actual brief.
- *   - On runProducer=true: also fire the Producer Call (Hop 2, Kling,
- *     ~$0.20) and return the rendered video URL.
+ *     director instructions, and run the Director Call (Hop 1, ~$0.015)
+ *     to return the actual shot direction.
+ *   - On runProducer=true: also fire the Producer Call (Hop 2) on the
+ *     selected producer model, persist the render as a media_components
+ *     row + Director/Producer production_events, and return the URL.
  *
  * Single-template by design — one Director Call + at most one Producer
  * Call fits the 300s budget, unlike renderAllVariantsForAsset's three
  * serial Kling renders.
  *
- * Body: { siteId, assetId?, template?, runProducer?, briefPrompt? }
- *   assetId     — optional; defaults to the most recent triaged image
- *   template    — reel_9x16 | story_9x16 | long_16x9 (default reel_9x16)
- *   briefPrompt — when set, the Director Call is SKIPPED and this exact
- *                 brief is rendered. Lets the operator render precisely
- *                 the brief they reviewed, not a re-rolled one.
+ * Body: { siteId, assetId?, template?, runProducer?, renderPrompt?, shotDirection?, producerModel? }
+ *   assetId       — optional; defaults to the most recent analyzed image
+ *   template      — reel_9x16 | story_9x16 | long_16x9 (default reel_9x16)
+ *   renderPrompt  — when set, the Director Call is SKIPPED and this exact
+ *                   shot direction is rendered. Lets the operator render
+ *                   precisely the direction they reviewed, not a re-rolled one.
+ *   shotDirection — the {renderPrompt,cameraMove,brandsMentioned} the Director
+ *                   produced; carried back on a render so the persisted
+ *                   provenance is complete.
+ *   producerModel — kling (default) | runway | gemini. Picks the Hop-2
+ *                   render engine; the shot direction is engine-agnostic.
  */
 
 const TEMPLATES: DirectorTemplate[] = ["reel_9x16", "story_9x16", "long_16x9"];
@@ -47,9 +58,23 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { siteId, assetId: seedAssetId, template, runProducer, briefPrompt } = body || {};
-  const renderExactBrief =
-    typeof briefPrompt === "string" && briefPrompt.trim().length > 0;
+  const {
+    siteId,
+    assetId: seedAssetId,
+    template,
+    runProducer,
+    renderPrompt,
+    producerModel,
+    shotDirection: passedShotDirection,
+  } = body || {};
+  const renderExactDirection =
+    typeof renderPrompt === "string" && renderPrompt.trim().length > 0;
+  const producer: "kling" | "gemini" | "runway" =
+    producerModel === "gemini"
+      ? "gemini"
+      : producerModel === "runway"
+        ? "runway"
+        : "kling";
 
   if (!siteId || typeof siteId !== "string") {
     return NextResponse.json({ error: "siteId required" }, { status: 400 });
@@ -100,38 +125,118 @@ export async function POST(req: NextRequest) {
     previousCameraMoves: context.previousCameraMoves,
   };
 
-  // Assembled prompt — shown verbatim. Pure function, no LLM call.
-  const directorPrompt = buildDirectorPrompt(input);
+  // Assembled director instructions — shown verbatim. Pure, no LLM call.
+  const directorInstructions = buildDirectorInstructions(input);
 
   // Hop 1 — the Director Call. Skipped when the operator passed an exact
-  // briefPrompt to render (a Producer-only request). Otherwise always
-  // run so the inspector shows the actual brief, not just the prompt
-  // that would produce it. Cheap (~$0.015).
-  const brief = renderExactBrief ? null : await directVideoBrief(input);
+  // renderPrompt to render (a Producer-only request). Otherwise always
+  // run so the inspector shows the actual shot direction, not just the
+  // instructions that would produce it. Cheap (~$0.015).
+  const directorResult = renderExactDirection ? null : await directShot(input);
+  const direction = directorResult?.direction ?? null;
 
   // Hop 2 — the Producer Call. Expensive; only on explicit request.
-  // Renders the supplied briefPrompt verbatim when given, else the brief
-  // the Director Call just produced.
-  const promptToRender = renderExactBrief
-    ? (briefPrompt as string).trim()
-    : brief?.prompt || null;
+  // Renders the supplied renderPrompt verbatim when given, else the shot
+  // direction the Director Call just produced.
+  const promptToRender = renderExactDirection
+    ? (renderPrompt as string).trim()
+    : direction?.renderPrompt || null;
 
   let render: { url: string; durationSeconds: number } | null = null;
   let producerError: string | null = null;
   if (runProducer) {
     if (!promptToRender) {
-      producerError = "No brief to render — the Director Call produced nothing.";
+      producerError = "No shot direction to render — the Director Call produced nothing.";
     } else {
       const spec = DIRECTOR_TEMPLATE_SPECS[tpl];
-      const aspect = tpl === "long_16x9" ? "16:9" : "9:16";
-      const video = await generateVideoFromImage(context.imageUrl, promptToRender, siteId, {
-        duration: String(spec.durationSeconds) as "5" | "10",
-        aspectRatio: aspect,
-      });
+      const aspect: "16:9" | "9:16" = tpl === "long_16x9" ? "16:9" : "9:16";
+      const video =
+        producer === "gemini"
+          ? await generateVideoFromImageVeo(context.imageUrl, promptToRender, siteId, {
+              aspectRatio: aspect,
+            })
+          : producer === "runway"
+            ? await generateVideoFromImageRunway(context.imageUrl, promptToRender, siteId, {
+                aspectRatio: aspect,
+                duration: spec.durationSeconds,
+              })
+            : await generateVideoFromImage(context.imageUrl, promptToRender, siteId, {
+                duration: String(spec.durationSeconds) as "5" | "10",
+                aspectRatio: aspect,
+              });
       if (video) {
         render = { url: video.url, durationSeconds: video.duration };
+
+        // Persist the render as a production-layer artifact (migration
+        // 136): one media_components row (the visual render) + two
+        // production_events rows (the Director + Producer calls), all in
+        // one transaction so a component never lands without its
+        // provenance. Both events point output_component_id at the
+        // render, so the Components viewer gets the video + both calls
+        // from a single walk. Non-fatal — the render already succeeded;
+        // a logging failure must not 500 it.
+        try {
+          const shotDir =
+            passedShotDirection && typeof passedShotDirection === "object"
+              ? passedShotDirection
+              : { renderPrompt: promptToRender };
+          const componentId = randomUUID();
+          const inputs = JSON.stringify([{ type: "media_asset", id: assetId }]);
+          await sql.transaction([
+            sql`
+              INSERT INTO media_components
+                (id, site_id, kind, storage_url, source_asset_id, status, render_settings)
+              VALUES (
+                ${componentId}, ${siteId}, 'visual_render', ${video.url},
+                ${assetId}, 'ready',
+                ${JSON.stringify({
+                  template: tpl,
+                  producer_model: producer,
+                  aspect,
+                  duration_seconds: video.duration,
+                  shot_direction: shotDir,
+                })}::jsonb
+              )
+            `,
+            sql`
+              INSERT INTO production_events
+                (site_id, process, model, prompt, settings, inputs, output_component_id)
+              VALUES (
+                ${siteId}, 'director_call', ${DIRECTOR_MODEL},
+                ${directorInstructions},
+                ${JSON.stringify({
+                  template: tpl,
+                  brand_tone: context.brandTone,
+                  shot_direction: shotDir,
+                })}::jsonb,
+                ${inputs}::jsonb, ${componentId}
+              )
+            `,
+            sql`
+              INSERT INTO production_events
+                (site_id, process, model, prompt, settings, inputs, output_component_id)
+              VALUES (
+                ${siteId}, 'producer_call', ${producer},
+                ${promptToRender},
+                ${JSON.stringify({
+                  template: tpl,
+                  aspect,
+                  duration_seconds: video.duration,
+                })}::jsonb,
+                ${inputs}::jsonb, ${componentId}
+              )
+            `,
+          ]);
+        } catch (err) {
+          console.warn(
+            "motion-gen: production-layer write failed:",
+            err instanceof Error ? err.message : err,
+          );
+        }
       } else {
-        producerError = "Producer Call (Kling) failed — see server logs.";
+        const producerLabel =
+          producer === "gemini" ? "Gemini / Veo" : producer === "runway" ? "Runway" : "Kling";
+        producerError = `Producer Call (${producerLabel}) failed — see server logs.`;
       }
     }
   }
@@ -146,10 +251,59 @@ export async function POST(req: NextRequest) {
       brandTone: context.brandTone,
       previousCameraMoves: context.previousCameraMoves,
     },
-    directorPrompt,
-    brief,
-    briefFailed: !renderExactBrief && brief === null,
+    directorInstructions,
+    direction,
+    directionFailed: !renderExactDirection && direction === null,
+    directionError: directorResult?.error ?? null,
+    producerModel: producer,
     render,
     producerError,
   });
+}
+
+/**
+ * GET /api/manage/motion-gen?siteId=...
+ *
+ * Lists recent analyzed image assets for the source-asset picker. Same
+ * eligibility filter the POST handler's auto-resolve uses (analyzed,
+ * image, not archived, has a storage_url) and the same created_at DESC
+ * order — so the picker's first row is exactly what "Most recent
+ * analyzed image" resolves to.
+ */
+export async function GET(req: NextRequest) {
+  const adminCookie = req.cookies.get("tp_admin")?.value;
+  if (!verifyCookie(adminCookie)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const siteId = new URL(req.url).searchParams.get("siteId");
+  if (!siteId) {
+    return NextResponse.json({ error: "siteId required" }, { status: 400 });
+  }
+
+  const rows = await sql`
+    SELECT id, storage_url, created_at
+    FROM media_assets
+    WHERE site_id = ${siteId}
+      AND media_type ILIKE 'image%'
+      AND processing_stage = 'analyzed'
+      AND archived_at IS NULL
+      AND storage_url IS NOT NULL
+    ORDER BY created_at DESC
+    LIMIT 12
+  `;
+
+  const assets = rows.map((r) => {
+    const url = (r.storage_url as string) || "";
+    const basename = decodeURIComponent(url.split("/").pop() || "").split("?")[0];
+    const taken = r.created_at ? new Date(r.created_at as string) : null;
+    const date = taken ? `${taken.getMonth() + 1}/${taken.getDate()}` : "";
+    const id = r.id as string;
+    return {
+      id,
+      label: [basename || id.slice(0, 8), date].filter(Boolean).join("  ·  "),
+    };
+  });
+
+  return NextResponse.json({ assets });
 }

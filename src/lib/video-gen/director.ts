@@ -1,7 +1,7 @@
 /**
  * Director Call — Hop 1 of the director pattern. VISUAL CREATION ONLY.
  *
- * Pipeline: [Director Call] → the brief → [Producer Call] → the render
+ * Pipeline: [Director Call] → the shot direction → [Producer Call] → the render
  *
  * The Director's job is the camera move and nothing else. It produces
  * Layer 1 of the three-layer video (visual). Layers 2-3 — voice-over,
@@ -22,26 +22,28 @@
  * Model: Sonnet 4.6, multimodal, fixed. The Director does genuine visual
  * composition reading — writing camera moves from text alone is blind.
  *
- * Graceful failure: returns null on any error. The caller falls back to
- * Ken Burns — render-pipeline integrity beats creative quality.
+ * Graceful failure: never throws — returns { direction: null, error } on
+ * any failure. The render pipeline ignores `error` and falls back to Ken
+ * Burns; the Motion Gen inspector surfaces it so a failed call is
+ * diagnosable instead of a silent null.
  */
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { fetchAndConvert } from "@/lib/image-utils";
+import { cdnImageForced } from "@/lib/cdn-image";
 
 const anthropic = new Anthropic();
 
 /** Sonnet 4.6 — locked for the Director Call (see memo). */
-const DIRECTOR_MODEL = "claude-sonnet-4-6";
+export const DIRECTOR_MODEL = "claude-sonnet-4-6";
 
-/** The three video-target templates the Director writes briefs for. */
+/** The three video-target templates the Director writes shot directions for. */
 export type DirectorTemplate = "reel_9x16" | "story_9x16" | "long_16x9";
 
 /**
  * Per-template creative spec. The template shapes the camera energy of
- * the brief (punchy vs atmospheric vs documentary) and carries the
- * duration the brief must be written for. Aspect ratio is the Producer
- * Call's concern, not the brief's.
+ * the shot direction (punchy vs atmospheric vs documentary) and carries
+ * the duration it must be written for. Aspect ratio is the Producer
+ * Call's concern, not the shot direction's.
  */
 export interface DirectorTemplateSpec {
   id: DirectorTemplate;
@@ -82,8 +84,8 @@ export const DIRECTOR_TEMPLATE_SPECS: Record<DirectorTemplate, DirectorTemplateS
 };
 
 /**
- * Everything the Director needs to write one visual brief. The caller
- * (variant-render.ts or the director inspector) assembles this; the
+ * Everything the Director needs to write one shot direction. The caller
+ * (variant-render.ts or the Motion Gen inspector) assembles this; the
  * Director module does no DB work — it only fetches + encodes the image.
  */
 export interface DirectorInput {
@@ -96,7 +98,7 @@ export interface DirectorInput {
   /** Brand tone string → camera register only (e.g. "expert and
    * assured" → smooth, controlled). NOT the copywriting voice traits. */
   brandTone: string | null;
-  /** Which template this brief is for. */
+  /** Which template this shot direction is for. */
   template: DirectorTemplate;
   /** Variety constraint: camera moves already used for this asset, so
    * the Director picks a different one across the 3 templates. */
@@ -104,26 +106,28 @@ export interface DirectorInput {
 }
 
 /**
- * The brief — the Director Call's output. Handed to the Producer Call
- * (Kling) and persisted to asset_variants.render_settings.director.
+ * The shot direction — the Director Call's output. Handed to the Producer
+ * Call (Kling / Veo) and persisted to asset_variants.render_settings.director.
  */
-export interface DirectorBrief {
-  /** The cinematic prompt for Kling — camera move + any micro-motion. */
-  prompt: string;
+export interface ShotDirection {
+  /** The cinematic prompt for the render engine — camera move + any
+   * micro-motion. The one field still called a "prompt": it IS the prompt
+   * the Producer model (Kling / Veo) receives. */
+  renderPrompt: string;
   /** Short descriptor of the primary camera move (e.g. "arcing push-in").
    * Drives the per-asset variety knob. */
   cameraMove: string;
-  /** Brands visibly present in the shot the brief features (from the
-   * analysis, never invented). */
+  /** Brands visibly present in the shot it features (from the analysis,
+   * never invented). */
   brandsMentioned: string[];
 }
 
 /**
- * Build the Director's instructions. Exported as a standalone builder so
- * the director inspector can show it without running the call — and so
- * it's cheap to iterate. Pure: same input always yields the same string.
+ * Build the Director's instructions — the text Sonnet receives. Exported
+ * as a standalone builder so the Motion Gen inspector can show it without
+ * running the call. Pure: same input always yields the same string.
  */
-export function buildDirectorPrompt(input: DirectorInput): string {
+export function buildDirectorInstructions(input: DirectorInput): string {
   const spec = DIRECTOR_TEMPLATE_SPECS[input.template];
   const analysis = input.analysis || {};
 
@@ -163,17 +167,17 @@ TracPost's subscribers are real working businesses. Their entire advantage is be
 - NEVER invent people who aren't in the photo, activities that aren't happening, drama, or lifestyle vignettes. Empty finished kitchen? The brief does not add a family. Wall mid-install? The brief does not add a crew walking in.
 - The test: could this have plausibly happened in the half-second after the shutter clicked? If yes, allowed. If it needs new actors or events, forbidden.
 
-## The camera move — curve it, for parallax
-A still photo becomes a video when the camera moves through 3-D space and near objects slide against far ones. That effect is PARALLAX, and it is the entire point of this render — without it the clip is just a zoom on a photo, which is worthless.
+## The camera move — curve it
+A still photo becomes a video when the CAMERA travels through 3-D space. As the viewpoint changes, near things and far things separate on their own — the depth comes alive. That depth separation is the entire point of this render; without it the clip is a flat zoom on a photo, which is worthless. (Filmmakers call the effect parallax. That word, and the effect, are YOUR reasoning for choosing the move — they NEVER appear in the brief, and you never describe objects separating. See "How Kling behaves" below.)
 
-Parallax comes from the camera moving SIDEWAYS relative to the scene — the lateral component of the motion. This rule drives every brief you write:
-- A STRAIGHT push-in (camera moving straight toward the subject) has almost no sideways component — so almost no parallax. It reads as a zoom. Do not default to it.
-- A CURVED, ARCING path — the camera advances while sweeping to one side — has a strong sideways component at every point. It produces clear parallax even when the move is small and slow.
-- A PAN or TILT is the camera rotating in place. Rotation is not travel — it produces ZERO parallax. Never use a pan or tilt as the main move.
+Depth separation is produced by ONE thing: the SIDEWAYS component of the camera's motion. This drives every move you choose:
+- A STRAIGHT push-in (camera moving straight toward the subject) has almost no sideways component. It reads as a flat zoom. Do not default to it.
+- A CURVED, ARCING path — the camera advances while sweeping to one side — has a strong sideways component at every point. The depth reads even when the move is small and slow.
+- A PAN or TILT is the camera rotating in place. Rotation is not travel — it does nothing for depth. Never use a pan or tilt as the main move.
 
-DEFAULT to an arcing push-in: the camera moves toward the subject AND curves to one side as it goes. The forward motion gives the sense of approaching the work; the sideways curve gives the parallax. Make the arc a real, visible sweep — not a straight line with a hint of bend.
+DEFAULT to an arcing push-in: the camera moves toward the subject AND curves to one side as it goes. Make the arc a real, visible sweep — not a straight line with a hint of bend. The forward motion gives the sense of approaching the work; the sideways sweep is what makes the depth read.
 
-This is what lets the move stay gentle. You do NOT need a fast, aggressive throw to get parallax — the curve does that work. A slow, modest arcing move reads as a genuine camera gliding through the space.
+This is what lets the move stay gentle — you do NOT need a fast, aggressive throw. The curve does the work; a slow, modest arcing move reads as a genuine camera gliding through the space.
 
 ## This render
 Template: ${spec.label} — ${spec.durationSeconds} seconds.
@@ -189,22 +193,23 @@ The tone changes only the camera's FEEL, not any words. Translate it into visual
 ${toneLine}
 
 ## How Kling behaves — write for it
-Kling executes literally and tends to over-animate. Write for restraint:
-- The ONE camera move comes from the parallax-rich family: an arcing push-in (your default), a curved dolly, an orbit, or a lateral truck. Avoid straight pushes; never make a pan or tilt the move.
-- Keep the pace gentle and eased — ease into the move, ease to a stop. The curve, not speed, delivers the parallax, so there is no need to rush. Scale the arc's reach to the ${spec.durationSeconds} seconds available.
-- Add at most one small motion or light element beyond the camera.
+Kling executes literally and tends to over-animate. It has no concept of "the camera" versus "the scene" — it reads every sentence as something to ANIMATE. Write for restraint:
+- THE CARDINAL RULE — describe ONLY the camera. Every motion verb in the brief must take the CAMERA as its subject ("the camera advances", "the camera curves left", "the arc eases to a stop"). NEVER attach a motion verb to a scene object — no "the board slides", "the foreground shifts", "the panel drifts", "the island moves against the wall". Kling takes "[object] slides" literally and physically slides that object — gravity, slope and all. The scene is frozen; the ONLY thing that moves is the camera. Do NOT name parallax and do NOT describe foreground separating from background — depth separation is the camera's job, and stating it as an outcome invites Kling to fake it by moving objects.
+- The ONE camera move comes from the depth-revealing family: an arcing push-in (your default), a curved dolly, an orbit, or a lateral truck. Avoid straight pushes; never make a pan or tilt the move.
+- Keep the pace gentle and eased — ease into the move, ease to a stop. The curve, not speed, makes the depth read, so there is no need to rush. Scale the arc's reach to the ${spec.durationSeconds} seconds available.
+- One small ambient motion (steam, dust, a light shift) is allowed ONLY as a true micro-continuation — never the subject, never anything that relocates an object.
 - Keep the brief to 40-70 words. Specific beats elaborate.
 - Avoid directing what Kling distorts: faces in tight close-up (they morph), text or logos in motion (they warp), complex hand or finger movement, fast or chaotic action. If the subject is a face or a logo, keep the move gentle and at a respectful distance.
 
 ## Your job
-1. LOOK at the image. Read the real composition and especially the DEPTH — what sits in the foreground, what sits behind. Parallax plays out between those depth layers, so the move must be built around them.
+1. LOOK at the image. Read the real composition and especially the DEPTH — what sits in the foreground, what sits behind. The depth comes alive between those layers, so the camera move must be built around them.
 2. Compose ONE arcing camera move for THIS frame: which way should the curve sweep, given where the subject and the depth layers sit. ${variety}
-3. Write the brief: 40-70 words, one arcing camera move, gentle and eased, grounded and real, for a ${spec.durationSeconds}-second clip. Name brands ONLY if the analysis lists them as visibly present — never invent.
+3. Write the brief: 40-70 words describing ONLY the camera and its path — gentle, eased, one arcing move, for a ${spec.durationSeconds}-second clip. The scene is frozen; no scene object moves. Name brands ONLY if the analysis lists them as visibly present — never invent.
 
 ## A strong brief looks like this
 (Story template, photo of a finished kitchen — an island in the foreground, cabinetry along the back wall)
-"A slow arcing push-in: the camera advances toward the cabinetry while curving gently to the right, so the foreground island slides leftward across the frame against the back wall — a clear, calm parallax. The scene holds still; cool even light. The arc eases to a stop with the range hood centered."
-Why it works: the curve produces real parallax at a gentle pace; the foreground island and the background wall visibly separate; no invented people; composed for the actual depth in the frame.
+"A slow arcing push-in: the camera eases forward toward the cabinetry, curving gently to the right as it travels so its path sweeps well to the side rather than straight in. Everything in the room is frozen — only the camera moves. Cool, even light, unchanging. The arc eases to a stop with the range hood centered."
+Why it works: every verb belongs to the camera — not one scene object is described as moving. The strong sideways curve does the depth work on its own, and the scene is stated as frozen, so Kling animates nothing but the camera.
 
 ## Output — JSON only, no markdown
 {
@@ -215,22 +220,38 @@ Why it works: the curve produces real parallax at a gentle pace; the foreground 
 }
 
 /**
- * Run the Director Call. Returns the brief, or null on any failure
- * (caller falls back to Ken Burns).
+ * Run the Director Call. Returns the shot direction, or { direction: null,
+ * error } on any failure (caller falls back to Ken Burns).
  */
-export async function directVideoBrief(
+export async function directShot(
   input: DirectorInput,
-): Promise<DirectorBrief | null> {
+): Promise<{ direction: ShotDirection | null; error: string | null }> {
   if (!input.imageUrl) {
     console.warn("director: no imageUrl provided");
-    return null;
+    return { direction: null, error: "No source image URL provided." };
   }
 
   try {
-    // Vision leg — fetch + encode the source still. fetchAndConvert
-    // handles HEIC → JPEG so Claude always gets a supported format.
-    const { data: imgBuffer, mimeType } = await fetchAndConvert(input.imageUrl);
-    const imgBase64 = imgBuffer.toString("base64");
+    // Vision leg — fetch the source still through the CDN, capped at
+    // 1568px and transcoded to JPEG. Anthropic rejects images over 5 MB
+    // (and downscales past 1568px anyway), so a raw full-res phone photo
+    // would 400 the call. The CDN resize also covers HEIC → JPEG.
+    const imgRes = await fetch(
+      cdnImageForced(input.imageUrl, {
+        width: 1568,
+        height: 1568,
+        fit: "scale-down",
+        format: "jpeg",
+        quality: 85,
+      }),
+    );
+    if (!imgRes.ok) {
+      return {
+        direction: null,
+        error: `Failed to fetch the source image (${imgRes.status}).`,
+      };
+    }
+    const imgBase64 = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
 
     const response = await anthropic.messages.create({
       model: DIRECTOR_MODEL,
@@ -243,11 +264,11 @@ export async function directVideoBrief(
               type: "image",
               source: {
                 type: "base64",
-                media_type: mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+                media_type: "image/jpeg",
                 data: imgBase64,
               },
             },
-            { type: "text", text: buildDirectorPrompt(input) },
+            { type: "text", text: buildDirectorInstructions(input) },
           ],
         },
       ],
@@ -258,7 +279,7 @@ export async function directVideoBrief(
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.warn("director: no JSON object in response");
-      return null;
+      return { direction: null, error: "The Director Call returned no JSON object." };
     }
 
     const parsed = JSON.parse(jsonMatch[0]) as {
@@ -269,21 +290,25 @@ export async function directVideoBrief(
 
     if (!parsed.prompt || typeof parsed.prompt !== "string") {
       console.warn("director: parsed response missing prompt");
-      return null;
+      return {
+        direction: null,
+        error: "The Director Call response had no prompt field.",
+      };
     }
 
     return {
-      prompt: parsed.prompt,
-      cameraMove: parsed.camera_move || "",
-      brandsMentioned: Array.isArray(parsed.brands_mentioned)
-        ? parsed.brands_mentioned.map(String)
-        : [],
+      direction: {
+        renderPrompt: parsed.prompt,
+        cameraMove: parsed.camera_move || "",
+        brandsMentioned: Array.isArray(parsed.brands_mentioned)
+          ? parsed.brands_mentioned.map(String)
+          : [],
+      },
+      error: null,
     };
   } catch (err) {
-    console.warn(
-      "director: brief generation failed:",
-      err instanceof Error ? err.message : err,
-    );
-    return null;
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("director: shot direction failed:", message);
+    return { direction: null, error: message };
   }
 }

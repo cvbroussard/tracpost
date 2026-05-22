@@ -6,6 +6,7 @@
 import * as jwt from "jsonwebtoken";
 import { uploadBufferToR2 } from "@/lib/r2";
 import { seoFilename } from "@/lib/seo-filename";
+import { cdnImageCroppedToAspect } from "@/lib/cdn-image";
 
 const API_BASE = "https://api.klingai.com/v1";
 
@@ -61,6 +62,13 @@ export async function generateVideoFromImage(
   try {
     const token = generateKlingToken();
 
+    // Pre-crop the source to the requested aspect via CDN cover-fit.
+    // Kling's image2video silently ignores aspect_ratio when an image
+    // is provided — it always inherits the source's aspect. Pre-cropping
+    // is what actually controls output shape (verified 2026-05-22: a
+    // 4032×3024 source rendered 1108×828 despite aspect_ratio="9:16").
+    const cropped = aspectRatio === "1:1" ? imageUrl : cdnImageCroppedToAspect(imageUrl, aspectRatio);
+
     // Create video generation task
     const createRes = await fetch(`${API_BASE}/videos/image2video`, {
       method: "POST",
@@ -70,7 +78,7 @@ export async function generateVideoFromImage(
       },
       body: JSON.stringify({
         model_name: MODEL_NAME,
-        image: imageUrl,
+        image: cropped,
         prompt,
         duration,
         mode,

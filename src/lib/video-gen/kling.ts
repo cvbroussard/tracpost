@@ -6,7 +6,6 @@
 import * as jwt from "jsonwebtoken";
 import { uploadBufferToR2 } from "@/lib/r2";
 import { seoFilename } from "@/lib/seo-filename";
-import { cdnImageCroppedToAspect } from "@/lib/cdn-image";
 
 const API_BASE = "https://api.klingai.com/v1";
 
@@ -14,6 +13,21 @@ const API_BASE = "https://api.klingai.com/v1";
 // config change, not a code deploy, and a wrong value can be corrected
 // without shipping. Default is the known-good v2-6.
 const MODEL_NAME = process.env.KLING_MODEL_NAME || "kling-v2-6";
+
+/**
+ * Producer-side prompt adapter (per the per-producer adapter pattern in
+ * [[runway-gen4-prompting]] + sibling shapeForRunway in runway.ts). The
+ * Director produces engine-agnostic shot direction; this adapter applies
+ * Kling-specific final shaping before the API call.
+ *
+ * v1: universal cleanup only (collapse whitespace, trim). Kling tolerates
+ * the Director's Runway-shaped output as-is — over-execution is a
+ * model-side problem prompt-shaping doesn't fix. This function is the
+ * architectural slot for any future Kling-specific transforms.
+ */
+export function shapeForKling(prompt: string): string {
+  return prompt.replace(/\s+/g, " ").trim();
+}
 
 interface KlingVideo {
   url: string;
@@ -41,6 +55,9 @@ function generateKlingToken(): string {
 /**
  * Generate a video from a still image using Kling.
  * The input image becomes the first frame — scene fidelity preserved.
+ * Output aspect matches the SOURCE image (Kling's image2video always
+ * inherits source aspect; no aspect_ratio param sent). Target aspects
+ * (9:16, 16:9, 1:1, etc.) are handled downstream by Smart Rotate.
  *
  * @param imageUrl - URL of the source image (R2 or external)
  * @param prompt - Motion/action prompt (people, camera movement, mood)
@@ -54,22 +71,16 @@ export async function generateVideoFromImage(
   options: {
     duration?: "5" | "10";
     mode?: "std" | "pro";
-    aspectRatio?: "16:9" | "9:16" | "1:1";
   } = {}
 ): Promise<KlingVideo | null> {
-  const { duration = "5", mode = "std", aspectRatio = "9:16" } = options;
+  const { duration = "5", mode = "std" } = options;
+  const shapedPrompt = shapeForKling(prompt);
 
   try {
     const token = generateKlingToken();
 
-    // Pre-crop the source to the requested aspect via CDN cover-fit.
-    // Kling's image2video silently ignores aspect_ratio when an image
-    // is provided — it always inherits the source's aspect. Pre-cropping
-    // is what actually controls output shape (verified 2026-05-22: a
-    // 4032×3024 source rendered 1108×828 despite aspect_ratio="9:16").
-    const cropped = aspectRatio === "1:1" ? imageUrl : cdnImageCroppedToAspect(imageUrl, aspectRatio);
-
-    // Create video generation task
+    // Create video generation task. Source URL passed as-is — Kling
+    // uses the source's aspect for the output regardless.
     const createRes = await fetch(`${API_BASE}/videos/image2video`, {
       method: "POST",
       headers: {
@@ -78,11 +89,10 @@ export async function generateVideoFromImage(
       },
       body: JSON.stringify({
         model_name: MODEL_NAME,
-        image: cropped,
-        prompt,
+        image: imageUrl,
+        prompt: shapedPrompt,
         duration,
         mode,
-        aspect_ratio: aspectRatio,
       }),
     });
 
@@ -127,7 +137,7 @@ export async function generateVideoFromImage(
         if (!videoRes.ok) return null;
 
         const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
-        const fname = seoFilename(prompt.slice(0, 40) || "video", "mp4");
+        const fname = seoFilename(shapedPrompt.slice(0, 40) || "video", "mp4");
         const key = `sites/${siteId}/media/${fname}`;
         const r2Url = await uploadBufferToR2(key, videoBuffer, "video/mp4");
 

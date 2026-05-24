@@ -149,20 +149,19 @@ export async function POST(req: NextRequest) {
       producerError = "No shot direction to render — the Director Call produced nothing.";
     } else {
       const spec = DIRECTOR_TEMPLATE_SPECS[tpl];
-      const aspect: "16:9" | "9:16" = tpl === "long_16x9" ? "16:9" : "9:16";
+      // Aspect no longer flows through the producer call. Each producer
+      // renders at the source's aspect (Kling natively; Runway picks the
+      // closest supported ratio from probed source dims; Veo is pulled).
+      // Smart Rotate handles target-aspect framing downstream — Option 3.
       const video =
         producer === "gemini"
-          ? await generateVideoFromImageVeo(context.imageUrl, promptToRender, siteId, {
-              aspectRatio: aspect,
-            })
+          ? await generateVideoFromImageVeo(context.imageUrl, promptToRender, siteId)
           : producer === "runway"
             ? await generateVideoFromImageRunway(context.imageUrl, promptToRender, siteId, {
-                aspectRatio: aspect,
                 duration: spec.durationSeconds,
               })
             : await generateVideoFromImage(context.imageUrl, promptToRender, siteId, {
                 duration: String(spec.durationSeconds) as "5" | "10",
-                aspectRatio: aspect,
               });
       if (video) {
         render = { url: video.url, durationSeconds: video.duration };
@@ -192,7 +191,6 @@ export async function POST(req: NextRequest) {
                 ${JSON.stringify({
                   template: tpl,
                   producer_model: producer,
-                  aspect,
                   duration_seconds: video.duration,
                   shot_direction: shotDir,
                 })}::jsonb
@@ -220,7 +218,6 @@ export async function POST(req: NextRequest) {
                 ${promptToRender},
                 ${JSON.stringify({
                   template: tpl,
-                  aspect,
                   duration_seconds: video.duration,
                 })}::jsonb,
                 ${inputs}::jsonb, ${componentId}

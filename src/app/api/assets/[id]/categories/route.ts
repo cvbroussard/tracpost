@@ -50,7 +50,7 @@ export async function GET(
 
   const [asset] = await sql`
     SELECT ma.id, ma.site_id,
-      ma.asset_analysis, ma.gps_lat, ma.gps_lng,
+      ma.ai_analysis, ma.gps_lat, ma.gps_lng,
       (EXISTS(SELECT 1 FROM recordings WHERE source_asset_id = ma.id AND transcript IS NOT NULL AND transcript <> '' AND archived_at IS NULL)
         OR (ma.context_note IS NOT NULL AND ma.context_note <> '')) AS has_transcript
     FROM media_assets ma WHERE ma.id = ${assetId}
@@ -80,7 +80,7 @@ export async function GET(
   // Surface the rest of the committed cascade artifact + brand links
   // + JIT-computed service area matches so the Auto-tag card can
   // render the full picture (same fields shown during preview).
-  const analysis = asset.asset_analysis as Record<string, unknown> | null;
+  const analysis = asset.ai_analysis as Record<string, unknown> | null;
   let committed: Record<string, unknown> | null = null;
   if (analysis) {
     const narrative = await getAssetNarrative(assetId);

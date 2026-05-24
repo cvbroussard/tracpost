@@ -29,7 +29,6 @@ interface ShotDirection {
 interface RenderSettings {
   template?: string;
   producer_model?: string;
-  aspect?: string;
   duration_seconds?: number;
   shot_direction?: ShotDirection;
 }
@@ -274,11 +273,12 @@ function ComponentDetail({
             </div>
           </div>
 
-          {/* Stats row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px]">
+          {/* Stats row — actual encoded dimensions live on the card's
+              badge (per the source-aspect rendering decision); no need
+              to surface a "requested aspect" stat that's no longer set. */}
+          <div className="grid grid-cols-3 gap-2 text-[10px]">
             <Stat label="Template" value={rs.template || "—"} />
             <Stat label="Producer" value={rs.producer_model || "—"} />
-            <Stat label="Aspect" value={rs.aspect || "—"} />
             <Stat
               label="Duration"
               value={rs.duration_seconds ? `${rs.duration_seconds}s` : "—"}

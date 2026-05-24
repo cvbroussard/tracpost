@@ -47,6 +47,16 @@ export interface CaptionHints {
   lead_with: string;
 }
 
+// MotionSequence is Vision's recovery of the implicit motion clip the still
+// was captured from. Three sub-fields mirror Runway's three motion sources
+// (per the motion-capture principle + Runway prompting reference memos).
+// Sub-fields are natural language and may be empty when not visually evidenced.
+export interface MotionSequence {
+  subject_motion: string;
+  camera_context: string;
+  scene_context: string;
+}
+
 export interface VisionResult {
   asset_categories: AssetCategoryCollection;
   scene_types: string[];
@@ -54,6 +64,7 @@ export interface VisionResult {
   story_angles: string[];
   suggested_pillar: string | null;
   caption_hints: CaptionHints;
+  motion_sequence: MotionSequence;
   cost: { input_tokens: number; output_tokens: number };
 }
 
@@ -81,7 +92,9 @@ export interface VisionInput {
 
 export const VISION_MODEL = "claude-sonnet-4-6";
 
-function buildSystemPrompt(): string {
+// Exported so analysis_events can persist the verbatim system prompt
+// alongside each Vision call's output (see persist-prompts-with-outputs memory).
+export function buildVisionSystemPrompt(): string {
   return `You are TracPost's multimodal asset analyzer. Given an asset image (or video poster) + the subscriber's transcript + pre-extracted entities + the site's declared GBP categories + brand DNA hints, produce ONE canonical analysis artifact in strict JSON.
 
 The pre-extracted entities (brands, specialties, materials) were already pulled from the transcript by a prior NER pass. Your job is to add the visual + multimodal reasoning that text alone can't provide.
@@ -114,6 +127,25 @@ OUTPUTS (all required):
    - phrases_to_avoid: optional, things that don't fit the brand voice
    - audience: who this caption is FOR ("homeowners seeking high-end historic restoration")
    - lead_with: what the first line of the caption should emphasize
+
+7. **motion_sequence** — Recover the implicit motion clip this still was captured from. Every photograph is a frozen frame of a moment with motion happening before AND after the shutter clicked. Your job is to describe ONLY motion that is **visually evidenced** in this frame. The downstream video generator uses this to write camera + subject motion direction; hallucinated motion produces broken videos. Three sub-fields:
+
+   - **subject_motion**: What in-frame subjects were doing. Examples: "The worker continues drilling a screw through the wood plank into the roof deck, drill rotating, arm pressing down." / "The contractor mid-stride along the foundation form, measuring tape extending behind." When NO subject in the frame is in motion-implying posture, return empty string ("").
+
+   - **camera_context**: What the photographer was doing. Camera position, implied movement, vantage. Examples: "Handheld documentary angle, photographer standing slightly below and to the right." / "Slow approach from the entry, the camera moving through the room." When subjects ARE moving, the camera context is often static or gentle handheld. When NO subject is moving, the photographer was the only thing in motion — this is the dominant source. Always populate this field.
+
+   - **scene_context**: Environmental motion. Light, weather, particles, fabric, dust. Examples: "Cool morning light angling in from the left, slight wind stirring tarp edges." / "Static interior, perfectly composed, no environmental motion." Use only if visually evidenced; otherwise note it as static.
+
+   CRITICAL — VISUAL-EVIDENCE DISCIPLINE:
+   - A drill in hand pressed against a surface → drilling implied (describe it)
+   - A drill held but not in contact with anything → tool is staged, NO motion implied (subject_motion = "")
+   - A figure mid-stride → walking implied
+   - A figure standing posed, looking at camera → minimal motion, gentle camera approach implied instead
+   - A static unmanned vehicle/machine → photographer was moving, NOT the vehicle (subject_motion = "")
+   - **Inert materials (insulation boards, sheathing, stacked lumber, parked equipment) NEVER move on their own under any circumstances**
+   - When in doubt, describe LESS motion, not more
+   - Use "continues" / "steadily" / "through" phrasing for in-progress action — NOT "begins" / "starts" / "initiates"
+   - Refer to subjects in generic terms: "the worker", "the figure on the left", "the subject" — not specific names
 
 CRITICAL RULES:
 
@@ -225,7 +257,7 @@ export async function analyzeVision(input: VisionInput): Promise<VisionOutcome> 
       // creative latitude on phrasing without rotating the
       // load-bearing fields. Still NOT seeded; some variance remains.
       temperature: 0.3,
-      system: buildSystemPrompt(),
+      system: buildVisionSystemPrompt(),
       messages: [
         {
           role: "user",
@@ -257,6 +289,11 @@ export async function analyzeVision(input: VisionInput): Promise<VisionOutcome> 
         phrases_to_avoid?: string[];
         audience?: string;
         lead_with?: string;
+      };
+      motion_sequence?: {
+        subject_motion?: string;
+        camera_context?: string;
+        scene_context?: string;
       };
     };
 
@@ -310,6 +347,11 @@ export async function analyzeVision(input: VisionInput): Promise<VisionOutcome> 
         phrases_to_avoid: parsed.caption_hints?.phrases_to_avoid || [],
         audience: parsed.caption_hints?.audience || "",
         lead_with: parsed.caption_hints?.lead_with || "",
+      },
+      motion_sequence: {
+        subject_motion: parsed.motion_sequence?.subject_motion || "",
+        camera_context: parsed.motion_sequence?.camera_context || "",
+        scene_context: parsed.motion_sequence?.scene_context || "",
       },
       cost: {
         input_tokens: res.usage.input_tokens,

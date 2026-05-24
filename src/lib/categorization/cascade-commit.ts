@@ -8,7 +8,7 @@
  *    All consumable work fires at cascade commit, not save."
  *
  * This is the ONE place where everything consumable gets produced:
- *   1. Persist asset_analysis JSONB + asset_categories rows
+ *   1. Persist ai_analysis JSONB + asset_categories rows
  *   2. Brand match (NER → catalog) + asset_brands rows
  *   3. Derive slug from cascade output
  *   4. Rename source R2 key to slug-derived (if differs)
@@ -34,6 +34,8 @@ import { deriveSourceKey } from "@/lib/pipeline/asset-keys";
 import { purgeCdnCache } from "@/lib/cdn";
 import { matchBrandsFromNer } from "./brand-match";
 import type { CascadeAnalysis } from "./cascade-analyze";
+import { NER_SYSTEM_PROMPT } from "./ner-extract";
+import { buildVisionSystemPrompt } from "./vision-analyze";
 
 export interface CommitCascadeInput {
   assetId: string;
@@ -77,7 +79,7 @@ async function persistCascadeArtifact(
 ): Promise<{ categoryRows: number }> {
   await sql`
     UPDATE media_assets
-    SET asset_analysis = ${JSON.stringify(analysis)}::jsonb,
+    SET ai_analysis = ${JSON.stringify(analysis)}::jsonb,
         processing_stage = 'analyzed',
         updated_at = NOW()
     WHERE id = ${assetId}
@@ -132,6 +134,104 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
 
   // ── 2. Persist cascade artifact + structured tags ────────────────
   const { categoryRows } = await persistCascadeArtifact(assetId, analysis);
+
+  // ── 2a. Append analysis_events history rows ──────────────────────
+  // Per [[persist-prompts-with-outputs]] — every LLM-driven feature
+  // persists verbatim prompt + input snapshot + output. The Director
+  // does this via production_events; cascade was the gap until now.
+  // Two rows per commit: one for the NER (Haiku) call, one for the
+  // Vision (Sonnet) call. ai_analysis stays as the denormalized
+  // "latest" cache; this table is the queryable history.
+  //
+  // Input snapshot is fetched at commit time (not preview time). Risk:
+  // small drift if site config or transcript changed between preview
+  // and commit. Acceptable for v1; tightenable to true preview-time
+  // capture if drift becomes visible.
+  //
+  // Non-fatal — history-write failure should NOT roll back the cascade
+  // commit (the user's analysis must persist regardless).
+  try {
+    const [transcriptRow] = await sql`
+      SELECT transcript FROM recordings
+      WHERE source_asset_id = ${assetId}
+        AND transcript IS NOT NULL AND transcript <> ''
+        AND archived_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    const transcript = (transcriptRow?.transcript as string) || "";
+
+    const [siteRow] = await sql`
+      SELECT pillar_config, brand_dna FROM sites WHERE id = ${siteId}
+    `;
+    const siteCategories = await sql`
+      SELECT sgc.gcid, gc.name
+      FROM site_gbp_categories sgc
+      JOIN gbp_categories gc ON gc.gcid = sgc.gcid
+      WHERE sgc.site_id = ${siteId}
+    `;
+
+    const nerInputSnapshot = { transcript };
+    const visionInputSnapshot = {
+      transcript,
+      ner_entities: analysis.entities,
+      ner_suggested_tags: analysis.suggested_tags,
+      site_categories: siteCategories,
+      pillar_config: siteRow?.pillar_config ?? [],
+      brand_dna_digest_present: Boolean(siteRow?.brand_dna),
+    };
+
+    const nerOutput = {
+      entities: analysis.entities,
+      suggested_tags: analysis.suggested_tags,
+    };
+    const visionOutput = {
+      asset_categories: analysis.asset_categories,
+      scene_types: analysis.scene_types,
+      url_slug: analysis.url_slug,
+      story_angles: analysis.story_angles,
+      suggested_pillar: analysis.suggested_pillar,
+      caption_hints: analysis.caption_hints,
+      motion_sequence: analysis.motion_sequence,
+    };
+
+    await sql.transaction([
+      sql`
+        INSERT INTO analysis_events
+          (asset_id, site_id, process, model, prompt, input_snapshot, output, cost)
+        VALUES (
+          ${assetId}, ${siteId}, 'ner_call', ${analysis.model_versions.ner},
+          ${NER_SYSTEM_PROMPT},
+          ${JSON.stringify(nerInputSnapshot)}::jsonb,
+          ${JSON.stringify(nerOutput)}::jsonb,
+          ${JSON.stringify({
+            input_tokens: analysis.cost.ner_input_tokens,
+            output_tokens: analysis.cost.ner_output_tokens,
+          })}::jsonb
+        )
+      `,
+      sql`
+        INSERT INTO analysis_events
+          (asset_id, site_id, process, model, prompt, input_snapshot, output, cost)
+        VALUES (
+          ${assetId}, ${siteId}, 'vision_call', ${analysis.model_versions.vision},
+          ${buildVisionSystemPrompt()},
+          ${JSON.stringify(visionInputSnapshot)}::jsonb,
+          ${JSON.stringify(visionOutput)}::jsonb,
+          ${JSON.stringify({
+            input_tokens: analysis.cost.vision_input_tokens,
+            output_tokens: analysis.cost.vision_output_tokens,
+          })}::jsonb
+        )
+      `,
+    ]);
+  } catch (err) {
+    warnings.push(`analysis_events write failed: ${err instanceof Error ? err.message : err}`);
+    console.warn(
+      `commitCascade ${assetId}: analysis_events write failed:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
 
   // ── 2b. Brand matching from NER hits ─────────────────────────────
   // Vision-based brand detection was retired (hallucinated from catalog

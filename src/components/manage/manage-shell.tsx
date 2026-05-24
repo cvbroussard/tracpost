@@ -37,6 +37,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Analysis", path: "/media-production/analysis" },
       { label: "Motion Gen", path: "/motion-gen" },
+      { label: "Prompt Lab", path: "/motion-gen/prompt-lab" },
       { label: "Web Pages", path: "/media-production/web-pages" },
       { label: "Standard Posts", path: "/media-production/standard-posts" },
       { label: "Video", path: "/media-production/video" },

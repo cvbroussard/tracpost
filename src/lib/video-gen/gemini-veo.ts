@@ -12,7 +12,7 @@
 
 import { uploadBufferToR2 } from "@/lib/r2";
 import { seoFilename } from "@/lib/seo-filename";
-import { cdnImageCroppedToAspect } from "@/lib/cdn-image";
+import { cdnImageForced } from "@/lib/cdn-image";
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -58,7 +58,6 @@ export async function generateVideoFromImageVeo(
   imageUrl: string,
   prompt: string,
   siteId: string,
-  options: { aspectRatio?: "16:9" | "9:16" } = {},
 ): Promise<VeoVideo | null> {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) {
@@ -66,16 +65,21 @@ export async function generateVideoFromImageVeo(
     return null;
   }
 
-  const { aspectRatio = "9:16" } = options;
-
+  // Veo is currently pulled from the producer picker (pending a workable
+  // fidelity story); kept callable for future re-evaluation. No aspect
+  // param — sends the source at native aspect (scale-down only).
   try {
-    // Veo takes the source image inline as base64. Fetch a CDN-cropped
-    // JPEG at the requested aspect — pre-cropping the source eliminates
-    // Veo's "landscape source letterboxed inside a 9:16 canvas" outcome
-    // by ensuring source.aspect == output.aspect from the start.
     let imgBuffer: Buffer;
     try {
-      const imgRes = await fetch(cdnImageCroppedToAspect(imageUrl, aspectRatio));
+      const imgRes = await fetch(
+        cdnImageForced(imageUrl, {
+          width: 1568,
+          height: 1568,
+          fit: "scale-down",
+          format: "jpeg",
+          quality: 85,
+        }),
+      );
       if (!imgRes.ok) {
         console.warn("Veo: source image fetch failed:", imgRes.status);
         return null;
@@ -105,7 +109,7 @@ export async function generateVideoFromImageVeo(
               },
             },
           ],
-          parameters: { aspectRatio },
+          parameters: {},
         }),
         signal: AbortSignal.timeout(30000),
       },

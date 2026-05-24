@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { AnalysisModal } from "@/components/manage/analysis-modal";
+import { FocalPointInspectorModal } from "@/components/manage/focal-point-inspector-modal";
 import { lifecycleBadge } from "@/lib/lifecycle-badge";
 import { cdnImage } from "@/lib/cdn-image";
 
@@ -35,6 +36,7 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "upload" | "ai" | "onboarded" | "untagged">("all");
   const [selected, setSelected] = useState<Asset | null>(null);
+  const [focalAsset, setFocalAsset] = useState<Asset | null>(null);
 
   useEffect(() => {
     fetch(`/api/manage/media?site_id=${siteId}`)
@@ -160,6 +162,18 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
                   No context
                 </span>
               )}
+              {asset.type !== "video" && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFocalAsset(asset);
+                  }}
+                  title="Inspect focal point"
+                  className="absolute bottom-1 right-1 rounded bg-black px-1.5 py-0.5 text-[9px] font-mono font-bold leading-none text-white shadow-md ring-1 ring-amber-400/40 hover:bg-zinc-900 hover:ring-amber-400/70"
+                >
+                  ⌖ FP
+                </button>
+              )}
             </div>
           );
         })}
@@ -167,6 +181,13 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
 
       {selected && (
         <AnalysisModal key={selected.id} assetId={selected.id} onClose={() => setSelected(null)} />
+      )}
+      {focalAsset && (
+        <FocalPointInspectorModal
+          key={focalAsset.id}
+          assetId={focalAsset.id}
+          onClose={() => setFocalAsset(null)}
+        />
       )}
     </div>
   );

@@ -19,10 +19,14 @@ import { ManagePage } from "@/components/manage/manage-page";
  * budget.
  */
 
+// Template labels carry duration + creative tone only. Aspect ratio
+// was dropped 2026-05-22 — producers render at source aspect; Smart
+// Rotate downstream picks target aspects. Template IDs keep their
+// historical _9x16/_16x9 suffixes for asset_variants compatibility.
 const TEMPLATES = [
-  { value: "reel_9x16", label: "Reel — 9:16, 5s" },
-  { value: "story_9x16", label: "Story — 9:16, 5s" },
-  { value: "long_16x9", label: "Long — 16:9, 10s" },
+  { value: "reel_9x16", label: "Reel — 5s, punchy" },
+  { value: "story_9x16", label: "Story — 5s, atmospheric" },
+  { value: "long_16x9", label: "Long — 10s, documentary" },
 ];
 
 // Producer-model picker (Hop 2). Gemini/Veo was tested 2026-05-22 and

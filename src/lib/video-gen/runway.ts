@@ -13,38 +13,81 @@
  * newer/different model is preferred).
  */
 
+import sharp from "sharp";
 import { uploadBufferToR2 } from "@/lib/r2";
 import { seoFilename } from "@/lib/seo-filename";
-import { cdnImageCroppedToAspect } from "@/lib/cdn-image";
+import { cdnImageForced } from "@/lib/cdn-image";
 
 const API_BASE = "https://api.dev.runwayml.com/v1";
 const RUNWAY_VERSION = process.env.RUNWAYML_API_VERSION || "2024-11-06";
 const RUNWAY_MODEL = process.env.RUNWAYML_MODEL || "gen4_turbo";
+
+/**
+ * Producer-side prompt adapter (per the per-producer adapter pattern in
+ * [[runway-gen4-prompting]]). The Director produces engine-agnostic shot
+ * direction following Runway's element order; this adapter applies any
+ * Runway-specific final shaping before the API call.
+ *
+ * v1: universal cleanup only (collapse whitespace, trim). The Director
+ * prompt rewrite already produces Runway-shaped output, so most of the
+ * Runway-specific work happens upstream. This function is the architectural
+ * slot for future divergence — e.g., enforcing length caps, swapping
+ * vocabulary, appending style descriptors if the Director omits one.
+ */
+export function shapeForRunway(prompt: string): string {
+  return prompt.replace(/\s+/g, " ").trim();
+}
 
 interface RunwayVideo {
   url: string;
   duration: number;
 }
 
-/** Runway expects pixel-ratio strings, not aspect labels. */
-function ratioFor(aspect: "16:9" | "9:16"): string {
-  return aspect === "16:9" ? "1280:720" : "720:1280";
+// Runway's supported output ratios (Gen-4 Turbo). The source's aspect
+// gets mapped to the closest one — we no longer pre-crop, so this is
+// where source-aspect-aware framing lives for Runway.
+const RUNWAY_RATIOS: { label: string; value: number }[] = [
+  { label: "1280:720", value: 1280 / 720 },   // 16:9 landscape
+  { label: "720:1280", value: 720 / 1280 },   // 9:16 portrait
+  { label: "1104:832", value: 1104 / 832 },   // ~4:3 landscape
+  { label: "832:1104", value: 832 / 1104 },   // ~3:4 portrait
+  { label: "960:960",  value: 1 },             // 1:1 square
+  { label: "1584:672", value: 1584 / 672 },   // ~21:9 ultrawide
+];
+
+function closestRunwayRatio(sourceAspect: number): string {
+  let best = RUNWAY_RATIOS[0];
+  let minDiff = Math.abs(sourceAspect - best.value);
+  for (const r of RUNWAY_RATIOS) {
+    const diff = Math.abs(sourceAspect - r.value);
+    if (diff < minDiff) {
+      minDiff = diff;
+      best = r;
+    }
+  }
+  return best.label;
 }
 
 /**
  * Generate a video from a still image using Runway Gen-4 Turbo.
  *
+ * Output aspect: the source's aspect, mapped to the closest Runway-
+ * supported ratio. Runway requires the `ratio` param (not optional),
+ * so we probe the source's dimensions and pick the nearest. No pre-crop —
+ * the model sees the full source frame; downstream Smart Rotate handles
+ * target-aspect framing.
+ *
  * @param imageUrl    - URL of the source image (R2 or external)
  * @param prompt      - Motion/action prompt (camera move, mood)
  * @param siteId      - owning site; scopes the R2 key
- * @param options     - aspectRatio: "16:9" | "9:16"; duration: 5 | 10
+ * @param options     - duration: 5 | 10
  * @returns the R2 URL + duration, or null on any failure (caller decides)
  */
 export async function generateVideoFromImageRunway(
   imageUrl: string,
   prompt: string,
   siteId: string,
-  options: { aspectRatio?: "16:9" | "9:16"; duration?: 5 | 10 } = {},
+  options: { duration?: 5 | 10 } = {},
 ): Promise<RunwayVideo | null> {
   const apiKey = process.env.RUNWAYML_API_SECRET;
   if (!apiKey) {
@@ -52,21 +95,34 @@ export async function generateVideoFromImageRunway(
     return null;
   }
 
-  const { aspectRatio = "9:16", duration = 5 } = options;
+  const { duration = 5 } = options;
+  const shapedPrompt = shapeForRunway(prompt);
 
   try {
-    // Fetch a CDN-cropped JPEG at the requested aspect — image-to-video
-    // producers derive output aspect from the input frame, so we settle
-    // aspect at the source rather than rely on the API's ratio param.
-    // Send as a base64 data URL so the call is self-contained (Runway
-    // also accepts public URLs; data URL eliminates the
-    // we-just-uploaded-to-R2-can-Runway-reach-it race).
-    const imgRes = await fetch(cdnImageCroppedToAspect(imageUrl, aspectRatio));
+    // Fetch a CDN-resized JPEG (aspect-preserving scale-down, capped at
+    // 1568px) — keeps the base64 payload manageable without altering the
+    // source's aspect.
+    const imgRes = await fetch(
+      cdnImageForced(imageUrl, {
+        width: 1568,
+        height: 1568,
+        fit: "scale-down",
+        format: "jpeg",
+        quality: 85,
+      }),
+    );
     if (!imgRes.ok) {
       console.warn("Runway: source image fetch failed:", imgRes.status);
       return null;
     }
     const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+
+    // Probe source dimensions to pick the closest Runway-supported ratio.
+    const meta = await sharp(imgBuffer).metadata();
+    const sourceAspect =
+      (meta.width || 1) / (meta.height || 1);
+    const ratio = closestRunwayRatio(sourceAspect);
+
     const promptImage = `data:image/jpeg;base64,${imgBuffer.toString("base64")}`;
 
     // Hop A — start the image-to-video task.
@@ -80,8 +136,8 @@ export async function generateVideoFromImageRunway(
       body: JSON.stringify({
         model: RUNWAY_MODEL,
         promptImage,
-        promptText: prompt,
-        ratio: ratioFor(aspectRatio),
+        promptText: shapedPrompt,
+        ratio,
         duration,
       }),
       signal: AbortSignal.timeout(30000),
@@ -137,7 +193,7 @@ export async function generateVideoFromImageRunway(
           return null;
         }
         const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
-        const fname = seoFilename(prompt.slice(0, 40) || "video", "mp4");
+        const fname = seoFilename(shapedPrompt.slice(0, 40) || "video", "mp4");
         const key = `sites/${siteId}/media/${fname}`;
         const r2Url = await uploadBufferToR2(key, videoBuffer, "video/mp4");
 

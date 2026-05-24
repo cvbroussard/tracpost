@@ -40,7 +40,9 @@ export type NerOutcome =
 
 export const NER_MODEL = "claude-haiku-4-5-20251001";
 
-const SYSTEM_PROMPT = `You extract structured entities and tag suggestions from a media asset's transcript (operator/subscriber narration during briefing).
+// Exported so analysis_events can persist the verbatim system prompt
+// alongside each NER call's output (see persist-prompts-with-outputs memory).
+export const NER_SYSTEM_PROMPT = `You extract structured entities and tag suggestions from a media asset's transcript (operator/subscriber narration during briefing).
 
 OUTPUT three entity arrays + suggested_tags. Each entity record has uniform fields.
 
@@ -105,7 +107,7 @@ export async function extractNer(transcript: string): Promise<NerOutcome> {
       // a seed so this isn't fully deterministic, but it's as close
       // as the API gets.
       temperature: 0,
-      system: SYSTEM_PROMPT,
+      system: NER_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
     });
 

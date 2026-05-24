@@ -1,31 +1,34 @@
 /**
  * Director Call — Hop 1 of the director pattern. VISUAL CREATION ONLY.
  *
- * Pipeline: [Director Call] → the shot direction → [Producer Call] → the render
+ * Pipeline: [Vision call (cascade)] → motion_sequence → [Director Call] →
+ *           the shot direction → [Producer Call] → the render
  *
- * The Director's job is the camera move and nothing else. It produces
- * Layer 1 of the three-layer video (visual). Layers 2-3 — voice-over,
- * music, on-screen captions — are the separate audio/narration layer.
- * Storytelling lives in narration, not in a camera move, so the
- * transcript, narrative threads, and copywriting brand voice are NOT
- * inputs here — they route to the audio layer. See
- * project_tracpost_director_pattern + project_tracpost_copy_video_bifurcation.
+ * The Director composes a shot direction from Vision's recovered motion
+ * sequence (the implicit clip the still was captured from) into a
+ * producer-ready prompt structured to Runway's element order — see
+ * [[tracpost-motion-capture-principle]] + [[runway-gen4-prompting]].
  *
- * Three inputs, all visual:
- *   - Vision (the image)  → composition, light, depth, framing
- *   - Analysis JSON       → visual facts: scene_type, what's in frame,
- *                           which brands are visibly present
- *   - Brand tone          → camera register only (assured→smooth,
- *                           energetic→kinetic). Not the copywriting voice.
- *   plus Template context → camera energy + duration.
+ * Inputs:
+ *   - Vision (the image)  → composition, light, depth, framing (Sonnet
+ *                           re-sees so it can compose; it does not re-infer
+ *                           motion — that lives in motion_sequence)
+ *   - Analysis JSON       → visual facts (scene_type, brands present) +
+ *                           motion_sequence (subject/camera/scene observations
+ *                           Vision already inferred under visual-evidence
+ *                           discipline)
+ *   - Brand tone          → camera register only
+ *   - Template            → camera energy + duration
  *
- * Model: Sonnet 4.6, multimodal, fixed. The Director does genuine visual
- * composition reading — writing camera moves from text alone is blind.
+ * Storytelling lives in narration (Layer 2-3 — voice-over, music, on-screen
+ * captions), so the transcript and copywriting voice traits route to the
+ * audio layer, NOT the Director.
+ *
+ * Model: Sonnet 4.6, multimodal, fixed.
  *
  * Graceful failure: never throws — returns { direction: null, error } on
  * any failure. The render pipeline ignores `error` and falls back to Ken
- * Burns; the Motion Gen inspector surfaces it so a failed call is
- * diagnosable instead of a silent null.
+ * Burns; the Motion Gen inspector surfaces it for diagnosis.
  */
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
@@ -42,8 +45,10 @@ export type DirectorTemplate = "reel_9x16" | "story_9x16" | "long_16x9";
 /**
  * Per-template creative spec. The template shapes the camera energy of
  * the shot direction (punchy vs atmospheric vs documentary) and carries
- * the duration it must be written for. Aspect ratio is the Producer
- * Call's concern, not the shot direction's.
+ * the duration it must be written for. Aspect ratio is NOT a Director
+ * concern — producers render at the source's aspect; Smart Rotate
+ * downstream handles target-aspect framing per the post-render reframer
+ * design (2026-05-22).
  */
 export interface DirectorTemplateSpec {
   id: DirectorTemplate;
@@ -131,11 +136,36 @@ export function buildDirectorInstructions(input: DirectorInput): string {
   const spec = DIRECTOR_TEMPLATE_SPECS[input.template];
   const analysis = input.analysis || {};
 
+  // Visual facts (from cascade-analyze vision pass)
   const sceneType = (analysis.scene_type as string) || "";
   const description = (analysis.description as string) || "";
   const detectedVendors = Array.isArray(analysis.detected_vendors)
     ? (analysis.detected_vendors as string[])
     : [];
+
+  // Motion sequence (from cascade-analyze vision pass — Vision's recovery
+  // of the implicit motion clip under visual-evidence discipline).
+  const motionSequence =
+    (analysis.motion_sequence as Record<string, unknown> | null) || {};
+  const subjectMotion =
+    typeof motionSequence.subject_motion === "string"
+      ? (motionSequence.subject_motion as string).trim()
+      : "";
+  const cameraContext =
+    typeof motionSequence.camera_context === "string"
+      ? (motionSequence.camera_context as string).trim()
+      : "";
+  const sceneContext =
+    typeof motionSequence.scene_context === "string"
+      ? (motionSequence.scene_context as string).trim()
+      : "";
+
+  const motionLines =
+    [
+      `Subject motion observed: ${subjectMotion || "(none — no in-frame subject was in motion-implying posture; the camera is the dominant motion source)"}`,
+      `Camera context observed: ${cameraContext || "(photographer position unclear; default to a gentle arcing approach)"}`,
+      `Scene context observed: ${sceneContext || "(no environmental motion observed)"}`,
+    ].join("\n");
 
   const analysisLines =
     [
@@ -146,7 +176,7 @@ export function buildDirectorInstructions(input: DirectorInput): string {
         : "",
     ]
       .filter(Boolean)
-      .join("\n") || "(no analysis on file — direct from the image)";
+      .join("\n") || "(no analysis on file — read direct from the image)";
 
   const toneLine = input.brandTone
     ? `This business's tone: ${input.brandTone}`
@@ -157,64 +187,95 @@ export function buildDirectorInstructions(input: DirectorInput): string {
       ? `Camera moves already used for this asset: ${input.previousCameraMoves.join("; ")}. Pick a DISTINCTLY DIFFERENT move (vary the arc direction or the move type).`
       : "No camera move used yet for this asset — any move is open.";
 
-  return `You are the Director. You write ONE camera-move brief that an AI video model (Kling) will execute, turning a single still photo into a short video. The photo you are shown IS the first frame — Kling generates motion forward from it. Your brief describes what HAPPENS next: the camera move, and any small motion or light shift. It never re-describes what is already in the frame. Your job is the VISUAL only — the camera, not the story.
+  return `You are the Director. You write ONE shot direction that an AI video model (Kling or Runway) executes, turning a single still photo into a 5-10 second video. The photo you are shown IS the first frame — the model generates motion forward from it.
 
-## The rule that matters most — stay real
-TracPost's subscribers are real working businesses. Their entire advantage is being real. The video must feel like a true moment from their actual work — never a staged lifestyle scene, never invented people or events.
+## Foundational principle — recover the implicit motion clip
+Every photograph is a frozen frame from a 5-10 second motion clip. Something was happening before the shutter clicked, and something would have continued after. Your job is to RECOVER and describe that motion. The Vision call has already inferred what was happening visually under strict visual-evidence discipline; you compose its observations into a producer-ready shot direction.
 
-- DEFAULT to camera motion. The most authentic, most reliable move is the camera exploring a frozen real moment — a slow arcing push toward the subject, a curving drift across the work. The scene holds still; the camera brings it alive.
-- Scene motion, if any, must be a PLAUSIBLE MICRO-CONTINUATION of what the photo froze: steam still rising, dust still settling, light shifting as a cloud passes, a hand finishing a motion ALREADY visible in the frame. Small, real, physically continuous.
-- NEVER invent people who aren't in the photo, activities that aren't happening, drama, or lifestyle vignettes. Empty finished kitchen? The brief does not add a family. Wall mid-install? The brief does not add a crew walking in.
-- The test: could this have plausibly happened in the half-second after the shutter clicked? If yes, allowed. If it needs new actors or events, forbidden.
+Three motion sources (Runway's recommended element order):
+1. SUBJECT motion — what in-frame subjects were doing
+2. CAMERA motion — what the photographer was doing
+3. SCENE motion — what the environment was doing (light, fabric, dust)
 
-## The camera move — curve it
-A still photo becomes a video when the CAMERA travels through 3-D space. As the viewpoint changes, near things and far things separate on their own — the depth comes alive. That depth separation is the entire point of this render; without it the clip is a flat zoom on a photo, which is worthless. (Filmmakers call the effect parallax. That word, and the effect, are YOUR reasoning for choosing the move — they NEVER appear in the brief, and you never describe objects separating. See "How Kling behaves" below.)
+## Vision call observations — your primary input
+${motionLines}
 
-Depth separation is produced by ONE thing: the SIDEWAYS component of the camera's motion. This drives every move you choose:
-- A STRAIGHT push-in (camera moving straight toward the subject) has almost no sideways component. It reads as a flat zoom. Do not default to it.
-- A CURVED, ARCING path — the camera advances while sweeping to one side — has a strong sideways component at every point. The depth reads even when the move is small and slow.
-- A PAN or TILT is the camera rotating in place. Rotation is not travel — it does nothing for depth. Never use a pan or tilt as the main move.
+CRITICAL: NEVER invent subject motion the Vision call did not observe. If subject_motion is empty, the camera is the dominant motion source — write a camera move, skip subject motion. Inert objects (insulation, sheathing, parked equipment) NEVER move on their own under any circumstances.
 
-DEFAULT to an arcing push-in: the camera moves toward the subject AND curves to one side as it goes. Make the arc a real, visible sweep — not a straight line with a hint of bend. The forward motion gives the sense of approaching the work; the sideways sweep is what makes the depth read.
+## Stay real
+TracPost's subscribers are real working businesses. Real wins. The video must feel like a true moment from their actual work — never invented people, activities, drama, or lifestyle vignettes. The test: could this have plausibly happened in the seconds the captured moment was a slice of? If yes, allowed. If it needs new actors or events the Vision didn't observe, forbidden.
 
-This is what lets the move stay gentle — you do NOT need a fast, aggressive throw. The curve does the work; a slow, modest arcing move reads as a genuine camera gliding through the space.
+## Camera move — Runway-canonical vocabulary
+Pick ONE primary camera move from this list. Use Runway's exact terms verbatim (the model recognizes these specifically — generic film terminology produces weaker adherence).
+
+**Default selection is subject-motion-aware** (this is the load-bearing rule):
+
+When Vision observed SUBJECT motion in the frame, default to:
+- **Static** — camera holds completely still; the subject's motion dominates the frame. MANDATORY when Static is chosen: end the prompt with this EXACT phrase verbatim — "The camera is entirely motionless for the duration of the scene, with movement only occurring from the subject." Static cameras are HARD for video models; this canonical reinforcement is REQUIRED or the model will drift.
+- **Tracking** — camera follows alongside the moving subject (e.g., follows the swinging hammer, follows the excavator boom through its dig arc)
+- **Handheld** — subtle natural shake; intimate documentary feel for grounded brand tones
+
+When Vision observed NO subject motion (camera is the motion source), default to:
+- **Arc** — camera moves in a curved path around or toward the subject. Sideways curve produces the depth separation that makes the clip read.
+- **Push in** — camera moves closer to the subject. Combine with Arc for a curved approach; a straight push reads as flat zoom.
+- **Pull back** — camera moves away from the subject; "reveal" shot
+- **Truck** — camera moves left or right, parallel to the subject; lateral travel
+- **Orbit** — camera circles completely around the subject
+- **Pedestal** — camera moves straight up or down vertically (useful for tall scenes)
+- **Crane/Jib** — camera moves up or down on a large arm (sweeping descents)
+
+Brand-tone modifier:
+- Grounded / blue-collar → Handheld or Static; natural light, honest movement
+- Premium / refined → Gimbal or Steadicam smoothness; controlled, elevated
+
+Never use as the main move:
+- **Pan** or **Tilt** alone (rotation produces no depth — flat output)
+- **Crash zoom**, **Whip pan** (too cinematic for grounded contractor content)
+
+For moves that travel through the frame (Push in, Pull back, Truck, Crane/Jib, Tracking), describe what comes into view OR what gets revealed during the move — Runway's documented best practice.
+
+Pace stays gentle and eased — ease into the move, ease to a stop. The curve / direction change does the work; speed doesn't need to. Scale the move's reach to the ${spec.durationSeconds} seconds available.
+
+${variety}
+
+## Brand tone → camera register
+${toneLine}
+- Grounded / blue-collar / no-nonsense → handheld or steady moves, natural light, honest movement
+- Premium / refined / assured → smooth, controlled, elevated moves; polished
 
 ## This render
 Template: ${spec.label} — ${spec.durationSeconds} seconds.
 Creative direction: ${spec.guidance}
 
-## What the analysis knows about this image
+## Output structure — follow Runway's element order
+Compose the renderPrompt in this order (aim for 30-70 words; Static cases run longer because of the required reinforcement phrase):
+
+[Camera motion]. [Subject motion — only if Vision observed any]. [Static-reinforcement phrase IF using Static]. [Style descriptor].
+
+**Worked example (rooftop drilling scene, Vision observed subject motion → Static camera)**:
+"Static medium shot framed on the subject at work on the roof deck. The subject continues fastening the panel, the drill rotating steadily. The camera is entirely motionless for the duration of the scene, with movement only occurring from the subject. Cinematic documentary live-action."
+
+**Worked example (finished kitchen, Vision observed no subject motion → Arc + Push in)**:
+"The camera arcs gently to the right as it pushes in toward the back cabinetry, the range hood coming into view as the move settles. Cinematic documentary live-action."
+
+**Worked example (excavator mid-dig with operator visible → Tracking)**:
+"The camera tracks alongside the excavator as the boom continues its dig arc. The bucket scrapes through the soil, dirt cascading from the teeth. Cinematic documentary live-action."
+
+## Discipline (universal — works on both Kling and Runway)
+- **Positive phrasing only.** "Locked camera" — NOT "no camera movement". "The camera remains still" — NOT "the camera doesn't move".
+- **In-progress phrasing for subject motion.** "continues / steadily / through" — NOT "starts / begins / initiates". The captured moment is mid-action, not at its start.
+- **Generic subject terms.** "the subject", "the figure on the left", "the worker" — NOT named entities or detailed appearance descriptions. The image carries identity; text describes motion.
+- **Do NOT re-describe the image** (clothing colors, materials, brand logos visible in the shot). Re-description reduces motion in output.
+- **Do NOT mix abstract / conceptual language.** "Cinematic documentary live-action" works as a style descriptor; "the essence of craftsmanship" does not.
+- **Do NOT describe motion the Vision call did not observe.** This is the universal restraint — the motion-capture principle generalizes the parallax fix. Inert objects never move regardless of how persuasive a camera arc looks.
+
+## What the analysis knows about the image (visual facts only)
 ${analysisLines}
-
-## Brand tone → the camera's personality
-The tone changes only the camera's FEEL, not any words. Translate it into visual choices:
-- Grounded / blue-collar / no-nonsense → handheld or steady moves, natural light, unglamorous and honest. The camera works the way the trade works.
-- Premium / refined / assured → smooth, controlled, elevated moves; careful light; polish.
-${toneLine}
-
-## How Kling behaves — write for it
-Kling executes literally and tends to over-animate. It has no concept of "the camera" versus "the scene" — it reads every sentence as something to ANIMATE. Write for restraint:
-- THE CARDINAL RULE — describe ONLY the camera. Every motion verb in the brief must take the CAMERA as its subject ("the camera advances", "the camera curves left", "the arc eases to a stop"). NEVER attach a motion verb to a scene object — no "the board slides", "the foreground shifts", "the panel drifts", "the island moves against the wall". Kling takes "[object] slides" literally and physically slides that object — gravity, slope and all. The scene is frozen; the ONLY thing that moves is the camera. Do NOT name parallax and do NOT describe foreground separating from background — depth separation is the camera's job, and stating it as an outcome invites Kling to fake it by moving objects.
-- The ONE camera move comes from the depth-revealing family: an arcing push-in (your default), a curved dolly, an orbit, or a lateral truck. Avoid straight pushes; never make a pan or tilt the move.
-- Keep the pace gentle and eased — ease into the move, ease to a stop. The curve, not speed, makes the depth read, so there is no need to rush. Scale the arc's reach to the ${spec.durationSeconds} seconds available.
-- One small ambient motion (steam, dust, a light shift) is allowed ONLY as a true micro-continuation — never the subject, never anything that relocates an object.
-- Keep the brief to 40-70 words. Specific beats elaborate.
-- Avoid directing what Kling distorts: faces in tight close-up (they morph), text or logos in motion (they warp), complex hand or finger movement, fast or chaotic action. If the subject is a face or a logo, keep the move gentle and at a respectful distance.
-
-## Your job
-1. LOOK at the image. Read the real composition and especially the DEPTH — what sits in the foreground, what sits behind. The depth comes alive between those layers, so the camera move must be built around them.
-2. Compose ONE arcing camera move for THIS frame: which way should the curve sweep, given where the subject and the depth layers sit. ${variety}
-3. Write the brief: 40-70 words describing ONLY the camera and its path — gentle, eased, one arcing move, for a ${spec.durationSeconds}-second clip. The scene is frozen; no scene object moves. Name brands ONLY if the analysis lists them as visibly present — never invent.
-
-## A strong brief looks like this
-(Story template, photo of a finished kitchen — an island in the foreground, cabinetry along the back wall)
-"A slow arcing push-in: the camera eases forward toward the cabinetry, curving gently to the right as it travels so its path sweeps well to the side rather than straight in. Everything in the room is frozen — only the camera moves. Cool, even light, unchanging. The arc eases to a stop with the range hood centered."
-Why it works: every verb belongs to the camera — not one scene object is described as moving. The strong sideways curve does the depth work on its own, and the scene is stated as frozen, so Kling animates nothing but the camera.
 
 ## Output — JSON only, no markdown
 {
-  "prompt": "the 40-70 word camera-move brief for Kling",
-  "camera_move": "<2-4 word descriptor of the move, e.g. 'arcing push-in'>",
+  "prompt": "the 30-60 word shot direction in Runway element order",
+  "camera_move": "<2-4 word descriptor of the camera move, e.g. 'arcing push-in'>",
   "brands_mentioned": ["<brands visibly present that the shot features, or empty>"]
 }`;
 }

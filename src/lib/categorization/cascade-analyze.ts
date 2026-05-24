@@ -32,6 +32,7 @@ import {
   type PillarConfigEntry,
   type AssetCategoryCollection,
   type CaptionHints,
+  type MotionSequence,
 } from "./vision-analyze";
 
 export type { PillarConfigEntry } from "./vision-analyze";
@@ -41,7 +42,7 @@ export type { PillarConfigEntry } from "./vision-analyze";
  * NER pass) and visual outputs (from vision pass) live alongside each
  * other. Provenance fields at the bottom.
  *
- * Persisted as-is into media_assets.asset_analysis JSONB.
+ * Persisted as-is into media_assets.ai_analysis JSONB.
  */
 export interface CascadeAnalysis {
   // From NER pass
@@ -55,6 +56,7 @@ export interface CascadeAnalysis {
   story_angles: string[];
   suggested_pillar: string | null;
   caption_hints: CaptionHints;
+  motion_sequence: MotionSequence;
 
   // Provenance
   generated_at: string;
@@ -109,6 +111,7 @@ export async function runCascade(input: CascadeInput): Promise<CascadeOutcome> {
     story_angles: vision.result.story_angles,
     suggested_pillar: vision.result.suggested_pillar,
     caption_hints: vision.result.caption_hints,
+    motion_sequence: vision.result.motion_sequence,
     generated_at: new Date().toISOString(),
     model_versions: { ner: NER_MODEL, vision: VISION_MODEL },
     cost: {

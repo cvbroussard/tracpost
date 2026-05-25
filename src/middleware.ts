@@ -55,6 +55,66 @@ const BOUNCE_DURING_ONBOARDING = new Set([
 // validates the token against the DB.
 const ONBOARDING_TOKEN_PATH = /^\/onboarding\/([A-Za-z0-9_-]{40,})$/;
 
+// Marketing-site auth gate (tracpost.com / www.tracpost.com only).
+// Activated when MARKETING_GATE_USER + MARKETING_GATE_PASS env vars are set;
+// absent vars = gate disabled (zero-friction rollback).
+// Subdomains (studio/platform/manage/blog/projects/preview/next) and tenant
+// custom domains are UNAFFECTED — they have their own auth or are intended
+// public surfaces for tenant content.
+const MARKETING_GATE_EXEMPT_EXACT = new Set([
+  "/login",        // Subscribers need to log in
+  "/admin-login",  // Already in sharedPaths, listed for clarity
+  "/unauthorized", // Error page — gating it would be circular
+  "/privacy",      // Legal/compliance
+  "/terms",        // Legal/compliance
+  "/data-deletion",
+  "/sms-consent",
+  "/reviewer",     // Meta App Reviewer guide entry — must stay accessible
+]);
+
+const MARKETING_GATE_EXEMPT_PREFIXES = [
+  "/api/",        // API routes (OAuth callbacks, webhooks, crons)
+  "/onboarding/", // In-progress subscribers
+  "/setup/",      // Post-signup setup flow
+  "/r/",          // Referral / redirect routes
+  "/reviewer/",   // Meta App Reviewer guide pages
+];
+
+function isMarketingGateExempt(pathname: string): boolean {
+  if (MARKETING_GATE_EXEMPT_EXACT.has(pathname)) return true;
+  return MARKETING_GATE_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+function checkMarketingGate(req: NextRequest): NextResponse | null {
+  const user = process.env.MARKETING_GATE_USER;
+  const pass = process.env.MARKETING_GATE_PASS;
+  // No env vars → gate disabled, pass through.
+  if (!user || !pass) return null;
+
+  const authHeader = req.headers.get("authorization");
+  if (authHeader?.startsWith("Basic ")) {
+    try {
+      const decoded = atob(authHeader.slice(6));
+      const sep = decoded.indexOf(":");
+      if (sep !== -1) {
+        const providedUser = decoded.slice(0, sep);
+        const providedPass = decoded.slice(sep + 1);
+        if (providedUser === user && providedPass === pass) return null;
+      }
+    } catch {
+      // Malformed header → fall through to 401
+    }
+  }
+
+  return new NextResponse("Authentication required", {
+    status: 401,
+    headers: {
+      "WWW-Authenticate": 'Basic realm="TracPost"',
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 export async function middleware(req: NextRequest) {
   const hostname = req.headers.get("host") || "localhost";
   const subdomain = classifyHost(hostname);
@@ -342,6 +402,16 @@ export async function middleware(req: NextRequest) {
     }
     // Let the route group handle it — no rewrites needed
     return NextResponse.next();
+  }
+
+  // Marketing-site auth gate — fires only for tracpost.com / www.tracpost.com,
+  // only when MARKETING_GATE_USER + MARKETING_GATE_PASS env vars are set,
+  // and only for non-exempt paths (see MARKETING_GATE_EXEMPT_* above).
+  // Subdomains and tenant custom domains have already been handled above
+  // and are unaffected.
+  if (isTracpostMarketing && !isMarketingGateExempt(pathname)) {
+    const gateResponse = checkMarketingGate(req);
+    if (gateResponse) return gateResponse;
   }
 
   // /login on marketing serves subscriber login

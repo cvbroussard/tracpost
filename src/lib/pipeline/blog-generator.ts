@@ -1335,7 +1335,7 @@ ${blogCorrectionsBlock}
             heroUrl,
             videoPrompt,
             siteData.site_id as string,
-            { duration: "5", aspectRatio: "9:16" }
+            { duration: "5" }
           );
 
           if (video) {

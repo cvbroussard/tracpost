@@ -133,7 +133,7 @@ export async function POST(
           asset.storage_url as string,
           motionPrompt,
           asset.site_id as string,
-          { duration, aspectRatio: "9:16" },
+          { duration },
         );
         if (!video) {
           return NextResponse.json({ error: "Kling generation failed" }, { status: 500 });

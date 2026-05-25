@@ -427,7 +427,6 @@ async function renderVideoFromStill(
       // Hop 2 — Producer Call (Kling). Still becomes the first frame.
       const video = await generateVideoFromImage(sourceUrl, direction.renderPrompt, siteId, {
         duration: String(spec.durationSeconds) as "5" | "10",
-        aspectRatio: aspect,
       });
 
       if (video) {

@@ -189,7 +189,7 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
         candidate.storage_url as string,
         prompt,
         siteId,
-        { duration: "5", aspectRatio: "9:16" },
+        { duration: "5" },
       );
 
       if (!video) {

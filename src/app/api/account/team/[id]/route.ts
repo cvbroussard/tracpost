@@ -57,9 +57,9 @@ export async function PATCH(
   }
 
   if (body.role !== undefined && ["member", "capture", "reviewer"].includes(body.role)) {
-    await sql`UPDATE users SET role = ${body.role} WHERE id = ${id}`; // legacy dual-write, retired Phase 4
-    // Sync the v3 business-membership capability (uses the member's current
-    // business_id — set just above if siteId changed — or the sole business).
+    // The business-membership capability is the sole authority (users.role
+    // retired). Uses the member's current business_id — set just above if
+    // siteId changed — or the account's sole business.
     const capability = body.role === "capture" ? "capture" : body.role === "reviewer" ? "reviewer" : "full";
     const [m2] = await sql`SELECT business_id FROM users WHERE id = ${id}`;
     let scopeBiz: string | null = (m2?.business_id as string | null) || null;
@@ -118,7 +118,7 @@ export async function POST(
   }
 
   const [member] = await sql`
-    SELECT id, email, phone, name, role FROM users
+    SELECT id, email, phone, name FROM users
     WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId} AND is_active = true
   `;
   if (!member) {

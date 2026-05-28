@@ -48,7 +48,6 @@ export async function POST() {
     subscriptionId: session.subscriptionId,
     subscriptionName: session.subscriptionName || session.userName,
     plan: session.plan,
-    role: session.role || "owner",
     isOwner: session.userId === (userRow?.owner_user_id as string | undefined),
     capability: (userRow?.capability as string | null) || null,
     principalType,

@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [subscriber] = await sql`
-    SELECT id, role FROM users
+    SELECT id FROM users
     WHERE email = ${email} AND is_active = true
   `;
 

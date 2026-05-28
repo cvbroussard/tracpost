@@ -39,12 +39,12 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // Accountless staff user. Legacy users.role is vestigial for staff (the
-  // membership is the real authority) — default it to 'admin'.
+  // Accountless staff user. Authority is the membership granted afterward;
+  // the legacy users.role column is no longer written.
   const [user] = await sql`
-    INSERT INTO users (email, name, role, password_hash, is_active, billing_account_id)
-    VALUES (${email}, ${name}, 'admin', ${passwordHash}, true, NULL)
-    RETURNING id, name, email, role, is_active, billing_account_id, business_id, created_at
+    INSERT INTO users (email, name, password_hash, is_active, billing_account_id)
+    VALUES (${email}, ${name}, ${passwordHash}, true, NULL)
+    RETURNING id, name, email, is_active, billing_account_id, business_id, created_at
   `;
 
   return NextResponse.json({
@@ -53,7 +53,6 @@ export async function POST(req: NextRequest) {
       id: user.id,
       name: (user.name as string) ?? null,
       email: user.email,
-      role: (user.role as string) ?? null,
       isActive: user.is_active !== false,
       createdAt: String(user.created_at),
       billingAccountId: (user.billing_account_id as string) ?? null,

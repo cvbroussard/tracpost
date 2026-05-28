@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function UsersPage() {
   const users = await sql`
     SELECT
-      u.id, u.name, u.email, u.role, u.is_active, u.created_at,
+      u.id, u.name, u.email, u.is_active, u.created_at,
       u.billing_account_id, a.name AS account_name,
       u.business_id, b.name AS business_name,
       COALESCE((
@@ -45,7 +45,6 @@ export default async function UsersPage() {
     id: u.id as string,
     name: (u.name as string) || null,
     email: (u.email as string) || null,
-    role: (u.role as string) || null,
     isActive: u.is_active !== false,
     createdAt: String(u.created_at),
     billingAccountId: (u.billing_account_id as string) || null,

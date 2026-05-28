@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
 
   const rows = await sql`
-    SELECT u.id, u.name, u.role, u.password_hash, u.billing_account_id, u.business_id,
+    SELECT u.id, u.name, u.password_hash, u.billing_account_id, u.business_id,
            s.plan, s.name AS subscription_name, s.owner_user_id,
            (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability
     FROM users u
@@ -44,10 +44,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
-  // Capture-only users cannot access the web dashboard. Capability lives on the
-  // user's business membership now (users.role being retired); `role` is kept
-  // only to populate the legacy session field below.
-  const role = (user.role as string) || "owner";
+  // Capture-only users cannot access the web dashboard. Capability lives on
+  // the user's business membership.
   if (user.capability === "capture") {
     return NextResponse.json(
       { error: "This account is mobile-only. Use the TracPost Studio app instead." },
@@ -91,7 +89,6 @@ export async function POST(req: NextRequest) {
     subscriptionId,
     subscriptionName: user.subscription_name || user.name,
     plan: user.plan,
-    role,
     isOwner: user.id === user.owner_user_id,
     capability: (user.capability as string | null) || null,
     principalType,

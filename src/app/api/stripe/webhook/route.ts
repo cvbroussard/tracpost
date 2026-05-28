@@ -142,12 +142,11 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
 
   // Create owner user attached to the subscription
   const [owner] = await sql`
-    INSERT INTO users (billing_account_id, name, email, role, is_active)
+    INSERT INTO users (billing_account_id, name, email, is_active)
     VALUES (
       ${subscription.id},
       ${email.split("@")[0]},
       ${email},
-      'owner',
       true
     )
     RETURNING id

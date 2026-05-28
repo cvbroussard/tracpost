@@ -44,7 +44,6 @@ export async function GET(req: NextRequest) {
     subscriptionId: subscriber.subscriptionId,
     subscriptionName: (subRows[0]?.name as string) || subscriber.name,
     plan: subscriber.plan,
-    role: subscriber.role,
     isOwner: subscriber.id === (subRows[0]?.owner_user_id as string | undefined),
     capability: subscriber.capability,
     principalType,

@@ -28,9 +28,6 @@ export interface AuthContext {
    *  `.subscriptionId` call-sites keep working through the dual-read window. */
   subscriptionId: string;
   plan: string;
-  /** Legacy single role ("owner"/team role). Retained through the dual-read
-   *  window; superseded by {@link memberships}. */
-  role: string;
   /** True when this user owns their account (accounts.owner_user_id). Replaces
    *  the legacy role==='owner' check; computed per-request from the DB. */
   isOwner: boolean;
@@ -45,25 +42,6 @@ export interface AuthContext {
   actingAsAdmin?: boolean;
 }
 
-// ── Dual-read schema bridge (v3 migrate-137) ──────────────────────
-// This file ships BEFORE migrate-137 runs (deploy step 1), so it must work
-// against BOTH schemas: legacy (`subscriptions`, `users.subscription_id`) and
-// v3 (`accounts`, `memberships`). Each DB-backed resolver tries the v3 path
-// first; if the v3 relations/columns don't exist yet, it falls back to legacy.
-// Once the v3 path succeeds once, `v3Confirmed` latches on (one-way) so we stop
-// attempting the legacy fallback and surface real errors thereafter.
-// Remove this whole bridge in the migrate-138 cleanup.
-let v3Confirmed = false;
-
-function isMissingSchema(e: unknown): boolean {
-  const err = e as { code?: string; message?: string };
-  return (
-    err?.code === "42P01" || // undefined_table
-    err?.code === "42703" || // undefined_column
-    /relation ".*" does not exist|column ".*" does not exist/i.test(err?.message || "")
-  );
-}
-
 export function derivePrincipal(memberships: Membership[]): PrincipalType {
   const types = new Set(memberships.map((m) => m.scopeType));
   if (types.has("platform")) return "platform";
@@ -73,7 +51,7 @@ export function derivePrincipal(memberships: Membership[]): PrincipalType {
   return "guest";
 }
 
-type UserRow = { user_id: string; name: string; role: string; account_id: string; plan: string; owner_user_id?: string | null };
+type UserRow = { user_id: string; name: string; account_id: string; plan: string; owner_user_id?: string | null };
 
 export async function loadMemberships(userId: string): Promise<Membership[]> {
   const rows = await sql`
@@ -93,7 +71,6 @@ function assemble(u: UserRow, memberships: Membership[], opts?: { actingAsAdmin?
     accountId: u.account_id,
     subscriptionId: u.account_id, // deprecated alias
     plan: u.plan || "free",
-    role: u.role || "owner",
     isOwner: !!u.owner_user_id && u.user_id === u.owner_user_id,
     principalType: memberships.length ? derivePrincipal(memberships) : "business",
     memberships,
@@ -106,27 +83,14 @@ function assemble(u: UserRow, memberships: Membership[], opts?: { actingAsAdmin?
  * Dual-read: v3 schema first, legacy fallback.
  */
 async function loadContextByUserId(userId: string): Promise<AuthContext | null> {
-  try {
-    const rows = await sql`
-      SELECT u.id AS user_id, u.name, u.role, u.billing_account_id AS account_id, a.plan, a.owner_user_id
-      FROM users u JOIN accounts a ON a.id = u.billing_account_id
-      WHERE u.id = ${userId} AND u.is_active = true AND a.is_active = true
-    `;
-    if (rows.length === 0) return null;
-    const memberships = await loadMemberships(userId);
-    v3Confirmed = true;
-    return assemble(rows[0] as UserRow, memberships);
-  } catch (e) {
-    if (v3Confirmed || !isMissingSchema(e)) throw e;
-    // ── legacy fallback (pre-migration only) ──
-    const rows = await sql`
-      SELECT u.id AS user_id, u.name, u.role, u.subscription_id AS account_id, s.plan
-      FROM users u JOIN subscriptions s ON u.subscription_id = s.id
-      WHERE u.id = ${userId} AND u.is_active = true AND s.is_active = true
-    `;
-    if (rows.length === 0) return null;
-    return assemble(rows[0] as UserRow, []);
-  }
+  const rows = await sql`
+    SELECT u.id AS user_id, u.name, u.billing_account_id AS account_id, a.plan, a.owner_user_id
+    FROM users u JOIN accounts a ON a.id = u.billing_account_id
+    WHERE u.id = ${userId} AND u.is_active = true AND a.is_active = true
+  `;
+  if (rows.length === 0) return null;
+  const memberships = await loadMemberships(userId);
+  return assemble(rows[0] as UserRow, memberships);
 }
 
 /**
@@ -137,41 +101,21 @@ async function loadContextByAccountOwner(
   match: { apiKeyHash: string } | { accountId: string },
   opts?: { actingAsAdmin?: boolean }
 ): Promise<AuthContext | null> {
-  try {
-    const rows =
-      "apiKeyHash" in match
-        ? await sql`
-            SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan, a.owner_user_id
-            FROM accounts a JOIN users u ON u.id = a.owner_user_id
-            WHERE a.api_key_hash = ${match.apiKeyHash} AND a.is_active = true
-            LIMIT 1`
-        : await sql`
-            SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan, a.owner_user_id
-            FROM accounts a JOIN users u ON u.id = a.owner_user_id
-            WHERE a.id = ${match.accountId} AND a.is_active = true
-            LIMIT 1`;
-    if (rows.length === 0) return null;
-    const memberships = await loadMemberships(rows[0].user_id as string);
-    v3Confirmed = true;
-    return assemble(rows[0] as UserRow, memberships, opts);
-  } catch (e) {
-    if (v3Confirmed || !isMissingSchema(e)) throw e;
-    // ── legacy fallback (pre-migration only) ──
-    const rows =
-      "apiKeyHash" in match
-        ? await sql`
-            SELECT u.id AS user_id, u.name, u.role, s.id AS account_id, s.plan
-            FROM subscriptions s JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
-            WHERE s.api_key_hash = ${match.apiKeyHash} AND s.is_active = true
-            LIMIT 1`
-        : await sql`
-            SELECT u.id AS user_id, u.name, u.role, s.id AS account_id, s.plan
-            FROM subscriptions s JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
-            WHERE s.id = ${match.accountId} AND s.is_active = true
-            LIMIT 1`;
-    if (rows.length === 0) return null;
-    return assemble(rows[0] as UserRow, [], opts);
-  }
+  const rows =
+    "apiKeyHash" in match
+      ? await sql`
+          SELECT u.id AS user_id, u.name, a.id AS account_id, a.plan, a.owner_user_id
+          FROM accounts a JOIN users u ON u.id = a.owner_user_id
+          WHERE a.api_key_hash = ${match.apiKeyHash} AND a.is_active = true
+          LIMIT 1`
+      : await sql`
+          SELECT u.id AS user_id, u.name, a.id AS account_id, a.plan, a.owner_user_id
+          FROM accounts a JOIN users u ON u.id = a.owner_user_id
+          WHERE a.id = ${match.accountId} AND a.is_active = true
+          LIMIT 1`;
+  if (rows.length === 0) return null;
+  const memberships = await loadMemberships(rows[0].user_id as string);
+  return assemble(rows[0] as UserRow, memberships, opts);
 }
 
 /**
@@ -216,10 +160,10 @@ export async function authenticateRequest(
       accountId: session.subscriptionId,
       subscriptionId: session.subscriptionId, // deprecated alias
       plan: session.plan,
-      role: session.role || "owner",
-      // Prefer the v3 baked field; legacy cookies fall back to role-derivation.
-      isOwner: session.isOwner ?? ((session.role || "owner") === "owner"),
-      principalType: "business",
+      // isOwner is baked into the cookie at login (Phase 3b). Pre-3b cookies
+      // lack it and resolve to false until the user re-logs in.
+      isOwner: session.isOwner ?? false,
+      principalType: session.principalType as PrincipalType ?? "business",
       memberships: [],
     };
   }

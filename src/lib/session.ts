@@ -7,9 +7,8 @@ export interface Session {
   subscriptionId: string;
   subscriptionName: string;
   plan: string;
-  role: string;
-  /** v3, baked at session creation. Absent on legacy cookies — readers fall back
-   *  to deriving from `role` during the rollover. */
+  /** v3, baked at session creation (Phase 3b). Absent on pre-3b cookies, which
+   *  resolve to non-owner until the user re-logs in. */
   isOwner?: boolean;
   capability?: string | null;
   /** v3 surface this principal belongs to ("platform" | "operator" | "agency"
@@ -32,16 +31,14 @@ export async function getSession(): Promise<Session | null> {
 }
 
 /**
- * Effective role string for display/gating, reconstructed from the v3 cookie
- * fields (isOwner + capability). Falls back to the legacy `role` field for
- * sessions issued before the v3 cookie bump (Phase 3b). Returns the legacy
- * vocabulary: "owner" | "capture" | "reviewer" | "member".
+ * Effective role string for display/gating, derived from the v3 cookie fields
+ * (isOwner + capability, baked since Phase 3b). Returns the display vocabulary:
+ * "owner" | "capture" | "reviewer" | "member". Pre-3b cookies lacking these
+ * fields resolve to "member" until the user re-logs in.
  */
 export function sessionDisplayRole(s: Session): string {
-  const isOwner = s.isOwner ?? ((s.role || "owner") === "owner");
-  if (isOwner) return "owner";
-  const cap = s.capability ?? (s.role === "capture" ? "capture" : s.role === "reviewer" ? "reviewer" : "full");
-  if (cap === "capture") return "capture";
-  if (cap === "reviewer") return "reviewer";
+  if (s.isOwner) return "owner";
+  if (s.capability === "capture") return "capture";
+  if (s.capability === "reviewer") return "reviewer";
   return "member";
 }

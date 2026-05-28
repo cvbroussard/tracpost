@@ -22,7 +22,6 @@ export interface UserRow {
   id: string;
   name: string | null;
   email: string | null;
-  role: string | null;
   isActive: boolean;
   createdAt: string;
   billingAccountId: string | null;
@@ -125,7 +124,7 @@ export function UsersClient({ initialRows }: { initialRows: UserRow[] }) {
   const q = search.trim().toLowerCase();
   const filtered = q
     ? rows.filter((u) =>
-        [u.name, u.email, u.accountName, u.businessName, u.role].some((v) =>
+        [u.name, u.email, u.accountName, u.businessName].some((v) =>
           (v || "").toLowerCase().includes(q),
         ),
       )
@@ -234,14 +233,6 @@ function UserCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-foreground">{u.name || "(no name)"}</span>
-            {u.role && (
-              <span
-                title="Legacy users.role — transitional, NOT the access authority. Scope + tier live on memberships; function (full/capture/reviewer) is moving to memberships too."
-                className="rounded bg-surface-hover px-2 py-0.5 text-xs text-muted"
-              >
-                legacy role: {u.role}
-              </span>
-            )}
             <span className={`text-xs ${u.isActive ? "text-success" : "text-danger"}`}>
               {u.isActive ? "active" : "inactive"}
             </span>

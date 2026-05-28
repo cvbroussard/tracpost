@@ -20,9 +20,10 @@ export async function POST(req: NextRequest) {
 
   // Find the invite
   const [member] = await sql`
-    SELECT u.id, u.billing_account_id, u.business_id, u.name, u.role,
+    SELECT u.id, u.billing_account_id, u.business_id, u.name,
            u.invite_expires, u.invite_consumed, u.is_active,
-           s.plan
+           s.plan, s.owner_user_id,
+           (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability
     FROM users u
     JOIN accounts s ON u.billing_account_id = s.id
     WHERE u.invite_token = ${token}
@@ -76,7 +77,13 @@ export async function POST(req: NextRequest) {
       id: member.id,
       subscriptionId: member.billing_account_id,
       name: member.name,
-      role: member.role,
+      role: member.capability === "capture"
+        ? "capture"
+        : member.capability === "reviewer"
+          ? "reviewer"
+          : member.id === member.owner_user_id
+            ? "owner"
+            : "member",
       siteId: member.business_id || null,
       plan: member.plan,
     },

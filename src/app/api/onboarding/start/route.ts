@@ -200,13 +200,12 @@ export async function POST(req: NextRequest) {
   `;
 
   const [owner] = await sql`
-    INSERT INTO users (billing_account_id, name, email, phone, role, is_active)
+    INSERT INTO users (billing_account_id, name, email, phone, is_active)
     VALUES (
       ${dbSub.id},
       ${nameClean},
       ${emailClean},
       ${phoneClean},
-      'owner',
       true
     )
     RETURNING id

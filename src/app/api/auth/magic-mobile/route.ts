@@ -38,7 +38,13 @@ export async function POST(req: NextRequest) {
       id: subscriber.id,
       name: subscriber.name,
       plan: subscriber.plan,
-      role: subscriber.role,
+      role: subscriber.isOwner
+        ? "owner"
+        : subscriber.capability === "capture"
+          ? "capture"
+          : subscriber.capability === "reviewer"
+            ? "reviewer"
+            : "member",
     },
     sites: sites.map((s: Record<string, unknown>) => ({
       id: s.id,

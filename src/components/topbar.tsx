@@ -12,18 +12,18 @@ interface TopBarProps {
 export function TopBar({ userName, variant = "studio" }: TopBarProps) {
   const router = useRouter();
 
-  const isSubdomain =
-    typeof window !== "undefined" &&
-    (window.location.hostname === "studio.tracpost.com" ||
-      window.location.hostname === "platform.tracpost.com" ||
-      window.location.hostname === "manage.tracpost.com");
-
   async function handleLogout() {
+    // Clear the V3 session cookie on every surface; also clear the legacy
+    // tp_admin cookie on platform/manage. Both are dropped so sign-out works
+    // regardless of which credential authenticated the session.
+    await fetch("/api/auth/logout", { method: "POST" });
     if (variant === "platform" || variant === "manage") {
       await fetch("/api/auth/admin", { method: "DELETE" });
-      router.push(isSubdomain ? "/login" : "/admin-login");
+    }
+    // Always return to the single canonical login page.
+    if (window.location.hostname.endsWith("tracpost.com")) {
+      window.location.href = "https://tracpost.com/login";
     } else {
-      await fetch("/api/auth/logout", { method: "POST" });
       router.push("/login");
     }
   }

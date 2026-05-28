@@ -29,7 +29,15 @@ export function MobileNav({ userName }: { userName: string }) {
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    // Always return to the single canonical login page.
+    if (
+      typeof window !== "undefined" &&
+      window.location.hostname.endsWith("tracpost.com")
+    ) {
+      window.location.href = "https://tracpost.com/login";
+    } else {
+      router.push("/login");
+    }
   }
 
   return (

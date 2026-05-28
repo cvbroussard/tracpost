@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     SELECT sub.id, sub.plan, sub.is_active, sub.created_at, sub.metadata,
            u.name, u.email
     FROM accounts sub
-    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+    JOIN users u ON u.id = sub.owner_user_id
     WHERE sub.id = ${id}
   `;
 

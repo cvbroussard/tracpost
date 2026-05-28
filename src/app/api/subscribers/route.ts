@@ -64,7 +64,7 @@ export async function GET() {
       SELECT s.id, s.plan, s.is_active, s.created_at, s.updated_at,
              COALESCE(owner.name, owner.email, '—') AS name
       FROM accounts s
-      LEFT JOIN users owner ON owner.billing_account_id = s.id AND owner.role = 'owner'
+      LEFT JOIN users owner ON owner.id = s.owner_user_id
       ORDER BY s.created_at DESC
     `;
     return NextResponse.json({ subscribers: rows });

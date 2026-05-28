@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
              (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = s.id AND status = 'published') AS published
       FROM businesses s
       JOIN accounts sub ON sub.id = s.billing_account_id
-      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+      JOIN users u ON u.id = sub.owner_user_id
       WHERE s.is_active = true
         AND (s.provisioning_status != 'complete' OR s.autopilot_enabled = false)
       ORDER BY s.created_at DESC

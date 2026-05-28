@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
       SELECT s.id, s.name, u.name AS subscriber_name, s.created_at AS timestamp
       FROM businesses s
       JOIN accounts sub ON sub.id = s.billing_account_id
-      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+      JOIN users u ON u.id = sub.owner_user_id
       WHERE s.provisioning_status = 'requested'
         AND s.is_active = true
         AND s.created_at >= ${sinceStr}
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
              u.name AS subscriber_name
       FROM social_accounts sa
       JOIN accounts sub ON sa.billing_account_id = sub.id
-      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+      JOIN users u ON u.id = sub.owner_user_id
       WHERE sa.status = 'active'
         AND sa.token_expires_at IS NOT NULL
         AND sa.token_expires_at < NOW() + INTERVAL '7 days'
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
       FROM engagement_events ee
       LEFT JOIN engaged_persons ep ON ep.id = ee.engaged_person_id
       JOIN accounts sub ON sub.id = ee.billing_account_id
-      LEFT JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+      LEFT JOIN users u ON u.id = sub.owner_user_id
       WHERE ee.sentiment = 'negative'
         AND ee.review_status = 'new'
         AND ee.occurred_at >= ${sinceStr}

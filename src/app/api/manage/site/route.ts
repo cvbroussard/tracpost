@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
              u.name AS subscriber_name, sub.plan
       FROM businesses s
       JOIN accounts sub ON sub.id = s.billing_account_id
-      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+      JOIN users u ON u.id = sub.owner_user_id
       WHERE s.id = ${siteId}
     `;
     if (!site) return NextResponse.json({ error: "Not found" }, { status: 404 });

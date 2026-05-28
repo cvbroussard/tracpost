@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
   const [existing] = await sql`
     SELECT s.id, s.metadata
     FROM accounts s
-    JOIN users u ON u.billing_account_id = s.id AND u.role = 'owner'
+    JOIN users u ON u.id = s.owner_user_id
     WHERE u.email = ${emailClean} AND s.is_active = true
     LIMIT 1
   `;

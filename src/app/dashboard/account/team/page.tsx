@@ -16,16 +16,34 @@ export default async function TeamPage() {
   const [subRow, members, sites] = await Promise.all([
     sql`SELECT plan FROM accounts WHERE id = ${session.subscriptionId}`,
     sql`
-      SELECT id, name, email, phone, role, business_id, notify_via,
-             password_hash IS NOT NULL AS has_password,
-             session_token_hash IS NOT NULL AS has_device,
-             last_active_at, is_active, created_at
-      FROM users
-      WHERE billing_account_id = ${session.subscriptionId}
-        AND is_active = true
+      SELECT u.id, u.name, u.email, u.phone, u.business_id, u.notify_via,
+             u.password_hash IS NOT NULL AS has_password,
+             u.session_token_hash IS NOT NULL AS has_device,
+             u.last_active_at, u.is_active, u.created_at,
+             CASE
+               WHEN u.id = a.owner_user_id THEN 'owner'
+               WHEN bm.capability = 'capture' THEN 'capture'
+               WHEN bm.capability = 'reviewer' THEN 'reviewer'
+               ELSE 'member'
+             END AS role
+      FROM users u
+      JOIN accounts a ON a.id = u.billing_account_id
+      LEFT JOIN LATERAL (
+        SELECT capability FROM memberships m
+        WHERE m.user_id = u.id AND m.scope_type = 'business'
+          AND m.capability IN ('capture', 'reviewer')
+        LIMIT 1
+      ) bm ON true
+      WHERE u.billing_account_id = ${session.subscriptionId}
+        AND u.is_active = true
       ORDER BY
-        CASE role WHEN 'owner' THEN 0 WHEN 'member' THEN 1 WHEN 'capture' THEN 2 ELSE 3 END,
-        created_at ASC
+        CASE
+          WHEN u.id = a.owner_user_id THEN 0
+          WHEN bm.capability = 'capture' THEN 2
+          WHEN bm.capability = 'reviewer' THEN 3
+          ELSE 1
+        END,
+        u.created_at ASC
     `,
     sql`
       SELECT id, name FROM businesses

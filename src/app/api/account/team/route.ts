@@ -37,6 +37,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
   }
 
+  // v3: capability lives on a business membership. Capture/reviewer must be
+  // scoped to a business (option A); default to the account's sole business.
+  const capability = role === "capture" ? "capture" : role === "reviewer" ? "reviewer" : "full";
+  let scopeBiz: string | null = siteId || null;
+  if (!scopeBiz) {
+    const bizRows = await sql`SELECT id FROM businesses WHERE billing_account_id = ${auth.subscriptionId} AND is_active = true`;
+    if (bizRows.length === 1) scopeBiz = bizRows[0].id as string;
+  }
+  if ((role === "capture" || role === "reviewer") && !scopeBiz) {
+    return NextResponse.json({ error: "Select a site for capture or reviewer members." }, { status: 400 });
+  }
+
   // Check if email already exists
   const [existing] = await sql`
     SELECT id FROM users WHERE email = ${email}
@@ -53,6 +65,16 @@ export async function POST(req: NextRequest) {
     VALUES (${name.trim()}, ${email.trim()}, ${role}, ${auth.subscriptionId}, ${siteId || null}, true, ${passwordHash})
     RETURNING id, name, email, role, business_id
   `;
+
+  // Mirror the role onto a business membership (the v3 source of truth; the
+  // users.role write above is legacy dual-write, retired in Phase 4).
+  if (scopeBiz) {
+    await sql`
+      INSERT INTO memberships (user_id, scope_type, scope_id, role, capability)
+      VALUES (${member.id}, 'business', ${scopeBiz}, 'member', ${capability})
+      ON CONFLICT DO NOTHING
+    `;
+  }
 
   // Send magic link invite for web-eligible roles when no password was set.
   // If owner set a password directly (reviewer flow), skip the invite —

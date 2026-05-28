@@ -118,7 +118,7 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   if (playbook) {
     const [hook] = await sql`
       SELECT text FROM hook_bank
-      WHERE business_id = ${asset.site_id}
+      WHERE business_id = ${asset.business_id}
       ORDER BY
         CASE rating WHEN 'loved' THEN 0 ELSE 1 END,
         used_count ASC, RANDOM()
@@ -128,7 +128,7 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
       hookText = hook.text;
       await sql`
         UPDATE hook_bank SET used_count = used_count + 1, last_used_at = NOW()
-        WHERE business_id = ${asset.site_id} AND text = ${hook.text}
+        WHERE business_id = ${asset.business_id} AND text = ${hook.text}
       `;
     }
   }
@@ -140,12 +140,12 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   `;
   const recentPostImages = await sql`
     SELECT bp.og_image_url FROM blog_posts bp
-    WHERE bp.business_id = ${asset.site_id}
+    WHERE bp.business_id = ${asset.business_id}
       AND bp.created_at > NOW() - INTERVAL '14 days'
   `;
   const recentUrls = recentPostImages.map((r) => r.og_image_url as string).filter(Boolean);
 
-  const qt = await getThresholds(asset.site_id as string);
+  const qt = await getThresholds(asset.business_id as string);
   // Inline-image affinity: prefer images that share tags with the source.
   // (Was a pillar-equality CASE on the dropped content_pillar column;
   // tag overlap is a stronger signal than pillar match anyway.)
@@ -153,7 +153,7 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   const inlineImages = await sql`
     SELECT storage_url, context_note, content_tags
     FROM media_assets
-    WHERE business_id = ${asset.site_id}
+    WHERE business_id = ${asset.business_id}
       AND id != ${assetId}
       AND processing_stage = 'analyzed'
       AND quality_score > ${heroAbove(qt)}
@@ -173,14 +173,14 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
 
   // Fetch existing post titles to avoid duplication
   const existingPosts = await sql`
-    SELECT title FROM blog_posts WHERE business_id = ${asset.site_id} ORDER BY created_at DESC LIMIT 20
+    SELECT title FROM blog_posts WHERE business_id = ${asset.business_id} ORDER BY created_at DESC LIMIT 20
   `;
   const existingTitles = existingPosts.map((p) => p.title as string);
 
   // Collect already-used external image URLs for dedup
   const usedImageRows = await sql`
     SELECT body FROM blog_posts
-    WHERE business_id = ${asset.site_id} AND status IN ('draft', 'published')
+    WHERE business_id = ${asset.business_id} AND status IN ('draft', 'published')
   `;
   const usedImageUrls: string[] = [];
   for (const row of usedImageRows) {
@@ -197,7 +197,7 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   `;
   const srcBrandIdList = srcBrandIds.map((r: Record<string, unknown>) => r.brand_id as string);
 
-  const researchResult = await researchContextNote((asset.context_note as string) || "", usedImageUrls, asset.site_id as string, srcBrandIdList);
+  const researchResult = await researchContextNote((asset.context_note as string) || "", usedImageUrls, asset.business_id as string, srcBrandIdList);
   const research = researchResult.text;
 
   // Fetch vendor URLs linked to this asset (from brands table)
@@ -250,7 +250,7 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   // Classify content type based on context
   const existingTypeRows = await sql`
     SELECT DISTINCT content_type
-    FROM blog_posts WHERE business_id = ${asset.site_id} AND status IN ('published', 'draft')
+    FROM blog_posts WHERE business_id = ${asset.business_id} AND status IN ('published', 'draft')
   `;
   const existingContentTypes = existingTypeRows
     .map((r) => r.content_type as string)
@@ -357,7 +357,7 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
       meta_title, meta_description, og_image_url, schema_json,
       tags, content_pillar, content_type, status
     ) VALUES (
-      ${asset.site_id}, ${assetId}, ${slug}, ${parsed.title},
+      ${asset.business_id}, ${assetId}, ${slug}, ${parsed.title},
       ${parsed.body}, ${parsed.excerpt},
       ${parsed.meta_title || parsed.title},
       ${parsed.meta_description || parsed.excerpt},
@@ -412,7 +412,7 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
   let hookText: string | undefined;
   const [hook] = await sql`
     SELECT text FROM hook_bank
-    WHERE business_id = ${topic.site_id}
+    WHERE business_id = ${topic.business_id}
     ORDER BY CASE rating WHEN 'loved' THEN 0 ELSE 1 END, used_count ASC, RANDOM()
     LIMIT 1
   `;
@@ -420,7 +420,7 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
     hookText = hook.text;
     await sql`
       UPDATE hook_bank SET used_count = used_count + 1, last_used_at = NOW()
-      WHERE business_id = ${topic.site_id} AND text = ${hook.text}
+      WHERE business_id = ${topic.business_id} AND text = ${hook.text}
     `;
   }
 
@@ -428,8 +428,8 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
   // Pillar-affinity sort migrated to tag-overlap (LOCKED 2026-05-09):
   // resolve topic.pillar to its tag IDs via pillar_config and prefer
   // images whose content_tags overlap.
-  const qt2 = await getThresholds(topic.site_id as string);
-  const [siteRowForPillarConfig] = await sql`SELECT pillar_config FROM businesses WHERE id = ${topic.site_id}`;
+  const qt2 = await getThresholds(topic.business_id as string);
+  const [siteRowForPillarConfig] = await sql`SELECT pillar_config FROM businesses WHERE id = ${topic.business_id}`;
   const _topicPillarConfig = (siteRowForPillarConfig?.pillar_config || []) as PillarConfig;
   const topicPillarTagIds = topic.pillar
     ? (_topicPillarConfig.find((p) => p.id === topic.pillar)?.tags.map((t) => t.id) || [])
@@ -437,7 +437,7 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
   const inlineImages = await sql`
     SELECT storage_url, context_note
     FROM media_assets
-    WHERE business_id = ${topic.site_id}
+    WHERE business_id = ${topic.business_id}
       AND processing_stage = 'analyzed'
       AND quality_score > ${heroAbove(qt2)}
       AND storage_url IS NOT NULL
@@ -454,7 +454,7 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
 
   // Fetch existing post titles to avoid duplication
   const existingPosts = await sql`
-    SELECT title FROM blog_posts WHERE business_id = ${topic.site_id} ORDER BY created_at DESC LIMIT 20
+    SELECT title FROM blog_posts WHERE business_id = ${topic.business_id} ORDER BY created_at DESC LIMIT 20
   `;
   const existingTitles = existingPosts.map((p) => p.title as string);
 
@@ -472,7 +472,7 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
 
   // Check blog_enabled
   const [settings] = await sql`
-    SELECT blog_enabled FROM blog_settings WHERE business_id = ${topic.site_id}
+    SELECT blog_enabled FROM blog_settings WHERE business_id = ${topic.business_id}
   `;
   if (!settings?.blog_enabled) return null;
 
@@ -482,7 +482,7 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
       meta_title, meta_description, schema_json,
       tags, content_pillar, status
     ) VALUES (
-      ${topic.site_id}, ${slug}, ${parsed.title},
+      ${topic.business_id}, ${slug}, ${parsed.title},
       ${parsed.body}, ${parsed.excerpt},
       ${parsed.meta_title || parsed.title},
       ${parsed.meta_description || parsed.excerpt},
@@ -1050,20 +1050,20 @@ export async function generateFromPairing(
   let hookText: string | undefined;
   const [hook] = await sql`
     SELECT text FROM hook_bank
-    WHERE business_id = ${siteData.site_id}
+    WHERE business_id = ${siteData.business_id}
     ORDER BY CASE rating WHEN 'loved' THEN 0 ELSE 1 END, used_count ASC, RANDOM()
     LIMIT 1
   `;
   if (hook) {
     hookText = hook.text as string;
-    await sql`UPDATE hook_bank SET used_count = used_count + 1, last_used_at = NOW() WHERE business_id = ${siteData.site_id} AND text = ${hook.text}`;
+    await sql`UPDATE hook_bank SET used_count = used_count + 1, last_used_at = NOW() WHERE business_id = ${siteData.business_id} AND text = ${hook.text}`;
   }
 
   // Inline images: enforce mix of subscriber uploads + AI for authenticity
   // Target: 2 subscriber uploads + 2 AI editorial = 4 inline images
   const recentPostImgs = await sql`
     SELECT bp.og_image_url FROM blog_posts bp
-    WHERE bp.business_id = ${siteData.site_id}
+    WHERE bp.business_id = ${siteData.business_id}
       AND bp.created_at > NOW() - INTERVAL '14 days'
   `;
   const recentImgUrls = recentPostImgs.map((r: Record<string, unknown>) => r.og_image_url as string).filter(Boolean);
@@ -1073,13 +1073,13 @@ export async function generateFromPairing(
   const uploadCount = (siteData.inline_upload_count as number) ?? 1;
   const aiCount = (siteData.inline_ai_count as number) ?? 3;
   const totalInline = uploadCount + aiCount;
-  const qtPairing = await getThresholds(siteData.site_id as string);
+  const qtPairing = await getThresholds(siteData.business_id as string);
   const pairingFloor = publishAbove(qtPairing);
 
   const uploadsInline = await sql`
     SELECT id, storage_url, context_note
     FROM media_assets
-    WHERE business_id = ${siteData.site_id}
+    WHERE business_id = ${siteData.business_id}
       AND id != ${asset.id}
       AND source = 'upload'
       AND processing_stage = 'analyzed'
@@ -1096,7 +1096,7 @@ export async function generateFromPairing(
   const aiInline = await sql`
     SELECT id, storage_url, context_note
     FROM media_assets
-    WHERE business_id = ${siteData.site_id}
+    WHERE business_id = ${siteData.business_id}
       AND id != ${asset.id}
       AND source = 'ai_generated'
       AND processing_stage = 'analyzed'
@@ -1117,7 +1117,7 @@ export async function generateFromPairing(
     const fallback = await sql`
       SELECT id, storage_url, context_note
       FROM media_assets
-      WHERE business_id = ${siteData.site_id}
+      WHERE business_id = ${siteData.business_id}
         AND id != ${asset.id}
         AND processing_stage = 'analyzed'
         AND quality_score > ${pairingFloor}
@@ -1151,7 +1151,7 @@ export async function generateFromPairing(
 
   // Existing titles for dedup
   const existingPosts = await sql`
-    SELECT title FROM blog_posts WHERE business_id = ${siteData.site_id} ORDER BY created_at DESC LIMIT 20
+    SELECT title FROM blog_posts WHERE business_id = ${siteData.business_id} ORDER BY created_at DESC LIMIT 20
   `;
   const existingTitles = existingPosts.map((p: Record<string, unknown>) => p.title as string);
 
@@ -1164,7 +1164,7 @@ export async function generateFromPairing(
   const researchResult = await researchContextNote(
     asset.contextNote || asset.description || "",
     [],
-    siteData.site_id as string,
+    siteData.business_id as string,
     brandIdList
   );
   const research = researchResult.text;
@@ -1179,7 +1179,7 @@ export async function generateFromPairing(
   let blogCorrectionsBlock = "";
   try {
     const { loadCorrections, formatCorrectionsForPrompt } = await import("@/lib/corrections");
-    const corrections = await loadCorrections(siteData.site_id as string, "blog");
+    const corrections = await loadCorrections(siteData.business_id as string, "blog");
     blogCorrectionsBlock = formatCorrectionsForPrompt(corrections);
   } catch { /* non-fatal */ }
 
@@ -1303,7 +1303,7 @@ ${blogCorrectionsBlock}
     if (heroImage) {
       const ext = heroImage.mimeType.includes("png") ? "png" : "jpg";
       const fname = seoFilename(parsed.title || "hero", ext);
-      const key = `sites/${siteData.site_id}/media/${fname}`;
+      const key = `sites/${siteData.business_id}/media/${fname}`;
       heroUrl = await uploadBufferToR2(key, heroImage.data, heroImage.mimeType);
     }
   } catch (err) {
@@ -1320,7 +1320,7 @@ ${blogCorrectionsBlock}
         // Count recent posts to determine if this is a video post
         const [recentCount] = await sql`
           SELECT COUNT(*)::int AS cnt FROM blog_posts
-          WHERE business_id = ${siteData.site_id}
+          WHERE business_id = ${siteData.business_id}
             AND created_at > NOW() - INTERVAL '30 days'
         `;
         const postNumber = (recentCount?.cnt || 0) + 1;
@@ -1334,7 +1334,7 @@ ${blogCorrectionsBlock}
           const video = await generateVideoFromImage(
             heroUrl,
             videoPrompt,
-            siteData.site_id as string,
+            siteData.business_id as string,
             { duration: "5" }
           );
 
@@ -1350,7 +1350,7 @@ ${blogCorrectionsBlock}
                   content_tags,
                   ai_analysis, metadata
                 ) VALUES (
-                  ${siteData.site_id}, ${video.url}, 'video',
+                  ${siteData.business_id}, ${video.url}, 'video',
                   ${rewardPrompt.prompt.slice(0, 200)},
                   'ai_generated', 'briefed', 0.95,
                   ${videoTags},
@@ -1406,7 +1406,7 @@ ${blogCorrectionsBlock}
       meta_title, meta_description, og_image_url, schema_json,
       tags, content_pillar, content_type, status, metadata
     ) VALUES (
-      ${siteData.site_id}, ${asset.id}, ${slug}, ${parsed.title},
+      ${siteData.business_id}, ${asset.id}, ${slug}, ${parsed.title},
       ${parsed.body}, ${parsed.excerpt},
       ${parsed.meta_title || parsed.title},
       ${parsed.meta_description || parsed.excerpt},

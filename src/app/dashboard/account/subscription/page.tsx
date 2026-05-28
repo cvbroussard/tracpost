@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, sessionDisplayRole } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { SubscriptionName } from "./subscription-name";
 import { SitesSection } from "../sites-section";
@@ -13,7 +13,7 @@ export default async function SubscriptionPage() {
   if (!session) redirect("/login");
 
   // Owner-only
-  const role = session.role || "owner";
+  const role = sessionDisplayRole(session);
   if (role !== "owner") redirect("/dashboard/account");
 
   const [subscriber] = await sql`

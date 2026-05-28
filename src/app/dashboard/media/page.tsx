@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, sessionDisplayRole } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { MediaGrid } from "@/components/media-grid";
 import { MediaFilters } from "./media-filters";
@@ -26,7 +26,7 @@ export default async function MediaPage({ searchParams }: Props) {
   // Reviewer-mode swap: render a pre-captured screenshot of the full
   // content area (header + upload buttons + grid all baked into the
   // image). No live header above it — the screenshot IS the page.
-  if (session.role === "reviewer") {
+  if (sessionDisplayRole(session) === "reviewer") {
     return (
       <div className="p-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}

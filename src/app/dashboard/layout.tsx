@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { sql } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, sessionDisplayRole } from "@/lib/session";
 import { TopBar } from "@/components/topbar";
 import { PageHeader } from "@/components/page-header";
 import { Sidebar } from "@/components/sidebar";
@@ -26,7 +26,7 @@ export default async function DashboardLayout({
   if (!session) redirect("/login");
 
   // Capture-only users cannot access the web dashboard
-  const role = session.role || "owner";
+  const role = sessionDisplayRole(session);
   if (role === "capture") redirect("/login?error=mobile_only");
 
   // Prefer active sites — if activeSiteId points to a deactivated site

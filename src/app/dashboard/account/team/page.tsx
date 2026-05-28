@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, sessionDisplayRole } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { TeamMembers } from "./team-members";
 
@@ -10,7 +10,7 @@ export default async function TeamPage() {
   if (!session) redirect("/login");
 
   // Owner-only
-  const role = session.role || "owner";
+  const role = sessionDisplayRole(session);
   if (role !== "owner") redirect("/dashboard/account");
 
   const [subRow, members, sites] = await Promise.all([

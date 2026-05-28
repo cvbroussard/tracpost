@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, sessionDisplayRole } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { TaggingManager } from "./tagging-manager";
 
@@ -57,7 +57,7 @@ export default async function TaggingPage() {
     <TaggingManager
       siteId={siteId}
       labels={labels}
-      role={session.role || "owner"}
+      role={sessionDisplayRole(session)}
       brands={brands.map((b) => ({
         id: b.id as string,
         name: b.name as string,

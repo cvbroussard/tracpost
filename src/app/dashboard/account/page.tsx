@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, sessionDisplayRole } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { AccountProfile } from "./account-profile";
 
@@ -19,7 +19,7 @@ export default async function MyAccountPage() {
 
   if (!subscriber) redirect("/login");
 
-  const role = (session.role || "owner") as string;
+  const role = sessionDisplayRole(session);
   const isOwner = role === "owner";
 
   return (

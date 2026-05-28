@@ -24,8 +24,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=link_expired", req.url));
   }
 
-  // Capture-only users can't access web
-  if (subscriber.role === "capture") {
+  // Capture-only users can't access web (capability on the business membership;
+  // users.role is being retired)
+  if (subscriber.capability === "capture") {
     return NextResponse.redirect(new URL("/login?error=mobile_only", req.url));
   }
 

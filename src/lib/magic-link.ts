@@ -34,6 +34,7 @@ export async function validateMagicToken(token: string): Promise<{
   subscriptionId: string;
   plan: string;
   role: string;
+  capability: string | null;
 } | null> {
   let parsed: { sub: string; tok: string };
   try {
@@ -46,7 +47,8 @@ export async function validateMagicToken(token: string): Promise<{
 
   const [user] = await sql`
     SELECT u.id, u.name, u.role, u.billing_account_id, u.magic_token_hash, u.magic_token_expires,
-           s.plan
+           s.plan,
+           (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability
     FROM users u
     JOIN accounts s ON u.billing_account_id = s.id
     WHERE u.id = ${userId} AND u.is_active = true
@@ -71,5 +73,6 @@ export async function validateMagicToken(token: string): Promise<{
     subscriptionId: user.billing_account_id as string,
     plan: (user.plan as string) || "free",
     role: (user.role as string) || "owner",
+    capability: (user.capability as string | null) || null,
   };
 }

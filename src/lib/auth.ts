@@ -104,8 +104,8 @@ function assemble(u: UserRow, memberships: Membership[], opts?: { actingAsAdmin?
 async function loadContextByUserId(userId: string): Promise<AuthContext | null> {
   try {
     const rows = await sql`
-      SELECT u.id AS user_id, u.name, u.role, u.account_id, a.plan
-      FROM users u JOIN accounts a ON a.id = u.account_id
+      SELECT u.id AS user_id, u.name, u.role, u.billing_account_id AS account_id, a.plan
+      FROM users u JOIN accounts a ON a.id = u.billing_account_id
       WHERE u.id = ${userId} AND u.is_active = true AND a.is_active = true
     `;
     if (rows.length === 0) return null;
@@ -138,12 +138,12 @@ async function loadContextByAccountOwner(
       "apiKeyHash" in match
         ? await sql`
             SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan
-            FROM accounts a JOIN users u ON u.account_id = a.id AND u.role = 'owner'
+            FROM accounts a JOIN users u ON u.billing_account_id = a.id AND u.role = 'owner'
             WHERE a.api_key_hash = ${match.apiKeyHash} AND a.is_active = true
             LIMIT 1`
         : await sql`
             SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan
-            FROM accounts a JOIN users u ON u.account_id = a.id AND u.role = 'owner'
+            FROM accounts a JOIN users u ON u.billing_account_id = a.id AND u.role = 'owner'
             WHERE a.id = ${match.accountId} AND a.is_active = true
             LIMIT 1`;
     if (rows.length === 0) return null;

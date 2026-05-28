@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { cookieDomain } from "@/lib/subdomains";
-import { createSessionToken } from "@/lib/auth";
+import { createSessionToken, derivePrincipal, loadMemberships } from "@/lib/auth";
 import { signCookie } from "@/lib/cookie-sign";
 
 /**
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
            s.plan, s.name AS subscription_name, s.owner_user_id,
            (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability
     FROM users u
-    JOIN accounts s ON u.billing_account_id = s.id
+    LEFT JOIN accounts s ON u.billing_account_id = s.id
     WHERE u.email = ${email}
       AND u.is_active = true
   `;
@@ -55,16 +55,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const subscriptionId = user.billing_account_id as string;
+  // Which v3 surface this user belongs to. Drives the post-login redirect
+  // (platform/operator staff land on their console, not studio) and lets
+  // gateAdmin authorize staff from the session cookie alone.
+  const principalType = derivePrincipal(await loadMemberships(user.id as string));
+
+  // Accountless staff (platform/operator) have no billing_account_id and thus
+  // no businesses — skip the sites query rather than feed "" to a uuid column.
+  const subscriptionId = (user.billing_account_id as string) || "";
   const userSiteScope = (user.business_id as string | null) || null;
 
   // If user has a site_id scope (Site Access bound to a single business),
   // filter sites to just that one. Otherwise return all subscription sites.
-  const rawSites = await sql`
-    SELECT id, name, url, is_active FROM businesses
-    WHERE billing_account_id = ${subscriptionId}
-    ORDER BY is_active DESC, created_at ASC
-  `;
+  const rawSites = subscriptionId
+    ? await sql`
+        SELECT id, name, url, is_active FROM businesses
+        WHERE billing_account_id = ${subscriptionId}
+        ORDER BY is_active DESC, created_at ASC
+      `
+    : [];
   const sites = userSiteScope
     ? rawSites.filter((s) => s.id === userSiteScope)
     : rawSites;
@@ -85,6 +94,7 @@ export async function POST(req: NextRequest) {
     role,
     isOwner: user.id === user.owner_user_id,
     capability: (user.capability as string | null) || null,
+    principalType,
     sites: sites.map((s) => ({ id: s.id, name: s.name, url: s.url, is_active: s.is_active !== false })),
     activeSiteId,
   };
@@ -100,6 +110,7 @@ export async function POST(req: NextRequest) {
     },
     sites,
     session_token: sessionToken, // For native app — store in SecureStore
+    principalType, // tells the login page which surface to redirect to
   });
 
   const domain = cookieDomain();

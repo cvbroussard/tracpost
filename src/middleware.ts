@@ -4,7 +4,7 @@ import {
   lookupTenantByCustomDomain,
   lookupCustomDomainBySlug,
 } from "@/lib/custom-domain-lookup";
-import { isAdminCookieValidEdge } from "@/lib/cookie-sign-edge";
+import { isAdminCookieValidEdge, verifyCookieEdge } from "@/lib/cookie-sign-edge";
 
 /**
  * Extract siteSlug from a custom subdomain.
@@ -481,6 +481,19 @@ async function gateAdmin(
 
   const adminCookie = req.cookies.get("tp_admin")?.value;
   if (await isAdminCookieValidEdge(adminCookie)) {
+    return null;
+  }
+
+  // v3: a platform/operator principal baked into the signed tp_session is also
+  // authorized for the admin/manage surfaces — no separate tp_admin cookie
+  // needed. This is the staff login path (accountless super-admin included).
+  const session = await verifyCookieEdge<{ principalType?: string }>(
+    req.cookies.get("tp_session")?.value,
+  );
+  if (
+    session &&
+    (session.principalType === "platform" || session.principalType === "operator")
+  ) {
     return null;
   }
 

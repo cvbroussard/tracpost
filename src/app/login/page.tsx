@@ -54,18 +54,31 @@ function LoginForm() {
         body: JSON.stringify({ email, password }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json();
         setError(data.error || "Invalid credentials");
         return;
       }
 
-      const isStudio = window.location.hostname === "studio.tracpost.com";
+      // Route to the surface this principal belongs to. Platform/operator staff
+      // land on their console; everyone else lands in studio.
+      const principalType = data.principalType as string | undefined;
       const isProduction = window.location.hostname.endsWith("tracpost.com");
-      if (isProduction && !isStudio) {
-        window.location.href = "https://studio.tracpost.com/";
+      if (isProduction) {
+        window.location.href =
+          principalType === "platform"
+            ? "https://platform.tracpost.com/"
+            : principalType === "operator"
+              ? "https://manage.tracpost.com/"
+              : "https://studio.tracpost.com/";
       } else {
-        router.push(isStudio ? "/" : "/dashboard");
+        router.push(
+          principalType === "platform"
+            ? "/admin"
+            : principalType === "operator"
+              ? "/manage"
+              : "/dashboard",
+        );
       }
     } catch {
       setError("Network error");

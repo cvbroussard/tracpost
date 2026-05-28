@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateMagicToken } from "@/lib/magic-link";
 import { sql } from "@/lib/db";
-import { studioUrl, cookieDomain } from "@/lib/subdomains";
+import { studioUrl, platformUrl, manageUrl, cookieDomain } from "@/lib/subdomains";
 import { signCookie } from "@/lib/cookie-sign";
+import { derivePrincipal, loadMemberships } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +31,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=mobile_only", req.url));
   }
 
-  const [subRows, siteRows] = await Promise.all([
+  const [subRows, siteRows, principalType] = await Promise.all([
     sql`SELECT name, owner_user_id FROM accounts WHERE id = ${subscriber.subscriptionId}`,
     sql`SELECT id, name, url, is_active FROM businesses WHERE billing_account_id = ${subscriber.subscriptionId} ORDER BY is_active DESC, created_at ASC`,
+    loadMemberships(subscriber.id).then(derivePrincipal),
   ]);
 
   // Build session
@@ -45,6 +47,7 @@ export async function GET(req: NextRequest) {
     role: subscriber.role,
     isOwner: subscriber.id === (subRows[0]?.owner_user_id as string | undefined),
     capability: subscriber.capability,
+    principalType,
     sites: siteRows.map((s: Record<string, unknown>) => ({
       id: s.id,
       name: s.name,
@@ -54,9 +57,14 @@ export async function GET(req: NextRequest) {
     activeSiteId: null,
   };
 
-  const redirectUrl = siteRows.length === 0
-    ? new URL("/setup", req.url)
-    : new URL(studioUrl("/") || "/dashboard", req.url);
+  const redirectUrl =
+    principalType === "platform"
+      ? new URL(platformUrl("/"), req.url)
+      : principalType === "operator"
+        ? new URL(manageUrl("/"), req.url)
+        : siteRows.length === 0
+          ? new URL("/setup", req.url)
+          : new URL(studioUrl("/") || "/dashboard", req.url);
 
   const response = NextResponse.redirect(redirectUrl);
 

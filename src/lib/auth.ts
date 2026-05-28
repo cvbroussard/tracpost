@@ -64,7 +64,7 @@ function isMissingSchema(e: unknown): boolean {
   );
 }
 
-function derivePrincipal(memberships: Membership[]): PrincipalType {
+export function derivePrincipal(memberships: Membership[]): PrincipalType {
   const types = new Set(memberships.map((m) => m.scopeType));
   if (types.has("platform")) return "platform";
   if (types.has("operator")) return "operator";
@@ -75,7 +75,7 @@ function derivePrincipal(memberships: Membership[]): PrincipalType {
 
 type UserRow = { user_id: string; name: string; role: string; account_id: string; plan: string; owner_user_id?: string | null };
 
-async function loadMemberships(userId: string): Promise<Membership[]> {
+export async function loadMemberships(userId: string): Promise<Membership[]> {
   const rows = await sql`
     SELECT scope_type, scope_id, role FROM memberships WHERE user_id = ${userId}
   `;

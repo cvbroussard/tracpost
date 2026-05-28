@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { cookieDomain } from "@/lib/subdomains";
 import { signCookie } from "@/lib/cookie-sign";
+import { derivePrincipal, loadMemberships } from "@/lib/auth";
 
 /**
  * POST /api/auth/refresh-session
@@ -22,16 +23,21 @@ export async function POST() {
   const [userRow] = await sql`
     SELECT u.business_id, a.owner_user_id,
            (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability
-    FROM users u JOIN accounts a ON a.id = u.billing_account_id
+    FROM users u LEFT JOIN accounts a ON a.id = u.billing_account_id
     WHERE u.id = ${session.userId}
   `;
   const userSiteScope = (userRow?.business_id as string | null) || null;
 
-  const rawSites = await sql`
-    SELECT id, name, url, is_active FROM businesses
-    WHERE billing_account_id = ${session.subscriptionId}
-    ORDER BY is_active DESC, created_at ASC
-  `;
+  const principalType = derivePrincipal(await loadMemberships(session.userId));
+
+  // Accountless staff have no businesses — skip the uuid-typed lookup.
+  const rawSites = session.subscriptionId
+    ? await sql`
+        SELECT id, name, url, is_active FROM businesses
+        WHERE billing_account_id = ${session.subscriptionId}
+        ORDER BY is_active DESC, created_at ASC
+      `
+    : [];
   const sites = userSiteScope
     ? rawSites.filter((s) => s.id === userSiteScope)
     : rawSites;
@@ -45,6 +51,7 @@ export async function POST() {
     role: session.role || "owner",
     isOwner: session.userId === (userRow?.owner_user_id as string | undefined),
     capability: (userRow?.capability as string | null) || null,
+    principalType,
     sites: sites.map((s) => ({ id: s.id, name: s.name, url: s.url, is_active: s.is_active !== false })),
     // Active-aware fallback: if the previous activeSiteId points to an
     // inactive site (e.g. subscriber just deactivated their current

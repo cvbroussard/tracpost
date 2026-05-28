@@ -12,6 +12,11 @@ export interface Session {
    *  to deriving from `role` during the rollover. */
   isOwner?: boolean;
   capability?: string | null;
+  /** v3 surface this principal belongs to ("platform" | "operator" | "agency"
+   *  | "business" | "guest"). Baked at session creation; gateAdmin reads it
+   *  from the cookie to authorize staff into platform/operator surfaces
+   *  without a separate tp_admin cookie. Absent on legacy cookies. */
+  principalType?: string;
   sites: Array<{ id: string; name: string; url: string; is_active?: boolean }>;
   activeSiteId: string | null;
 }

@@ -10,6 +10,7 @@ const baseNav = [
   { label: "Provisioning", path: "/provisioning", icon: "▸" },
   { label: "Site Controls", path: "/sites", icon: "◎" },
   { label: "Subscribers", path: "/subscribers", icon: "◇" },
+  { label: "Users", path: "/users", icon: "◍" },
   { label: "Pipeline", path: "/pipeline", icon: "▶" },
   { label: "Connections", path: "/social", icon: "◉" },
   { label: "Coaching", path: "/coaching", icon: "▦" },

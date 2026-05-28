@@ -31,6 +31,9 @@ export interface AuthContext {
   /** Legacy single role ("owner"/team role). Retained through the dual-read
    *  window; superseded by {@link memberships}. */
   role: string;
+  /** True when this user owns their account (accounts.owner_user_id). Replaces
+   *  the legacy role==='owner' check; computed per-request from the DB. */
+  isOwner: boolean;
   /** Which surface this principal belongs to. Derived from memberships.
    *  Defaults to "business" in legacy/cookie mode (the only pre-v3 principal). */
   principalType: PrincipalType;
@@ -70,7 +73,7 @@ function derivePrincipal(memberships: Membership[]): PrincipalType {
   return "guest";
 }
 
-type UserRow = { user_id: string; name: string; role: string; account_id: string; plan: string };
+type UserRow = { user_id: string; name: string; role: string; account_id: string; plan: string; owner_user_id?: string | null };
 
 async function loadMemberships(userId: string): Promise<Membership[]> {
   const rows = await sql`
@@ -91,6 +94,7 @@ function assemble(u: UserRow, memberships: Membership[], opts?: { actingAsAdmin?
     subscriptionId: u.account_id, // deprecated alias
     plan: u.plan || "free",
     role: u.role || "owner",
+    isOwner: !!u.owner_user_id && u.user_id === u.owner_user_id,
     principalType: memberships.length ? derivePrincipal(memberships) : "business",
     memberships,
     ...(opts?.actingAsAdmin ? { actingAsAdmin: true } : {}),
@@ -104,7 +108,7 @@ function assemble(u: UserRow, memberships: Membership[], opts?: { actingAsAdmin?
 async function loadContextByUserId(userId: string): Promise<AuthContext | null> {
   try {
     const rows = await sql`
-      SELECT u.id AS user_id, u.name, u.role, u.billing_account_id AS account_id, a.plan
+      SELECT u.id AS user_id, u.name, u.role, u.billing_account_id AS account_id, a.plan, a.owner_user_id
       FROM users u JOIN accounts a ON a.id = u.billing_account_id
       WHERE u.id = ${userId} AND u.is_active = true AND a.is_active = true
     `;
@@ -137,13 +141,13 @@ async function loadContextByAccountOwner(
     const rows =
       "apiKeyHash" in match
         ? await sql`
-            SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan
-            FROM accounts a JOIN users u ON u.billing_account_id = a.id AND u.role = 'owner'
+            SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan, a.owner_user_id
+            FROM accounts a JOIN users u ON u.id = a.owner_user_id
             WHERE a.api_key_hash = ${match.apiKeyHash} AND a.is_active = true
             LIMIT 1`
         : await sql`
-            SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan
-            FROM accounts a JOIN users u ON u.billing_account_id = a.id AND u.role = 'owner'
+            SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan, a.owner_user_id
+            FROM accounts a JOIN users u ON u.id = a.owner_user_id
             WHERE a.id = ${match.accountId} AND a.is_active = true
             LIMIT 1`;
     if (rows.length === 0) return null;
@@ -213,6 +217,9 @@ export async function authenticateRequest(
       subscriptionId: session.subscriptionId, // deprecated alias
       plan: session.plan,
       role: session.role || "owner",
+      // Cookie path has no DB row; derive ownership from the cookie's role
+      // (owner ⟺ role==='owner') until Phase 3 bakes it into the cookie.
+      isOwner: (session.role || "owner") === "owner",
       principalType: "business",
       memberships: [],
     };

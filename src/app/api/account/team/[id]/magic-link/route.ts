@@ -18,7 +18,7 @@ export async function POST(
   const auth = authResult as AuthContext;
   const { id } = await params;
 
-  if (auth.role !== "owner") {
+  if (!auth.isOwner) {
     return NextResponse.json({ error: "Owner access required" }, { status: 403 });
   }
 

@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [subRows, siteRows] = await Promise.all([
-    sql`SELECT name FROM accounts WHERE id = ${subscriber.subscriptionId}`,
+    sql`SELECT name, owner_user_id FROM accounts WHERE id = ${subscriber.subscriptionId}`,
     sql`SELECT id, name, url, is_active FROM businesses WHERE billing_account_id = ${subscriber.subscriptionId} ORDER BY is_active DESC, created_at ASC`,
   ]);
 
@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
     subscriptionName: (subRows[0]?.name as string) || subscriber.name,
     plan: subscriber.plan,
     role: subscriber.role,
+    isOwner: subscriber.id === (subRows[0]?.owner_user_id as string | undefined),
+    capability: subscriber.capability,
     sites: siteRows.map((s: Record<string, unknown>) => ({
       id: s.id,
       name: s.name,

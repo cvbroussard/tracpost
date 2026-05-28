@@ -8,6 +8,10 @@ export interface Session {
   subscriptionName: string;
   plan: string;
   role: string;
+  /** v3, baked at session creation. Absent on legacy cookies — readers fall back
+   *  to deriving from `role` during the rollover. */
+  isOwner?: boolean;
+  capability?: string | null;
   sites: Array<{ id: string; name: string; url: string; is_active?: boolean }>;
   activeSiteId: string | null;
 }

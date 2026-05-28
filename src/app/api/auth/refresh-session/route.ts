@@ -20,7 +20,10 @@ export async function POST() {
   // since last login. Session caches go stale across permission changes
   // until refresh fires — this keeps reviewer scoping current.
   const [userRow] = await sql`
-    SELECT business_id FROM users WHERE id = ${session.userId}
+    SELECT u.business_id, a.owner_user_id,
+           (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability
+    FROM users u JOIN accounts a ON a.id = u.billing_account_id
+    WHERE u.id = ${session.userId}
   `;
   const userSiteScope = (userRow?.business_id as string | null) || null;
 
@@ -40,6 +43,8 @@ export async function POST() {
     subscriptionName: session.subscriptionName || session.userName,
     plan: session.plan,
     role: session.role || "owner",
+    isOwner: session.userId === (userRow?.owner_user_id as string | undefined),
+    capability: (userRow?.capability as string | null) || null,
     sites: sites.map((s) => ({ id: s.id, name: s.name, url: s.url, is_active: s.is_active !== false })),
     // Active-aware fallback: if the previous activeSiteId points to an
     // inactive site (e.g. subscriber just deactivated their current

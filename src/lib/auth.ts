@@ -217,9 +217,8 @@ export async function authenticateRequest(
       subscriptionId: session.subscriptionId, // deprecated alias
       plan: session.plan,
       role: session.role || "owner",
-      // Cookie path has no DB row; derive ownership from the cookie's role
-      // (owner ⟺ role==='owner') until Phase 3 bakes it into the cookie.
-      isOwner: (session.role || "owner") === "owner",
+      // Prefer the v3 baked field; legacy cookies fall back to role-derivation.
+      isOwner: session.isOwner ?? ((session.role || "owner") === "owner"),
       principalType: "business",
       memberships: [],
     };

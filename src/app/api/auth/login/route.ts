@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const rows = await sql`
     SELECT u.id, u.name, u.role, u.password_hash, u.billing_account_id, u.business_id,
-           s.plan, s.name AS subscription_name,
+           s.plan, s.name AS subscription_name, s.owner_user_id,
            (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability
     FROM users u
     JOIN accounts s ON u.billing_account_id = s.id
@@ -83,6 +83,8 @@ export async function POST(req: NextRequest) {
     subscriptionName: user.subscription_name || user.name,
     plan: user.plan,
     role,
+    isOwner: user.id === user.owner_user_id,
+    capability: (user.capability as string | null) || null,
     sites: sites.map((s) => ({ id: s.id, name: s.name, url: s.url, is_active: s.is_active !== false })),
     activeSiteId,
   };

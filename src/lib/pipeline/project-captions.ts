@@ -120,20 +120,20 @@ export async function buildProjectSnapshot(projectId: string): Promise<ProjectSn
 export async function buildSiteSnapshot(siteId: string): Promise<ProjectSnapshot> {
   const [site] = await sql`
     SELECT name, brand_voice, content_vibe, business_type, location
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
 
   if (!site) throw new Error("Site not found");
 
   const brandRows = await sql`
-    SELECT DISTINCT b.name, b.url FROM brands b WHERE b.site_id = ${siteId}
+    SELECT DISTINCT b.name, b.url FROM brands b WHERE b.business_id = ${siteId}
   `;
 
   // Get recent manual/corrected captions (not AI-generated triage captions)
   const captioned = await sql`
     SELECT ma.context_note, ma.date_taken, ma.created_at, ma.metadata
     FROM media_assets ma
-    WHERE ma.site_id = ${siteId}
+    WHERE ma.business_id = ${siteId}
       AND ma.context_note IS NOT NULL
       AND ma.context_note != ''
       AND (ma.metadata->>'caption_source' IS NULL OR ma.metadata->>'caption_source' != 'ai')
@@ -214,7 +214,7 @@ export async function onCaptionSaved(
  */
 export async function maybeGenerateArticlePrompts(projectId: string): Promise<boolean> {
   const [project] = await sql`
-    SELECT p.id, p.site_id, p.metadata
+    SELECT p.id, p.business_id, p.metadata
     FROM projects p
     WHERE p.id = ${projectId}
   `;
@@ -226,7 +226,7 @@ export async function maybeGenerateArticlePrompts(projectId: string): Promise<bo
   // Check playbook exists
   const [site] = await sql`
     SELECT brand_playbook IS NOT NULL AS has_playbook
-    FROM sites WHERE id = ${project.site_id}
+    FROM businesses WHERE id = ${project.site_id}
   `;
   if (!site?.has_playbook) return false;
 
@@ -278,7 +278,7 @@ export async function onPlaybookSharpened(siteId: string): Promise<void> {
     console.error("Service derivation failed:", err instanceof Error ? err.message : err);
   }
 
-  const projects = await sql`SELECT id FROM projects WHERE site_id = ${siteId}`;
+  const projects = await sql`SELECT id FROM projects WHERE business_id = ${siteId}`;
   for (const p of projects) {
     await maybeGenerateArticlePrompts(p.id as string);
   }
@@ -305,7 +305,7 @@ export interface GeneratedText {
  */
 async function loadEnrichedContext(siteId: string): Promise<string> {
   const [site] = await sql`
-    SELECT brand_playbook, location FROM sites WHERE id = ${siteId}
+    SELECT brand_playbook, location FROM businesses WHERE id = ${siteId}
   `;
   const parts: string[] = [];
 
@@ -324,7 +324,7 @@ async function loadEnrichedContext(siteId: string): Promise<string> {
 
   // Services
   const services = await sql`
-    SELECT name, description FROM services WHERE site_id = ${siteId} ORDER BY display_order LIMIT 6
+    SELECT name, description FROM services WHERE business_id = ${siteId} ORDER BY display_order LIMIT 6
   `;
   if (services.length > 0) {
     parts.push(`Services offered: ${services.map((s) => String(s.name)).join(", ")}`);
@@ -333,9 +333,9 @@ async function loadEnrichedContext(siteId: string): Promise<string> {
   // GBP categories
   const cats = await sql`
     SELECT gc.name, sgc.is_primary
-    FROM site_gbp_categories sgc
+    FROM business_gbp_categories sgc
     JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.site_id = ${siteId}
+    WHERE sgc.business_id = ${siteId}
     ORDER BY sgc.is_primary DESC
   `;
   if (cats.length > 0) {

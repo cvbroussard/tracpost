@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Verify site ownership
-  const [site] = await sql`SELECT id FROM sites WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}`;
+  const [site] = await sql`SELECT id FROM businesses WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}`;
   if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
   const sessionCode = generateSessionCode();
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   const [session] = await sql`
     INSERT INTO spotlight_sessions (
-      site_id, subscription_id, session_code, photo_url, photo_key,
+      business_id, billing_account_id, session_code, photo_url, photo_key,
       staff_note, expires_at, captured_at
     )
     VALUES (
@@ -39,13 +39,13 @@ export async function POST(req: NextRequest) {
 
   // Log analytics event
   await sql`
-    INSERT INTO spotlight_analytics (session_id, site_id, event, metadata)
+    INSERT INTO spotlight_analytics (session_id, business_id, event, metadata)
     VALUES (${session.id}, ${site_id}, 'session_created', ${JSON.stringify({ staff_note: staff_note || null })})
   `;
 
   if (photo_url) {
     await sql`
-      INSERT INTO spotlight_analytics (session_id, site_id, event)
+      INSERT INTO spotlight_analytics (session_id, business_id, event)
       VALUES (${session.id}, ${site_id}, 'photo_uploaded')
     `;
   }
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
            google_review_opened, photo_consent,
            captured_at, completed_at, created_at
     FROM spotlight_sessions
-    WHERE site_id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+    WHERE business_id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
     ORDER BY created_at DESC
     LIMIT ${limit} OFFSET ${offset}
   `;

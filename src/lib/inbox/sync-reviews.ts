@@ -11,16 +11,16 @@ import type { FetchReviewsInput } from "@/lib/pipeline/adapters/types";
  */
 export async function syncReviews(siteId: string): Promise<number> {
   const accounts = await sql`
-    SELECT sa.id, sa.subscription_id, sa.platform, sa.account_id,
+    SELECT sa.id, sa.billing_account_id, sa.platform, sa.account_id,
            sa.access_token_encrypted, sa.metadata
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.status = 'active'
   `;
 
   // Load site context once for auto-drafting
   const [site] = await sql`
-    SELECT name, brand_voice, brand_playbook FROM sites WHERE id = ${siteId}
+    SELECT name, brand_voice, brand_playbook FROM businesses WHERE id = ${siteId}
   `;
 
   let totalAdded = 0;
@@ -50,7 +50,7 @@ export async function syncReviews(siteId: string): Promise<number> {
       for (const review of reviews) {
         const [inserted] = await sql`
           INSERT INTO inbox_reviews (
-            subscription_id, site_id, social_account_id,
+            billing_account_id, business_id, social_account_id,
             platform, platform_review_id,
             reviewer_name, reviewer_avatar_url,
             rating, body, reviewed_at, raw_data,

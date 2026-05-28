@@ -95,8 +95,8 @@ export async function POST(req: NextRequest) {
     }
 
     const [site] = await sql`
-      SELECT id FROM sites
-      WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+      SELECT id FROM businesses
+      WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
     `;
     if (!site) {
       return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     if (source_asset_id) {
       const [asset] = await sql`
         SELECT id FROM media_assets
-        WHERE id = ${source_asset_id} AND site_id = ${site_id}
+        WHERE id = ${source_asset_id} AND business_id = ${site_id}
       `;
       if (!asset) {
         return NextResponse.json(
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
 
     const [recording] = await sql`
       INSERT INTO recordings (
-        site_id, source_asset_id, storage_url, duration_ms,
+        business_id, source_asset_id, storage_url, duration_ms,
         mime_type, source, metadata,
         transcript, transcribed_at, transcribe_provider
       )
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
         ${JSON.stringify(metadata)}::jsonb,
         ${initialTranscript}, ${transcribedAt}, ${transcribeProvider}
       )
-      RETURNING id, site_id, source_asset_id, storage_url, mime_type,
+      RETURNING id, business_id, source_asset_id, storage_url, mime_type,
                 duration_ms, source, transcript, transcribed_at,
                 transcribe_provider, created_at
     `;
@@ -250,9 +250,9 @@ export async function GET(req: NextRequest) {
                r.duration_ms, r.transcript, r.transcribed_at,
                r.transcribe_provider, r.source, r.created_at
         FROM recordings r
-        JOIN sites s ON s.id = r.site_id
+        JOIN businesses s ON s.id = r.business_id
         WHERE r.source_asset_id = ${sourceAssetId}
-          AND s.subscription_id = ${auth.subscriptionId}
+          AND s.billing_account_id = ${auth.subscriptionId}
           AND r.archived_at IS NULL
         ORDER BY r.created_at DESC
       `
@@ -261,9 +261,9 @@ export async function GET(req: NextRequest) {
                r.duration_ms, r.transcript, r.transcribed_at,
                r.transcribe_provider, r.source, r.created_at
         FROM recordings r
-        JOIN sites s ON s.id = r.site_id
-        WHERE r.site_id = ${siteId}
-          AND s.subscription_id = ${auth.subscriptionId}
+        JOIN businesses s ON s.id = r.business_id
+        WHERE r.business_id = ${siteId}
+          AND s.billing_account_id = ${auth.subscriptionId}
           AND r.archived_at IS NULL
         ORDER BY r.created_at DESC
         LIMIT 100

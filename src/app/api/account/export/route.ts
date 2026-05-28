@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const [recent] = await sql`
     SELECT id, status, download_url, created_at
     FROM data_exports
-    WHERE subscription_id = ${auth.subscriptionId}
+    WHERE billing_account_id = ${auth.subscriptionId}
       AND created_at > NOW() - INTERVAL '1 hour'
       AND status = 'completed'
     ORDER BY created_at DESC
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   // Create export record
   const [exportRow] = await sql`
-    INSERT INTO data_exports (subscription_id, status)
+    INSERT INTO data_exports (billing_account_id, status)
     VALUES (${auth.subscriptionId}, 'building')
     RETURNING id
   `;
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
     const [exp] = await sql`
       SELECT id, status, download_url, expires_at, created_at
       FROM data_exports
-      WHERE id = ${exportId} AND subscription_id = ${auth.subscriptionId}
+      WHERE id = ${exportId} AND billing_account_id = ${auth.subscriptionId}
     `;
     if (!exp) {
       return NextResponse.json({ error: "Export not found" }, { status: 404 });
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
   const exports = await sql`
     SELECT id, status, download_url, expires_at, created_at
     FROM data_exports
-    WHERE subscription_id = ${auth.subscriptionId}
+    WHERE billing_account_id = ${auth.subscriptionId}
     ORDER BY created_at DESC
     LIMIT 10
   `;

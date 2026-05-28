@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const [site] = await sql`
     SELECT s.gbp_profile, s.gbp_sync_dirty, s.gbp_dirty_fields,
            s.gsc_property, s.gsc_verification_token
-    FROM sites s
+    FROM businesses s
     WHERE s.id = ${siteId}
   `;
 
@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
   const [gbpAccount] = await sql`
     SELECT sa.id, sa.account_name, sa.status, sa.token_expires_at, sa.metadata
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp'
     ORDER BY sa.created_at DESC
     LIMIT 1
   `;
@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
   // GBP location
   const [gbpLocation] = await sql`
     SELECT external_id, gbp_account_id, gbp_location_id, sync_status, sync_data
-    FROM gbp_locations
-    WHERE site_id = ${siteId}
+    FROM gbp_profiles
+    WHERE business_id = ${siteId}
     LIMIT 1
   `.catch(() => [null]);
 
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     SELECT
       COUNT(*)::int AS total_synced
     FROM gbp_photo_sync
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
   `.catch(() => [{ total_synced: 0 }]);
 
   // Review stats
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE reply_status = 'pending')::int AS pending_replies
     FROM inbox_reviews
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
   `.catch(() => [{ total: 0, pending_replies: 0 }]);
 
   const profile = (site?.gbp_profile || {}) as Record<string, unknown>;

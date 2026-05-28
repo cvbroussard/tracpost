@@ -8,18 +8,18 @@ export default async function SubscribersPage() {
     SELECT
       sub.id, sub.plan, sub.is_active, sub.created_at,
       COALESCE(owner.name, owner.email, '—') AS name,
-      (SELECT COUNT(*)::int FROM sites WHERE subscription_id = sub.id) AS site_count,
+      (SELECT COUNT(*)::int FROM businesses WHERE billing_account_id = sub.id) AS site_count,
       (
         SELECT COUNT(*)::int FROM social_accounts sa
-        WHERE sa.subscription_id = sub.id AND sa.status = 'active'
+        WHERE sa.billing_account_id = sub.id AND sa.status = 'active'
       ) AS account_count,
       (
         SELECT COUNT(*)::int FROM social_posts sp
         JOIN social_accounts sa ON sp.account_id = sa.id
-        WHERE sa.subscription_id = sub.id AND sp.status = 'published'
+        WHERE sa.billing_account_id = sub.id AND sp.status = 'published'
       ) AS published_count
-    FROM subscriptions sub
-    LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
+    FROM accounts sub
+    LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
     ORDER BY sub.created_at DESC
   `;
 

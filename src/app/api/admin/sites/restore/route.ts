@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT id, name FROM sites
+    SELECT id, name FROM businesses
     WHERE id = ${siteId} AND deleted_at IS NOT NULL
   `;
 
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET deleted_at = NULL,
         deletion_status = NULL,
         deletion_requested_at = NULL,

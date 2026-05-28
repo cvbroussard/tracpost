@@ -57,7 +57,7 @@ export default async function ArticleReviewPage({
   const { id } = await params;
 
   const [article] = (await sql`
-    SELECT bp.id, bp.site_id, bp.slug, bp.title, bp.body, bp.excerpt,
+    SELECT bp.id, bp.business_id, bp.slug, bp.title, bp.body, bp.excerpt,
            bp.meta_title, bp.meta_description,
            ma.storage_url AS hero_url,
            ma.media_type AS hero_media_type,
@@ -66,7 +66,7 @@ export default async function ArticleReviewPage({
     FROM blog_posts_v2 bp
     LEFT JOIN media_assets ma ON ma.id = bp.hero_asset_id
     WHERE bp.id = ${id}
-      AND bp.site_id = ${session.activeSiteId}
+      AND bp.business_id = ${session.activeSiteId}
     LIMIT 1
   `) as BlogArticle[];
 
@@ -101,7 +101,7 @@ export default async function ArticleReviewPage({
   const [settings] = (await sql`
     SELECT blog_title, subdomain, custom_domain
     FROM blog_settings
-    WHERE site_id = ${session.activeSiteId}
+    WHERE business_id = ${session.activeSiteId}
     LIMIT 1
   `) as BlogSettingsRow[];
 

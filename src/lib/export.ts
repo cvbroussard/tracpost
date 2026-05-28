@@ -24,8 +24,8 @@ export async function buildExportArchive(
   // Gather all data
   const [subscriber] = await sql`
     SELECT sub.id, u.name, u.email, sub.plan, sub.created_at
-    FROM subscriptions sub
-    JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+    FROM accounts sub
+    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
     WHERE sub.id = ${subscriptionId}
   `;
   if (!subscriber) throw new Error("Subscription not found");
@@ -33,7 +33,7 @@ export async function buildExportArchive(
   const sites = await sql`
     SELECT id, name, url, brand_voice, cadence_config, content_pillars,
            autopilot_config, autopilot_enabled, created_at
-    FROM sites WHERE subscription_id = ${subscriptionId}
+    FROM businesses WHERE billing_account_id = ${subscriptionId}
   `;
 
   // Create zip in memory
@@ -68,7 +68,7 @@ export async function buildExportArchive(
     // Site config
     const [blogSettings] = await sql`
       SELECT blog_enabled, subdomain, custom_domain, blog_title, blog_description, theme
-      FROM blog_settings WHERE site_id = ${siteId}
+      FROM blog_settings WHERE business_id = ${siteId}
     `;
 
     archive.append(
@@ -92,7 +92,7 @@ export async function buildExportArchive(
     const posts = await sql`
       SELECT slug, title, body, excerpt, meta_title, meta_description,
              og_image_url, tags, content_pillar, status, published_at, created_at, source
-      FROM blog_posts WHERE site_id = ${siteId}
+      FROM blog_posts WHERE business_id = ${siteId}
       ORDER BY created_at ASC
     `;
 
@@ -126,7 +126,7 @@ export async function buildExportArchive(
              sp.platform_post_id, sa.platform_username
       FROM social_posts sp
       LEFT JOIN social_accounts sa ON sp.account_id = sa.id
-      WHERE sp.site_id = ${siteId}
+      WHERE sp.business_id = ${siteId}
       ORDER BY sp.created_at ASC
     `;
 
@@ -151,7 +151,7 @@ export async function buildExportArchive(
     // Social accounts (names only, not tokens)
     const accounts = await sql`
       SELECT platform, platform_username, platform_user_id, created_at
-      FROM social_accounts WHERE site_id = ${siteId}
+      FROM social_accounts WHERE business_id = ${siteId}
     `;
     if (accounts.length > 0) {
       archive.append(JSON.stringify(accounts, null, 2), {
@@ -162,7 +162,7 @@ export async function buildExportArchive(
     // SEO audits
     const audits = await sql`
       SELECT url, audit_data, score, created_at
-      FROM seo_audits WHERE site_id = ${siteId}
+      FROM seo_audits WHERE business_id = ${siteId}
       ORDER BY created_at DESC LIMIT 1
     `;
     if (audits.length > 0) {

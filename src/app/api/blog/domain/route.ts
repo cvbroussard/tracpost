@@ -62,12 +62,12 @@ export async function POST(req: NextRequest) {
       SET subdomain = ${siteSlug},
           custom_domain = ${rootDomain},
           updated_at = NOW()
-      WHERE site_id = ${site_id}
+      WHERE business_id = ${site_id}
     `;
 
     // Also set blog_slug on sites table
     await sql`
-      UPDATE sites SET blog_slug = ${siteSlug}, updated_at = NOW()
+      UPDATE businesses SET blog_slug = ${siteSlug}, updated_at = NOW()
       WHERE id = ${site_id}
     `;
 
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
 
   if (action === "verify") {
     const [settings] = await sql`
-      SELECT custom_domain FROM blog_settings WHERE site_id = ${site_id}
+      SELECT custom_domain FROM blog_settings WHERE business_id = ${site_id}
     `;
     const rootDomain = settings?.custom_domain as string;
     if (!rootDomain) {
@@ -146,19 +146,19 @@ export async function POST(req: NextRequest) {
     const [owner] = await sql`
       SELECT u.email, u.name
       FROM users u
-      JOIN subscriptions sub ON sub.id = u.subscription_id
-      JOIN sites s ON s.subscription_id = sub.id
+      JOIN accounts sub ON sub.id = u.billing_account_id
+      JOIN businesses s ON s.billing_account_id = sub.id
       WHERE s.id = ${site_id} AND u.role = 'owner'
     `;
     if (!owner?.email) {
       return NextResponse.json({ error: "Tenant owner email not found" }, { status: 404 });
     }
 
-    const [siteRow] = await sql`SELECT name FROM sites WHERE id = ${site_id}`;
+    const [siteRow] = await sql`SELECT name FROM businesses WHERE id = ${site_id}`;
     const siteName = (siteRow?.name as string) || "Your site";
 
     // Custom domain is the root domain (post-2026-04 rewrite — no more blog.* subdomain pattern)
-    const [blogSettings] = await sql`SELECT custom_domain FROM blog_settings WHERE site_id = ${site_id}`;
+    const [blogSettings] = await sql`SELECT custom_domain FROM blog_settings WHERE business_id = ${site_id}`;
     const rootDomain = (blogSettings?.custom_domain as string) || "";
 
     const { sendDnsInstructionsEmail } = await import("@/lib/email");
@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
 
   if (action === "remove") {
     const [settings] = await sql`
-      SELECT custom_domain FROM blog_settings WHERE site_id = ${site_id}
+      SELECT custom_domain FROM blog_settings WHERE business_id = ${site_id}
     `;
     const rootDomain = settings?.custom_domain as string;
     if (!rootDomain) {
@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
 
     await sql`
       UPDATE blog_settings SET custom_domain = NULL, updated_at = NOW()
-      WHERE site_id = ${site_id}
+      WHERE business_id = ${site_id}
     `;
 
     return NextResponse.json({ removed: true, domain: rootDomain });

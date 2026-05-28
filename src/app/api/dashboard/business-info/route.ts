@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
     : null;
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET name = ${name},
         business_type = ${businessType},
         location = ${location},

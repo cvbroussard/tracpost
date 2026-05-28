@@ -17,15 +17,15 @@ export async function PATCH(req: NextRequest) {
 
   if (bizName) {
     await sql`
-      UPDATE subscriptions SET name = ${bizName}, updated_at = NOW()
+      UPDATE accounts SET name = ${bizName}, updated_at = NOW()
       WHERE id = ${auth.subscriptionId}
     `;
   }
 
   if (companyPhone !== undefined) {
     await sql`
-      UPDATE sites SET business_phone = ${companyPhone || null}, updated_at = NOW()
-      WHERE subscription_id = ${auth.subscriptionId}
+      UPDATE businesses SET business_phone = ${companyPhone || null}, updated_at = NOW()
+      WHERE billing_account_id = ${auth.subscriptionId}
     `;
   }
 

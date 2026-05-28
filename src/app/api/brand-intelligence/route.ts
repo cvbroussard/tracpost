@@ -45,8 +45,8 @@ export async function POST(req: NextRequest) {
 
     // Verify ownership
     const [site] = await sql`
-      SELECT id FROM sites
-      WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+      SELECT id FROM businesses
+      WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
     `;
     if (!site) {
       return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -148,8 +148,8 @@ export async function GET(req: NextRequest) {
 
   // Verify ownership
   const [site] = await sql`
-    SELECT id FROM sites
-    WHERE id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses
+    WHERE id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });

@@ -39,7 +39,7 @@ export async function parseContextNote(
 
   // Fetch all brands for this subscriber (brands = slot 1 / link_in_post behavior)
   const brands = await sql`
-    SELECT id, name, slug, url FROM brands WHERE site_id = ${siteId}
+    SELECT id, name, slug, url FROM brands WHERE business_id = ${siteId}
   `;
 
   const brandMap = new Map<string, { id: string; name: string; url: string | null }>();

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const rows = await sql`SELECT id FROM subscriptions WHERE is_test = true`;
+  const rows = await sql`SELECT id FROM accounts WHERE is_test = true`;
 
   const results: Array<{ id: string; success: boolean; error: string | null }> = [];
   for (const row of rows) {

@@ -36,7 +36,7 @@ export default async function LegalHubPage() {
   const [row] = await sql`
     SELECT face_policy, face_waiver_signed_at,
            minor_face_policy, minor_face_waiver_signed_at
-    FROM sites WHERE id = ${session.activeSiteId}
+    FROM businesses WHERE id = ${session.activeSiteId}
   `;
 
   const facePolicy = (row?.face_policy as string) || "blur";

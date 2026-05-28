@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
     // refactored.
     await sql`
       INSERT INTO gbp_credentials (
-        site_id, google_account_id, google_email,
+        business_id, google_account_id, google_email,
         access_token, refresh_token, token_expires_at,
         scopes, is_active
       )
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
         ${"{business.manage,userinfo.email,webmasters.readonly}"},
         true
       )
-      ON CONFLICT (site_id)
+      ON CONFLICT (business_id)
       DO UPDATE SET
         google_account_id = EXCLUDED.google_account_id,
         google_email = EXCLUDED.google_email,
@@ -113,13 +113,13 @@ export async function GET(req: NextRequest) {
     `;
 
     // Notify operator that locations need assignment
-    const [site] = await sql`SELECT name FROM sites WHERE id = ${state.site_id}`;
+    const [site] = await sql`SELECT name FROM businesses WHERE id = ${state.site_id}`;
     const siteName = (site?.name as string) || "Unknown site";
     try {
       const locationNames = locations.map((l) => l.locationName).join(", ");
       await sql`
         INSERT INTO notifications (
-          subscription_id, category, severity, title, body, metadata
+          billing_account_id, category, severity, title, body, metadata
         ) VALUES (
           ${state.subscription_id}, 'campaigns', 'info',
           ${"Google connected — assign location to site"},
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
 
     // Log usage
     await sql`
-      INSERT INTO usage_log (subscription_id, action, metadata)
+      INSERT INTO usage_log (billing_account_id, action, metadata)
       VALUES (${state.subscription_id}, 'google_connect', ${JSON.stringify({
         google_account_id: googleAccountId,
         email,

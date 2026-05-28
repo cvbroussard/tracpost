@@ -26,7 +26,7 @@ export async function classifyBlogContentType(
   const existing = await sql`
     SELECT DISTINCT metadata->>'content_type' AS content_type
     FROM blog_posts_v2
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND status IN ('published', 'draft')
       AND metadata->>'content_type' IS NOT NULL
   `;

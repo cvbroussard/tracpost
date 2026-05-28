@@ -25,7 +25,7 @@ export async function publishSpotlight(sessionId: string): Promise<{
   const [session] = await sql`
     SELECT ss.*, s.name AS site_name, s.brand_voice
     FROM spotlight_sessions ss
-    JOIN sites s ON s.id = ss.site_id
+    JOIN businesses s ON s.id = ss.business_id
     WHERE ss.id = ${sessionId} AND ss.photo_consent = true
   `;
 
@@ -43,8 +43,8 @@ export async function publishSpotlight(sessionId: string): Promise<{
   const accounts = await sql`
     SELECT sa.id, sa.platform, sa.account_id, sa.access_token_encrypted, sa.metadata
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${session.site_id} AND sa.status = 'active'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${session.site_id} AND sa.status = 'active'
   `;
 
   if (accounts.length === 0) {
@@ -121,7 +121,7 @@ export async function publishSpotlight(sessionId: string): Promise<{
 
       // Log analytics
       await sql`
-        INSERT INTO spotlight_analytics (session_id, site_id, event, metadata)
+        INSERT INTO spotlight_analytics (session_id, business_id, event, metadata)
         VALUES (${sessionId}, ${session.site_id}, 'social_posted', ${JSON.stringify({ platform: account.platform, post_id: post.id })})
       `;
 

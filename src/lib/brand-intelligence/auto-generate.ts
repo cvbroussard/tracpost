@@ -127,7 +127,7 @@ Requirements:
 
   // Store playbook on site
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_playbook = ${JSON.stringify(playbook)},
         brand_wizard_state = NULL,
         updated_at = NOW()
@@ -138,7 +138,7 @@ Requirements:
   const hooks = playbook.contentHooks.lovedHooks || [];
   for (const hook of hooks) {
     await sql`
-      INSERT INTO hook_bank (site_id, text, category, rating)
+      INSERT INTO hook_bank (business_id, text, category, rating)
       VALUES (${siteId}, ${hook.text}, ${hook.category}, 'loved')
       ON CONFLICT DO NOTHING
     `;
@@ -154,7 +154,7 @@ Requirements:
   };
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_voice = ${JSON.stringify(brandVoice)}, updated_at = NOW()
     WHERE id = ${siteId}
   `;
@@ -192,7 +192,7 @@ export async function refinePlaybook(
 ): Promise<BrandPlaybook> {
   // Load existing playbook
   const [site] = await sql`
-    SELECT brand_playbook, business_type, location FROM sites WHERE id = ${siteId}
+    SELECT brand_playbook, business_type, location FROM businesses WHERE id = ${siteId}
   `;
 
   if (!site?.brand_playbook) {
@@ -251,18 +251,18 @@ Respond with ONLY valid JSON (no markdown fencing).`,
 
   // Store refined playbook
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_playbook = ${JSON.stringify(playbook)},
         updated_at = NOW()
     WHERE id = ${siteId}
   `;
 
   // Replace hook_bank with refined hooks
-  await sql`DELETE FROM hook_bank WHERE site_id = ${siteId}`;
+  await sql`DELETE FROM hook_bank WHERE business_id = ${siteId}`;
   const hooks = playbook.contentHooks.lovedHooks || [];
   for (const hook of hooks) {
     await sql`
-      INSERT INTO hook_bank (site_id, text, category, rating)
+      INSERT INTO hook_bank (business_id, text, category, rating)
       VALUES (${siteId}, ${hook.text}, ${hook.category}, 'loved')
       ON CONFLICT DO NOTHING
     `;
@@ -279,13 +279,13 @@ Respond with ONLY valid JSON (no markdown fencing).`,
   };
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_voice = ${JSON.stringify(brandVoice)}, updated_at = NOW()
     WHERE id = ${siteId}
   `;
 
   // Regenerate content topics
-  await sql`DELETE FROM content_topics WHERE site_id = ${siteId}`;
+  await sql`DELETE FROM content_topics WHERE business_id = ${siteId}`;
   generateContentTopics(siteId, playbook).catch((err) => {
     console.error("Topic regeneration failed:", err instanceof Error ? err.message : err);
   });
@@ -293,7 +293,7 @@ Respond with ONLY valid JSON (no markdown fencing).`,
   // Derive pillar+tag config from the sharpened playbook
   const pillarConfig = await derivePillarConfig(playbook);
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET pillar_config = ${JSON.stringify(pillarConfig)}::jsonb, updated_at = NOW()
     WHERE id = ${siteId}
   `;
@@ -301,7 +301,7 @@ Respond with ONLY valid JSON (no markdown fencing).`,
   // Derive image style from the sharpened playbook
   try {
     const { deriveImageStyle } = await import("@/lib/image-gen/derive-style");
-    const siteName = (await sql`SELECT name FROM sites WHERE id = ${siteId}`)[0]?.name as string || "";
+    const siteName = (await sql`SELECT name FROM businesses WHERE id = ${siteId}`)[0]?.name as string || "";
     await deriveImageStyle(siteId, siteName, businessType, angle);
   } catch (err) {
     console.error("Image style derivation failed:", err instanceof Error ? err.message : err);
@@ -470,7 +470,7 @@ Respond with ONLY valid JSON (no markdown):
 
   for (const topic of data.topics || []) {
     await sql`
-      INSERT INTO content_topics (site_id, title, search_query, intent, priority, pillar, cluster)
+      INSERT INTO content_topics (business_id, title, search_query, intent, priority, pillar, cluster)
       VALUES (${siteId}, ${topic.title}, ${topic.search_query}, ${topic.intent}, ${topic.priority}, ${topic.pillar}, ${topic.cluster})
     `;
   }

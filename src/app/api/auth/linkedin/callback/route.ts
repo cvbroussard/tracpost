@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
     }
 
     await sql`
-      INSERT INTO usage_log (subscription_id, action, metadata)
+      INSERT INTO usage_log (billing_account_id, action, metadata)
       VALUES (${state.subscription_id}, 'linkedin_connect', ${JSON.stringify({
         user_id: userId,
         user_name: userName,

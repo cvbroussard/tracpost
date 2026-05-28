@@ -48,6 +48,7 @@ const RENAMES = [
   ["service_areas_canonical", "service_areas"],
   ["sites", "businesses"],
   ["branches", "locations"],
+  ["subscriptions", "accounts"],
   // columns (global sweep — every site_id/subscription_id in SQL)
   ["site_id", "business_id"],
   // subscription_id → billing_account_id (NOT account_id — collides with the
@@ -60,6 +61,10 @@ const RENAMES = [
 // auth.ts is the hand-managed dual-read bridge (references BOTH old subscription_id
 // and new billing_account_id intentionally) — never codemod it; it's removed in 138.
 const EXCLUDE_SUBSTRINGS = ["/lib/geo-match.ts", "/lib/auth.ts"];
+
+// Tag names for the Neon sql client — includes aliases. `dbSql` comes from
+// `const { sql: dbSql } = await import("@/lib/db")` (e.g. google/profile/route.ts).
+const SQL_TAGS = new Set(["sql", "dbSql"]);
 
 // Build word-boundary regexes, longest source first so a specific token is tried
 // before a prefix of it (defensive; \b already prevents overlap).
@@ -93,7 +98,7 @@ function delimsFor(node) {
 function collectSqlLiteralNodes(sourceFile) {
   const out = [];
   for (const tt of sourceFile.getDescendantsOfKind(SyntaxKind.TaggedTemplateExpression)) {
-    if (tt.getTag().getText() !== "sql") continue;
+    if (!SQL_TAGS.has(tt.getTag().getText())) continue;
     const tmpl = tt.getTemplate();
     if (Node.isNoSubstitutionTemplateLiteral(tmpl)) {
       out.push(tmpl);

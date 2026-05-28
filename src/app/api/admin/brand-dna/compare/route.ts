@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   const [site] = await sql`
     SELECT business_type, location, brand_playbook, brand_dna,
            active_brand_source, name
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   const [site] = await sql`
     SELECT business_type, location, url, brand_playbook, brand_dna,
            active_brand_source, name
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
     version: v2.version || `2.0-v2-${score.tier}`,
   };
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_dna = ${JSON.stringify(envelope)}::jsonb,
         updated_at = NOW()
     WHERE id = ${siteId}

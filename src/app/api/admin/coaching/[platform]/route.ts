@@ -83,7 +83,7 @@ export async function GET(
   const visits = (await sql`
     SELECT node_id::text AS node_id, COUNT(*)::int AS visits
     FROM (
-      SELECT DISTINCT subscription_id, unnest(path_taken) AS node_id
+      SELECT DISTINCT billing_account_id, unnest(path_taken) AS node_id
       FROM coaching_progress
       WHERE platform = ${platform}
     ) v

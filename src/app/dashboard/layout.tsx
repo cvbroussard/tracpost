@@ -40,7 +40,7 @@ export default async function DashboardLayout({
   // Fetch site logo for breadcrumb
   let siteLogo: string | null = null;
   if (siteId) {
-    const [logoRow] = await sql`SELECT business_logo FROM sites WHERE id = ${siteId}`;
+    const [logoRow] = await sql`SELECT business_logo FROM businesses WHERE id = ${siteId}`;
     siteLogo = (logoRow?.business_logo as string) || null;
   }
 
@@ -52,16 +52,16 @@ export default async function DashboardLayout({
       sql`
         SELECT DISTINCT sa.platform
         FROM social_accounts sa
-        JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-        WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
+        JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+        WHERE ssl.business_id = ${siteId} AND sa.status = 'active'
       `,
       sql`
         SELECT brand_playbook IS NOT NULL AS has_playbook, autopilot_enabled,
                provisioning_status, metadata, brand_voice
-        FROM sites WHERE id = ${siteId}
+        FROM businesses WHERE id = ${siteId}
       `,
-      sql`SELECT COUNT(*)::int AS count FROM media_assets WHERE site_id = ${siteId}`,
-      sql`SELECT blog_enabled FROM blog_settings WHERE site_id = ${siteId}`,
+      sql`SELECT COUNT(*)::int AS count FROM media_assets WHERE business_id = ${siteId}`,
+      sql`SELECT blog_enabled FROM blog_settings WHERE business_id = ${siteId}`,
     ]);
 
     const connectedPlatforms = accounts.map((a: Record<string, unknown>) => a.platform as string);
@@ -161,8 +161,8 @@ async function buildActivityFeed(siteId: string) {
     SELECT sp.id, sa.platform, sp.caption, sp.published_at
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sp.status = 'published' AND sp.published_at IS NOT NULL
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sp.status = 'published' AND sp.published_at IS NOT NULL
     ORDER BY sp.published_at DESC
     LIMIT 10
   `;
@@ -181,8 +181,8 @@ async function buildActivityFeed(siteId: string) {
     SELECT sp.id, sa.platform, sp.scheduled_at
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sp.status = 'scheduled' AND sp.scheduled_at > NOW()
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sp.status = 'scheduled' AND sp.scheduled_at > NOW()
     ORDER BY sp.scheduled_at ASC
     LIMIT 5
   `;
@@ -202,7 +202,7 @@ async function buildActivityFeed(siteId: string) {
   const triaged = await sql`
     SELECT id, context_note, triaged_at
     FROM media_assets
-    WHERE site_id = ${siteId} AND processing_stage IN ('briefed', 'analyzed') AND triaged_at IS NOT NULL
+    WHERE business_id = ${siteId} AND processing_stage IN ('briefed', 'analyzed') AND triaged_at IS NOT NULL
     ORDER BY triaged_at DESC
     LIMIT 5
   `;
@@ -220,7 +220,7 @@ async function buildActivityFeed(siteId: string) {
   const blogs = await sql`
     SELECT id, title, published_at, created_at
     FROM blog_posts
-    WHERE site_id = ${siteId} AND status = 'published'
+    WHERE business_id = ${siteId} AND status = 'published'
     ORDER BY published_at DESC
     LIMIT 3
   `;
@@ -238,7 +238,7 @@ async function buildActivityFeed(siteId: string) {
   const reviews = await sql`
     SELECT id, platform, reviewer_name, rating, created_at
     FROM inbox_reviews
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
     ORDER BY created_at DESC
     LIMIT 5
   `;

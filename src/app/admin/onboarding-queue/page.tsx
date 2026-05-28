@@ -54,7 +54,7 @@ export default async function OnboardingQueuePage() {
   const submissions = (await sql`
     SELECT
       os.token,
-      os.subscription_id,
+      os.billing_account_id,
       os.current_step,
       os.submitted_at,
       os.completed_at,
@@ -66,8 +66,8 @@ export default async function OnboardingQueuePage() {
       u.email AS owner_email,
       sub.plan
     FROM onboarding_submissions os
-    LEFT JOIN subscriptions sub ON sub.id = os.subscription_id
-    LEFT JOIN users u ON u.subscription_id = os.subscription_id AND u.role = 'owner'
+    LEFT JOIN accounts sub ON sub.id = os.billing_account_id
+    LEFT JOIN users u ON u.billing_account_id = os.billing_account_id AND u.role = 'owner'
     WHERE os.completed_at IS NULL
     ORDER BY
       CASE WHEN os.submitted_at IS NOT NULL THEN 0 ELSE 1 END,

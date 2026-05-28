@@ -29,8 +29,8 @@ async function getPendingImports(): Promise<PendingImport[]> {
   const rows = await sql`
     SELECT pa.id AS asset_id, pa.platform, pa.asset_name,
            pa.asset_id AS platform_native_id, pa.metadata AS asset_metadata,
-           sa.access_token_encrypted, sa.subscription_id,
-           (SELECT spa.site_id FROM site_platform_assets spa
+           sa.access_token_encrypted, sa.billing_account_id,
+           (SELECT spa.business_id FROM business_platform_assets spa
             WHERE spa.platform_asset_id = pa.id AND spa.is_primary = true
             LIMIT 1) AS primary_site_id
     FROM platform_assets pa

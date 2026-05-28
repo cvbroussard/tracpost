@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     // Auto-assign on unambiguous 1-to-1 (subscription has 1 site,
     // OAuth brought back 1 ad account).
     const siteRows = await sql`
-      SELECT id FROM sites WHERE subscription_id = ${state.subscription_id} LIMIT 2
+      SELECT id FROM businesses WHERE billing_account_id = ${state.subscription_id} LIMIT 2
     `;
     if (siteRows.length === 1 && newAdAccountIds.length === 1) {
       await assignSiteToAsset({
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
     }
 
     await sql`
-      INSERT INTO usage_log (subscription_id, action, metadata)
+      INSERT INTO usage_log (billing_account_id, action, metadata)
       VALUES (${state.subscription_id}, 'meta_ads_connect', ${JSON.stringify({
         user_id: userInfo.id,
         user_name: userInfo.name,

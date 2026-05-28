@@ -13,7 +13,7 @@ export interface ContactPageData {
 }
 
 export async function loadContactPage(siteId: string): Promise<ContactPageData> {
-  const [site] = await sql`SELECT website_copy FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT website_copy FROM businesses WHERE id = ${siteId}`;
   const copy = (site?.website_copy as WebsiteCopy | null) || null;
   const contactCopy = copy?.contact;
 

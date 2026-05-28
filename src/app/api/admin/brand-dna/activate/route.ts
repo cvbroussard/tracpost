@@ -23,14 +23,14 @@ export async function POST(req: NextRequest) {
 
   if (source === "dna") {
     // Guard: don't activate dna if no envelope exists
-    const [site] = await sql`SELECT brand_dna FROM sites WHERE id = ${siteId}`;
+    const [site] = await sql`SELECT brand_dna FROM businesses WHERE id = ${siteId}`;
     if (!site?.brand_dna) {
       return NextResponse.json({ error: "No Brand DNA generated yet — run Compare first" }, { status: 400 });
     }
   }
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET active_brand_source = ${source}, updated_at = NOW()
     WHERE id = ${siteId}
   `;

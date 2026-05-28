@@ -44,7 +44,7 @@ export default async function ContentSafeguardsPage() {
       face_policy, face_waiver_signed_at, face_waiver_version,
       minor_face_policy, minor_face_waiver_signed_at, minor_face_waiver_version,
       identity_policy, identity_waiver_signed_at, identity_waiver_version
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   if (!row) redirect("/dashboard/business");
 

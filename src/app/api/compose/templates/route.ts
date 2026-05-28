@@ -29,12 +29,12 @@ export async function GET(_req: NextRequest) {
   // platform_asset assigned to this site). Blog is always available.
   const connectedRows = await sql`
     SELECT DISTINCT pa.platform
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${siteId}
+    WHERE spa.business_id = ${siteId}
       AND spa.is_primary = true
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
   `;
   const connectedPlatforms = connectedRows.map((r) => r.platform as string);
   // Blog is always available (TracPost-owned, no external OAuth required).

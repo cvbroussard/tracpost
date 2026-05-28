@@ -30,8 +30,8 @@ export async function GET(req: NextRequest) {
   }
 
   const [subRows, siteRows] = await Promise.all([
-    sql`SELECT name FROM subscriptions WHERE id = ${subscriber.subscriptionId}`,
-    sql`SELECT id, name, url, is_active FROM sites WHERE subscription_id = ${subscriber.subscriptionId} ORDER BY is_active DESC, created_at ASC`,
+    sql`SELECT name FROM accounts WHERE id = ${subscriber.subscriptionId}`,
+    sql`SELECT id, name, url, is_active FROM businesses WHERE billing_account_id = ${subscriber.subscriptionId} ORDER BY is_active DESC, created_at ASC`,
   ]);
 
   // Build session

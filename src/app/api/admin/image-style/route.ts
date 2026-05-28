@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     // When admin manually enables, clear the lock.
     if (autopilotEnabled) {
       await sql`
-        UPDATE sites
+        UPDATE businesses
         SET autopilot_enabled = true,
             metadata = COALESCE(metadata, '{}'::jsonb) - 'autopilot_locked',
             updated_at = NOW()
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       `;
     } else {
       await sql`
-        UPDATE sites
+        UPDATE businesses
         SET autopilot_enabled = false,
             metadata = COALESCE(metadata, '{}'::jsonb) || '{"autopilot_locked":"true"}'::jsonb,
             updated_at = NOW()
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       .filter((l) => l.label.trim() && l.href.trim());
     await sql`
       UPDATE blog_settings SET nav_links = ${JSON.stringify(filtered)}::jsonb, updated_at = NOW()
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
     `;
   } else if (blogSlug !== undefined && Object.keys(body).length === 2) {
     // Update both blog_settings.subdomain and sites.blog_slug
@@ -52,26 +52,26 @@ export async function POST(req: NextRequest) {
     }
     // Check uniqueness
     const [existing] = await sql`
-      SELECT site_id FROM blog_settings WHERE subdomain = ${slug} AND site_id != ${siteId}
+      SELECT business_id FROM blog_settings WHERE subdomain = ${slug} AND business_id != ${siteId}
     `;
     if (existing) {
       return NextResponse.json({ error: "Blog slug already taken" }, { status: 409 });
     }
-    await sql`UPDATE sites SET blog_slug = ${slug}, updated_at = NOW() WHERE id = ${siteId}`;
+    await sql`UPDATE businesses SET blog_slug = ${slug}, updated_at = NOW() WHERE id = ${siteId}`;
     await sql`
-      UPDATE blog_settings SET subdomain = ${slug}, updated_at = NOW() WHERE site_id = ${siteId}
+      UPDATE blog_settings SET subdomain = ${slug}, updated_at = NOW() WHERE business_id = ${siteId}
     `;
   } else if (blogCadence !== undefined && Object.keys(body).length === 2) {
-    await sql`UPDATE sites SET blog_cadence = ${blogCadence} WHERE id = ${siteId}`;
+    await sql`UPDATE businesses SET blog_cadence = ${blogCadence} WHERE id = ${siteId}`;
   } else if (articleRatio !== undefined && Object.keys(body).length === 2) {
-    await sql`UPDATE sites SET article_mix = ${articleRatio} WHERE id = ${siteId}`;
+    await sql`UPDATE businesses SET article_mix = ${articleRatio} WHERE id = ${siteId}`;
   } else if (videoRatio !== undefined && Object.keys(body).length === 2) {
-    await sql`UPDATE sites SET video_ratio = ${videoRatio} WHERE id = ${siteId}`;
+    await sql`UPDATE businesses SET video_ratio = ${videoRatio} WHERE id = ${siteId}`;
   } else if (inlineUploadCount !== undefined && inlineAiCount !== undefined && Object.keys(body).length === 3) {
-    await sql`UPDATE sites SET inline_upload_count = ${inlineUploadCount}, inline_ai_count = ${inlineAiCount} WHERE id = ${siteId}`;
+    await sql`UPDATE businesses SET inline_upload_count = ${inlineUploadCount}, inline_ai_count = ${inlineAiCount} WHERE id = ${siteId}`;
   } else {
     await sql`
-      UPDATE sites
+      UPDATE businesses
       SET image_style = ${style || null},
           image_variations = ${JSON.stringify(variations || [])}::jsonb,
           image_processing_mode = ${processingMode || 'auto'},

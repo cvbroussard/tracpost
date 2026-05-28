@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
   }
 
   const [row] = await sql`
-    SELECT os.id, os.token, os.subscription_id, u.name AS owner_name
+    SELECT os.id, os.token, os.billing_account_id, u.name AS owner_name
     FROM onboarding_submissions os
-    JOIN users u ON u.subscription_id = os.subscription_id AND u.role = 'owner'
+    JOIN users u ON u.billing_account_id = os.billing_account_id AND u.role = 'owner'
     WHERE u.email = ${email}
       AND os.submitted_at IS NULL
       AND os.completed_at IS NULL

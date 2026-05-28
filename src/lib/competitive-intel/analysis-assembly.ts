@@ -196,7 +196,7 @@ export async function runAnalysisForSite(
 ): Promise<AssemblyResult> {
   // Insert a running row up front
   const [row] = await sql`
-    INSERT INTO competitive_market_analyses (site_id, status)
+    INSERT INTO competitive_market_analyses (business_id, status)
     VALUES (${siteId}, 'running')
     RETURNING id
   `;
@@ -217,9 +217,9 @@ export async function runAnalysisForSite(
         ct.slug AS tier_slug,
         ct.label AS tier_label,
         (SELECT JSON_AGG(JSON_BUILD_OBJECT('gcid', gc.gcid, 'name', gc.name, 'isPrimary', sgc.is_primary))
-         FROM site_gbp_categories sgc JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-         WHERE sgc.site_id = ${siteId}) AS categories
-      FROM sites s
+         FROM business_gbp_categories sgc JOIN gbp_categories gc ON gc.gcid = sgc.gcid
+         WHERE sgc.business_id = ${siteId}) AS categories
+      FROM businesses s
       LEFT JOIN commercial_tiers ct ON ct.id = s.commercial_tier_id
       WHERE s.id = ${siteId}
     `;
@@ -407,7 +407,7 @@ export async function getLatestAnalysis(siteId: string): Promise<{
   const [row] = await sql`
     SELECT id, generated_at, analysis_data
     FROM competitive_market_analyses
-    WHERE site_id = ${siteId} AND status = 'complete'
+    WHERE business_id = ${siteId} AND status = 'complete'
     ORDER BY generated_at DESC
     LIMIT 1
   `;

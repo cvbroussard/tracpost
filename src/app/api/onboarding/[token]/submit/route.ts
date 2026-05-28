@@ -46,7 +46,7 @@ export async function POST(
 
   const [owner] = await sql`
     SELECT id, email, name FROM users
-    WHERE subscription_id = ${submission.subscription_id} AND role = 'owner'
+    WHERE billing_account_id = ${submission.subscription_id} AND role = 'owner'
     LIMIT 1
   `;
 

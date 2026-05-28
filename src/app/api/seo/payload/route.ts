@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
     .join("");
 
   const subRows = await sql`
-    SELECT s.id AS subscription_id
-    FROM subscriptions s
+    SELECT s.id AS billing_account_id
+    FROM accounts s
     WHERE s.api_key_hash = ${apiKeyHash} AND s.is_active = true
   `;
 
@@ -66,8 +66,8 @@ export async function GET(req: NextRequest) {
   // Verify site belongs to subscription
   const siteRows = await sql`
     SELECT id, name, url, metadata
-    FROM sites
-    WHERE id = ${siteId} AND subscription_id = ${subscriptionId}
+    FROM businesses
+    WHERE id = ${siteId} AND billing_account_id = ${subscriptionId}
   `;
 
   if (siteRows.length === 0) {
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     SELECT structured_data, meta_title, meta_description,
            og_title, og_description, og_image, canonical_url, updated_at
     FROM seo_content
-    WHERE site_id = ${siteId} AND url = ${parsedUrl.href}
+    WHERE business_id = ${siteId} AND url = ${parsedUrl.href}
       AND updated_at > NOW() - INTERVAL '1 hour'
     ORDER BY updated_at DESC
     LIMIT 1
@@ -199,7 +199,7 @@ export async function GET(req: NextRequest) {
   // Cache in seo_content
   try {
     await sql`
-      INSERT INTO seo_content (site_id, page_type, page_id, url, meta_title,
+      INSERT INTO seo_content (business_id, page_type, page_id, url, meta_title,
         meta_description, og_title, og_description, og_image,
         canonical_url, structured_data, status, updated_at)
       VALUES (
@@ -210,7 +210,7 @@ export async function GET(req: NextRequest) {
         ${payload.canonical}, ${JSON.stringify(schemas)},
         'active', NOW()
       )
-      ON CONFLICT (site_id, page_type, page_id)
+      ON CONFLICT (business_id, page_type, page_id)
       DO UPDATE SET
         url = EXCLUDED.url,
         meta_title = EXCLUDED.meta_title,
@@ -229,7 +229,7 @@ export async function GET(req: NextRequest) {
   // Also store an audit record
   try {
     await sql`
-      INSERT INTO seo_audits (site_id, page_type, page_id, url, audit_data, seo_score, issues)
+      INSERT INTO seo_audits (business_id, page_type, page_id, url, audit_data, seo_score, issues)
       VALUES (
         ${siteId}, ${analysis.pageType}, ${parsedUrl.pathname},
         ${parsedUrl.href},

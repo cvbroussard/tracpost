@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     JOIN social_accounts sa ON sa.id = pa.social_account_id
     WHERE pa.id = ${platformAssetId}
       AND pa.asset_type = 'meta_ad_account'
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
   `;
   if (!verify) {
     return NextResponse.json({ error: "ad account not found in your grants" }, { status: 404 });
@@ -40,20 +40,20 @@ export async function POST(req: NextRequest) {
 
   // Demote any current primaries for this site (across all ad accounts)
   await sql`
-    UPDATE site_platform_assets spa
+    UPDATE business_platform_assets spa
     SET is_primary = false
     FROM platform_assets pa
     WHERE spa.platform_asset_id = pa.id
-      AND spa.site_id = ${session.activeSiteId}
+      AND spa.business_id = ${session.activeSiteId}
       AND pa.asset_type = 'meta_ad_account'
       AND spa.is_primary = true
   `;
 
   // Upsert: assign the chosen account to this site as primary
   await sql`
-    INSERT INTO site_platform_assets (site_id, platform_asset_id, is_primary)
+    INSERT INTO business_platform_assets (business_id, platform_asset_id, is_primary)
     VALUES (${session.activeSiteId}, ${platformAssetId}, true)
-    ON CONFLICT (site_id, platform_asset_id)
+    ON CONFLICT (business_id, platform_asset_id)
     DO UPDATE SET is_primary = true
   `;
 

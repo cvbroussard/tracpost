@@ -37,13 +37,13 @@ export async function buildTranscriptionPromptForSite(siteId: string): Promise<s
   if (!siteId) return "";
 
   const [brandRows, projectRows, siteRow, categoryRows] = await Promise.all([
-    sql`SELECT name FROM brands WHERE site_id = ${siteId} ORDER BY name`,
-    sql`SELECT name FROM projects WHERE site_id = ${siteId} ORDER BY name`,
+    sql`SELECT name FROM brands WHERE business_id = ${siteId} ORDER BY name`,
+    sql`SELECT name FROM projects WHERE business_id = ${siteId} ORDER BY name`,
     sql`SELECT gbp_profile->'serviceArea'->'places'->'placeInfos' AS place_infos
-        FROM sites WHERE id = ${siteId}`,
-    sql`SELECT gc.name FROM site_gbp_categories sgc
+        FROM businesses WHERE id = ${siteId}`,
+    sql`SELECT gc.name FROM business_gbp_categories sgc
         JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-        WHERE sgc.site_id = ${siteId}
+        WHERE sgc.business_id = ${siteId}
         ORDER BY sgc.is_primary DESC, gc.name`,
   ]);
 
@@ -140,13 +140,13 @@ export async function normalizeTranscriptCase(text: string, siteId: string): Pro
   if (!text || !siteId) return text;
 
   const [brandRows, projectRows, siteRow, categoryRows] = await Promise.all([
-    sql`SELECT name FROM brands WHERE site_id = ${siteId}`,
-    sql`SELECT name FROM projects WHERE site_id = ${siteId}`,
+    sql`SELECT name FROM brands WHERE business_id = ${siteId}`,
+    sql`SELECT name FROM projects WHERE business_id = ${siteId}`,
     sql`SELECT gbp_profile->'serviceArea'->'places'->'placeInfos' AS place_infos
-        FROM sites WHERE id = ${siteId}`,
-    sql`SELECT gc.name FROM site_gbp_categories sgc
+        FROM businesses WHERE id = ${siteId}`,
+    sql`SELECT gc.name FROM business_gbp_categories sgc
         JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-        WHERE sgc.site_id = ${siteId}`,
+        WHERE sgc.business_id = ${siteId}`,
   ]);
 
   const brands = brandRows.map((r) => r.name as string).filter(Boolean);

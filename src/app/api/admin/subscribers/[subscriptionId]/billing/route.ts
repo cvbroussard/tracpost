@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const { subscriptionId } = await params;
 
   const [sub] = await sql`
-    SELECT plan, metadata FROM subscriptions WHERE id = ${subscriptionId}
+    SELECT plan, metadata FROM accounts WHERE id = ${subscriptionId}
   `;
   if (!sub) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const { action } = body;
 
   const [sub] = await sql`
-    SELECT metadata FROM subscriptions WHERE id = ${subscriptionId}
+    SELECT metadata FROM accounts WHERE id = ${subscriptionId}
   `;
   if (!sub) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const newPlanName = String(target.name).toLowerCase();
     await sql`
-      UPDATE subscriptions
+      UPDATE accounts
       SET plan = ${newPlanName}, plan_id = ${target.id as string}, updated_at = NOW()
       WHERE id = ${subscriptionId}
     `;
@@ -202,7 +202,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       const { priceToPlan } = await import("@/lib/stripe");
       const newPlan = await priceToPlan(price_id);
       if (newPlan) {
-        await sql`UPDATE subscriptions SET plan = ${newPlan}, updated_at = NOW() WHERE id = ${subscriptionId}`;
+        await sql`UPDATE accounts SET plan = ${newPlan}, updated_at = NOW() WHERE id = ${subscriptionId}`;
       }
 
       return NextResponse.json({ success: true, plan: newPlan });

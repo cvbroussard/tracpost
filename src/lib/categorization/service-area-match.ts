@@ -77,7 +77,7 @@ export async function matchServiceAreas(
   // by place_id.
   const [site] = await sql`
     SELECT gbp_profile->'serviceArea'->'places'->'placeInfos' AS place_infos
-    FROM sites
+    FROM businesses
     WHERE id = ${siteId}
   `;
   const placeInfos = (site?.place_infos || []) as Array<{ placeId?: string; placeName?: string }>;
@@ -88,7 +88,7 @@ export async function matchServiceAreas(
 
   const canonicalRows = await sql`
     SELECT id, name, place_id, kind, viewport
-    FROM service_areas_canonical
+    FROM service_areas
     WHERE place_id = ANY(${placeIds}::text[])
   `;
   const canonicalByPlaceId = new Map(canonicalRows.map((r) => [r.place_id as string, r]));

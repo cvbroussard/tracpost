@@ -94,15 +94,15 @@ export async function generateCaption({ postId }: CaptionRequest): Promise<Capti
   // Fetch post + asset + site in one chain
   const [post] = await sql`
     SELECT sp.id, sp.account_id, sp.content_pillar, sp.media_type, sp.slot_id,
-           sa.platform, sa.account_name, ssl.site_id,
+           sa.platform, sa.account_name, ssl.business_id,
            s.name AS site_name, s.url AS site_url, s.brand_voice,
            s.brand_playbook,
            ma.context_note, ma.transcription, ma.ai_analysis, ma.metadata AS asset_metadata,
            ma.media_type AS asset_media_type, ma.source AS asset_source
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    JOIN sites s ON ssl.site_id = s.id
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    JOIN businesses s ON ssl.business_id = s.id
     LEFT JOIN media_assets ma ON sp.source_asset_id = ma.id
     WHERE sp.id = ${postId}
   `;
@@ -139,7 +139,7 @@ export async function generateCaption({ postId }: CaptionRequest): Promise<Capti
   if (playbook && post.site_id) {
     const [hook] = await sql`
       SELECT text FROM hook_bank
-      WHERE site_id = ${post.site_id}
+      WHERE business_id = ${post.site_id}
       ORDER BY CASE rating WHEN 'loved' THEN 0 ELSE 1 END, used_count ASC, RANDOM()
       LIMIT 1
     `;
@@ -147,7 +147,7 @@ export async function generateCaption({ postId }: CaptionRequest): Promise<Capti
       hookText = hook.text;
       await sql`
         UPDATE hook_bank SET used_count = used_count + 1, last_used_at = NOW()
-        WHERE site_id = ${post.site_id} AND text = ${hook.text}
+        WHERE business_id = ${post.site_id} AND text = ${hook.text}
       `;
     }
   }
@@ -452,7 +452,7 @@ export async function composeAnchorCaption(opts: {
 
   const [site] = await sql`
     SELECT name, url, brand_voice, brand_playbook
-    FROM sites
+    FROM businesses
     WHERE id = ${siteId}
   `;
   if (!site) throw new Error(`Site ${siteId} not found`);
@@ -578,8 +578,8 @@ export async function generateMissingCaptions(siteId: string): Promise<number> {
     SELECT sp.id
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
       AND sp.status = 'scheduled'
       AND sp.caption IS NULL
     ORDER BY sp.scheduled_at ASC

@@ -18,7 +18,7 @@ export async function fillSlots(siteId: string): Promise<number> {
   // derivation).
   const [site] = await sql`
     SELECT autopilot_config, pillar_config
-    FROM sites
+    FROM businesses
     WHERE id = ${siteId} AND autopilot_enabled = true
   `;
 
@@ -31,7 +31,7 @@ export async function fillSlots(siteId: string): Promise<number> {
   const openSlots = await sql`
     SELECT id, account_id, platform, content_pillar, scheduled_at
     FROM publishing_slots
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND status = 'open'
       AND scheduled_at > NOW()
     ORDER BY scheduled_at ASC
@@ -61,7 +61,7 @@ export async function fillSlots(siteId: string): Promise<number> {
       const candidates = await sql`
         SELECT id, storage_url, media_type, quality_score, content_tags, ai_analysis, variants
         FROM media_assets
-        WHERE site_id = ${siteId}
+        WHERE business_id = ${siteId}
           AND processing_stage = ${status}
           AND quality_score >= ${config.min_quality || 0.4}
           AND ${slot.platform} = ANY(platform_fit)

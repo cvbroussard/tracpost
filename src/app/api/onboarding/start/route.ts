@@ -89,8 +89,8 @@ export async function POST(req: NextRequest) {
   // ── Check for existing subscription for this email ────────────────
   const [existing] = await sql`
     SELECT s.id, s.metadata
-    FROM subscriptions s
-    JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
+    FROM accounts s
+    JOIN users u ON u.billing_account_id = s.id AND u.role = 'owner'
     WHERE u.email = ${emailClean} AND s.is_active = true
     LIMIT 1
   `;
@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
   const isTest = emailClean.endsWith("@tracpost.com");
 
   const [dbSub] = await sql`
-    INSERT INTO subscriptions (api_key_hash, plan, is_active, is_test, metadata)
+    INSERT INTO accounts (api_key_hash, plan, is_active, is_test, metadata)
     VALUES (
       ${apiKeyHash},
       ${plan},
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
   `;
 
   await sql`
-    INSERT INTO users (subscription_id, name, email, phone, role, is_active)
+    INSERT INTO users (billing_account_id, name, email, phone, role, is_active)
     VALUES (
       ${dbSub.id},
       ${nameClean},

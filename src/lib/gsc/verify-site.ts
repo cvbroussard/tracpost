@@ -109,7 +109,7 @@ export async function autoVerifyDomain(
   const metaContent = contentMatch ? contentMatch[1] : tokenResult.token;
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET gsc_verification_token = ${metaContent}
     WHERE id = ${siteId}
   `;
@@ -122,7 +122,7 @@ export async function autoVerifyDomain(
 
   if (verified) {
     const property = `https://${customDomain}/`;
-    await sql`UPDATE sites SET gsc_property = ${property} WHERE id = ${siteId}`;
+    await sql`UPDATE businesses SET gsc_property = ${property} WHERE id = ${siteId}`;
     return { status: "verified", token: metaContent, property };
   }
 

@@ -17,8 +17,8 @@ export async function PATCH(
 
   const [project] = await sql`
     SELECT p.id FROM projects p
-    JOIN sites s ON p.site_id = s.id
-    WHERE p.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON p.business_id = s.id
+    WHERE p.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -98,8 +98,8 @@ export async function DELETE(
 
   await sql`
     DELETE FROM projects p
-    USING sites s
-    WHERE p.site_id = s.id AND p.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    USING businesses s
+    WHERE p.business_id = s.id AND p.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
 
   return NextResponse.json({ success: true });

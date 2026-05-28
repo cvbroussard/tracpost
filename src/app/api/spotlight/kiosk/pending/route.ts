@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const [session] = await sql`
     SELECT id, session_code, photo_url, staff_note, created_at
     FROM spotlight_sessions
-    WHERE site_id = ${kiosk.siteId}
+    WHERE business_id = ${kiosk.siteId}
       AND status = 'waiting'
       AND expires_at > NOW()
     ORDER BY created_at DESC
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   // Log analytics
   await sql`
-    INSERT INTO spotlight_analytics (session_id, site_id, event)
+    INSERT INTO spotlight_analytics (session_id, business_id, event)
     VALUES (${session.id}, ${kiosk.siteId}, 'kiosk_viewed')
   `;
 

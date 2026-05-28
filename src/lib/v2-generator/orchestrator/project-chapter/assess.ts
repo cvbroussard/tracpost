@@ -15,13 +15,13 @@ export async function assessChapters(siteId: string): Promise<ChapterSiteAssessm
            pc.sequence_index, pc.trigger_kind, pc.status
     FROM project_chapters pc
     JOIN projects_v2 pv ON pv.id = pc.project_id
-    WHERE pv.site_id = ${siteId}
+    WHERE pv.business_id = ${siteId}
       AND pc.status = 'ready'
     ORDER BY pc.project_id, pc.sequence_index
   `;
 
   const [count] = await sql`
-    SELECT COUNT(*)::int AS n FROM projects_v2 WHERE site_id = ${siteId}
+    SELECT COUNT(*)::int AS n FROM projects_v2 WHERE business_id = ${siteId}
   `;
 
   return {

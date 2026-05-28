@@ -23,7 +23,7 @@ export async function POST(
   const body = await req.json().catch(() => ({}));
   const action = body.action;
 
-  const [site] = await sql`SELECT id FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT id FROM businesses WHERE id = ${siteId}`;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
@@ -46,8 +46,8 @@ export async function POST(
     const [gbpAccount] = await sql`
       SELECT sa.account_id, sa.access_token_encrypted, sa.metadata
       FROM social_accounts sa
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
       LIMIT 1
     `;
 
@@ -64,7 +64,7 @@ export async function POST(
 
     // pillar_config loaded once for derive-pillar-from-tags
     // (LOCKED 2026-05-09 — pillars not stored on assets).
-    const [siteRowForPillars] = await sql`SELECT pillar_config FROM sites WHERE id = ${siteId}`;
+    const [siteRowForPillars] = await sql`SELECT pillar_config FROM businesses WHERE id = ${siteId}`;
     const _pillarConfig = (siteRowForPillars?.pillar_config || []) as PillarConfig;
 
     const assets = await sql`
@@ -93,7 +93,7 @@ export async function POST(
 
       if (result) {
         await sql`
-          INSERT INTO gbp_photo_sync (site_id, media_asset_id, gbp_media_name, gbp_media_url, source_url, category, media_type)
+          INSERT INTO gbp_photo_sync (business_id, media_asset_id, gbp_media_name, gbp_media_url, source_url, category, media_type)
           VALUES (${siteId}, ${asset.id}, ${result.name}, ${result.googleUrl || null}, ${asset.storage_url}, ${category}, 'PHOTO')
           ON CONFLICT DO NOTHING
         `;
@@ -113,7 +113,7 @@ export async function POST(
     // Get the GBP media name to delete from Google
     const [syncRecord] = await sql`
       SELECT gbp_media_name FROM gbp_photo_sync
-      WHERE site_id = ${siteId} AND media_asset_id = ${asset_id}
+      WHERE business_id = ${siteId} AND media_asset_id = ${asset_id}
     `;
 
     if (syncRecord?.gbp_media_name) {
@@ -124,8 +124,8 @@ export async function POST(
         const [gbpAccount] = await sql`
           SELECT sa.access_token_encrypted
           FROM social_accounts sa
-          JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-          WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
+          JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+          WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
           LIMIT 1
         `;
 
@@ -139,7 +139,7 @@ export async function POST(
     }
 
     // Remove sync record regardless
-    await sql`DELETE FROM gbp_photo_sync WHERE site_id = ${siteId} AND media_asset_id = ${asset_id}`;
+    await sql`DELETE FROM gbp_photo_sync WHERE business_id = ${siteId} AND media_asset_id = ${asset_id}`;
 
     return NextResponse.json({ success: true });
   }
@@ -162,8 +162,8 @@ export async function POST(
     const [gbpAccount] = await sql`
       SELECT sa.access_token_encrypted
       FROM social_accounts sa
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
       LIMIT 1
     `;
 
@@ -175,7 +175,7 @@ export async function POST(
     const deleted = await deleteGbpPhoto(accessToken, gbpMediaName);
 
     if (deleted) {
-      await sql`DELETE FROM gbp_photo_sync WHERE gbp_media_name = ${gbpMediaName} AND site_id = ${siteId}`;
+      await sql`DELETE FROM gbp_photo_sync WHERE gbp_media_name = ${gbpMediaName} AND business_id = ${siteId}`;
     }
 
     return NextResponse.json({ success: deleted });
@@ -193,8 +193,8 @@ export async function POST(
     const [gbpAccount] = await sql`
       SELECT sa.account_id, sa.access_token_encrypted, sa.metadata
       FROM social_accounts sa
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
       LIMIT 1
     `;
 

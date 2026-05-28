@@ -21,16 +21,16 @@ export default async function GoogleHubPage() {
       ROUND(AVG(rating)::numeric, 1)::float AS avg_rating,
       COUNT(*) FILTER (WHERE reviewed_at > NOW() - INTERVAL '30 days')::int AS recent
     FROM inbox_reviews
-    WHERE site_id = ${siteId}
-      AND subscription_id = ${session.subscriptionId}
+    WHERE business_id = ${siteId}
+      AND billing_account_id = ${session.subscriptionId}
       AND is_hidden = false
   `;
 
   const [gbpAccount] = await sql`
     SELECT sa.account_name, sa.status, sa.metadata
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp'
     LIMIT 1
   `;
 
@@ -41,8 +41,8 @@ export default async function GoogleHubPage() {
       COUNT(*) FILTER (WHERE sp.published_at > NOW() - INTERVAL '30 days')::int AS recent
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp'
   `;
 
   return (

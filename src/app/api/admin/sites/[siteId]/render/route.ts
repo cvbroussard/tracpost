@@ -27,7 +27,7 @@ export async function POST(
   const body = await req.json().catch(() => ({}));
   const action = body.action || "render_pending";
 
-  const [site] = await sql`SELECT id FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT id FROM businesses WHERE id = ${siteId}`;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
@@ -43,7 +43,7 @@ export async function POST(
       await sql`
         UPDATE media_assets
         SET render_status = 'pending', variants = '{}'::jsonb
-        WHERE id = ${assetId} AND site_id = ${siteId}
+        WHERE id = ${assetId} AND business_id = ${siteId}
       `;
     }
 

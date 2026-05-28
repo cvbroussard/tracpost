@@ -69,7 +69,7 @@ export default async function MediaPage({ searchParams }: Props) {
                ma.render_status, ma.archived_at, ma.briefable_at, ma.scene_types,
                (SELECT COUNT(*)::int FROM jsonb_object_keys(ma.variants)) AS variant_count
         FROM media_assets ma
-        WHERE ma.site_id = ${siteId}
+        WHERE ma.business_id = ${siteId}
           AND (CASE WHEN ${showArchived} THEN ma.archived_at IS NOT NULL ELSE ma.archived_at IS NULL END)
           AND (${projectId}::uuid IS NULL OR EXISTS (
             SELECT 1 FROM asset_projects ap
@@ -87,7 +87,7 @@ export default async function MediaPage({ searchParams }: Props) {
                ma.render_status, ma.archived_at, ma.briefable_at, ma.scene_types,
                (SELECT COUNT(*)::int FROM jsonb_object_keys(ma.variants)) AS variant_count
         FROM media_assets ma
-        WHERE ma.site_id = ${siteId}
+        WHERE ma.business_id = ${siteId}
           AND (CASE WHEN ${showArchived} THEN ma.archived_at IS NOT NULL ELSE ma.archived_at IS NULL END)
           AND (${projectId}::uuid IS NULL OR EXISTS (
             SELECT 1 FROM asset_projects ap
@@ -105,7 +105,7 @@ export default async function MediaPage({ searchParams }: Props) {
                ma.render_status, ma.archived_at, ma.briefable_at, ma.scene_types,
                (SELECT COUNT(*)::int FROM jsonb_object_keys(ma.variants)) AS variant_count
         FROM media_assets ma
-        WHERE ma.site_id = ${siteId}
+        WHERE ma.business_id = ${siteId}
           AND (CASE WHEN ${showArchived} THEN ma.archived_at IS NOT NULL ELSE ma.archived_at IS NULL END)
           AND (${projectId}::uuid IS NULL OR EXISTS (
             SELECT 1 FROM asset_projects ap
@@ -122,7 +122,7 @@ export default async function MediaPage({ searchParams }: Props) {
                ma.render_status, ma.archived_at, ma.briefable_at, ma.scene_types,
                (SELECT COUNT(*)::int FROM jsonb_object_keys(ma.variants)) AS variant_count
         FROM media_assets ma
-        WHERE ma.site_id = ${siteId}
+        WHERE ma.business_id = ${siteId}
           AND (CASE WHEN ${showArchived} THEN ma.archived_at IS NOT NULL ELSE ma.archived_at IS NULL END)
           AND (${projectId}::uuid IS NULL OR EXISTS (
             SELECT 1 FROM asset_projects ap
@@ -200,38 +200,38 @@ export default async function MediaPage({ searchParams }: Props) {
       COUNT(*) FILTER (WHERE source = 'ai_generated')::int AS ai_generated,
       COUNT(*) FILTER (WHERE processing_stage = 'onboarded' AND archived_at IS NULL)::int AS pending_briefing,
       COUNT(*) FILTER (WHERE archived_at IS NOT NULL)::int AS archived
-    FROM media_assets WHERE site_id = ${siteId}
+    FROM media_assets WHERE business_id = ${siteId}
   `;
 
   const [siteData, allBrands, allProjects, allServices, allBranches, assetBrandRows, assetProjectRows, assetServiceRows, assetBranchRows] = await Promise.all([
-    sql`SELECT content_pillars, pillar_config, brand_label, project_label, persona_label, branch_label, service_label FROM sites WHERE id = ${siteId}`,
-    sql`SELECT id, name, slug, url FROM brands WHERE site_id = ${siteId} ORDER BY name ASC`,
-    sql`SELECT id, name, slug FROM projects WHERE site_id = ${siteId} ORDER BY name ASC`,
-    sql`SELECT id, name, slug FROM services WHERE site_id = ${siteId} ORDER BY name ASC`,
-    sql`SELECT id, name, slug FROM branches WHERE site_id = ${siteId} ORDER BY name ASC`,
+    sql`SELECT content_pillars, pillar_config, brand_label, project_label, persona_label, branch_label, service_label FROM businesses WHERE id = ${siteId}`,
+    sql`SELECT id, name, slug, url FROM brands WHERE business_id = ${siteId} ORDER BY name ASC`,
+    sql`SELECT id, name, slug FROM projects WHERE business_id = ${siteId} ORDER BY name ASC`,
+    sql`SELECT id, name, slug FROM services WHERE business_id = ${siteId} ORDER BY name ASC`,
+    sql`SELECT id, name, slug FROM locations WHERE business_id = ${siteId} ORDER BY name ASC`,
     sql`
       SELECT ab.asset_id, ab.brand_id
       FROM asset_brands ab
       JOIN media_assets ma ON ma.id = ab.asset_id
-      WHERE ma.site_id = ${siteId}
+      WHERE ma.business_id = ${siteId}
     `,
     sql`
       SELECT ap.asset_id, ap.project_id
       FROM asset_projects ap
       JOIN media_assets ma ON ma.id = ap.asset_id
-      WHERE ma.site_id = ${siteId}
+      WHERE ma.business_id = ${siteId}
     `,
     sql`
       SELECT asv.asset_id, asv.service_id
       FROM asset_services asv
       JOIN media_assets ma ON ma.id = asv.asset_id
-      WHERE ma.site_id = ${siteId}
+      WHERE ma.business_id = ${siteId}
     `,
     sql`
-      SELECT ab.asset_id, ab.branch_id
-      FROM asset_branches ab
+      SELECT ab.asset_id, ab.location_id
+      FROM asset_locations ab
       JOIN media_assets ma ON ma.id = ab.asset_id
-      WHERE ma.site_id = ${siteId}
+      WHERE ma.business_id = ${siteId}
     `,
   ]);
   // Personas retired 2026-05-19.
@@ -265,7 +265,7 @@ export default async function MediaPage({ searchParams }: Props) {
   for (const row of assetBranchRows) {
     const aid = row.asset_id as string;
     if (!assetBranchMap[aid]) assetBranchMap[aid] = [];
-    assetBranchMap[aid].push(row.branch_id as string);
+    assetBranchMap[aid].push(row.location_id as string);
   }
 
   const pillars = (siteData[0]?.content_pillars || []) as string[];

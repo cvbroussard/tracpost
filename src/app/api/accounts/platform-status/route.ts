@@ -27,13 +27,13 @@ export async function GET(req: NextRequest) {
     SELECT pa.id AS platform_asset_id, pa.asset_id, pa.asset_name, pa.social_account_id,
            sa.token_expires_at, sa.status AS account_status,
            sa.account_name AS connected_user_name
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${siteId}
+    WHERE spa.business_id = ${siteId}
       AND pa.platform = ${platform}
       AND spa.is_primary = true
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
     LIMIT 1
   `;
 
@@ -55,11 +55,11 @@ export async function GET(req: NextRequest) {
       FROM platform_assets pa
       JOIN social_accounts sa ON sa.id = pa.social_account_id
       WHERE pa.platform = ${platform}
-        AND sa.subscription_id = ${session.subscriptionId}
+        AND sa.billing_account_id = ${session.subscriptionId}
         AND NOT EXISTS (
-          SELECT 1 FROM site_platform_assets spa_other
+          SELECT 1 FROM business_platform_assets spa_other
           WHERE spa_other.platform_asset_id = pa.id
-            AND spa_other.site_id != ${siteId}
+            AND spa_other.business_id != ${siteId}
         )
       ORDER BY pa.asset_name
     `;
@@ -91,10 +91,10 @@ export async function GET(req: NextRequest) {
            (SELECT COUNT(*)::int FROM social_posts sp WHERE sp.account_id = sa.id AND sp.status = 'published') AS published,
            (SELECT COUNT(*)::int FROM social_posts sp WHERE sp.account_id = sa.id AND sp.status = 'scheduled') AS scheduled
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
       AND sa.platform = ${platform}
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
     ORDER BY sa.created_at DESC
     LIMIT 1
   `;
@@ -122,11 +122,11 @@ export async function GET(req: NextRequest) {
     FROM platform_assets pa
     JOIN social_accounts sa ON sa.id = pa.social_account_id
     WHERE pa.platform = ${platform}
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
       AND NOT EXISTS (
-        SELECT 1 FROM site_platform_assets spa_other
+        SELECT 1 FROM business_platform_assets spa_other
         WHERE spa_other.platform_asset_id = pa.id
-          AND spa_other.site_id != ${siteId}
+          AND spa_other.business_id != ${siteId}
       )
     LIMIT 1
   `;
@@ -140,11 +140,11 @@ export async function GET(req: NextRequest) {
       FROM platform_assets pa
       JOIN social_accounts sa ON sa.id = pa.social_account_id
       WHERE pa.platform = ${platform}
-        AND sa.subscription_id = ${session.subscriptionId}
+        AND sa.billing_account_id = ${session.subscriptionId}
         AND NOT EXISTS (
-          SELECT 1 FROM site_platform_assets spa_other
+          SELECT 1 FROM business_platform_assets spa_other
           WHERE spa_other.platform_asset_id = pa.id
-            AND spa_other.site_id != ${siteId}
+            AND spa_other.business_id != ${siteId}
         )
       ORDER BY pa.asset_name
     `;

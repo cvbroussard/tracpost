@@ -26,7 +26,7 @@ export async function sendPushNotification(
 ): Promise<void> {
   const tokens = await sql`
     SELECT id, token FROM push_tokens
-    WHERE subscription_id = ${subscriptionId}
+    WHERE billing_account_id = ${subscriptionId}
   `;
 
   if (tokens.length === 0) return;

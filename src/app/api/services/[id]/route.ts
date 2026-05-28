@@ -18,8 +18,8 @@ export async function PATCH(
 
   const [service] = await sql`
     SELECT s.id FROM services s
-    JOIN sites si ON s.site_id = si.id
-    WHERE s.id = ${id} AND si.subscription_id = ${auth.subscriptionId}
+    JOIN businesses si ON s.business_id = si.id
+    WHERE s.id = ${id} AND si.billing_account_id = ${auth.subscriptionId}
   `;
   if (!service) {
     return NextResponse.json({ error: "Service not found" }, { status: 404 });
@@ -76,8 +76,8 @@ export async function DELETE(
 
   await sql`
     DELETE FROM services s
-    USING sites si
-    WHERE s.site_id = si.id AND s.id = ${id} AND si.subscription_id = ${auth.subscriptionId}
+    USING businesses si
+    WHERE s.business_id = si.id AND s.id = ${id} AND si.billing_account_id = ${auth.subscriptionId}
   `;
 
   return NextResponse.json({ success: true });

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   // Verify ownership
   const [site] = await sql`
-    SELECT id FROM sites WHERE id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       SELECT id, slug, title, excerpt, og_image_url, tags,
              content_pillar, status, published_at, created_at
       FROM blog_posts
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY created_at DESC
       LIMIT 50
     `,
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       SELECT blog_enabled, subdomain, custom_domain, blog_title,
              blog_description, theme
       FROM blog_settings
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
     `,
   ]);
 
@@ -71,21 +71,21 @@ export async function POST(req: NextRequest) {
 
     // Verify ownership
     const [site] = await sql`
-      SELECT id FROM sites WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+      SELECT id FROM businesses WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
     `;
     if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
     // Check if this is a new enable (was disabled or didn't exist)
     const [prev] = await sql`
-      SELECT blog_enabled FROM blog_settings WHERE site_id = ${site_id}
+      SELECT blog_enabled FROM blog_settings WHERE business_id = ${site_id}
     `;
     const wasEnabled = prev?.blog_enabled === true;
 
     // Upsert blog_settings
     await sql`
-      INSERT INTO blog_settings (site_id, blog_enabled, blog_title, blog_description, subdomain, updated_at)
+      INSERT INTO blog_settings (business_id, blog_enabled, blog_title, blog_description, subdomain, updated_at)
       VALUES (${site_id}, ${blog_enabled ?? false}, ${blog_title || null}, ${blog_description || null}, ${subdomain || null}, NOW())
-      ON CONFLICT (site_id)
+      ON CONFLICT (business_id)
       DO UPDATE SET
         blog_enabled = COALESCE(${blog_enabled}, blog_settings.blog_enabled),
         blog_title = COALESCE(${blog_title}, blog_settings.blog_title),
@@ -112,10 +112,10 @@ export async function POST(req: NextRequest) {
 
     // Verify ownership via site
     const [post] = await sql`
-      SELECT bp.id, bp.site_id
+      SELECT bp.id, bp.business_id
       FROM blog_posts bp
-      JOIN sites s ON s.id = bp.site_id
-      WHERE bp.id = ${post_id} AND s.subscription_id = ${auth.subscriptionId}
+      JOIN businesses s ON s.id = bp.business_id
+      WHERE bp.id = ${post_id} AND s.billing_account_id = ${auth.subscriptionId}
     `;
     if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
 
@@ -148,8 +148,8 @@ export async function POST(req: NextRequest) {
     const [post] = await sql`
       SELECT bp.id
       FROM blog_posts bp
-      JOIN sites s ON s.id = bp.site_id
-      WHERE bp.id = ${post_id} AND s.subscription_id = ${auth.subscriptionId}
+      JOIN businesses s ON s.id = bp.business_id
+      WHERE bp.id = ${post_id} AND s.billing_account_id = ${auth.subscriptionId}
     `;
     if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
 

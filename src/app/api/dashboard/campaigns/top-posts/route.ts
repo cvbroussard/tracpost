@@ -38,22 +38,22 @@ export async function GET(_req: NextRequest) {
 
   const pages = await sql`
     SELECT pa.asset_id AS page_id, pa.asset_name AS page_name, pa.metadata
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${session.activeSiteId}
+    WHERE spa.business_id = ${session.activeSiteId}
       AND pa.asset_type = 'facebook_page'
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
   `;
 
   const igAccounts = await sql`
     SELECT pa.asset_id AS ig_user_id, pa.asset_name AS ig_username, pa.metadata
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${session.activeSiteId}
+    WHERE spa.business_id = ${session.activeSiteId}
       AND pa.asset_type = 'instagram_account'
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
   `;
 
   if (pages.length === 0 && igAccounts.length === 0) {

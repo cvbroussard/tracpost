@@ -25,7 +25,7 @@ export async function POST(
   // Verify user belongs to this subscription
   const [member] = await sql`
     SELECT id FROM users
-    WHERE id = ${id} AND subscription_id = ${auth.subscriptionId} AND is_active = true
+    WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId} AND is_active = true
   `;
   if (!member) {
     return NextResponse.json({ error: "Member not found" }, { status: 404 });

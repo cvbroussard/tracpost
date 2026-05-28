@@ -23,7 +23,7 @@ export async function PATCH(
 
   const [member] = await sql`
     SELECT id FROM users
-    WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}
+    WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!member) {
     return NextResponse.json({ error: "Member not found" }, { status: 404 });
@@ -53,7 +53,7 @@ export async function PATCH(
   }
 
   if (body.siteId !== undefined) {
-    await sql`UPDATE users SET site_id = ${body.siteId || null} WHERE id = ${id}`;
+    await sql`UPDATE users SET business_id = ${body.siteId || null} WHERE id = ${id}`;
   }
 
   if (body.role !== undefined && ["member", "capture", "reviewer"].includes(body.role)) {
@@ -94,7 +94,7 @@ export async function POST(
 
   const [member] = await sql`
     SELECT id, email, phone, name, role FROM users
-    WHERE id = ${id} AND subscription_id = ${auth.subscriptionId} AND is_active = true
+    WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId} AND is_active = true
   `;
   if (!member) {
     return NextResponse.json({ error: "Member not found" }, { status: 404 });
@@ -146,7 +146,7 @@ export async function DELETE(
   await sql`
     UPDATE users
     SET is_active = false, session_token_hash = NULL
-    WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}
+    WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}
   `;
 
   return NextResponse.json({ success: true });

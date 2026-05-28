@@ -31,7 +31,7 @@ export interface HomePageData {
 export async function loadHomePage(siteId: string): Promise<HomePageData> {
   const [site] = await sql`
     SELECT website_copy, hero_asset_id, business_type, location
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
 
   if (!site) {
@@ -49,7 +49,7 @@ export async function loadHomePage(siteId: string): Promise<HomePageData> {
   const galleryAssets = await sql`
     SELECT storage_url, context_note
     FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND processing_stage = 'briefed'
       AND media_type LIKE 'image%'
       ${heroAssetId ? sql`AND id != ${heroAssetId}` : sql``}
@@ -66,7 +66,7 @@ export async function loadHomePage(siteId: string): Promise<HomePageData> {
   const articles = await sql`
     SELECT title, slug, excerpt, og_image_url, published_at
     FROM blog_posts
-    WHERE site_id = ${siteId} AND status = 'published'
+    WHERE business_id = ${siteId} AND status = 'published'
     ORDER BY published_at DESC
     LIMIT 3
   `;
@@ -118,7 +118,7 @@ async function resolveHeroImage(
   if (heroAssetId) {
     const [pinned] = await sql`
       SELECT storage_url FROM media_assets
-      WHERE id = ${heroAssetId} AND site_id = ${siteId}
+      WHERE id = ${heroAssetId} AND business_id = ${siteId}
     `;
     if (pinned?.storage_url) return String(pinned.storage_url);
     // Fall through if the pinned asset was deleted (FK is ON DELETE SET NULL)
@@ -126,7 +126,7 @@ async function resolveHeroImage(
 
   const [top] = await sql`
     SELECT storage_url FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND processing_stage = 'briefed'
       AND media_type LIKE 'image%'
     ORDER BY quality_score DESC NULLS LAST

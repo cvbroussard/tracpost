@@ -41,16 +41,16 @@ export async function POST(req: NextRequest) {
 
   // Verify ownership
   const [site] = await sql`
-    SELECT id FROM sites WHERE id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
 
   const pending = await sql`
-    SELECT id, site_id, storage_url, media_type, metadata
+    SELECT id, business_id, storage_url, media_type, metadata
     FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND processing_stage = 'onboarded'
       AND ai_analysis IS NULL
     ORDER BY created_at ASC

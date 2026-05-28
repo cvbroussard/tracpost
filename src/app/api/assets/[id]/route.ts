@@ -30,10 +30,10 @@ export async function PATCH(
 
     // Verify ownership via site
     const [asset] = await sql`
-      SELECT ma.id, ma.site_id, ma.metadata
+      SELECT ma.id, ma.business_id, ma.metadata
       FROM media_assets ma
-      JOIN sites s ON ma.site_id = s.id
-      WHERE ma.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+      JOIN businesses s ON ma.business_id = s.id
+      WHERE ma.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
     `;
 
     if (!asset) {
@@ -77,7 +77,7 @@ export async function PATCH(
       `;
       try {
         await sql`
-          INSERT INTO subscriber_actions (site_id, action_type, target_type, target_id, payload)
+          INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
           VALUES (${asset.site_id}, 'restore', 'media_asset', ${id}, '{}'::jsonb)
         `;
       } catch { /* non-fatal */ }
@@ -164,9 +164,9 @@ export async function PATCH(
     // but ignored — personas retired 2026-05-19.
     void persona_ids;
     if (Array.isArray(branch_ids)) {
-      await sql`DELETE FROM asset_branches WHERE asset_id = ${id}`;
+      await sql`DELETE FROM asset_locations WHERE asset_id = ${id}`;
       for (const branchId of branch_ids) {
-        await sql`INSERT INTO asset_branches (asset_id, branch_id) VALUES (${id}, ${branchId}) ON CONFLICT DO NOTHING`;
+        await sql`INSERT INTO asset_locations (asset_id, location_id) VALUES (${id}, ${branchId}) ON CONFLICT DO NOTHING`;
       }
     }
     if (Array.isArray(service_ids)) {
@@ -178,7 +178,7 @@ export async function PATCH(
 
     // Log the edit
     await sql`
-      INSERT INTO subscriber_actions (site_id, action_type, target_type, target_id, payload)
+      INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
       VALUES (${asset.site_id}, 'edit', 'media_asset', ${id}, ${JSON.stringify({
         context_note: context_note !== undefined ? "updated" : undefined,
         pillar: pillar !== undefined ? pillar : undefined,
@@ -255,8 +255,8 @@ export async function DELETE(
   const [asset] = await sql`
     SELECT ma.id
     FROM media_assets ma
-    JOIN sites s ON ma.site_id = s.id
-    WHERE ma.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON ma.business_id = s.id
+    WHERE ma.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
 
   if (!asset) {
@@ -273,8 +273,8 @@ export async function DELETE(
   // state changes over time.
   try {
     await sql`
-      INSERT INTO subscriber_actions (site_id, action_type, target_type, target_id, payload)
-      SELECT site_id, 'archive', 'media_asset', ${id}, '{}'::jsonb
+      INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
+      SELECT business_id, 'archive', 'media_asset', ${id}, '{}'::jsonb
       FROM media_assets WHERE id = ${id}
     `;
   } catch { /* non-fatal */ }

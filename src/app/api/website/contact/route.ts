@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT name, business_email FROM sites WHERE id = ${site_id} AND is_active = true
+    SELECT name, business_email FROM businesses WHERE id = ${site_id} AND is_active = true
   `;
   if (!site) {
     return cors(NextResponse.json({ error: "Site not found" }, { status: 404 }));
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
   const [submission] = await sql`
     INSERT INTO contact_submissions (
-      site_id, name, email, phone, message,
+      business_id, name, email, phone, message,
       ip_address, user_agent, referer,
       is_spam, spam_reason
     )

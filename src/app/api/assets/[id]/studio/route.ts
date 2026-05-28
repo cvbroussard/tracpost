@@ -46,11 +46,11 @@ export async function POST(
 
   // Verify ownership. content_pillar dropped from SELECT (LOCKED 2026-05-09).
   const [asset] = await sql`
-    SELECT ma.id, ma.site_id, ma.storage_url, ma.media_type, ma.context_note,
+    SELECT ma.id, ma.business_id, ma.storage_url, ma.media_type, ma.context_note,
            ma.content_tags
     FROM media_assets ma
-    JOIN sites s ON s.id = ma.site_id
-    WHERE ma.id = ${assetId} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON s.id = ma.business_id
+    WHERE ma.id = ${assetId} AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!asset) {
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });
@@ -140,7 +140,7 @@ export async function POST(
         }
         const [inserted] = await sql`
           INSERT INTO media_assets (
-            site_id, storage_url, media_type, context_note,
+            business_id, storage_url, media_type, context_note,
             source, processing_stage, source_asset_id,
             content_tags, metadata
           ) VALUES (
@@ -295,7 +295,7 @@ async function persistGeneratedAsset(opts: {
 
   const [inserted] = await sql`
     INSERT INTO media_assets (
-      site_id, storage_url, media_type, context_note,
+      business_id, storage_url, media_type, context_note,
       source, processing_stage, source_asset_id,
       content_tags, metadata
     ) VALUES (

@@ -52,7 +52,7 @@ export async function GET(
   const [progress] = await sql`
     SELECT last_node_id, path_taken, reached_terminal, completed_at
     FROM coaching_progress
-    WHERE subscription_id = ${submission.subscription_id} AND platform = ${platform}
+    WHERE billing_account_id = ${submission.subscription_id} AND platform = ${platform}
   `;
 
   return NextResponse.json({
@@ -105,7 +105,7 @@ export async function POST(
   if (action === "navigate") {
     await sql`
       INSERT INTO coaching_progress (
-        subscription_id, platform, last_node_id, path_taken, reached_terminal, completed_at
+        billing_account_id, platform, last_node_id, path_taken, reached_terminal, completed_at
       ) VALUES (
         ${submission.subscription_id},
         ${platform},
@@ -114,7 +114,7 @@ export async function POST(
         false,
         NULL
       )
-      ON CONFLICT (subscription_id, platform) DO UPDATE SET
+      ON CONFLICT (billing_account_id, platform) DO UPDATE SET
         last_node_id = EXCLUDED.last_node_id,
         path_taken   = array_append(coaching_progress.path_taken, EXCLUDED.last_node_id),
         updated_at   = NOW()
@@ -123,7 +123,7 @@ export async function POST(
     // complete or abandon: update status fields, leave path_taken alone
     await sql`
       INSERT INTO coaching_progress (
-        subscription_id, platform, last_node_id, path_taken, reached_terminal, completed_at
+        billing_account_id, platform, last_node_id, path_taken, reached_terminal, completed_at
       ) VALUES (
         ${submission.subscription_id},
         ${platform},
@@ -132,7 +132,7 @@ export async function POST(
         ${reachedTerminal},
         ${completedAt}
       )
-      ON CONFLICT (subscription_id, platform) DO UPDATE SET
+      ON CONFLICT (billing_account_id, platform) DO UPDATE SET
         last_node_id     = EXCLUDED.last_node_id,
         reached_terminal = coaching_progress.reached_terminal OR EXCLUDED.reached_terminal,
         completed_at     = COALESCE(coaching_progress.completed_at, EXCLUDED.completed_at),

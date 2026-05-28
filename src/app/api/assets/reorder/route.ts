@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
   // Verify ownership
   const [asset] = await sql`
     SELECT ma.id FROM media_assets ma
-    JOIN sites s ON ma.site_id = s.id
-    WHERE ma.id = ${asset_id} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON ma.business_id = s.id
+    WHERE ma.id = ${asset_id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!asset) {
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });

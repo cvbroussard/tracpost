@@ -22,9 +22,9 @@ export async function POST(req: NextRequest) {
   // If marking primary, unset other primaries for the same site+platform first
   if (is_primary && platform) {
     await sql`
-      UPDATE site_platform_assets
+      UPDATE business_platform_assets
       SET is_primary = false
-      WHERE site_id = ${site_id}
+      WHERE business_id = ${site_id}
         AND platform_asset_id IN (
           SELECT id FROM platform_assets WHERE platform = ${platform}
         )

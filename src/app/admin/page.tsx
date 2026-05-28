@@ -5,8 +5,8 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminOverview() {
   const [subscriptions, sites, accounts, posts, assets] = await Promise.all([
-    sql`SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE is_active) ::int AS active FROM subscriptions`,
-    sql`SELECT COUNT(*)::int AS count FROM sites`,
+    sql`SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE is_active) ::int AS active FROM accounts`,
+    sql`SELECT COUNT(*)::int AS count FROM businesses`,
     sql`SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE status = 'active')::int AS active FROM social_accounts`,
     sql`
       SELECT

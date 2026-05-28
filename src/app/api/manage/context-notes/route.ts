@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
              '{}'
            ) AS detected_vendors
     FROM media_assets ma
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND processing_stage = 'briefed'
       AND (media_type LIKE 'image%' OR media_type = 'image')
     ORDER BY quality_score DESC NULLS LAST

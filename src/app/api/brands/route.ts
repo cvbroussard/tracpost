@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
            b.logo_service_url, b.created_at, ma.storage_url AS hero_url
     FROM brands b
     LEFT JOIN media_assets ma ON ma.id = b.hero_asset_id
-    WHERE b.site_id = ${siteId}
+    WHERE b.business_id = ${siteId}
     ORDER BY b.name ASC
   `;
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT id FROM sites WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
   const [brand] = await sql`
     INSERT INTO brands (
-      site_id, name, slug, url, description, hero_asset_id,
+      business_id, name, slug, url, description, hero_asset_id,
       seed_source, seed_recording_id, seed_asset_id, authorized_at, enrichment_status
     )
     VALUES (
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       ${seedSource}, ${seed_recording_id || null}, ${seed_asset_id || null}, NOW(),
       ${url ? "skipped" : "pending"}
     )
-    ON CONFLICT (site_id, slug) DO UPDATE SET
+    ON CONFLICT (business_id, slug) DO UPDATE SET
       name = ${name.trim()},
       url = COALESCE(brands.url, ${url || null}),
       description = COALESCE(brands.description, ${description || null}),

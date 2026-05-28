@@ -77,7 +77,7 @@ export async function recordEngagementEvent(input: RecordEventInput): Promise<bo
   // 4. Insert the event (idempotent on conflict)
   const inserted = await sql`
     INSERT INTO engagement_events (
-      subscription_id, site_id, platform_asset_id, engaged_person_id,
+      billing_account_id, business_id, platform_asset_id, engaged_person_id,
       platform, event_type, target_type, platform_target_id,
       body, sentiment, sentiment_score, permalink,
       occurred_at, review_status, metadata

@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   const [site] = await sql`
     SELECT brand_label, project_label, persona_label, branch_label, service_label, tag_group_config
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
 
   if (!site) {
@@ -106,7 +106,7 @@ export async function PATCH(req: NextRequest) {
 
   // Verify ownership + load existing config (PATCH semantics for cues)
   const [site] = await sql`
-    SELECT id, tag_group_config FROM sites WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id, tag_group_config FROM businesses WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -191,7 +191,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_label = ${brand_label ?? null},
         project_label = ${project_label ?? null},
         persona_label = ${persona_label ?? null},

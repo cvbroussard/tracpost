@@ -11,13 +11,13 @@ export default async function SocialAccountsPage() {
            (SELECT COUNT(*)::int FROM social_posts sp WHERE sp.account_id = sa.id AND sp.status = 'scheduled') AS scheduled_count,
            (
              SELECT array_agg(s.name)
-             FROM site_social_links ssl
-             JOIN sites s ON ssl.site_id = s.id
+             FROM business_social_links ssl
+             JOIN businesses s ON ssl.business_id = s.id
              WHERE ssl.social_account_id = sa.id
            ) AS linked_sites
     FROM social_accounts sa
-    JOIN subscriptions sub ON sa.subscription_id = sub.id
-    LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
+    JOIN accounts sub ON sa.billing_account_id = sub.id
+    LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
     ORDER BY sa.created_at DESC
   `;
 

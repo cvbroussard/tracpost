@@ -20,7 +20,7 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const [sub] = await sql`SELECT id, is_test FROM subscriptions WHERE id = ${id}`;
+  const [sub] = await sql`SELECT id, is_test FROM accounts WHERE id = ${id}`;
   if (!sub) {
     return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
   }

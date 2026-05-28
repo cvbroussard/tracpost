@@ -44,7 +44,7 @@ export async function wipeSubscription(
 
   // Look up subscription + Stripe references before deleting anything.
   const [sub] = await sql`
-    SELECT id, metadata, is_test FROM subscriptions WHERE id = ${subscriptionId}
+    SELECT id, metadata, is_test FROM accounts WHERE id = ${subscriptionId}
   `;
 
   if (!sub) {
@@ -93,7 +93,7 @@ export async function wipeSubscription(
   try {
     await sql`
       INSERT INTO wipe_log (
-        subscription_id, reason, operator_id, notes,
+        billing_account_id, reason, operator_id, notes,
         stripe_subscription_id, stripe_customer_id,
         stripe_subscription_cancelled, stripe_customer_deleted,
         wiped_at
@@ -111,7 +111,7 @@ export async function wipeSubscription(
   // 4) DB cascade delete. All FKs to subscriptions are ON DELETE CASCADE.
   try {
     const deleted = await sql`
-      DELETE FROM subscriptions WHERE id = ${subscriptionId}
+      DELETE FROM accounts WHERE id = ${subscriptionId}
     `;
     result.rows_deleted = (deleted as unknown as { rowCount?: number }).rowCount || 1;
   } catch (err) {

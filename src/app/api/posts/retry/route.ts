@@ -16,9 +16,9 @@ export async function POST(req: NextRequest) {
     SELECT sp.id, sp.status
     FROM social_posts sp
     JOIN social_accounts sa ON sa.id = sp.account_id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    JOIN sites s ON s.id = ssl.site_id
-    WHERE sp.id = ${post_id} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    JOIN businesses s ON s.id = ssl.business_id
+    WHERE sp.id = ${post_id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
 
   if (!post) {

@@ -32,7 +32,7 @@ export async function GET(
   const [row] = await sql`
     SELECT id, status, generated_at, error_message, analysis_data, updated_at
     FROM competitive_market_analyses
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
     ORDER BY generated_at DESC
     LIMIT 1
   `;

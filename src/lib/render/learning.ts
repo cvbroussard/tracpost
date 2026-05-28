@@ -49,9 +49,9 @@ export async function syncEngagement(siteId: string): Promise<number> {
       AND EXISTS (
         SELECT 1 FROM social_posts sp
         JOIN social_accounts sa ON sp.account_id = sa.id
-        JOIN site_social_links ssl ON ssl.social_account_id = sa.id
+        JOIN business_social_links ssl ON ssl.social_account_id = sa.id
         WHERE sp.id = rh.social_post_id
-          AND ssl.site_id = ${siteId}
+          AND ssl.business_id = ${siteId}
           AND sp.status = 'published'
       )
     RETURNING rh.id
@@ -100,8 +100,8 @@ export async function aggregatePerformance(
     FROM render_history rh
     JOIN social_posts sp ON sp.id = rh.social_post_id
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
       AND rh.engagement IS NOT NULL
       AND (rh.engagement->>'impressions')::int > 0
       ${platformClause}
@@ -185,8 +185,8 @@ export async function recommendAllConfigs(
   const platforms = await sql`
     SELECT DISTINCT sa.platform
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.status = 'active'
   `;
 
   const recommendations: ConfigRecommendation[] = [];
@@ -217,8 +217,8 @@ export async function getPerformanceSummary(siteId: string): Promise<{
     FROM render_history rh
     JOIN social_posts sp ON sp.id = rh.social_post_id
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
       AND rh.engagement IS NOT NULL
   `;
 
@@ -228,8 +228,8 @@ export async function getPerformanceSummary(siteId: string): Promise<{
     FROM render_history rh
     JOIN social_posts sp ON sp.id = rh.social_post_id
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
       AND rh.engagement IS NOT NULL
     GROUP BY rh.platform
     ORDER BY rate DESC

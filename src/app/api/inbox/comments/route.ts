@@ -36,8 +36,8 @@ export async function GET(req: NextRequest) {
       COUNT(*) FILTER (WHERE ic.is_read = false)::int AS unread_count,
       MAX(ic.commented_at) AS latest_activity
     FROM inbox_comments ic
-    LEFT JOIN social_posts sp ON sp.platform_post_id = ic.platform_post_id     WHERE ic.site_id = ${siteId}
-      AND ic.subscription_id = ${auth.subscriptionId}
+    LEFT JOIN social_posts sp ON sp.platform_post_id = ic.platform_post_id     WHERE ic.business_id = ${siteId}
+      AND ic.billing_account_id = ${auth.subscriptionId}
       AND ic.is_hidden = false
       ${unreadOnly ? sql`AND ic.is_read = false` : sql``}
     GROUP BY ic.platform_post_id, ic.platform, sp.id, sp.caption, sp.media_urls, sp.platform_post_url

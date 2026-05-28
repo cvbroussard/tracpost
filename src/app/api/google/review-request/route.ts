@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "site_id, email, and review_url required" }, { status: 400 });
   }
 
-  const [site] = await sql`SELECT name, subdomain, gbp_profile->>'title' AS title FROM sites WHERE id = ${site_id}`;
+  const [site] = await sql`SELECT name, subdomain, gbp_profile->>'title' AS title FROM businesses WHERE id = ${site_id}`;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
@@ -57,9 +57,9 @@ export async function POST(req: NextRequest) {
 
     // Log the request
     await sql`
-      INSERT INTO usage_log (subscription_id, action, metadata)
-      SELECT subscription_id, 'review_request', ${JSON.stringify({ email, business: businessName })}::jsonb
-      FROM sites WHERE id = ${site_id}
+      INSERT INTO usage_log (billing_account_id, action, metadata)
+      SELECT billing_account_id, 'review_request', ${JSON.stringify({ email, business: businessName })}::jsonb
+      FROM businesses WHERE id = ${site_id}
     `;
 
     return NextResponse.json({ success: true });

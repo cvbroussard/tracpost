@@ -43,12 +43,12 @@ export async function enrichPlace(
   // (place_id IS NULL), UPDATE it in place rather than INSERTing a
   // dup-slug row. Preserves any FK references to the orphan's id.
   const orphan = await sql`
-    SELECT id FROM service_areas_canonical
+    SELECT id FROM service_areas
     WHERE slug = ${slug} AND place_id IS NULL LIMIT 1
   `;
   if (orphan.length > 0) {
     await sql`
-      UPDATE service_areas_canonical
+      UPDATE service_areas
       SET place_id = ${placeId},
           name = ${displayName},
           kind = ${kind},
@@ -59,7 +59,7 @@ export async function enrichPlace(
   }
 
   await sql`
-    INSERT INTO service_areas_canonical (name, slug, kind, place_id, viewport)
+    INSERT INTO service_areas (name, slug, kind, place_id, viewport)
     VALUES (
       ${displayName},
       ${slug},
@@ -71,7 +71,7 @@ export async function enrichPlace(
     DO UPDATE SET
       name = EXCLUDED.name,
       kind = EXCLUDED.kind,
-      viewport = COALESCE(EXCLUDED.viewport, service_areas_canonical.viewport)
+      viewport = COALESCE(EXCLUDED.viewport, service_areas.viewport)
   `;
 
   return true;

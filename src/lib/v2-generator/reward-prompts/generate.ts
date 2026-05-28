@@ -44,7 +44,7 @@ export interface RewardPrompt {
 export async function generateRewardPrompts(siteId: string): Promise<RewardPrompt[]> {
   const [site] = await sql`
     SELECT name, url, brand_dna
-    FROM sites
+    FROM businesses
     WHERE id = ${siteId}
   `;
   if (!site) throw new Error(`Site ${siteId} not found`);
@@ -83,7 +83,7 @@ export async function generateRewardPrompts(siteId: string): Promise<RewardPromp
     },
   };
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_dna = ${JSON.stringify(updatedDna)}::jsonb
     WHERE id = ${siteId}
   `;

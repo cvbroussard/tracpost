@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   const [row] = await sql`
     SELECT entity_id, updated_at FROM subscriber_pickers
     WHERE user_id = ${session.userId}
-      AND site_id = ${siteId}
+      AND business_id = ${siteId}
       AND picker_kind = ${kind}
   `;
   return NextResponse.json({
@@ -71,9 +71,9 @@ export async function PUT(req: NextRequest) {
   }
 
   await sql`
-    INSERT INTO subscriber_pickers (user_id, site_id, picker_kind, entity_id, updated_at)
+    INSERT INTO subscriber_pickers (user_id, business_id, picker_kind, entity_id, updated_at)
     VALUES (${session.userId}, ${site_id}, ${picker_kind}, ${entity_id || null}, NOW())
-    ON CONFLICT (user_id, site_id, picker_kind) DO UPDATE SET
+    ON CONFLICT (user_id, business_id, picker_kind) DO UPDATE SET
       entity_id = ${entity_id || null},
       updated_at = NOW()
   `;

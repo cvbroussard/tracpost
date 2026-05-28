@@ -53,7 +53,7 @@ export async function loadCorrections(
     const rows = await sql`
       SELECT id, category, rule, scope, example_before, example_after
       FROM content_corrections
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
         AND is_active = true
         AND (scope = 'all' OR scope = ${scope})
       ORDER BY created_at ASC
@@ -64,7 +64,7 @@ export async function loadCorrections(
   const rows = await sql`
     SELECT id, category, rule, scope, example_before, example_after
     FROM content_corrections
-    WHERE site_id = ${siteId} AND is_active = true
+    WHERE business_id = ${siteId} AND is_active = true
     ORDER BY created_at ASC
   `;
   return rows as unknown as ContentCorrection[];
@@ -106,15 +106,15 @@ export async function previewImpact(
 
     const [blogCount] = await sql`
       SELECT COUNT(*)::int AS count FROM blog_posts
-      WHERE site_id = ${siteId} AND body ILIKE ${pattern}
+      WHERE business_id = ${siteId} AND body ILIKE ${pattern}
     `;
     blogPosts += blogCount?.count || 0;
 
     const [captionCount] = await sql`
       SELECT COUNT(*)::int AS count FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId} AND sp.caption ILIKE ${pattern}
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId} AND sp.caption ILIKE ${pattern}
     `;
     captions += captionCount?.count || 0;
   }

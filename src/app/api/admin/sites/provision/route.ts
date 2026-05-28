@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     // Treat NULL provisioning_status as equivalent to 'requested' —
     // legacy admin-created sites may not have the field set.
     const [site] = await sql`
-      UPDATE sites
+      UPDATE businesses
       SET provisioning_status = 'in_progress', updated_at = NOW()
       WHERE id = ${siteId}
         AND (provisioning_status IN ('requested', 'in_progress') OR provisioning_status IS NULL)
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     // 2. Enable blog + seed content if not already enabled
     // Enable blog settings (but don't seed content — wait for playbook sharpening)
     const [blogSettings] = await sql`
-      SELECT blog_enabled FROM blog_settings WHERE site_id = ${siteId}
+      SELECT blog_enabled FROM blog_settings WHERE business_id = ${siteId}
     `;
     if (!blogSettings?.blog_enabled) {
       try {
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
         }
 
         await sql`
-          INSERT INTO blog_settings (site_id, blog_enabled, subdomain, blog_title, blog_description)
+          INSERT INTO blog_settings (business_id, blog_enabled, subdomain, blog_title, blog_description)
           VALUES (
             ${siteId},
             true,
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
             ${site.name + " Blog"},
             ${`Latest updates from ${site.name}`}
           )
-          ON CONFLICT (site_id) DO UPDATE SET
+          ON CONFLICT (business_id) DO UPDATE SET
             blog_enabled = true,
             subdomain = COALESCE(blog_settings.subdomain, ${subdomain}),
             blog_title = COALESCE(blog_settings.blog_title, ${site.name + " Blog"}),
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
 
   if (action === "complete") {
     const [site] = await sql`
-      UPDATE sites
+      UPDATE businesses
       SET provisioning_status = 'complete', updated_at = NOW()
       WHERE id = ${siteId} AND provisioning_status = 'in_progress' AND is_active = true
       RETURNING id, name

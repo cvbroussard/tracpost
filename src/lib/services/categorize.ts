@@ -30,7 +30,7 @@ interface TenantSignals {
 async function gatherSignals(siteId: string): Promise<TenantSignals> {
   const [site] = await sql`
     SELECT business_type, location, brand_playbook
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   const playbook = (site?.brand_playbook as BrandPlaybook | null) || null;
   const offerCore = playbook?.offerCore;
@@ -38,7 +38,7 @@ async function gatherSignals(siteId: string): Promise<TenantSignals> {
   const tagline = positioning?.selectedAngles?.[0]?.tagline || null;
 
   const services = await sql`
-    SELECT name, description FROM services WHERE site_id = ${siteId}
+    SELECT name, description FROM services WHERE business_id = ${siteId}
     ORDER BY display_order
   `;
 
@@ -205,16 +205,16 @@ export async function persistCategorization(
   result: CategorizationResult,
   chosenBy: "auto" | "admin" | "tenant" = "auto",
 ): Promise<void> {
-  await sql`DELETE FROM site_gbp_categories WHERE site_id = ${siteId}`;
+  await sql`DELETE FROM business_gbp_categories WHERE business_id = ${siteId}`;
 
   await sql`
-    INSERT INTO site_gbp_categories (site_id, gcid, is_primary, reasoning, confidence, chosen_by)
+    INSERT INTO business_gbp_categories (business_id, gcid, is_primary, reasoning, confidence, chosen_by)
     VALUES (${siteId}, ${result.primary.gcid}, true, ${result.primary.reasoning}, ${result.primary.confidence}, ${chosenBy})
   `;
 
   for (const a of result.additional) {
     await sql`
-      INSERT INTO site_gbp_categories (site_id, gcid, is_primary, reasoning, confidence, chosen_by)
+      INSERT INTO business_gbp_categories (business_id, gcid, is_primary, reasoning, confidence, chosen_by)
       VALUES (${siteId}, ${a.gcid}, false, ${a.reasoning}, ${a.confidence}, ${chosenBy})
     `;
   }
@@ -247,9 +247,9 @@ export async function loadSiteCategories(siteId: string): Promise<{
   const rows = await sql`
     SELECT sgc.gcid, sgc.is_primary, sgc.reasoning, sgc.confidence,
            gc.name
-    FROM site_gbp_categories sgc
+    FROM business_gbp_categories sgc
     JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.site_id = ${siteId}
+    WHERE sgc.business_id = ${siteId}
     ORDER BY sgc.is_primary DESC, sgc.confidence DESC NULLS LAST
   `;
 

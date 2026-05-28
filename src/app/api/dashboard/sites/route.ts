@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   const url = domain ? `https://${domain}` : null;
 
   // Ensure slug uniqueness
-  const [existingSlug] = await sql`SELECT id FROM sites WHERE blog_slug = ${blogSlug}`;
+  const [existingSlug] = await sql`SELECT id FROM businesses WHERE blog_slug = ${blogSlug}`;
   const finalSlug = existingSlug
     ? `${blogSlug}-${Date.now().toString(36).slice(-4)}`
     : blogSlug;
@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
   const timezone = await getTimezoneForCoords(place_lat, place_lon);
 
   const [site] = await sql`
-    INSERT INTO sites (
-      subscription_id, name, domain, url, business_type, location,
+    INSERT INTO businesses (
+      billing_account_id, name, domain, url, business_type, location,
       place_id, place_lat, place_lon, place_name, place_set_at, timezone,
       blog_slug, provisioning_status, metadata
     )
@@ -82,8 +82,8 @@ export async function POST(req: NextRequest) {
 
   // Update session cookie to include the new site and switch to it
   const allSites = await sql`
-    SELECT id, name, url FROM sites
-    WHERE subscription_id = ${session.subscriptionId} AND is_active = true
+    SELECT id, name, url FROM businesses
+    WHERE billing_account_id = ${session.subscriptionId} AND is_active = true
     ORDER BY created_at ASC
   `;
 

@@ -206,13 +206,13 @@ export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; 
 
   // Check if this is a service-area business (no storefront categories allowed)
   const isServiceArea = await sql`
-    SELECT 1 FROM sites WHERE id = ${siteId} AND (gbp_profile->>'serviceArea') IS NOT NULL
+    SELECT 1 FROM businesses WHERE id = ${siteId} AND (gbp_profile->>'serviceArea') IS NOT NULL
   `;
   const serviceAreaBusiness = isServiceArea.length > 0;
 
   // Load site pillar_config — pillar derived from content_tags at read time
   // (LOCKED 2026-05-09). Used for mapToGbpCategory below.
-  const [siteRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${siteId}`;
+  const [siteRow] = await sql`SELECT pillar_config FROM businesses WHERE id = ${siteId}`;
   const pillarConfig = (siteRow?.pillar_config || []) as PillarConfig;
 
   // Find eligible assets not yet synced (skip previously failed uploads)
@@ -220,13 +220,13 @@ export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; 
     SELECT ma.id, ma.storage_url, ma.content_tags, ma.quality_score,
            ma.ai_analysis, ma.metadata AS asset_metadata
     FROM media_assets ma
-    WHERE ma.site_id = ${siteId}
+    WHERE ma.business_id = ${siteId}
       AND ma.processing_stage = 'briefed'
       AND ma.quality_score >= ${minQuality}
       AND ma.media_type LIKE 'image/%'
       AND NOT EXISTS (
         SELECT 1 FROM gbp_photo_sync gps
-        WHERE gps.media_asset_id = ma.id AND gps.site_id = ${siteId}
+        WHERE gps.media_asset_id = ma.id AND gps.business_id = ${siteId}
       )
       AND NOT (COALESCE(ma.metadata->>'gbp_upload_failed', 'false') = 'true')
     ORDER BY ma.quality_score DESC
@@ -277,7 +277,7 @@ export async function autoSyncPhotos(siteId: string): Promise<{ synced: number; 
 
       if (result) {
         await sql`
-          INSERT INTO gbp_photo_sync (site_id, media_asset_id, gbp_media_name, gbp_media_url, source_url, category, media_type)
+          INSERT INTO gbp_photo_sync (business_id, media_asset_id, gbp_media_name, gbp_media_url, source_url, category, media_type)
           VALUES (${siteId}, ${asset.id}, ${result.name}, ${result.googleUrl || null}, ${asset.storage_url}, ${category}, 'PHOTO')
         `;
         synced++;
@@ -318,12 +318,12 @@ export async function pullGbpPhotos(siteId: string): Promise<number> {
 
   for (const item of items) {
     const [existing] = await sql`
-      SELECT id FROM gbp_photo_sync WHERE gbp_media_name = ${item.name} AND site_id = ${siteId}
+      SELECT id FROM gbp_photo_sync WHERE gbp_media_name = ${item.name} AND business_id = ${siteId}
     `;
     if (existing) continue;
 
     await sql`
-      INSERT INTO gbp_photo_sync (site_id, gbp_media_name, gbp_media_url, source_url, category, media_type, synced_at)
+      INSERT INTO gbp_photo_sync (business_id, gbp_media_name, gbp_media_url, source_url, category, media_type, synced_at)
       VALUES (
         ${siteId},
         ${item.name},

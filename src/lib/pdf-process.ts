@@ -51,7 +51,7 @@ export async function processPdf(
 
   const [parentAsset] = await sql`
     INSERT INTO media_assets (
-      site_id, storage_url, media_type, context_note,
+      business_id, storage_url, media_type, context_note,
       source, processing_stage, metadata, sort_order
     )
     VALUES (
@@ -111,7 +111,7 @@ export async function processPdf(
 
     const [asset] = await sql`
       INSERT INTO media_assets (
-        site_id, storage_url, media_type, context_note,
+        business_id, storage_url, media_type, context_note,
         source, processing_stage, metadata, sort_order
       )
       VALUES (

@@ -19,13 +19,13 @@ const ALL_PLATFORMS = [
 export default async function ProvisioningPage() {
   const subscribers = await sql`
     SELECT
-      sub.id AS subscription_id,
+      sub.id AS billing_account_id,
       u.name AS subscriber_name,
       u.email,
       sub.plan,
       sub.created_at,
       sub.metadata,
-      s.id AS site_id,
+      s.id AS business_id,
       s.name AS site_name,
       s.url AS site_url,
       s.business_type,
@@ -44,15 +44,15 @@ export default async function ProvisioningPage() {
       (
         SELECT array_agg(DISTINCT sa.platform)
         FROM social_accounts sa
-        JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-        WHERE ssl.site_id = s.id AND sa.status = 'active'
+        JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+        WHERE ssl.business_id = s.id AND sa.status = 'active'
       ) AS connected_platforms,
       (
-        SELECT blog_enabled FROM blog_settings WHERE site_id = s.id
+        SELECT blog_enabled FROM blog_settings WHERE business_id = s.id
       ) AS blog_enabled
-    FROM subscriptions sub
-    JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
-    JOIN sites s ON s.subscription_id = sub.id
+    FROM accounts sub
+    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+    JOIN businesses s ON s.billing_account_id = sub.id
     WHERE sub.is_active = true AND s.is_active = true
     ORDER BY sub.created_at DESC
   `;
@@ -95,7 +95,7 @@ export default async function ProvisioningPage() {
             const siteAssets = sub.site_id ? await sql`
               SELECT id, storage_url, context_note, quality_score, metadata, ai_analysis
               FROM media_assets
-              WHERE site_id = ${sub.site_id}
+              WHERE business_id = ${sub.site_id}
                 AND processing_stage IN ('briefed', 'analyzed')
               ORDER BY quality_score DESC
               LIMIT 50

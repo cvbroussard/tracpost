@@ -50,9 +50,9 @@ export async function GET(req: NextRequest) {
     // Provisioning — requested sites
     sql`
       SELECT s.id, s.name, u.name AS subscriber_name, s.created_at AS timestamp
-      FROM sites s
-      JOIN subscriptions sub ON sub.id = s.subscription_id
-      JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+      FROM businesses s
+      JOIN accounts sub ON sub.id = s.billing_account_id
+      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
       WHERE s.provisioning_status = 'requested'
         AND s.is_active = true
         AND s.created_at >= ${sinceStr}
@@ -64,8 +64,8 @@ export async function GET(req: NextRequest) {
       SELECT sa.id, sa.platform, sa.account_name, sa.token_expires_at AS timestamp,
              u.name AS subscriber_name
       FROM social_accounts sa
-      JOIN subscriptions sub ON sa.subscription_id = sub.id
-      JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+      JOIN accounts sub ON sa.billing_account_id = sub.id
+      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
       WHERE sa.status = 'active'
         AND sa.token_expires_at IS NOT NULL
         AND sa.token_expires_at < NOW() + INTERVAL '7 days'
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
       SELECT ps.url, ps.performance, ps.scored_at AS timestamp,
              s.name AS site_name
       FROM page_scores ps
-      JOIN sites s ON s.id = ps.site_id
+      JOIN businesses s ON s.id = ps.business_id
       WHERE ps.performance < 70
         AND ps.scored_at >= ${sinceStr}
       ORDER BY ps.scored_at DESC
@@ -105,13 +105,13 @@ export async function GET(req: NextRequest) {
     // Engagement — unreviewed negative events from the engage module
     sql`
       SELECT ee.id, ee.platform, ee.event_type, ee.body,
-             ee.occurred_at AS timestamp, ee.subscription_id,
+             ee.occurred_at AS timestamp, ee.billing_account_id,
              ep.display_name AS person_name,
              u.name AS subscriber_name
       FROM engagement_events ee
       LEFT JOIN engaged_persons ep ON ep.id = ee.engaged_person_id
-      JOIN subscriptions sub ON sub.id = ee.subscription_id
-      LEFT JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+      JOIN accounts sub ON sub.id = ee.billing_account_id
+      LEFT JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
       WHERE ee.sentiment = 'negative'
         AND ee.review_status = 'new'
         AND ee.occurred_at >= ${sinceStr}

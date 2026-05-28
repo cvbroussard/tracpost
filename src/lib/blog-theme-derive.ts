@@ -112,7 +112,7 @@ Rules:
   await sql`
     UPDATE blog_settings
     SET theme = ${JSON.stringify(theme)}::jsonb, updated_at = NOW()
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
   `;
 
   return theme;

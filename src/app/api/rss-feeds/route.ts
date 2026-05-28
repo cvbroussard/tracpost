@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const feeds = await sql`
     SELECT id, feed_url, feed_name, is_active, last_polled, created_at
     FROM rss_feeds
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
     ORDER BY created_at DESC
   `;
 
@@ -40,9 +40,9 @@ export async function POST(req: NextRequest) {
     }
 
     const [feed] = await sql`
-      INSERT INTO rss_feeds (site_id, feed_url, feed_name)
+      INSERT INTO rss_feeds (business_id, feed_url, feed_name)
       VALUES (${siteId}, ${feedUrl}, ${feedName || null})
-      ON CONFLICT (site_id, feed_url) DO UPDATE SET
+      ON CONFLICT (business_id, feed_url) DO UPDATE SET
         feed_name = COALESCE(${feedName || null}, rss_feeds.feed_name),
         is_active = true
       RETURNING id, feed_url, feed_name, is_active
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     await sql`
       UPDATE rss_feeds
       SET is_active = NOT is_active
-      WHERE id = ${feedId} AND site_id = ${siteId}
+      WHERE id = ${feedId} AND business_id = ${siteId}
     `;
     return NextResponse.json({ ok: true });
   }
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   if (action === "delete" && feedId) {
     await sql`
       DELETE FROM rss_feeds
-      WHERE id = ${feedId} AND site_id = ${siteId}
+      WHERE id = ${feedId} AND business_id = ${siteId}
     `;
     return NextResponse.json({ ok: true });
   }

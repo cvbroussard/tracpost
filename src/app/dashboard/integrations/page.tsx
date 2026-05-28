@@ -21,7 +21,7 @@ export default async function AccountsPage() {
 
   // A subscription with zero sites has nowhere to publish — gate the
   // entire connections UI behind site creation.
-  const siteCountRows = await sql`SELECT COUNT(*)::int AS n FROM sites WHERE subscription_id = ${session.subscriptionId}`;
+  const siteCountRows = await sql`SELECT COUNT(*)::int AS n FROM businesses WHERE billing_account_id = ${session.subscriptionId}`;
   const hasNoSites = (siteCountRows[0]?.n as number) === 0;
 
   const isEnterprise = session.plan.toLowerCase().includes("enterprise");
@@ -33,12 +33,12 @@ export default async function AccountsPage() {
   // 1. Assigned platform_assets (new model)
   const assigned = await sql`
     SELECT pa.platform, pa.asset_name, sa.token_expires_at
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${activeSiteId}
+    WHERE spa.business_id = ${activeSiteId}
       AND spa.is_primary = true
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
   `;
   for (const row of assigned) {
     statuses[row.platform as string] = {
@@ -52,9 +52,9 @@ export default async function AccountsPage() {
   const legacy = await sql`
     SELECT sa.platform, sa.account_name, sa.token_expires_at
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${activeSiteId}
-      AND sa.subscription_id = ${session.subscriptionId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${activeSiteId}
+      AND sa.billing_account_id = ${session.subscriptionId}
     ORDER BY sa.created_at DESC
   `;
   for (const row of legacy) {
@@ -77,11 +77,11 @@ export default async function AccountsPage() {
     SELECT pa.platform, COUNT(*)::int AS count
     FROM platform_assets pa
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE sa.subscription_id = ${session.subscriptionId}
+    WHERE sa.billing_account_id = ${session.subscriptionId}
       AND NOT EXISTS (
-        SELECT 1 FROM site_platform_assets spa_other
+        SELECT 1 FROM business_platform_assets spa_other
         WHERE spa_other.platform_asset_id = pa.id
-          AND spa_other.site_id != ${activeSiteId}
+          AND spa_other.business_id != ${activeSiteId}
       )
     GROUP BY pa.platform
   `;

@@ -48,7 +48,7 @@ async function selectNextAsset(
   // Load pillar_config once — pillars are derived from content_tags
   // at read time per the LOCKED 2026-05-09 architecture. Replaces the
   // legacy ma.content_pillar column reads.
-  const [siteRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${siteId}`;
+  const [siteRow] = await sql`SELECT pillar_config FROM businesses WHERE id = ${siteId}`;
   const pillarConfig = (siteRow?.pillar_config || []) as PillarConfig;
 
   // Get the last 2 published pillars for diversity (derived from tags)
@@ -56,9 +56,9 @@ async function selectNextAsset(
     SELECT ma.content_tags
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
     LEFT JOIN media_assets ma ON ma.id = sp.source_asset_id
-    WHERE ssl.site_id = ${siteId}
+    WHERE ssl.business_id = ${siteId}
       AND sa.platform = ${platform}
       AND sp.status = 'published'
     ORDER BY sp.published_at DESC
@@ -77,7 +77,7 @@ async function selectNextAsset(
            ma.metadata->'generated_text'->>'pin_headline' AS pin_headline,
            ma.variants
     FROM media_assets ma
-    WHERE ma.site_id = ${siteId}
+    WHERE ma.business_id = ${siteId}
       AND ma.processing_stage = 'analyzed'
       AND ma.quality_score >= ${threshold}
       AND ma.media_type LIKE 'image%'
@@ -138,7 +138,7 @@ async function selectPoolVideo(
            ma.context_note,
            ma.source_asset_id
     FROM media_assets ma
-    WHERE ma.site_id = ${siteId}
+    WHERE ma.business_id = ${siteId}
       AND ma.source = 'ai_generated'
       AND ma.media_type = 'video'
       AND ma.processing_stage = 'analyzed'
@@ -322,7 +322,7 @@ export async function autopilotPublish(siteId: string, opts: { force?: boolean; 
     try {
       const [post] = await sql`
         INSERT INTO social_posts (
-          site_id, account_id, source_asset_id, caption, media_urls, media_type,
+          business_id, account_id, source_asset_id, caption, media_urls, media_type,
           status, scheduled_at, published_at, ai_generated, metadata
         )
         VALUES (

@@ -64,7 +64,7 @@ export async function matchBrandsFromNer(
   if (nerBrands.length === 0) return { matched, suggested_new };
 
   const brandRows = await sql`
-    SELECT id, name FROM brands WHERE site_id = ${siteId}
+    SELECT id, name FROM brands WHERE business_id = ${siteId}
   `;
   const catalogIndex = brandRows.map((r) => ({
     id: r.id as string,

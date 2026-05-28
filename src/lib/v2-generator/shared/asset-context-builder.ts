@@ -58,7 +58,7 @@ export async function buildAssetContexts(
 
   // Pillars are not stored on assets (LOCKED 2026-05-09) — they derive
   // from content_tags + the site's pillar_config at read time.
-  const [pcRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${siteId}`;
+  const [pcRow] = await sql`SELECT pillar_config FROM businesses WHERE id = ${siteId}`;
   const pillarConfig = (pcRow?.pillar_config || []) as PillarConfig;
 
   // Pull asset_brands for all in one batch

@@ -242,8 +242,8 @@ export async function publishDuePosts(siteId: string): Promise<{ published: numb
     SELECT sp.id
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
       AND sp.status = 'scheduled'
       AND sp.caption IS NOT NULL
       AND sp.scheduled_at <= NOW()

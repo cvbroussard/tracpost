@@ -85,7 +85,7 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
   // Load site config
   const [site] = await sql`
     SELECT video_pool_config, brand_playbook, content_vibe
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   if (!site) return result;
 
@@ -96,7 +96,7 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
   const [weekCount] = await sql`
     SELECT COUNT(*)::int AS count
     FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND source = 'ai_generated'
       AND media_type = 'video'
       AND created_at > date_trunc('week', NOW())
@@ -122,7 +122,7 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
     SELECT ma.id, ma.storage_url, ma.quality_score,
            ma.content_tags, ma.ai_analysis, ma.context_note
     FROM media_assets ma
-    WHERE ma.site_id = ${siteId}
+    WHERE ma.business_id = ${siteId}
       AND ma.processing_stage = 'analyzed'
       AND ma.quality_score >= ${heroThreshold}
       AND ma.media_type LIKE 'image%'
@@ -143,7 +143,7 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
   const existingScenes = await sql`
     SELECT DISTINCT ai_analysis->>'scene_type' AS scene_type
     FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND source = 'ai_generated'
       AND media_type = 'video'
   `;
@@ -206,7 +206,7 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
       // stored on assets, derive from content_tags at read time).
       await sql`
         INSERT INTO media_assets (
-          site_id, storage_url, media_type, context_note,
+          business_id, storage_url, media_type, context_note,
           source, processing_stage, quality_score,
           source_asset_id, content_tags,
           ai_analysis, metadata
@@ -255,7 +255,7 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
  */
 export async function getPoolStatus(siteId: string): Promise<PoolStatus> {
   const [site] = await sql`
-    SELECT video_pool_config FROM sites WHERE id = ${siteId}
+    SELECT video_pool_config FROM businesses WHERE id = ${siteId}
   `;
   const poolConfig = ((site?.video_pool_config || {}) as Record<string, number>);
   const weeklyCap = poolConfig.weekly_cap || DEFAULT_WEEKLY_CAP;
@@ -270,7 +270,7 @@ export async function getPoolStatus(siteId: string): Promise<PoolStatus> {
         )
       )::int AS available
     FROM media_assets ma
-    WHERE ma.site_id = ${siteId}
+    WHERE ma.business_id = ${siteId}
       AND ma.source = 'ai_generated'
       AND ma.media_type = 'video'
       AND ma.processing_stage = 'analyzed'
@@ -279,7 +279,7 @@ export async function getPoolStatus(siteId: string): Promise<PoolStatus> {
   const [weekCount] = await sql`
     SELECT COUNT(*)::int AS count
     FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND source = 'ai_generated'
       AND media_type = 'video'
       AND created_at > date_trunc('week', NOW())

@@ -28,12 +28,12 @@ export async function POST(
   const { id } = await params;
 
   const [asset] = await sql`
-    SELECT ma.id, ma.site_id, ma.storage_url, ma.media_type,
+    SELECT ma.id, ma.business_id, ma.storage_url, ma.media_type,
            ma.date_taken, ma.created_at, ma.metadata, ma.context_note,
            ma.ai_analysis
     FROM media_assets ma
-    JOIN sites s ON ma.site_id = s.id
-    WHERE ma.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON ma.business_id = s.id
+    WHERE ma.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
 
   if (!asset) {

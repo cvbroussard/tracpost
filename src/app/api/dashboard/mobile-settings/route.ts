@@ -17,7 +17,7 @@ export async function GET() {
   }
 
   const [site] = await sql`
-    SELECT mobile_settings FROM sites WHERE id = ${session.activeSiteId}
+    SELECT mobile_settings FROM businesses WHERE id = ${session.activeSiteId}
   `;
 
   const defaults = {
@@ -56,14 +56,14 @@ export async function POST(req: NextRequest) {
 
   // Merge with existing
   const [site] = await sql`
-    SELECT mobile_settings FROM sites WHERE id = ${session.activeSiteId}
+    SELECT mobile_settings FROM businesses WHERE id = ${session.activeSiteId}
   `;
 
   const current = (site?.mobile_settings as Record<string, unknown>) || {};
   const updated = { ...current, ...body };
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET mobile_settings = ${JSON.stringify(updated)}::jsonb, updated_at = NOW()
     WHERE id = ${session.activeSiteId}
   `;

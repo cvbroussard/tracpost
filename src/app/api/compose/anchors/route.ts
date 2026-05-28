@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest) {
   if (!siteId) return NextResponse.json({ error: "No active site" }, { status: 400 });
 
   // Site URL = anchor URL prefix.
-  const [siteRow] = await sql`SELECT url FROM sites WHERE id = ${siteId}`;
+  const [siteRow] = await sql`SELECT url FROM businesses WHERE id = ${siteId}`;
   const siteUrl = (siteRow?.url as string | null)?.replace(/\/+$/, "") || "";
 
   // Blog articles (v2): published only.
@@ -32,7 +32,7 @@ export async function GET(_req: NextRequest) {
            b.published_at, ma.storage_url AS hero_url
     FROM blog_posts_v2 b
     LEFT JOIN media_assets ma ON ma.id = b.hero_asset_id
-    WHERE b.site_id = ${siteId}
+    WHERE b.business_id = ${siteId}
       AND b.status = 'published'
     ORDER BY b.published_at DESC NULLS LAST
   `;
@@ -44,7 +44,7 @@ export async function GET(_req: NextRequest) {
            ma.storage_url AS hero_url
     FROM projects_v2 p
     LEFT JOIN media_assets ma ON ma.id = p.hero_asset_id
-    WHERE p.site_id = ${siteId}
+    WHERE p.business_id = ${siteId}
       AND p.status = 'active'
     ORDER BY COALESCE(p.end_date, p.start_date, p.created_at) DESC NULLS LAST
   `;
@@ -56,7 +56,7 @@ export async function GET(_req: NextRequest) {
            ma.storage_url AS hero_url
     FROM services_v2 s
     LEFT JOIN media_assets ma ON ma.id = s.hero_asset_id
-    WHERE s.site_id = ${siteId}
+    WHERE s.business_id = ${siteId}
       AND s.status = 'active'
     ORDER BY s.display_order ASC, s.created_at DESC
   `;
@@ -75,7 +75,7 @@ export async function GET(_req: NextRequest) {
       SELECT sp.link_url
       FROM social_posts sp
       JOIN social_accounts sa ON sa.id = sp.account_id
-      WHERE sa.subscription_id = ${session.subscriptionId}
+      WHERE sa.billing_account_id = ${session.subscriptionId}
         AND sp.link_url IS NOT NULL
     `;
     for (const row of usageRows) {

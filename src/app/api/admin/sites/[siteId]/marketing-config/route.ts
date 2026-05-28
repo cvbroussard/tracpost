@@ -38,7 +38,7 @@ export async function POST(
       return NextResponse.json({ error: "page_config must be an array" }, { status: 400 });
     }
     await sql`
-      UPDATE sites SET page_config = ${JSON.stringify(page_config)}::jsonb
+      UPDATE businesses SET page_config = ${JSON.stringify(page_config)}::jsonb
       WHERE id = ${siteId}
     `;
     updates.push("page_config");
@@ -49,7 +49,7 @@ export async function POST(
       return NextResponse.json({ error: "work_content must be an object" }, { status: 400 });
     }
     await sql`
-      UPDATE sites SET work_content = ${JSON.stringify(work_content)}::jsonb
+      UPDATE businesses SET work_content = ${JSON.stringify(work_content)}::jsonb
       WHERE id = ${siteId}
     `;
     updates.push("work_content");
@@ -58,17 +58,17 @@ export async function POST(
   if (hero_asset_id !== undefined) {
     // Validate the asset belongs to this site (or is null to clear)
     if (hero_asset_id === null) {
-      await sql`UPDATE sites SET hero_asset_id = NULL WHERE id = ${siteId}`;
+      await sql`UPDATE businesses SET hero_asset_id = NULL WHERE id = ${siteId}`;
     } else {
       const [asset] = await sql`
         SELECT id FROM media_assets
-        WHERE id = ${hero_asset_id} AND site_id = ${siteId}
+        WHERE id = ${hero_asset_id} AND business_id = ${siteId}
       `;
       if (!asset) {
         return NextResponse.json({ error: "hero_asset_id not found on this site" }, { status: 404 });
       }
       await sql`
-        UPDATE sites SET hero_asset_id = ${hero_asset_id} WHERE id = ${siteId}
+        UPDATE businesses SET hero_asset_id = ${hero_asset_id} WHERE id = ${siteId}
       `;
     }
     updates.push("hero_asset_id");
@@ -79,7 +79,7 @@ export async function POST(
   }
 
   // Look up siteSlug so we can revalidate the tenant's routes
-  const [site] = await sql`SELECT blog_slug FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT blog_slug FROM businesses WHERE id = ${siteId}`;
   if (site?.blog_slug) {
     revalidatePath(`/tenant/${site.blog_slug}`, "layout");
   }

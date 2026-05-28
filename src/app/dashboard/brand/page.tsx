@@ -23,8 +23,8 @@ export default async function BrandPage() {
 
   const [site] = await sql`
     SELECT name, brand_playbook
-    FROM sites
-    WHERE id = ${session.activeSiteId} AND subscription_id = ${session.subscriptionId}
+    FROM businesses
+    WHERE id = ${session.activeSiteId} AND billing_account_id = ${session.subscriptionId}
   `;
   if (!site) redirect("/dashboard");
 

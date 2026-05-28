@@ -33,9 +33,9 @@ export async function getGbpCredentials(siteId: string): Promise<{
     SELECT pa.id AS asset_row_id, pa.asset_id, pa.metadata AS asset_metadata,
            gc.id AS cred_id, gc.access_token, gc.refresh_token, gc.token_expires_at
     FROM platform_assets pa
-    JOIN site_platform_assets spa ON spa.platform_asset_id = pa.id
-    JOIN gbp_credentials gc ON gc.site_id = spa.site_id AND gc.is_active = true
-    WHERE spa.site_id = ${siteId}
+    JOIN business_platform_assets spa ON spa.platform_asset_id = pa.id
+    JOIN gbp_credentials gc ON gc.business_id = spa.business_id AND gc.is_active = true
+    WHERE spa.business_id = ${siteId}
       AND pa.platform = 'gbp'
       AND pa.asset_type = 'gbp_location'
       AND spa.is_primary = true

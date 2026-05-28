@@ -20,8 +20,8 @@ export async function GET() {
   // Find all active sites with custom domains
   const sites = await sql`
     SELECT s.id, bs.custom_domain, bs.subdomain
-    FROM sites s
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    FROM businesses s
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE s.is_active = true
       AND (bs.custom_domain IS NOT NULL OR bs.subdomain IS NOT NULL)
   `;
@@ -41,7 +41,7 @@ export async function GET() {
 
     // Get known URLs from page_scores (already discovered)
     const existing = await sql`
-      SELECT url, scored_at FROM page_scores WHERE site_id = ${siteId}
+      SELECT url, scored_at FROM page_scores WHERE business_id = ${siteId}
     `;
 
     if (existing.length > 0) {
@@ -110,9 +110,9 @@ export async function GET() {
       .slice(0, 30);
 
     await sql`
-      INSERT INTO page_scores (site_id, url, performance, seo, accessibility, best_practices, audits, scored_at)
+      INSERT INTO page_scores (business_id, url, performance, seo, accessibility, best_practices, audits, scored_at)
       VALUES (${target.siteId}, ${target.url}, ${performance}, ${seo}, ${accessibility}, ${bestPractices}, ${JSON.stringify(audits)}, NOW())
-      ON CONFLICT (site_id, url) DO UPDATE SET
+      ON CONFLICT (business_id, url) DO UPDATE SET
         performance = EXCLUDED.performance,
         seo = EXCLUDED.seo,
         accessibility = EXCLUDED.accessibility,

@@ -16,7 +16,7 @@ const TTL_MS = 10 * 60 * 1000; // 10 minutes
  */
 export async function sendOtp(userId: string, action: string): Promise<boolean> {
   const [user] = await sql`
-    SELECT email, subscription_id FROM users WHERE id = ${userId} AND is_active = true
+    SELECT email, billing_account_id FROM users WHERE id = ${userId} AND is_active = true
   `;
 
   if (!user?.email) return false;
@@ -26,7 +26,7 @@ export async function sendOtp(userId: string, action: string): Promise<boolean> 
   const expiresAt = new Date(Date.now() + TTL_MS).toISOString();
 
   await sql`
-    UPDATE subscriptions
+    UPDATE accounts
     SET metadata = jsonb_set(
       COALESCE(metadata, '{}'::jsonb),
       '{otp}',
@@ -45,12 +45,12 @@ export async function sendOtp(userId: string, action: string): Promise<boolean> 
  */
 export async function verifyOtp(userId: string, code: string, action: string): Promise<boolean> {
   const [user] = await sql`
-    SELECT subscription_id FROM users WHERE id = ${userId}
+    SELECT billing_account_id FROM users WHERE id = ${userId}
   `;
   if (!user) return false;
 
   const [sub] = await sql`
-    SELECT metadata FROM subscriptions WHERE id = ${user.subscription_id}
+    SELECT metadata FROM accounts WHERE id = ${user.subscription_id}
   `;
   if (!sub) return false;
 
@@ -66,7 +66,7 @@ export async function verifyOtp(userId: string, code: string, action: string): P
 
   // Clear OTP (one-time use)
   await sql`
-    UPDATE subscriptions
+    UPDATE accounts
     SET metadata = metadata - 'otp', updated_at = NOW()
     WHERE id = ${user.subscription_id}
   `;

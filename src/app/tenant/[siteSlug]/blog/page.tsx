@@ -52,11 +52,11 @@ export default async function HubPage({ params }: Props) {
   // Parallel data fetches
   const [posts, blogSettings, siteRow, logoAsset] = await Promise.all([
     getBlogPosts(site.siteId, 20),
-    sql`SELECT nav_links, theme FROM blog_settings WHERE site_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo, ga4_measurement_id, gsc_verification_token FROM sites WHERE id = ${site.siteId}`,
+    sql`SELECT nav_links, theme FROM blog_settings WHERE business_id = ${site.siteId}`,
+    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo, ga4_measurement_id, gsc_verification_token FROM businesses WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
-      WHERE site_id = ${site.siteId}
+      WHERE business_id = ${site.siteId}
         AND media_type LIKE 'image%'
         AND metadata->>'is_logo' = 'true'
       LIMIT 1

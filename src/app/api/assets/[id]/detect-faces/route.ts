@@ -35,7 +35,7 @@ export async function POST(
   const { id: assetId } = await params;
 
   const [asset] = await sql`
-    SELECT id, site_id, storage_url, media_type, metadata
+    SELECT id, business_id, storage_url, media_type, metadata
     FROM media_assets WHERE id = ${assetId}
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });

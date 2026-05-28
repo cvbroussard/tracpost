@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
 
   // Verify site belongs to subscriber
   const siteRows = await sql`
-    SELECT id, url FROM sites
-    WHERE id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+    SELECT id, url FROM businesses
+    WHERE id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
   `;
 
   if (siteRows.length === 0) {
@@ -73,8 +73,8 @@ export async function GET(req: NextRequest) {
 
   // Verify site belongs to subscriber
   const siteRows = await sql`
-    SELECT id FROM sites
-    WHERE id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses
+    WHERE id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
   `;
 
   if (siteRows.length === 0) {
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
   const auditRows = await sql`
     SELECT id, page_type, url, audit_data, seo_score, issues, created_at
     FROM seo_audits
-    WHERE site_id = ${siteId} AND page_type = 'site_audit'
+    WHERE business_id = ${siteId} AND page_type = 'site_audit'
     ORDER BY created_at DESC
     LIMIT 1
   `;
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
   const pageRows = await sql`
     SELECT page_type, url, seo_score, issues, audit_data, created_at
     FROM seo_audits
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND page_type != 'site_audit'
       AND created_at >= ${latest.created_at}::timestamptz - INTERVAL '1 minute'
       AND created_at <= ${latest.created_at}::timestamptz + INTERVAL '5 minutes'

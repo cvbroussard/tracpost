@@ -20,12 +20,12 @@ export async function PATCH(
   const updates: string[] = [];
 
   if (body.is_read !== undefined) {
-    await sql`UPDATE inbox_reviews SET is_read = ${body.is_read} WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}`;
+    await sql`UPDATE inbox_reviews SET is_read = ${body.is_read} WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}`;
     updates.push("is_read");
   }
 
   if (body.is_hidden !== undefined) {
-    await sql`UPDATE inbox_reviews SET is_hidden = ${body.is_hidden} WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}`;
+    await sql`UPDATE inbox_reviews SET is_hidden = ${body.is_hidden} WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}`;
     updates.push("is_hidden");
   }
 

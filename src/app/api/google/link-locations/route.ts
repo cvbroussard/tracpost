@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
     ? await sql`
         SELECT sa.id, sa.account_name, sa.status, sa.metadata
         FROM social_accounts sa
-        JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-        WHERE ssl.site_id = ${siteId}
+        JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+        WHERE ssl.business_id = ${siteId}
           AND sa.platform = 'gbp'
           AND sa.status = 'pending_assignment'
       `
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   // Get the pending social account
   const [pending] = await sql`
-    SELECT id, subscription_id, access_token_encrypted, refresh_token_encrypted,
+    SELECT id, billing_account_id, access_token_encrypted, refresh_token_encrypted,
            token_expires_at, metadata
     FROM social_accounts
     WHERE id = ${social_account_id}
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
   // Create the real social_account for this specific location
   const [newAccount] = await sql`
     INSERT INTO social_accounts (
-      subscription_id, platform, account_name, account_id,
+      billing_account_id, platform, account_name, account_id,
       access_token_encrypted, refresh_token_encrypted, token_expires_at,
       scopes, status, metadata
     )
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
         site_id: site_id,
       })}
     )
-    ON CONFLICT (subscription_id, platform, account_id)
+    ON CONFLICT (billing_account_id, platform, account_id)
     DO UPDATE SET
       account_name = EXCLUDED.account_name,
       access_token_encrypted = EXCLUDED.access_token_encrypted,
@@ -127,20 +127,20 @@ export async function POST(req: NextRequest) {
 
   // Remove old site_social_link (from the pending account)
   await sql`
-    DELETE FROM site_social_links WHERE social_account_id = ${social_account_id}
+    DELETE FROM business_social_links WHERE social_account_id = ${social_account_id}
   `;
 
   // Link the new account to the correct site
   await sql`
-    INSERT INTO site_social_links (site_id, social_account_id)
+    INSERT INTO business_social_links (business_id, social_account_id)
     VALUES (${site_id}, ${newAccount.id})
     ON CONFLICT DO NOTHING
   `;
 
   // Store GBP location record
   await sql`
-    INSERT INTO gbp_locations (
-      site_id, external_id, gbp_account_id, gbp_location_id,
+    INSERT INTO gbp_profiles (
+      business_id, external_id, gbp_account_id, gbp_location_id,
       sync_status, sync_data
     )
     VALUES (
@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
   let gscStatus: "found" | "not_found" | "skipped" = "skipped";
   try {
     const [siteRow] = await sql`
-      SELECT bs.custom_domain FROM blog_settings bs WHERE bs.site_id = ${site_id}
+      SELECT bs.custom_domain FROM blog_settings bs WHERE bs.business_id = ${site_id}
     `;
     const customDomain = siteRow?.custom_domain as string | null;
 
@@ -182,13 +182,13 @@ export async function POST(req: NextRequest) {
       );
 
       if (match) {
-        await sql`UPDATE sites SET gsc_property = ${match.siteUrl} WHERE id = ${site_id}`;
+        await sql`UPDATE businesses SET gsc_property = ${match.siteUrl} WHERE id = ${site_id}`;
         gscStatus = "found";
       } else {
         gscStatus = "not_found";
         // Notify admin that Search Console isn't verified for this domain
         await sql`
-          INSERT INTO notifications (subscription_id, category, severity, title, body, metadata)
+          INSERT INTO notifications (billing_account_id, category, severity, title, body, metadata)
           VALUES (
             ${pending.subscription_id}, 'campaigns', 'info',
             ${"Search Console not verified"},

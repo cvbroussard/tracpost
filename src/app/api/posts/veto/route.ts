@@ -32,10 +32,10 @@ export async function POST(req: NextRequest) {
     // post → account → site → subscriber
     const [post] = await sql`
       SELECT sp.id, sp.status, sp.slot_id, sp.source_asset_id,
-             sa.site_id, s.subscription_id
+             sa.business_id, s.billing_account_id
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      JOIN sites s ON sa.site_id = s.id
+      JOIN businesses s ON sa.business_id = s.id
       WHERE sp.id = ${post_id}
     `;
 
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     `;
 
     await sql`
-      INSERT INTO subscriber_actions (site_id, action_type, target_type, target_id, payload)
+      INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
       VALUES (${post.site_id}, 'veto', 'social_post', ${post_id}, ${JSON.stringify({ reason })})
     `;
 

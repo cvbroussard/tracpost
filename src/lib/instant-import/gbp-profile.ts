@@ -97,7 +97,7 @@ export async function importGbpProfile(asset: AssetRow): Promise<GbpImportResult
   // Persist. Update sites.gbp_profile (always). Backfill business_phone if
   // currently empty so we don't clobber an explicit operator override.
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET gbp_profile = ${JSON.stringify(gbpProfile)}::jsonb,
         business_phone = COALESCE(NULLIF(business_phone, ''), ${primaryPhone}),
         updated_at = NOW()

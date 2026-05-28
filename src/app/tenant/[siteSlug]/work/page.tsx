@@ -47,7 +47,7 @@ export default async function TenantWorkPage({ params }: Props) {
 
   // Load work content + a small slice of website_copy for fallbacks
   const workContent = await loadWorkContent(ctx.siteId);
-  const [siteRow] = await sql`SELECT website_copy FROM sites WHERE id = ${ctx.siteId}`;
+  const [siteRow] = await sql`SELECT website_copy FROM businesses WHERE id = ${ctx.siteId}`;
   const websiteCopy = (siteRow?.website_copy as WebsiteCopy | null) || null;
 
   const hostMode = await detectHostMode();

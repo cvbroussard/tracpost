@@ -87,7 +87,7 @@ Be precise with hex colors. For fonts, return the family name (e.g., "Inter", "O
  */
 export async function refreshSiteTheme(siteId: string): Promise<BlogTheme> {
   const [site] = await sql`
-    SELECT url FROM sites WHERE id = ${siteId}
+    SELECT url FROM businesses WHERE id = ${siteId}
   `;
 
   if (!site?.url) {
@@ -99,7 +99,7 @@ export async function refreshSiteTheme(siteId: string): Promise<BlogTheme> {
   await sql`
     UPDATE blog_settings
     SET theme = ${JSON.stringify(theme)}, updated_at = NOW()
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
   `;
 
   return theme;
@@ -110,7 +110,7 @@ export async function refreshSiteTheme(siteId: string): Promise<BlogTheme> {
  */
 export async function refreshStaleThemes(): Promise<number> {
   const stale = await sql`
-    SELECT site_id FROM blog_settings
+    SELECT business_id FROM blog_settings
     WHERE blog_enabled = true
       AND (updated_at IS NULL OR updated_at < NOW() - INTERVAL '7 days')
   `;

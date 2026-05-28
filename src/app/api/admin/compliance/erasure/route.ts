@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const [sub] = await sql`SELECT id, is_test FROM subscriptions WHERE id = ${subscription_id}`;
+  const [sub] = await sql`SELECT id, is_test FROM accounts WHERE id = ${subscription_id}`;
   if (!sub) {
     return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
   }

@@ -22,8 +22,8 @@ export async function getSiteTier(siteId: string): Promise<string | null> {
 
   const [row] = await sql`
     SELECT p.tier
-    FROM sites s
-    LEFT JOIN subscriptions sub ON sub.id = s.subscription_id
+    FROM businesses s
+    LEFT JOIN accounts sub ON sub.id = s.billing_account_id
     LEFT JOIN plans p ON p.id = sub.plan_id
     WHERE s.id = ${siteId}
     LIMIT 1

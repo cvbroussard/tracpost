@@ -28,7 +28,7 @@ export async function POST(
 
   const [site] = await sql`
     SELECT name, blog_slug, business_type, location, brand_playbook
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -61,7 +61,7 @@ export async function POST(
     });
 
     await sql`
-      UPDATE sites SET website_copy = ${JSON.stringify(copy)}::jsonb
+      UPDATE businesses SET website_copy = ${JSON.stringify(copy)}::jsonb
       WHERE id = ${siteId}
     `;
 

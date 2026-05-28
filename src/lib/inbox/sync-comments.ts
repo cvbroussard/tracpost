@@ -12,11 +12,11 @@ const MAX_POSTS_PER_SYNC = 20;
 export async function syncComments(siteId: string): Promise<number> {
   // Get all active social accounts for this site that have an adapter with fetchComments
   const accounts = await sql`
-    SELECT sa.id, sa.subscription_id, sa.platform, sa.account_id,
+    SELECT sa.id, sa.billing_account_id, sa.platform, sa.account_id,
            sa.access_token_encrypted, sa.metadata
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.status = 'active'
   `;
 
   let totalAdded = 0;
@@ -60,7 +60,7 @@ export async function syncComments(siteId: string): Promise<number> {
         for (const comment of comments) {
           const [inserted] = await sql`
             INSERT INTO inbox_comments (
-              subscription_id, site_id, social_account_id, post_id,
+              billing_account_id, business_id, social_account_id, post_id,
               platform, platform_post_id, platform_comment_id,
               author_name, author_username, author_avatar_url, author_platform_id,
               body, commented_at, raw_data

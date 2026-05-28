@@ -29,7 +29,7 @@ export async function resolveAdAccount(args: {
       JOIN social_accounts sa ON sa.id = pa.social_account_id
       WHERE pa.id = ${args.platformAssetId}
         AND pa.asset_type = 'meta_ad_account'
-        AND sa.subscription_id = ${args.subscriptionId}
+        AND sa.billing_account_id = ${args.subscriptionId}
       LIMIT 1
     `;
     if (rows.length === 0) return null;
@@ -42,12 +42,12 @@ export async function resolveAdAccount(args: {
   // Fall back to primary assigned to the active Business
   const rows = await sql`
     SELECT pa.asset_id, sa.access_token_encrypted
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${args.activeSiteId}
+    WHERE spa.business_id = ${args.activeSiteId}
       AND pa.asset_type = 'meta_ad_account'
-      AND sa.subscription_id = ${args.subscriptionId}
+      AND sa.billing_account_id = ${args.subscriptionId}
     ORDER BY spa.is_primary DESC, pa.created_at DESC
     LIMIT 1
   `;

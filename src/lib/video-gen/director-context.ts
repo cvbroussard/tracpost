@@ -41,7 +41,7 @@ export async function gatherDirectorContext(
 ): Promise<DirectorContext | null> {
   const [asset] = await sql`
     SELECT ma.storage_url, ma.ai_analysis, s.brand_dna
-    FROM media_assets ma JOIN sites s ON s.id = ma.site_id
+    FROM media_assets ma JOIN businesses s ON s.id = ma.business_id
     WHERE ma.id = ${assetId}
   `;
   if (!asset) return null;

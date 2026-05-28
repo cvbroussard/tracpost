@@ -317,7 +317,7 @@ async function storeAuditResults(
   // Store one summary audit row
   try {
     await sql`
-      INSERT INTO seo_audits (site_id, page_type, page_id, url, audit_data, seo_score, issues)
+      INSERT INTO seo_audits (business_id, page_type, page_id, url, audit_data, seo_score, issues)
       VALUES (
         ${siteId},
         'site_audit',
@@ -350,7 +350,7 @@ async function storeAuditResults(
     try {
       const pathname = new URL(page.url).pathname;
       await sql`
-        INSERT INTO seo_audits (site_id, page_type, page_id, url, audit_data, seo_score, issues)
+        INSERT INTO seo_audits (business_id, page_type, page_id, url, audit_data, seo_score, issues)
         VALUES (
           ${siteId},
           ${page.pageType},

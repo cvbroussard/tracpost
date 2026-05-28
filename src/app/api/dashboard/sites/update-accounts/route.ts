@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
 
   // Verify ownership and that provisioning hasn't started
   const [site] = await sql`
-    SELECT id, metadata FROM sites
+    SELECT id, metadata FROM businesses
     WHERE id = ${siteId}
-      AND subscription_id = ${session.subscriptionId}
+      AND billing_account_id = ${session.subscriptionId}
       AND provisioning_status = 'requested'
       AND is_active = true
   `;
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   };
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET metadata = ${JSON.stringify(updatedMeta)}::jsonb, updated_at = NOW()
     WHERE id = ${siteId}
   `;

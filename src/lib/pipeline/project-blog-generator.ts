@@ -57,8 +57,8 @@ export async function generateProjectArticle(
   const [site] = await sql`
     SELECT s.name, s.brand_voice, s.content_vibe, s.url, s.blog_slug,
            bs.custom_domain
-    FROM sites s
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    FROM businesses s
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE s.id = ${siteId}
   `;
 
@@ -259,7 +259,7 @@ export async function generateArticlePrompts(
   projectId: string
 ): Promise<ArticlePrompt[]> {
   const [project] = await sql`
-    SELECT id, name, description, address, start_date, end_date, site_id
+    SELECT id, name, description, address, start_date, end_date, business_id
     FROM projects WHERE id = ${projectId}
   `;
   if (!project) return [];
@@ -270,7 +270,7 @@ export async function generateArticlePrompts(
   // and playbook audience define the reader and the rhetorical stance.
   const [site] = await sql`
     SELECT business_type, content_vibe, brand_playbook
-    FROM sites WHERE id = ${project.site_id}
+    FROM businesses WHERE id = ${project.site_id}
   `;
 
   const businessType = (site?.business_type as string) || "business";
@@ -379,8 +379,8 @@ export async function generateProjectArticleFromPrompt(
   const [site] = await sql`
     SELECT s.name, s.brand_voice, s.content_vibe, s.url, s.blog_slug,
            bs.custom_domain
-    FROM sites s
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    FROM businesses s
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE s.id = ${siteId}
   `;
 

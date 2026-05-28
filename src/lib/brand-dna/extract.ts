@@ -152,7 +152,7 @@ export async function extractBrandSignals(siteId: string): Promise<BrandSignals>
            COALESCE(like_count, 0) + COALESCE(comment_count, 0) AS engagement,
            posted_at
     FROM historical_posts
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND caption IS NOT NULL
       AND length(caption) >= 15
       AND (posted_at IS NULL OR posted_at >= NOW() - INTERVAL '18 months')
@@ -169,7 +169,7 @@ export async function extractBrandSignals(siteId: string): Promise<BrandSignals>
   const reviewRows = await sql`
     SELECT body, metadata->>'star_rating' AS star_rating
     FROM engagement_events
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND platform = 'gbp'
       AND event_type = 'review'
       AND body IS NOT NULL

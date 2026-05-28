@@ -20,8 +20,8 @@ export default async function LocationPickerPage({
     ? await sql`
         SELECT sa.id, sa.account_name, sa.metadata
         FROM social_accounts sa
-        JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-        WHERE ssl.site_id = ${siteId}
+        JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+        WHERE ssl.business_id = ${siteId}
           AND sa.platform = 'gbp'
           AND sa.status = 'pending_assignment'
       `
@@ -47,7 +47,7 @@ export default async function LocationPickerPage({
   }
 
   const sites = await sql`
-    SELECT id, name FROM sites WHERE is_active = true ORDER BY name
+    SELECT id, name FROM businesses WHERE is_active = true ORDER BY name
   `;
 
   const pendingConnections = pending.map((p) => {

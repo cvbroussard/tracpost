@@ -46,7 +46,7 @@ export async function upsertEngagedPerson(input: UpsertPersonInput): Promise<str
 
   // 2. New person — create the engaged_person row first
   const [newPerson] = await sql`
-    INSERT INTO engaged_persons (subscription_id, display_name)
+    INSERT INTO engaged_persons (billing_account_id, display_name)
     VALUES (${input.subscriptionId}, ${input.displayName})
     RETURNING id
   `;

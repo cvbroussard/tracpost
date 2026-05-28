@@ -40,7 +40,7 @@ export async function PATCH(
   // Verify ownership before update
   const [existing] = await sql`
     SELECT id, status FROM blog_posts_v2
-    WHERE id = ${id} AND site_id = ${session.activeSiteId}
+    WHERE id = ${id} AND business_id = ${session.activeSiteId}
   `;
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -89,7 +89,7 @@ export async function DELETE(
   const { id } = await params;
   const [existing] = await sql`
     SELECT id FROM blog_posts_v2
-    WHERE id = ${id} AND site_id = ${session.activeSiteId}
+    WHERE id = ${id} AND business_id = ${session.activeSiteId}
   `;
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

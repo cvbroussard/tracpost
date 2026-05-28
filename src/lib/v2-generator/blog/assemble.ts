@@ -77,7 +77,7 @@ export interface AssembledBlogPrompt {
 export async function assembleBlogPrompt(spec: BlogGenerateSpec): Promise<AssembledBlogPrompt> {
   // 1. Site context
   const [site] = await sql`
-    SELECT name, url, brand_dna FROM sites WHERE id = ${spec.siteId}
+    SELECT name, url, brand_dna FROM businesses WHERE id = ${spec.siteId}
   `;
   if (!site) throw new Error(`Site ${spec.siteId} not found`);
   const siteName = String(site.name || "");

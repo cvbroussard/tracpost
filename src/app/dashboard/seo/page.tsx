@@ -21,12 +21,12 @@ export default async function SeoPage() {
   const siteId = session.activeSiteId;
 
   const [siteRows, pageScores, searchData, contentRows] = await Promise.all([
-    sql`SELECT id, name, url FROM sites WHERE id = ${siteId}`,
+    sql`SELECT id, name, url FROM businesses WHERE id = ${siteId}`,
 
     sql`
       SELECT url, performance, seo, accessibility, best_practices, scored_at
       FROM page_scores
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY url ASC
     `,
 
@@ -34,7 +34,7 @@ export default async function SeoPage() {
       SELECT query, SUM(impressions)::int AS impressions, SUM(clicks)::int AS clicks,
              ROUND(AVG(position)::numeric, 1) AS avg_position
       FROM search_performance
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
         AND date >= (CURRENT_DATE - INTERVAL '28 days')
       GROUP BY query
       ORDER BY impressions DESC
@@ -45,7 +45,7 @@ export default async function SeoPage() {
       SELECT COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE status = 'active')::int AS active
       FROM seo_content
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
     `,
   ]);
 

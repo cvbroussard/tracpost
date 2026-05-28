@@ -22,7 +22,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
   const origin = customDomain ? `https://${customDomain}` : `https://preview.tracpost.com/${siteSlug}`;
 
   const [siteRow] = await sql`
-    SELECT page_config, business_type FROM sites WHERE id = ${site.siteId}
+    SELECT page_config, business_type FROM businesses WHERE id = ${site.siteId}
   `;
 
   const pageConfig = normalizePageConfig(

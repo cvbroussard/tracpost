@@ -20,8 +20,8 @@ export default async function GooglePhotosPage() {
            ma.ai_analysis->>'scene_type' AS scene_type,
            gps.id AS sync_id, gps.synced_at
     FROM media_assets ma
-    LEFT JOIN gbp_photo_sync gps ON gps.media_asset_id = ma.id AND gps.site_id = ${siteId}
-    WHERE ma.site_id = ${siteId}
+    LEFT JOIN gbp_photo_sync gps ON gps.media_asset_id = ma.id AND gps.business_id = ${siteId}
+    WHERE ma.business_id = ${siteId}
       AND (ma.media_type LIKE 'image/%' OR ma.media_type = 'image')
       AND ma.processing_stage IN ('briefed', 'analyzed')
       AND COALESCE(ma.metadata->>'gbp_upload_failed', 'false') != 'true'
@@ -30,14 +30,14 @@ export default async function GooglePhotosPage() {
 
   const [gbpConnected] = await sql`
     SELECT 1 FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status IN ('active', 'token_expired')
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp' AND sa.status IN ('active', 'token_expired')
     LIMIT 1
   `;
 
   // Cover + logo
   const [siteAssets] = await sql`
-    SELECT gbp_cover_asset_id, business_logo FROM sites WHERE id = ${siteId}
+    SELECT gbp_cover_asset_id, business_logo FROM businesses WHERE id = ${siteId}
   `;
   const coverAssetId = siteAssets?.gbp_cover_asset_id as string | null;
   const logoUrl = (siteAssets?.business_logo as string) || null;

@@ -121,7 +121,7 @@ export async function GET(
   const scores = await sql`
     SELECT url, performance, seo, accessibility, best_practices, audits, scored_at
     FROM page_scores
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
     ORDER BY url ASC
   `;
 
@@ -153,8 +153,8 @@ export async function POST(
     // Get site's custom domain or subdomain
     const [site] = await sql`
       SELECT bs.custom_domain, bs.subdomain
-      FROM sites s
-      LEFT JOIN blog_settings bs ON bs.site_id = s.id
+      FROM businesses s
+      LEFT JOIN blog_settings bs ON bs.business_id = s.id
       WHERE s.id = ${siteId}
     `;
 
@@ -186,9 +186,9 @@ export async function POST(
         batch.map(async (url) => {
           const result = await scoreUrl(url);
           await sql`
-            INSERT INTO page_scores (site_id, url, performance, seo, accessibility, best_practices, audits, scored_at)
+            INSERT INTO page_scores (business_id, url, performance, seo, accessibility, best_practices, audits, scored_at)
             VALUES (${siteId}, ${url}, ${result.performance}, ${result.seo}, ${result.accessibility}, ${result.bestPractices}, ${JSON.stringify(result.audits)}, NOW())
-            ON CONFLICT (site_id, url) DO UPDATE SET
+            ON CONFLICT (business_id, url) DO UPDATE SET
               performance = EXCLUDED.performance,
               seo = EXCLUDED.seo,
               accessibility = EXCLUDED.accessibility,
@@ -219,9 +219,9 @@ export async function POST(
     const result = await scoreUrl(url);
 
     await sql`
-      INSERT INTO page_scores (site_id, url, performance, seo, accessibility, best_practices, audits, scored_at)
+      INSERT INTO page_scores (business_id, url, performance, seo, accessibility, best_practices, audits, scored_at)
       VALUES (${siteId}, ${url}, ${result.performance}, ${result.seo}, ${result.accessibility}, ${result.bestPractices}, ${JSON.stringify(result.audits)}, NOW())
-      ON CONFLICT (site_id, url) DO UPDATE SET
+      ON CONFLICT (business_id, url) DO UPDATE SET
         performance = EXCLUDED.performance,
         seo = EXCLUDED.seo,
         accessibility = EXCLUDED.accessibility,

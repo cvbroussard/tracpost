@@ -22,8 +22,8 @@ export async function POST(req: NextRequest) {
 
   // Verify session belongs to this kiosk's site
   const [session] = await sql`
-    SELECT id, site_id FROM spotlight_sessions
-    WHERE id = ${session_id} AND site_id = ${kiosk.siteId} AND status = 'active'
+    SELECT id, business_id FROM spotlight_sessions
+    WHERE id = ${session_id} AND business_id = ${kiosk.siteId} AND status = 'active'
   `;
 
   if (!session) return NextResponse.json({ error: "Session not found or expired" }, { status: 404 });
@@ -53,13 +53,13 @@ export async function POST(req: NextRequest) {
   // Log analytics
   if (star_rating) {
     await sql`
-      INSERT INTO spotlight_analytics (session_id, site_id, event, metadata)
+      INSERT INTO spotlight_analytics (session_id, business_id, event, metadata)
       VALUES (${session_id}, ${kiosk.siteId}, 'rating_tapped', ${JSON.stringify({ rating: star_rating })})
     `;
   }
 
   await sql`
-    INSERT INTO spotlight_analytics (session_id, site_id, event)
+    INSERT INTO spotlight_analytics (session_id, business_id, event)
     VALUES (${session_id}, ${kiosk.siteId}, 'review_submitted')
   `;
 

@@ -42,8 +42,8 @@ export async function POST(req: NextRequest) {
 
   // Verify the subscriber owns this site.
   const [siteRow] = await sql`
-    SELECT id FROM sites
-    WHERE id = ${siteId} AND subscription_id = ${session.subscriptionId}
+    SELECT id FROM businesses
+    WHERE id = ${siteId} AND billing_account_id = ${session.subscriptionId}
     LIMIT 1
   `;
   if (!siteRow) {
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     FROM platform_assets pa
     JOIN social_accounts sa ON sa.id = pa.social_account_id
     WHERE pa.id = ${platformAssetId}
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
     LIMIT 1
   `;
   if (!assetRow) {
@@ -69,9 +69,9 @@ export async function POST(req: NextRequest) {
   // Strict 1:1: clear any existing primary assignment for this site+platform
   // before binding the new asset. One business = one Page.
   await sql`
-    UPDATE site_platform_assets
+    UPDATE business_platform_assets
     SET is_primary = false
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND platform_asset_id IN (
         SELECT id FROM platform_assets WHERE platform = ${assetRow.platform}
       )

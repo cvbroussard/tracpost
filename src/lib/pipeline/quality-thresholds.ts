@@ -31,7 +31,7 @@ const MIN_SAMPLE_SIZE = 10;
  */
 export async function getThresholds(siteId: string): Promise<QualityThresholds> {
   const [site] = await sql`
-    SELECT quality_thresholds FROM sites WHERE id = ${siteId}
+    SELECT quality_thresholds FROM businesses WHERE id = ${siteId}
   `;
 
   const stored = (site?.quality_thresholds || {}) as Partial<QualityThresholds>;
@@ -57,7 +57,7 @@ export async function recalculateThresholds(siteId: string): Promise<QualityThre
       MIN(quality_score) AS min_score,
       MAX(quality_score) AS max_score
     FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND processing_stage = 'analyzed'
       AND quality_score IS NOT NULL
   `;
@@ -77,7 +77,7 @@ export async function recalculateThresholds(siteId: string): Promise<QualityThre
   };
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET quality_thresholds = ${JSON.stringify(thresholds)}::jsonb
     WHERE id = ${siteId}
   `;

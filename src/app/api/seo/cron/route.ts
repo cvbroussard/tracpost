@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
     // Get all sites with URLs
     const sites = await sql`
       SELECT s.id, s.url, s.name, sub.is_active
-      FROM sites s
-      JOIN subscriptions sub ON sub.id = s.subscription_id
+      FROM businesses s
+      JOIN accounts sub ON sub.id = s.billing_account_id
       WHERE s.url IS NOT NULL
         AND s.url != ''
         AND sub.is_active = true

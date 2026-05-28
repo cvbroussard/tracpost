@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   }
 
   const sites = await sql`
-    SELECT id, name FROM sites
+    SELECT id, name FROM businesses
     WHERE autopilot_enabled = true
       AND is_active = true
       AND provisioning_status = 'complete'

@@ -8,9 +8,9 @@ export default async function UsagePage() {
       SELECT COALESCE(owner.name, owner.email, '—') AS name, sub.plan,
              COUNT(ul.id)::int AS total_actions,
              MAX(ul.created_at) AS last_action
-      FROM subscriptions sub
-      LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
-      LEFT JOIN usage_log ul ON ul.subscription_id = sub.id
+      FROM accounts sub
+      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+      LEFT JOIN usage_log ul ON ul.billing_account_id = sub.id
       WHERE sub.is_active = true
       GROUP BY sub.id, owner.name, owner.email, sub.plan
       ORDER BY total_actions DESC
@@ -27,9 +27,9 @@ export default async function UsagePage() {
              COALESCE(owner.name, owner.email, '—') AS subscriber_name,
              s.name AS site_name
       FROM usage_log ul
-      JOIN subscriptions sub ON ul.subscription_id = sub.id
-      LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
-      LEFT JOIN sites s ON ul.site_id = s.id
+      JOIN accounts sub ON ul.billing_account_id = sub.id
+      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+      LEFT JOIN businesses s ON ul.business_id = s.id
       ORDER BY ul.created_at DESC
       LIMIT 30
     `,

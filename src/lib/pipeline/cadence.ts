@@ -100,8 +100,8 @@ async function countPublishedToday(siteId: string, platform: string): Promise<nu
     SELECT COUNT(*)::int AS n
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
       AND sa.platform = ${platform}
       AND sp.status = 'published'
       AND sp.published_at >= CURRENT_DATE
@@ -117,8 +117,8 @@ async function countPublishedThisWeek(siteId: string, platform: string): Promise
     SELECT COUNT(*)::int AS n
     FROM social_posts sp
     JOIN social_accounts sa ON sp.account_id = sa.id
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
       AND sa.platform = ${platform}
       AND sp.status = 'published'
       AND sp.published_at >= DATE_TRUNC('week', CURRENT_DATE)
@@ -189,7 +189,7 @@ export async function shouldPublishNow(
  */
 export async function loadCadenceConfig(siteId: string): Promise<CadenceConfig> {
   const [site] = await sql`
-    SELECT cadence_config FROM sites WHERE id = ${siteId}
+    SELECT cadence_config FROM businesses WHERE id = ${siteId}
   `;
   const stored = (site?.cadence_config || {}) as CadenceConfig;
 
@@ -199,8 +199,8 @@ export async function loadCadenceConfig(siteId: string): Promise<CadenceConfig> 
   const accounts = await sql`
     SELECT sa.platform
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.status = 'active'
   `;
 
   for (const acct of accounts) {

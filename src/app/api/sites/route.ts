@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
       : null;
 
     const rows = await sql`
-      INSERT INTO sites (
-        subscription_id, name, domain, blog_url, url, external_id, brand_voice, business_type,
+      INSERT INTO businesses (
+        billing_account_id, name, domain, blog_url, url, external_id, brand_voice, business_type,
         location, place_id, place_lat, place_lon, place_name, place_set_at, timezone
       )
       VALUES (
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         ${place_id ? (place_name || null) : null}, ${place_id ? new Date() : null},
         ${timezone}
       )
-      RETURNING id, subscription_id, name, domain, blog_url, url, external_id, brand_voice, business_type, location, created_at
+      RETURNING id, billing_account_id, name, domain, blog_url, url, external_id, brand_voice, business_type, location, created_at
     `;
 
     return NextResponse.json({ site: rows[0] }, { status: 201 });
@@ -75,8 +75,8 @@ export async function GET(req: NextRequest) {
   try {
     const rows = await sql`
       SELECT id, name, url, external_id, brand_voice, metadata, created_at, updated_at
-      FROM sites
-      WHERE subscription_id = ${auth.subscriptionId}
+      FROM businesses
+      WHERE billing_account_id = ${auth.subscriptionId}
       ORDER BY created_at DESC
     `;
     return NextResponse.json({ sites: rows });

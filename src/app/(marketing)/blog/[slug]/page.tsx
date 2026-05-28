@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const [post] = await sql`
     SELECT bp.title, bp.excerpt, bp.og_image_url, bp.metadata
     FROM blog_posts bp
-    JOIN sites s ON s.id = bp.site_id
+    JOIN businesses s ON s.id = bp.business_id
     WHERE bp.slug = ${slug} AND s.blog_slug = 'tracpost' AND bp.status = 'published'
   `;
   if (!post) return {};
@@ -42,7 +42,7 @@ export default async function MarketingBlogArticle({ params }: Props) {
     SELECT bp.title, bp.body, bp.excerpt, bp.og_image_url, bp.published_at,
            bp.content_type, bp.content_pillar, bp.metadata
     FROM blog_posts bp
-    JOIN sites s ON s.id = bp.site_id
+    JOIN businesses s ON s.id = bp.business_id
     WHERE bp.slug = ${slug} AND s.blog_slug = 'tracpost' AND bp.status = 'published'
   `;
   if (!post) notFound();
@@ -58,7 +58,7 @@ export default async function MarketingBlogArticle({ params }: Props) {
     const siblings = await sql`
       SELECT bp.slug, bp.title, bp.metadata
       FROM blog_posts bp
-      JOIN sites s ON s.id = bp.site_id
+      JOIN businesses s ON s.id = bp.business_id
       WHERE s.blog_slug = 'tracpost'
         AND bp.status = 'published'
         AND bp.metadata->'series'->>'slug' = ${seriesMeta.slug}

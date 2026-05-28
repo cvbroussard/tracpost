@@ -32,7 +32,7 @@ export async function POST(
   const body = await req.json().catch(() => ({}));
   const step: "categorize" | "derive" | "all" = body.step || "all";
 
-  const [site] = await sql`SELECT blog_slug FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT blog_slug FROM businesses WHERE id = ${siteId}`;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }

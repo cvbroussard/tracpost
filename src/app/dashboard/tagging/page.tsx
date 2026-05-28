@@ -25,20 +25,20 @@ export default async function TaggingPage() {
             b.logo_service_url, ma.storage_url AS hero_url
         FROM brands b
         LEFT JOIN media_assets ma ON ma.id = b.hero_asset_id
-        WHERE b.site_id = ${siteId}
+        WHERE b.business_id = ${siteId}
         ORDER BY b.name`,
     sql`SELECT id, name, slug, status, start_date, end_date, address, description,
             caption_mode, manual_caption_count, hero_asset_id, metadata,
             place_id, gps_lat, gps_lng
-        FROM projects WHERE site_id = ${siteId} ORDER BY name`,
+        FROM projects WHERE business_id = ${siteId} ORDER BY name`,
     sql`SELECT id, name, slug, address, city, state, description,
-            phone, hours, gbp_location_id, is_primary, hero_asset_id, metadata
-        FROM branches WHERE site_id = ${siteId} ORDER BY is_primary DESC, name`,
+            phone, hours, gbp_profile_id AS gbp_location_id, is_primary, hero_asset_id, metadata
+        FROM locations WHERE business_id = ${siteId} ORDER BY is_primary DESC, name`,
     sql`SELECT id, name, slug, description, price_range, duration, display_order,
             hero_asset_id, metadata, source
-        FROM services WHERE site_id = ${siteId} ORDER BY display_order ASC, name ASC`,
+        FROM services WHERE business_id = ${siteId} ORDER BY display_order ASC, name ASC`,
     sql`SELECT brand_label, project_label, persona_label, branch_label, service_label
-        FROM sites WHERE id = ${siteId}`,
+        FROM businesses WHERE id = ${siteId}`,
   ]);
   // Personas retired 2026-05-19.
   const personas: Array<Record<string, unknown>> = [];

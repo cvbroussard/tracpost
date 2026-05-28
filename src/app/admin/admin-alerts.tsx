@@ -52,11 +52,11 @@ export async function AdminAlerts() {
   const [newSubscribers, expiringTokens, pendingGbp, logCounts] = await Promise.all([
     // Sites with provisioning explicitly requested by subscriber
     sql`
-      SELECT sub.id AS subscription_id, u.name AS subscriber_name,
+      SELECT sub.id AS billing_account_id, u.name AS subscriber_name,
              s.name AS site_name, s.metadata AS site_metadata, s.created_at
-      FROM subscriptions sub
-      JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
-      JOIN sites s ON s.subscription_id = sub.id
+      FROM accounts sub
+      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+      JOIN businesses s ON s.billing_account_id = sub.id
       WHERE s.provisioning_status = 'requested'
         AND s.is_active = true
       ORDER BY s.created_at DESC
@@ -64,10 +64,10 @@ export async function AdminAlerts() {
     // Social accounts with tokens expiring in the next 7 days
     sql`
       SELECT sa.id, sa.platform, sa.account_name, sa.token_expires_at,
-             sub.id AS subscription_id, u.name AS subscriber_name
+             sub.id AS billing_account_id, u.name AS subscriber_name
       FROM social_accounts sa
-      JOIN subscriptions sub ON sa.subscription_id = sub.id
-      JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+      JOIN accounts sub ON sa.billing_account_id = sub.id
+      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
       WHERE sa.status = 'active'
         AND sa.token_expires_at IS NOT NULL
         AND sa.token_expires_at < NOW() + INTERVAL '7 days'

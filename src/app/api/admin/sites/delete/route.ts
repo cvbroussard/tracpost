@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   if (action === "deny") {
     const [site] = await sql`
-      UPDATE sites
+      UPDATE businesses
       SET deletion_status = NULL,
           deletion_requested_at = NULL,
           deletion_reason = NULL,
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   // Approve: soft delete
   const [site] = await sql`
-    SELECT id, name FROM sites
+    SELECT id, name FROM businesses
     WHERE id = ${siteId} AND deleted_at IS NULL
   `;
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET deleted_at = NOW(),
         autopilot_enabled = false,
         deletion_status = 'approved',
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   await sql`
     UPDATE blog_settings
     SET blog_enabled = false, updated_at = NOW()
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
   `;
 
   return NextResponse.json({

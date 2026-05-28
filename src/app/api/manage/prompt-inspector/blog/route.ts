@@ -47,15 +47,15 @@ export async function POST(req: NextRequest) {
   if (!heroId) {
     const usedRows = await sql`
       SELECT DISTINCT id FROM (
-        SELECT seed_asset_id AS id FROM blog_posts_v2 WHERE site_id = ${siteId} AND seed_asset_id IS NOT NULL
+        SELECT seed_asset_id AS id FROM blog_posts_v2 WHERE business_id = ${siteId} AND seed_asset_id IS NOT NULL
         UNION
-        SELECT hero_asset_id AS id FROM blog_posts_v2 WHERE site_id = ${siteId}
+        SELECT hero_asset_id AS id FROM blog_posts_v2 WHERE business_id = ${siteId}
       ) u
     `;
     const usedIds = usedRows.map((r) => r.id);
     const candidates = await sql`
       SELECT id FROM media_assets
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
         AND (media_type ILIKE 'image%' OR media_type = 'video')
         AND processing_stage IN ('briefed','analyzed')
         AND archived_at IS NULL
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   // Body candidates — pillar-matched if hero has tags whose parent pillar
   // resolves. Pillar derived from tags via site pillar_config (LOCKED 2026-05-09).
   const [hero] = await sql`SELECT content_tags FROM media_assets WHERE id = ${heroId}`;
-  const [pcRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${siteId}`;
+  const [pcRow] = await sql`SELECT pillar_config FROM businesses WHERE id = ${siteId}`;
   const pc = (pcRow?.pillar_config || []) as PillarConfig;
   const pillar = primaryPillarFromTags(
     (hero?.content_tags as string[] | null) || null,
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
   const bodyRows = pillarTagIds.length > 0
     ? await sql`
         SELECT id FROM media_assets
-        WHERE site_id = ${siteId}
+        WHERE business_id = ${siteId}
           AND id <> ${heroId}
           AND processing_stage IN ('briefed','analyzed')
           AND archived_at IS NULL
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       `
     : await sql`
         SELECT id FROM media_assets
-        WHERE site_id = ${siteId}
+        WHERE business_id = ${siteId}
           AND id <> ${heroId}
           AND processing_stage IN ('briefed','analyzed')
           AND archived_at IS NULL

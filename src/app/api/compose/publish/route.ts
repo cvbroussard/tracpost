@@ -106,13 +106,13 @@ export async function POST(req: NextRequest) {
   if (template.platform !== "blog") {
     const [bound] = await sql`
       SELECT pa.social_account_id, pa.platform, pa.asset_id, pa.metadata
-      FROM site_platform_assets spa
+      FROM business_platform_assets spa
       JOIN platform_assets pa ON pa.id = spa.platform_asset_id
       JOIN social_accounts sa ON sa.id = pa.social_account_id
-      WHERE spa.site_id = ${siteId}
+      WHERE spa.business_id = ${siteId}
         AND pa.platform = ${template.platform}
         AND spa.is_primary = true
-        AND sa.subscription_id = ${session.subscriptionId}
+        AND sa.billing_account_id = ${session.subscriptionId}
       LIMIT 1
     `;
     if (!bound) {
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
     SELECT id, storage_url, media_type
     FROM media_assets
     WHERE id = ANY(${assetIds}::uuid[])
-      AND site_id = ${siteId}
+      AND business_id = ${siteId}
   `;
   if (ownedAssets.length !== assetIds.length) {
     return NextResponse.json({ error: "One or more assets are not accessible" }, { status: 400 });

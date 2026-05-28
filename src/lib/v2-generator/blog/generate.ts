@@ -94,7 +94,7 @@ export async function generateBlogArticle(spec: BlogGenerateSpec): Promise<BlogG
 
   const [row] = await sql`
     INSERT INTO blog_posts_v2 (
-      site_id, slug, title, body, excerpt,
+      business_id, slug, title, body, excerpt,
       hero_asset_id, poster_asset_id, seed_asset_id, service_id, project_id,
       meta_title, meta_description,
       content_pillars, content_tags,

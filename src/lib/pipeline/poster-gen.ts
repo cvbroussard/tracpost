@@ -25,7 +25,7 @@ export async function generatePosterForAsset(
   sourceAssetId: string,
 ): Promise<string | null> {
   const [asset] = await sql`
-    SELECT id, site_id, storage_url, media_type, poster_asset_id
+    SELECT id, business_id, storage_url, media_type, poster_asset_id
     FROM media_assets
     WHERE id = ${sourceAssetId}
   `;
@@ -60,7 +60,7 @@ export async function generatePosterForAsset(
   // or the orchestrator pool.
   const [posterAsset] = await sql`
     INSERT INTO media_assets (
-      site_id, storage_url, media_type, source,
+      business_id, storage_url, media_type, source,
       processing_stage, sort_order, metadata
     )
     VALUES (

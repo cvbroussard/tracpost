@@ -18,7 +18,7 @@ export default async function SubscriptionPage() {
 
   const [subscriber] = await sql`
     SELECT id, name, plan, metadata, cancelled_at, created_at
-    FROM subscriptions
+    FROM accounts
     WHERE id = ${session.subscriptionId}
   `;
 
@@ -30,8 +30,8 @@ export default async function SubscriptionPage() {
   const allSites = await sql`
     SELECT id, name, business_type, location, provisioning_status,
            autopilot_enabled, is_active, created_at
-    FROM sites
-    WHERE subscription_id = ${session.subscriptionId}
+    FROM businesses
+    WHERE billing_account_id = ${session.subscriptionId}
     ORDER BY is_active DESC, created_at DESC
   `;
 

@@ -17,8 +17,8 @@ export async function DELETE(
   // Verify ownership through site
   const [kiosk] = await sql`
     SELECT k.id FROM spotlight_kiosks k
-    JOIN sites s ON s.id = k.site_id
-    WHERE k.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON s.id = k.business_id
+    WHERE k.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
 
   if (!kiosk) return NextResponse.json({ error: "Kiosk not found" }, { status: 404 });

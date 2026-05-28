@@ -93,11 +93,11 @@ export async function POST(
 
   const { id: assetId } = await params;
   const [asset] = await sql`
-    SELECT id, site_id, media_type FROM media_assets WHERE id = ${assetId}
+    SELECT id, business_id, media_type FROM media_assets WHERE id = ${assetId}
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   const [owned] = await sql`
-    SELECT id FROM sites WHERE id = ${asset.site_id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${asset.site_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });

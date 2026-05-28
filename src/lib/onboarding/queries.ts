@@ -23,7 +23,7 @@ export interface OnboardingSubmission {
 export async function createSubmission(subscriptionId: string): Promise<OnboardingSubmission> {
   const token = generateOnboardingToken();
   const [row] = await sql`
-    INSERT INTO onboarding_submissions (subscription_id, token)
+    INSERT INTO onboarding_submissions (billing_account_id, token)
     VALUES (${subscriptionId}, ${token})
     RETURNING *
   `;

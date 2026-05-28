@@ -20,8 +20,8 @@ export async function GET(req: NextRequest) {
   const accounts = await sql`
     SELECT sa.id, sa.platform, sa.account_name, sa.status, sa.token_expires_at
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.subscription_id = ${auth.subscriptionId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.billing_account_id = ${auth.subscriptionId}
     ORDER BY sa.platform ASC
   `;
 

@@ -43,7 +43,7 @@ export interface WorkContent {
 const EMPTY: WorkContent = {};
 
 export async function loadWorkContent(siteId: string): Promise<WorkContent> {
-  const [row] = await sql`SELECT work_content FROM sites WHERE id = ${siteId}`;
+  const [row] = await sql`SELECT work_content FROM businesses WHERE id = ${siteId}`;
   if (!row?.work_content) return EMPTY;
   return row.work_content as WorkContent;
 }
@@ -60,7 +60,7 @@ export async function loadServiceTiles(siteId: string, prefix = ""): Promise<Ser
            ma.storage_url AS hero_url
     FROM services s
     LEFT JOIN media_assets ma ON ma.id = s.hero_asset_id
-    WHERE s.site_id = ${siteId}
+    WHERE s.business_id = ${siteId}
     ORDER BY s.display_order, s.created_at
   `;
   return rows.map((r) => {

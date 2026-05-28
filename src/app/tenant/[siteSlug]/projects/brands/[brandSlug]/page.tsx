@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const [brand] = await sql`
     SELECT name, description FROM brands
-    WHERE site_id = ${site.siteId} AND slug = ${brandSlug}
+    WHERE business_id = ${site.siteId} AND slug = ${brandSlug}
   `;
   if (!brand) return {};
 
@@ -58,7 +58,7 @@ export default async function BrandDetailPage({ params }: Props) {
   const [brand] = await sql`
     SELECT id, name, slug, url, description
     FROM brands
-    WHERE site_id = ${site.siteId} AND slug = ${brandSlug}
+    WHERE business_id = ${site.siteId} AND slug = ${brandSlug}
   `;
   if (!brand) notFound();
 
@@ -90,7 +90,7 @@ export default async function BrandDetailPage({ params }: Props) {
     sql`
       SELECT id, title, slug, excerpt, og_image_url, published_at
       FROM blog_posts
-      WHERE site_id = ${site.siteId}
+      WHERE business_id = ${site.siteId}
         AND status = 'published'
         AND body ILIKE ${"%" + String(brand.name) + "%"}
       ORDER BY published_at DESC
@@ -112,17 +112,17 @@ export default async function BrandDetailPage({ params }: Props) {
       SELECT b.name, b.slug,
              (SELECT COUNT(*)::int FROM asset_brands ab WHERE ab.brand_id = b.id) AS asset_count
       FROM brands b
-      WHERE b.site_id = ${site.siteId}
+      WHERE b.business_id = ${site.siteId}
         AND b.id != ${brandId}
         AND (SELECT COUNT(*) FROM asset_brands ab WHERE ab.brand_id = b.id) >= 2
       ORDER BY (SELECT COUNT(*) FROM asset_brands ab WHERE ab.brand_id = b.id) DESC
       LIMIT 8
     `,
-    sql`SELECT nav_links, theme FROM blog_settings WHERE site_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo FROM sites WHERE id = ${site.siteId}`,
+    sql`SELECT nav_links, theme FROM blog_settings WHERE business_id = ${site.siteId}`,
+    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo FROM businesses WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
-      WHERE site_id = ${site.siteId}
+      WHERE business_id = ${site.siteId}
         AND media_type LIKE 'image%'
         AND metadata->>'is_logo' = 'true'
       LIMIT 1

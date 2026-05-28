@@ -58,7 +58,7 @@ async function recordHistoricalPost(input: {
 }): Promise<boolean> {
   const inserted = await sql`
     INSERT INTO historical_posts (
-      subscription_id, site_id, platform_asset_id, platform,
+      billing_account_id, business_id, platform_asset_id, platform,
       source_platform_id, post_type, caption, source_url,
       storage_url, thumbnail_url, posted_at,
       like_count, comment_count, width, height, duration_ms,

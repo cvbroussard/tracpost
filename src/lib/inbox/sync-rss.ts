@@ -17,7 +17,7 @@ export async function syncRssFeeds(siteId: string): Promise<number> {
   const feeds = await sql`
     SELECT id, feed_url, feed_name, last_item_id
     FROM rss_feeds
-    WHERE site_id = ${siteId} AND is_active = true
+    WHERE business_id = ${siteId} AND is_active = true
   `;
 
   let itemsCreated = 0;
@@ -45,7 +45,7 @@ export async function syncRssFeeds(siteId: string): Promise<number> {
         // Check if we already have this item
         const [existing] = await sql`
           SELECT id FROM media_assets
-          WHERE site_id = ${siteId} AND source = 'rss'
+          WHERE business_id = ${siteId} AND source = 'rss'
             AND metadata->>'source_url' = ${item.link}
         `;
         if (existing) continue;
@@ -62,7 +62,7 @@ export async function syncRssFeeds(siteId: string): Promise<number> {
         });
 
         await sql`
-          INSERT INTO media_assets (site_id, source, media_type, processing_stage, context_note, metadata, created_at)
+          INSERT INTO media_assets (business_id, source, media_type, processing_stage, context_note, metadata, created_at)
           VALUES (
             ${siteId},
             'rss',

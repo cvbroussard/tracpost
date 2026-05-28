@@ -41,7 +41,7 @@ export async function generateV2Content(spec: ContentSpec): Promise<GenerateResu
   const [site] = await sql`
     SELECT name, url, brand_dna,
            identity_policy, identity_waiver_signed_at
-    FROM sites
+    FROM businesses
     WHERE id = ${spec.siteId}
   `;
   if (!site) throw new Error(`Site ${spec.siteId} not found`);
@@ -267,7 +267,7 @@ async function persistV2(
   if (spec.pool === "blog") {
     const [row] = await sql`
       INSERT INTO blog_posts_v2 (
-        site_id, slug, title, body, excerpt,
+        business_id, slug, title, body, excerpt,
         hero_asset_id, poster_asset_id, seed_asset_id, service_id,
         meta_title, meta_description,
         content_pillars, content_tags,
@@ -297,7 +297,7 @@ async function persistV2(
   if (spec.pool === "project") {
     const [row] = await sql`
       INSERT INTO projects_v2 (
-        site_id, slug, name, description,
+        business_id, slug, name, description,
         hero_asset_id, poster_asset_id,
         content_pillars, content_tags,
         status, start_date, end_date,
@@ -328,7 +328,7 @@ async function persistV2(
   if (spec.pool === "service") {
     const [row] = await sql`
       INSERT INTO services_v2 (
-        site_id, slug, name, description, body, excerpt,
+        business_id, slug, name, description, body, excerpt,
         hero_asset_id, poster_asset_id,
         price_range, duration, display_order,
         content_pillars, content_tags,

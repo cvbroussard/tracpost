@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
         FROM engagement_events ee
         LEFT JOIN engaged_persons ep ON ep.id = ee.engaged_person_id
         LEFT JOIN engaged_person_handles eph ON eph.engaged_person_id = ep.id AND eph.platform = ee.platform
-        WHERE ee.subscription_id = ${subscriptionId} AND ee.site_id = ${siteId}
+        WHERE ee.billing_account_id = ${subscriptionId} AND ee.business_id = ${siteId}
           AND (
             -- Spam events: shown only when include_spam=true
             ((ee.metadata->>'is_spam') = 'true' AND ${includeSpam})
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
         FROM engagement_events ee
         LEFT JOIN engaged_persons ep ON ep.id = ee.engaged_person_id
         LEFT JOIN engaged_person_handles eph ON eph.engaged_person_id = ep.id AND eph.platform = ee.platform
-        WHERE ee.subscription_id = ${subscriptionId}
+        WHERE ee.billing_account_id = ${subscriptionId}
           AND (
             -- Spam events: shown only when include_spam=true
             ((ee.metadata->>'is_spam') = 'true' AND ${includeSpam})
@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
             WHERE engaged_person_id = ep.id
             ORDER BY last_seen_at DESC LIMIT 1) AS primary_platform
     FROM engaged_persons ep
-    WHERE ep.subscription_id = ${subscriptionId}
+    WHERE ep.billing_account_id = ${subscriptionId}
       AND (
         ${includeSpam}
         OR EXISTS (
@@ -120,14 +120,14 @@ export async function GET(req: NextRequest) {
       COUNT(*) FILTER (WHERE sentiment = 'negative')::int AS negative,
       COUNT(*) FILTER (WHERE sentiment = 'neutral')::int AS neutral
     FROM engagement_events
-    WHERE subscription_id = ${subscriptionId}
+    WHERE billing_account_id = ${subscriptionId}
       AND occurred_at > NOW() - INTERVAL '30 days'
   `;
 
   const byPlatform = await sql`
     SELECT platform, COUNT(*)::int AS count
     FROM engagement_events
-    WHERE subscription_id = ${subscriptionId}
+    WHERE billing_account_id = ${subscriptionId}
       AND occurred_at > NOW() - INTERVAL '30 days'
     GROUP BY platform
     ORDER BY count DESC

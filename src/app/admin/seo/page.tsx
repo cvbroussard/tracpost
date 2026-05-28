@@ -7,10 +7,10 @@ export default async function AdminSeoPage() {
   const sites = await sql`
     SELECT s.id, s.name, s.gsc_property, s.gsc_verification_token,
            bs.custom_domain,
-           (SELECT COUNT(*)::int FROM page_scores WHERE site_id = s.id) AS score_count,
-           (SELECT COUNT(*)::int FROM search_performance WHERE site_id = s.id) AS search_count
-    FROM sites s
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+           (SELECT COUNT(*)::int FROM page_scores WHERE business_id = s.id) AS score_count,
+           (SELECT COUNT(*)::int FROM search_performance WHERE business_id = s.id) AS search_count
+    FROM businesses s
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE s.is_active = true
     ORDER BY s.name ASC
   `;

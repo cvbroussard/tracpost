@@ -20,11 +20,11 @@ export async function POST(req: NextRequest) {
 
   // Find the invite
   const [member] = await sql`
-    SELECT u.id, u.subscription_id, u.site_id, u.name, u.role,
+    SELECT u.id, u.billing_account_id, u.business_id, u.name, u.role,
            u.invite_expires, u.invite_consumed, u.is_active,
            s.plan
     FROM users u
-    JOIN subscriptions s ON u.subscription_id = s.id
+    JOIN accounts s ON u.billing_account_id = s.id
     WHERE u.invite_token = ${token}
   `;
 
@@ -61,12 +61,12 @@ export async function POST(req: NextRequest) {
   // Fetch sites for this subscriber (filtered by site scope if set)
   const sites = member.site_id
     ? await sql`
-        SELECT id, name, url FROM sites
+        SELECT id, name, url FROM businesses
         WHERE id = ${member.site_id} AND is_active = true
       `
     : await sql`
-        SELECT id, name, url FROM sites
-        WHERE subscription_id = ${member.subscription_id} AND is_active = true
+        SELECT id, name, url FROM businesses
+        WHERE billing_account_id = ${member.subscription_id} AND is_active = true
         ORDER BY created_at ASC
       `;
 

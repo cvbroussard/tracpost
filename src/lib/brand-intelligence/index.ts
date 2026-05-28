@@ -28,14 +28,14 @@ export type {
 
 export async function getWizardState(siteId: string): Promise<WizardState | null> {
   const [row] = await sql`
-    SELECT brand_wizard_state FROM sites WHERE id = ${siteId}
+    SELECT brand_wizard_state FROM businesses WHERE id = ${siteId}
   `;
   return (row?.brand_wizard_state as WizardState) || null;
 }
 
 async function saveWizardState(siteId: string, state: WizardState): Promise<void> {
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_wizard_state = ${JSON.stringify(state)},
         updated_at = NOW()
     WHERE id = ${siteId}
@@ -74,7 +74,7 @@ export async function startResearch(
   };
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_wizard_state = ${JSON.stringify(state)},
         brand_playbook = ${JSON.stringify(partialPlaybook)},
         updated_at = NOW()
@@ -109,7 +109,7 @@ export async function selectAnglesAndGenerateHooks(
 
   // Get research from partial playbook
   const [site] = await sql`
-    SELECT brand_playbook FROM sites WHERE id = ${siteId}
+    SELECT brand_playbook FROM businesses WHERE id = ${siteId}
   `;
   const partialPlaybook = site?.brand_playbook as Partial<BrandPlaybook>;
   if (!partialPlaybook?.audienceResearch) {
@@ -134,7 +134,7 @@ export async function selectAnglesAndGenerateHooks(
   };
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_wizard_state = ${JSON.stringify(state)},
         brand_playbook = ${JSON.stringify(updatedPlaybook)},
         updated_at = NOW()
@@ -177,7 +177,7 @@ export async function rateHooksAndFinalize(
 
   // Get partial playbook
   const [site] = await sql`
-    SELECT brand_playbook FROM sites WHERE id = ${siteId}
+    SELECT brand_playbook FROM businesses WHERE id = ${siteId}
   `;
   const partialPlaybook = site?.brand_playbook as Partial<BrandPlaybook>;
   if (!partialPlaybook?.audienceResearch || !partialPlaybook?.brandPositioning) {
@@ -210,7 +210,7 @@ export async function rateHooksAndFinalize(
 
   for (const hook of allKeptHooks) {
     await sql`
-      INSERT INTO hook_bank (site_id, text, category, rating)
+      INSERT INTO hook_bank (business_id, text, category, rating)
       VALUES (${siteId}, ${hook.text}, ${hook.category}, ${hook.rating})
     `;
   }
@@ -226,7 +226,7 @@ export async function rateHooksAndFinalize(
 
   // Save final playbook, clear wizard state, update brand_voice
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_playbook = ${JSON.stringify(playbook)},
         brand_voice = ${JSON.stringify(brandVoice)},
         brand_wizard_state = NULL,
@@ -253,7 +253,7 @@ export async function rateHooksAndFinalize(
 
 export async function getPlaybook(siteId: string): Promise<BrandPlaybook | null> {
   const [row] = await sql`
-    SELECT brand_playbook FROM sites WHERE id = ${siteId}
+    SELECT brand_playbook FROM businesses WHERE id = ${siteId}
   `;
   const pb = row?.brand_playbook as BrandPlaybook | null;
   if (!pb?.offerCore) return null; // incomplete playbook
@@ -267,14 +267,14 @@ export async function getHookBank(
   if (rating) {
     const rows = await sql`
       SELECT text, category, rating FROM hook_bank
-      WHERE site_id = ${siteId} AND rating = ${rating}
+      WHERE business_id = ${siteId} AND rating = ${rating}
       ORDER BY used_count ASC, RANDOM()
     `;
     return rows as Array<{ text: string; category: string; rating: string }>;
   }
   const rows = await sql`
     SELECT text, category, rating FROM hook_bank
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
     ORDER BY
       CASE rating WHEN 'loved' THEN 0 ELSE 1 END,
       used_count ASC, RANDOM()
@@ -289,6 +289,6 @@ export async function markHookUsed(siteId: string, hookText: string): Promise<vo
   await sql`
     UPDATE hook_bank
     SET used_count = used_count + 1, last_used_at = NOW()
-    WHERE site_id = ${siteId} AND text = ${hookText}
+    WHERE business_id = ${siteId} AND text = ${hookText}
   `;
 }

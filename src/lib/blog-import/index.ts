@@ -14,7 +14,7 @@ import { rehostImages, rewriteImageUrls } from "./images";
 export async function runBlogImport(importId: string): Promise<void> {
   // Load the import job
   const [job] = await sql`
-    SELECT id, site_id, source_url, discovered_urls, status
+    SELECT id, business_id, source_url, discovered_urls, status
     FROM blog_imports WHERE id = ${importId}
   `;
   if (!job) throw new Error(`Import job ${importId} not found`);
@@ -60,7 +60,7 @@ export async function runBlogImport(importId: string): Promise<void> {
       let slug = post.slug;
       const [existing] = await sql`
         SELECT id, source FROM blog_posts
-        WHERE site_id = ${siteId} AND slug = ${slug}
+        WHERE business_id = ${siteId} AND slug = ${slug}
       `;
       if (existing && existing.source === "generated") {
         slug = `${slug}-imported`;
@@ -81,7 +81,7 @@ export async function runBlogImport(importId: string): Promise<void> {
       // Upsert into blog_posts
       await sql`
         INSERT INTO blog_posts (
-          site_id, slug, title, body, excerpt, meta_title,
+          business_id, slug, title, body, excerpt, meta_title,
           meta_description, og_image_url, schema_json, tags,
           status, published_at, source
         ) VALUES (
@@ -93,7 +93,7 @@ export async function runBlogImport(importId: string): Promise<void> {
           ${extracted.publishDate || new Date().toISOString()},
           'imported'
         )
-        ON CONFLICT (site_id, slug) DO UPDATE SET
+        ON CONFLICT (business_id, slug) DO UPDATE SET
           title = EXCLUDED.title,
           body = EXCLUDED.body,
           excerpt = EXCLUDED.excerpt,
@@ -142,7 +142,7 @@ export async function startDiscovery(
 ): Promise<{ importId: string; posts: DiscoveredPost[] }> {
   // Create the import job
   const [row] = await sql`
-    INSERT INTO blog_imports (site_id, source_url, status)
+    INSERT INTO blog_imports (business_id, source_url, status)
     VALUES (${siteId}, ${blogUrl}, 'discovering')
     RETURNING id
   `;

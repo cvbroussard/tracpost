@@ -281,8 +281,8 @@ export async function loadTenantSignals(siteId: string): Promise<TenantSignals> 
   const [site] = await sql`
     SELECT s.business_type, s.render_config,
            sub.plan
-    FROM sites s
-    JOIN subscriptions sub ON sub.id = s.subscription_id
+    FROM businesses s
+    JOIN accounts sub ON sub.id = s.billing_account_id
     WHERE s.id = ${siteId}
   `;
 
@@ -297,8 +297,8 @@ export async function loadTenantSignals(siteId: string): Promise<TenantSignals> 
   const platforms = await sql`
     SELECT sa.platform
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.status = 'active'
   `;
 
   const connectedPlatforms = platforms.map(

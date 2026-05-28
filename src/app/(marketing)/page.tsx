@@ -50,7 +50,7 @@ export default async function MarketingHomePage() {
   const [stats] = await sql`
     SELECT
       (SELECT COUNT(*)::int FROM blog_posts WHERE status = 'published') AS articles_published,
-      (SELECT COUNT(DISTINCT site_id)::int FROM blog_posts WHERE status = 'published') AS active_tenants
+      (SELECT COUNT(DISTINCT business_id)::int FROM blog_posts WHERE status = 'published') AS active_tenants
   `;
   const articlesPublished = (stats?.articles_published as number) || 0;
   const activeTenants = (stats?.active_tenants as number) || 0;
@@ -60,7 +60,7 @@ export default async function MarketingHomePage() {
     SELECT bp.title, bp.slug, bp.excerpt, bp.og_image_url, bp.published_at,
            s.name AS site_name, s.blog_slug, s.business_type
     FROM blog_posts bp
-    JOIN sites s ON s.id = bp.site_id
+    JOIN businesses s ON s.id = bp.business_id
     WHERE bp.status = 'published'
       AND bp.og_image_url IS NOT NULL
     ORDER BY bp.published_at DESC NULLS LAST
@@ -71,7 +71,7 @@ export default async function MarketingHomePage() {
   const recentPosts = await sql`
     SELECT bp.title, bp.published_at, s.name AS site_name, s.blog_slug
     FROM blog_posts bp
-    JOIN sites s ON s.id = bp.site_id
+    JOIN businesses s ON s.id = bp.business_id
     WHERE bp.status = 'published'
     ORDER BY bp.published_at DESC NULLS LAST
     LIMIT 8

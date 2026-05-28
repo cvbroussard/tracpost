@@ -49,7 +49,7 @@ export async function checkDepartureRedirect(
   const [redirect] = await sql`
     SELECT dr.target_base
     FROM departure_redirects dr
-    JOIN blog_settings bs ON bs.site_id = dr.site_id
+    JOIN blog_settings bs ON bs.business_id = dr.business_id
     WHERE (bs.subdomain = ${host} OR bs.custom_domain = ${host})
       AND dr.active_until > NOW()
     LIMIT 1
@@ -68,10 +68,10 @@ export async function resolveBlogSite(hostname: string): Promise<BlogSite | null
   const host = hostname.split(":")[0];
 
   const [match] = await sql`
-    SELECT bs.site_id, s.name AS site_name, s.blog_slug,
+    SELECT bs.business_id, s.name AS site_name, s.blog_slug,
            bs.blog_title, bs.blog_description, bs.theme
     FROM blog_settings bs
-    JOIN sites s ON s.id = bs.site_id
+    JOIN businesses s ON s.id = bs.business_id
     WHERE bs.custom_domain = ${host} AND bs.blog_enabled = true
     LIMIT 1
   `;
@@ -86,7 +86,7 @@ export async function resolveBlogSite(hostname: string): Promise<BlogSite | null
 export async function getCustomDomain(siteId: string): Promise<string | null> {
   const [row] = await sql`
     SELECT custom_domain FROM blog_settings
-    WHERE site_id = ${siteId} AND custom_domain IS NOT NULL
+    WHERE business_id = ${siteId} AND custom_domain IS NOT NULL
   `;
   return row ? (row.custom_domain as string) : null;
 }
@@ -97,7 +97,7 @@ export async function getCustomDomain(siteId: string): Promise<string | null> {
  */
 export async function getFavicon(siteId: string): Promise<string | null> {
   const [row] = await sql`
-    SELECT business_favicon FROM sites WHERE id = ${siteId}
+    SELECT business_favicon FROM businesses WHERE id = ${siteId}
   `;
   return row?.business_favicon ? (row.business_favicon as string) : null;
 }
@@ -108,10 +108,10 @@ export async function getFavicon(siteId: string): Promise<string | null> {
  */
 export async function resolveBlogSiteBySlug(siteSlug: string): Promise<BlogSite | null> {
   const [row] = await sql`
-    SELECT bs.site_id, s.name AS site_name, s.blog_slug,
+    SELECT bs.business_id, s.name AS site_name, s.blog_slug,
            bs.blog_title, bs.blog_description, bs.theme
-    FROM sites s
-    JOIN blog_settings bs ON bs.site_id = s.id
+    FROM businesses s
+    JOIN blog_settings bs ON bs.business_id = s.id
     WHERE (s.blog_slug = ${siteSlug} OR bs.subdomain = ${siteSlug})
       AND bs.blog_enabled = true AND s.is_active = true
   `;
@@ -130,7 +130,7 @@ export async function getBlogPosts(
     SELECT id, slug, title, excerpt, og_image_url, tags,
            content_pillar, published_at, created_at
     FROM blog_posts
-    WHERE site_id = ${siteId} AND status = 'published'
+    WHERE business_id = ${siteId} AND status = 'published'
     ORDER BY published_at DESC
     LIMIT ${limit} OFFSET ${offset}
   `;
@@ -148,7 +148,7 @@ export async function getBlogPost(
            og_image_url, schema_json, tags, content_pillar, metadata,
            published_at, updated_at, created_at
     FROM blog_posts
-    WHERE site_id = ${siteId} AND slug = ${slug} AND status = 'published'
+    WHERE business_id = ${siteId} AND slug = ${slug} AND status = 'published'
   `;
   return post || null;
 }
@@ -165,12 +165,12 @@ export async function getAllBlogSites(): Promise<Array<{
   latestPostDate: string | null;
 }>> {
   const rows = await sql`
-    SELECT s.id AS site_id, s.name AS site_name, s.blog_slug,
+    SELECT s.id AS business_id, s.name AS site_name, s.blog_slug,
            bs.blog_title, bs.blog_description,
            (SELECT MAX(published_at) FROM blog_posts bp
-            WHERE bp.site_id = s.id AND bp.status = 'published') AS latest_post_date
-    FROM sites s
-    JOIN blog_settings bs ON bs.site_id = s.id
+            WHERE bp.business_id = s.id AND bp.status = 'published') AS latest_post_date
+    FROM businesses s
+    JOIN blog_settings bs ON bs.business_id = s.id
     WHERE bs.blog_enabled = true AND s.blog_slug IS NOT NULL AND s.is_active = true
     ORDER BY s.name ASC
   `;

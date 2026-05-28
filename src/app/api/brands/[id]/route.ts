@@ -17,9 +17,9 @@ export async function PATCH(
   const { id } = await params;
 
   const [brand] = await sql`
-    SELECT b.id, b.site_id, b.name, b.url FROM brands b
-    JOIN sites s ON b.site_id = s.id
-    WHERE b.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    SELECT b.id, b.business_id, b.name, b.url FROM brands b
+    JOIN businesses s ON b.business_id = s.id
+    WHERE b.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!brand) {
     return NextResponse.json({ error: "Brand not found" }, { status: 404 });
@@ -92,8 +92,8 @@ export async function DELETE(
 
   await sql`
     DELETE FROM brands b
-    USING sites s
-    WHERE b.site_id = s.id AND b.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    USING businesses s
+    WHERE b.business_id = s.id AND b.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
 
   return NextResponse.json({ success: true });

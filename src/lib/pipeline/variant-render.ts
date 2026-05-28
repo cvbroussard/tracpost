@@ -95,7 +95,7 @@ export async function renderDefaultVariant(
   assetId: string,
 ): Promise<VariantRenderResult | null> {
   const [asset] = await sql`
-    SELECT id, site_id, storage_url, media_type, processing_stage
+    SELECT id, business_id, storage_url, media_type, processing_stage
     FROM media_assets
     WHERE id = ${assetId}
   `;
@@ -132,10 +132,10 @@ export async function renderTemplateVariant(
   if (!tpl) return null;
 
   const [asset] = await sql`
-    SELECT ma.id, ma.site_id, ma.storage_url, ma.media_type, ma.metadata,
+    SELECT ma.id, ma.business_id, ma.storage_url, ma.media_type, ma.metadata,
            s.face_policy, s.face_waiver_signed_at,
            s.minor_face_policy, s.minor_face_waiver_signed_at
-    FROM media_assets ma JOIN sites s ON s.id = ma.site_id
+    FROM media_assets ma JOIN businesses s ON s.id = ma.business_id
     WHERE ma.id = ${assetId}
   `;
   if (!asset) return null;

@@ -18,7 +18,7 @@ interface GA4Credentials {
 }
 
 async function getCredentials(siteId: string): Promise<GA4Credentials | null> {
-  const [site] = await sql`SELECT ga4_property_id FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT ga4_property_id FROM businesses WHERE id = ${siteId}`;
   const propertyId = site?.ga4_property_id as string;
   if (!propertyId) return null;
 
@@ -26,8 +26,8 @@ async function getCredentials(siteId: string): Promise<GA4Credentials | null> {
   const [gbpAccount] = await sql`
     SELECT sa.access_token_encrypted
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
     LIMIT 1
   `;
 

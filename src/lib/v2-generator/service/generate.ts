@@ -41,12 +41,12 @@ const anthropic = new Anthropic();
 export async function generateServicePage(spec: ServiceGenerateSpec): Promise<ServiceGenerateResult> {
   // 1. Load service + site
   const [service] = await sql`
-    SELECT s.id, s.site_id, s.slug, s.name, s.description,
+    SELECT s.id, s.business_id, s.slug, s.name, s.description,
            s.hero_asset_id, s.poster_asset_id,
            s.service_areas, s.service_radius_miles,
-           sites.name AS site_name, sites.url AS site_url, sites.brand_dna
+           businesses.name AS site_name, businesses.url AS site_url, businesses.brand_dna
     FROM services_v2 s
-    JOIN sites ON sites.id = s.site_id
+    JOIN businesses ON businesses.id = s.business_id
     WHERE s.id = ${spec.serviceId}
   `;
   if (!service) throw new Error(`Service ${spec.serviceId} not found`);
@@ -87,7 +87,7 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
   const allProjectsForSite = await sql`
     SELECT id, slug, name, hero_asset_id
     FROM projects_v2
-    WHERE site_id = ${service.site_id} AND status = 'active'
+    WHERE business_id = ${service.site_id} AND status = 'active'
     ORDER BY created_at DESC
   `;
   // Cap to 4 cited projects to keep article focused

@@ -15,8 +15,8 @@ export default async function SubscriberDetail({
 
   const [subscription] = await sql`
     SELECT sub.id, u.name, sub.plan, sub.is_active, sub.metadata, sub.created_at, sub.updated_at
-    FROM subscriptions sub
-    JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+    FROM accounts sub
+    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
     WHERE sub.id = ${id}
   `;
 
@@ -27,13 +27,13 @@ export default async function SubscriberDetail({
   const [sites, accounts, recentPosts, usage] = await Promise.all([
     sql`
       SELECT id, name, url, autopilot_enabled, is_active, created_at
-      FROM sites WHERE subscription_id = ${id}
+      FROM businesses WHERE billing_account_id = ${id}
       ORDER BY is_active DESC, created_at DESC
     `,
     sql`
       SELECT sa.id, sa.platform, sa.account_name, sa.status, sa.token_expires_at
       FROM social_accounts sa
-      WHERE sa.subscription_id = ${id}
+      WHERE sa.billing_account_id = ${id}
       ORDER BY sa.created_at DESC
     `,
     sql`
@@ -41,14 +41,14 @@ export default async function SubscriberDetail({
              sa.account_name, sa.platform
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      WHERE sa.subscription_id = ${id}
+      WHERE sa.billing_account_id = ${id}
       ORDER BY sp.created_at DESC
       LIMIT 10
     `,
     sql`
       SELECT action, COUNT(*)::int AS count
       FROM usage_log
-      WHERE subscription_id = ${id}
+      WHERE billing_account_id = ${id}
       GROUP BY action
       ORDER BY count DESC
     `,

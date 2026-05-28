@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     SELECT gps.*, ma.quality_score, ma.ai_analysis
     FROM gbp_photo_sync gps
     LEFT JOIN media_assets ma ON ma.id = gps.media_asset_id
-    WHERE gps.site_id = ${siteId}
+    WHERE gps.business_id = ${siteId}
     ORDER BY gps.synced_at DESC
   `;
 
@@ -32,13 +32,13 @@ export async function GET(req: NextRequest) {
     SELECT ma.id, ma.storage_url, ma.quality_score,
            ma.ai_analysis, ma.created_at
     FROM media_assets ma
-    WHERE ma.site_id = ${siteId}
+    WHERE ma.business_id = ${siteId}
       AND ma.processing_stage = 'briefed'
       AND ma.quality_score >= 0.5
       AND ma.media_type LIKE 'image/%'
       AND NOT EXISTS (
         SELECT 1 FROM gbp_photo_sync gps
-        WHERE gps.media_asset_id = ma.id AND gps.site_id = ${siteId}
+        WHERE gps.media_asset_id = ma.id AND gps.business_id = ${siteId}
       )
     ORDER BY ma.quality_score DESC
     LIMIT 50
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
       COUNT(*) FILTER (WHERE category = 'EXTERIOR')::int AS exterior,
       COUNT(*) FILTER (WHERE category = 'INTERIOR')::int AS interior
     FROM gbp_photo_sync
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
   `;
 
   return NextResponse.json({ synced, eligible, stats });

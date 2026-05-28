@@ -19,7 +19,7 @@ export async function loadPageMetadata(
 ): Promise<PageMetadata> {
   const [site] = await sql`
     SELECT website_copy, name, business_type, location
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
 
   const copy = (site?.website_copy as WebsiteCopy | null) || null;

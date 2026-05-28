@@ -27,12 +27,12 @@ export default async function SeoMonitoringPage() {
     sql`
       SELECT id, page_type, url, audit_data, seo_score, issues, created_at
       FROM seo_audits
-      WHERE site_id = ${siteId} AND page_type = 'site_audit'
+      WHERE business_id = ${siteId} AND page_type = 'site_audit'
       ORDER BY created_at DESC
       LIMIT 1
     `,
     sql`
-      SELECT id, name, url FROM sites WHERE id = ${siteId}
+      SELECT id, name, url FROM businesses WHERE id = ${siteId}
     `,
   ]);
 
@@ -45,7 +45,7 @@ export default async function SeoMonitoringPage() {
     const pageRows = await sql`
       SELECT page_type, url, seo_score, issues, audit_data, created_at
       FROM seo_audits
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
         AND page_type != 'site_audit'
         AND created_at >= ${latestAudit.created_at}::timestamptz - INTERVAL '1 minute'
         AND created_at <= ${latestAudit.created_at}::timestamptz + INTERVAL '5 minutes'

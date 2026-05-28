@@ -20,7 +20,7 @@ export async function GET(
   const [site] = await sql`
     SELECT id, name, subdomain, gbp_profile->'metadata'->>'newReviewUri' AS review_uri,
            gbp_profile->'metadata'->>'placeId' AS place_id
-    FROM sites
+    FROM businesses
     WHERE subdomain = ${slug} OR LOWER(REPLACE(name, ' ', '-')) = ${slug.toLowerCase()}
     LIMIT 1
   `;
@@ -40,15 +40,15 @@ export async function GET(
   // Log the click for analytics
   try {
     await sql`
-      INSERT INTO usage_log (subscription_id, action, metadata)
-      SELECT subscription_id, 'review_click', ${JSON.stringify({
+      INSERT INTO usage_log (billing_account_id, action, metadata)
+      SELECT billing_account_id, 'review_click', ${JSON.stringify({
         site_id: site.id,
         site_name: site.name,
         source: new URL(req.url).searchParams.get("utm_medium") || "direct",
         campaign: new URL(req.url).searchParams.get("utm_campaign") || null,
         timestamp: new Date().toISOString(),
       })}::jsonb
-      FROM sites WHERE id = ${site.id}
+      FROM businesses WHERE id = ${site.id}
     `;
   } catch { /* non-fatal */ }
 

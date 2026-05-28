@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   `;
 
   for (const account of accounts) {
-    await sql`DELETE FROM site_social_links WHERE social_account_id = ${account.id}`;
+    await sql`DELETE FROM business_social_links WHERE social_account_id = ${account.id}`;
     await sql`DELETE FROM social_accounts WHERE id = ${account.id}`;
   }
 

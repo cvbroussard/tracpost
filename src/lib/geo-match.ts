@@ -68,8 +68,8 @@ export async function matchAssetToEntities(
 
   // Match against branches with lat/lng in metadata
   const branches = await sql`
-    SELECT id, metadata FROM branches
-    WHERE site_id = ${siteId} AND metadata->>'lat' IS NOT NULL
+    SELECT id, metadata FROM locations
+    WHERE business_id = ${siteId} AND metadata->>'lat' IS NOT NULL
   `;
 
   for (const br of branches) {
@@ -78,7 +78,7 @@ export async function matchAssetToEntities(
     const brLng = meta.lng as number;
     if (brLat && brLng && haversineKm(lat, lng, brLat, brLng) <= RADIUS_KM) {
       await sql`
-        INSERT INTO asset_branches (asset_id, branch_id)
+        INSERT INTO asset_locations (asset_id, location_id)
         VALUES (${assetId}, ${br.id})
         ON CONFLICT DO NOTHING
       `;
@@ -92,7 +92,7 @@ export async function matchAssetToEntities(
   // they need their own canonical-place migration eventually.
   const projects = await sql`
     SELECT id, gps_lat, gps_lng FROM projects
-    WHERE site_id = ${siteId} AND gps_lat IS NOT NULL
+    WHERE business_id = ${siteId} AND gps_lat IS NOT NULL
   `;
 
   for (const proj of projects) {
@@ -131,7 +131,7 @@ export async function backfillAssetsForEntity(
   // pending — branches don't have dedicated gps columns yet).
   if (entityType === "branch") {
     await sql`
-      UPDATE branches
+      UPDATE locations
       SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ lat: geo.lat, lng: geo.lng })}::jsonb
       WHERE id = ${entityId}
     `;
@@ -148,13 +148,13 @@ export async function backfillAssetsForEntity(
   // only as of 2026-05-19).
   const assets = await sql`
     SELECT id, gps_lat, gps_lng FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND gps_lat IS NOT NULL
   `;
 
   let matched = 0;
-  const joinTable = entityType === "branch" ? "asset_branches" : "asset_projects";
-  const fkColumn = entityType === "branch" ? "branch_id" : "project_id";
+  const joinTable = entityType === "branch" ? "asset_locations" : "asset_projects";
+  const fkColumn = entityType === "branch" ? "location_id" : "project_id";
 
   for (const asset of assets) {
     const aLat = Number(asset.gps_lat);

@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
   }
   const sites = await sql`
     SELECT id, name, domain, url, provisioning_status, is_active
-    FROM sites
-    WHERE subscription_id = ${subscriptionId} AND is_active = true
+    FROM businesses
+    WHERE billing_account_id = ${subscriptionId} AND is_active = true
     ORDER BY name
   `;
   return NextResponse.json({ sites });
@@ -37,14 +37,14 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = await sql`
-      INSERT INTO sites (subscription_id, name, domain, blog_url, url, provisioning_status)
+      INSERT INTO businesses (billing_account_id, name, domain, blog_url, url, provisioning_status)
       VALUES (
         ${subscription_id}, ${name},
         ${domain || null}, ${blog_url || null},
         ${domain ? `https://${domain}` : null},
         'requested'
       )
-      RETURNING id, subscription_id, name, domain, blog_url, url, provisioning_status, created_at
+      RETURNING id, billing_account_id, name, domain, blog_url, url, provisioning_status, created_at
     `;
 
     return NextResponse.json({ site: rows[0] }, { status: 201 });

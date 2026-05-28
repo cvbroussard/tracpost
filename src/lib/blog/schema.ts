@@ -36,8 +36,8 @@ export async function generateHubSchema(input: HubSchemaInput): Promise<Record<s
   const socialAccounts = await sql`
     SELECT sa.platform, sa.account_id, sa.account_name, sa.metadata
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
   `;
 
   const sameAs = socialAccounts
@@ -56,14 +56,14 @@ export async function generateHubSchema(input: HubSchemaInput): Promise<Record<s
   const [reviewAgg] = await sql`
     SELECT COUNT(*)::int AS count, ROUND(AVG(rating)::numeric, 1) AS avg_rating
     FROM inbox_reviews
-    WHERE site_id = ${siteId} AND rating IS NOT NULL
+    WHERE business_id = ${siteId} AND rating IS NOT NULL
   `;
 
   // Fetch top reviews
   const topReviews = await sql`
     SELECT reviewer_name, rating, body, created_at
     FROM inbox_reviews
-    WHERE site_id = ${siteId} AND rating >= 4 AND body IS NOT NULL
+    WHERE business_id = ${siteId} AND rating >= 4 AND body IS NOT NULL
     ORDER BY rating DESC, created_at DESC
     LIMIT 5
   `;
@@ -71,8 +71,8 @@ export async function generateHubSchema(input: HubSchemaInput): Promise<Record<s
   // Fetch GBP location data
   const [gbpLocation] = await sql`
     SELECT gl.sync_data
-    FROM gbp_locations gl
-    WHERE gl.site_id = ${siteId}
+    FROM gbp_profiles gl
+    WHERE gl.business_id = ${siteId}
     LIMIT 1
   `;
 

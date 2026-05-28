@@ -18,7 +18,7 @@ export interface AboutPageData {
 export async function loadAboutPage(siteId: string): Promise<AboutPageData> {
   const [site] = await sql`
     SELECT website_copy, hero_asset_id
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
 
   const copy = (site?.website_copy as WebsiteCopy | null) || null;
@@ -28,7 +28,7 @@ export async function loadAboutPage(siteId: string): Promise<AboutPageData> {
   const heroAssetId = site?.hero_asset_id as string | null;
   const [aboutHeroRow] = await sql`
     SELECT storage_url FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND processing_stage = 'briefed'
       AND media_type LIKE 'image%'
       ${heroAssetId ? sql`AND id != ${heroAssetId}` : sql``}
@@ -40,7 +40,7 @@ export async function loadAboutPage(siteId: string): Promise<AboutPageData> {
   // Brands with enough evidence to be meaningful
   const brandRows = await sql`
     SELECT name, slug FROM brands
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND (SELECT COUNT(*) FROM asset_brands ab WHERE ab.brand_id = brands.id) >= 2
     ORDER BY name
     LIMIT 20

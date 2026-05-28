@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
         // Brandfetch-only re-logo. Preserves Claude/OG description,
         // touches only hero_asset_id and metadata.hero_source.
         const [brandRow] = await sql`
-          SELECT site_id, url,
+          SELECT business_id, url,
                  enrichment_metadata->>'hero_source' AS current_hero_source
           FROM brands WHERE id = ${id}
         `;

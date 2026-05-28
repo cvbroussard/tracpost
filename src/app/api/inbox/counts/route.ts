@@ -18,9 +18,9 @@ export async function GET(req: NextRequest) {
   }
 
   const [[comments], [reviews], [messages]] = await Promise.all([
-    sql`SELECT COUNT(*)::int AS count FROM inbox_comments WHERE site_id = ${siteId} AND subscription_id = ${auth.subscriptionId} AND is_read = false AND is_hidden = false`,
-    sql`SELECT COUNT(*)::int AS count FROM inbox_reviews WHERE site_id = ${siteId} AND subscription_id = ${auth.subscriptionId} AND is_read = false AND is_hidden = false`,
-    sql`SELECT COUNT(*)::int AS count FROM inbox_messages WHERE site_id = ${siteId} AND subscription_id = ${auth.subscriptionId} AND is_read = false`,
+    sql`SELECT COUNT(*)::int AS count FROM inbox_comments WHERE business_id = ${siteId} AND billing_account_id = ${auth.subscriptionId} AND is_read = false AND is_hidden = false`,
+    sql`SELECT COUNT(*)::int AS count FROM inbox_reviews WHERE business_id = ${siteId} AND billing_account_id = ${auth.subscriptionId} AND is_read = false AND is_hidden = false`,
+    sql`SELECT COUNT(*)::int AS count FROM inbox_messages WHERE business_id = ${siteId} AND billing_account_id = ${auth.subscriptionId} AND is_read = false`,
   ]);
 
   return NextResponse.json({

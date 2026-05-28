@@ -17,7 +17,7 @@ async function getRelatedPosts(
   const rows = await sql`
     SELECT slug, title, tags
     FROM blog_posts
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND status = 'published'
       AND slug != ${excludeSlug}
     ORDER BY published_at DESC
@@ -40,7 +40,7 @@ interface LinkableBrand {
 async function getSiteBrands(siteId: string): Promise<LinkableBrand[]> {
   const rows = await sql`
     SELECT slug, name FROM brands
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND (SELECT COUNT(*) FROM asset_brands ab WHERE ab.brand_id = brands.id) >= 2
   `;
   return rows.map((r) => ({

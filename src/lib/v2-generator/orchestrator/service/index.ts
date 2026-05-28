@@ -48,7 +48,7 @@ export async function orchestrateService(
     // (proxy: empty body / no schema_jsonld in metadata).
     const [row] = await sql`
       SELECT id FROM services_v2
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
         AND status = 'active'
         AND (
           updated_at < NOW() - INTERVAL '${sql.unsafe(String(STALE_THRESHOLD_DAYS))} days'
@@ -84,7 +84,7 @@ export async function previewServiceCandidates(siteId: string): Promise<Array<{
   const rows = await sql`
     SELECT id, name, updated_at, COALESCE(length(body), 0) AS body_length
     FROM services_v2
-    WHERE site_id = ${siteId} AND status = 'active'
+    WHERE business_id = ${siteId} AND status = 'active'
     ORDER BY updated_at ASC
   `;
   const now = Date.now();

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   // Verify site ownership
   const [site] = await sql`
-    SELECT id FROM sites WHERE id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -44,13 +44,13 @@ export async function GET(req: NextRequest) {
     JOIN social_accounts sa ON sp.account_id = sa.id
     WHERE sa.id IN (
       SELECT ssl.social_account_id
-      FROM site_social_links ssl
-      WHERE ssl.site_id = ${siteId}
+      FROM business_social_links ssl
+      WHERE ssl.business_id = ${siteId}
       UNION
       SELECT pa.social_account_id
-      FROM site_platform_assets spa
+      FROM business_platform_assets spa
       JOIN platform_assets pa ON pa.id = spa.platform_asset_id
-      WHERE spa.site_id = ${siteId}
+      WHERE spa.business_id = ${siteId}
     )
     ORDER BY COALESCE(sp.scheduled_at, sp.created_at) DESC
     LIMIT 100

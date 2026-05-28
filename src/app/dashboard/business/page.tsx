@@ -33,22 +33,22 @@ export default async function SettingsPage() {
              s.business_phone, s.business_email, s.business_logo, s.business_favicon,
              s.brand_assets,
              s.provisioning_status, s.metadata AS site_metadata
-      FROM sites s
+      FROM businesses s
       WHERE s.id = ${siteId}
     `,
     sql`
       SELECT blog_enabled, subdomain, custom_domain, blog_title, blog_description
-      FROM blog_settings WHERE site_id = ${siteId}
+      FROM blog_settings WHERE business_id = ${siteId}
     `,
     sql`
       SELECT
         (COUNT(*) FILTER (WHERE status = 'published'))::int AS published,
         COUNT(*)::int AS total
-      FROM blog_posts WHERE site_id = ${siteId}
+      FROM blog_posts WHERE business_id = ${siteId}
     `,
     sql`
       SELECT created_at FROM blog_posts
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY created_at DESC LIMIT 1
     `,
   ]);

@@ -49,7 +49,7 @@ export async function GET(
   const { id: assetId } = await params;
 
   const [asset] = await sql`
-    SELECT ma.id, ma.site_id,
+    SELECT ma.id, ma.business_id,
       ma.ai_analysis, ma.gps_lat, ma.gps_lng,
       (EXISTS(SELECT 1 FROM recordings WHERE source_asset_id = ma.id AND transcript IS NOT NULL AND transcript <> '' AND archived_at IS NULL)
         OR (ma.context_note IS NOT NULL AND ma.context_note <> '')) AS has_transcript
@@ -57,7 +57,7 @@ export async function GET(
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   const [owned] = await sql`
-    SELECT id FROM sites WHERE id = ${asset.site_id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${asset.site_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
@@ -65,8 +65,8 @@ export async function GET(
 
   const siteCategories = await sql`
     SELECT sgc.gcid, gc.name
-    FROM site_gbp_categories sgc JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.site_id = ${asset.site_id}
+    FROM business_gbp_categories sgc JOIN gbp_categories gc ON gc.gcid = sgc.gcid
+    WHERE sgc.business_id = ${asset.site_id}
     ORDER BY sgc.is_primary DESC, gc.name
   `;
 
@@ -167,10 +167,10 @@ export async function POST(
   const gcid = body.gcid;
   if (!action || !gcid) return NextResponse.json({ error: "action and gcid required" }, { status: 400 });
 
-  const [asset] = await sql`SELECT site_id FROM media_assets WHERE id = ${assetId}`;
+  const [asset] = await sql`SELECT business_id FROM media_assets WHERE id = ${assetId}`;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   const [owned] = await sql`
-    SELECT id FROM sites WHERE id = ${asset.site_id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${asset.site_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
@@ -178,7 +178,7 @@ export async function POST(
 
   // Validate gcid is in site's catalog
   const [valid] = await sql`
-    SELECT 1 FROM site_gbp_categories WHERE site_id = ${asset.site_id} AND gcid = ${gcid}
+    SELECT 1 FROM business_gbp_categories WHERE business_id = ${asset.site_id} AND gcid = ${gcid}
   `;
   if (!valid) return NextResponse.json({ error: "gcid not in site's category set" }, { status: 400 });
 

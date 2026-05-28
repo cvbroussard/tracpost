@@ -74,7 +74,7 @@ export async function triageAsset(_assetId: string): Promise<TriageResult> {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function _archivedTriageAssetBody(assetId: string): Promise<TriageResult> {
   const [asset] = await sql`
-    SELECT id, site_id, storage_url, media_type, context_note, transcription, metadata, poster_asset_id
+    SELECT id, business_id, storage_url, media_type, context_note, transcription, metadata, poster_asset_id
     FROM media_assets
     WHERE id = ${assetId} AND processing_stage = 'onboarded'
   `;
@@ -86,7 +86,7 @@ async function _archivedTriageAssetBody(assetId: string): Promise<TriageResult> 
   // Fetch site config for thresholds
   const [site] = await sql`
     SELECT autopilot_config, content_pillars, pillar_config, brand_voice
-    FROM sites
+    FROM businesses
     WHERE id = ${asset.site_id}
   `;
 
@@ -104,7 +104,7 @@ async function _archivedTriageAssetBody(assetId: string): Promise<TriageResult> 
   // Fetch site's brand list for auto-detection
   const brands = await sql`
     SELECT id, name, slug FROM brands
-    WHERE site_id = ${asset.site_id}
+    WHERE business_id = ${asset.site_id}
   `;
 
   // Resolve the URL we'll feed into vision: image source uses its own URL,
@@ -187,7 +187,7 @@ async function _archivedTriageAssetBody(assetId: string): Promise<TriageResult> 
 
   // Log triage in history
   await sql`
-    INSERT INTO subscriber_actions (site_id, action_type, target_type, target_id, payload)
+    INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
     VALUES (${asset.site_id}, 'triage', 'media_asset', ${assetId}, ${JSON.stringify({
       status: result.processing_stage,
       quality_score: result.quality_score,
@@ -254,7 +254,7 @@ async function visionTriage(
   let enrichedContext = "";
   try {
     const [siteExtra] = await sql`
-      SELECT brand_playbook, location FROM sites WHERE id = ${siteId}
+      SELECT brand_playbook, location FROM businesses WHERE id = ${siteId}
     `;
     const parts: string[] = [];
     const playbook = (siteExtra?.brand_playbook || {}) as Record<string, unknown>;
@@ -267,11 +267,11 @@ async function visionTriage(
       const stmt = offerCore.offerStatement as Record<string, unknown>;
       if (stmt.finalStatement) parts.push(`Brand promise: ${stmt.finalStatement}`);
     }
-    const services = await sql`SELECT name FROM services WHERE site_id = ${siteId} ORDER BY display_order LIMIT 6`;
+    const services = await sql`SELECT name FROM services WHERE business_id = ${siteId} ORDER BY display_order LIMIT 6`;
     if (services.length > 0) parts.push(`Services: ${services.map((s) => String(s.name)).join(", ")}`);
     const cats = await sql`
-      SELECT gc.name, sgc.is_primary FROM site_gbp_categories sgc
-      JOIN gbp_categories gc ON gc.gcid = sgc.gcid WHERE sgc.site_id = ${siteId}
+      SELECT gc.name, sgc.is_primary FROM business_gbp_categories sgc
+      JOIN gbp_categories gc ON gc.gcid = sgc.gcid WHERE sgc.business_id = ${siteId}
     `;
     const primaryCat = cats.find((c) => c.is_primary);
     if (primaryCat) parts.push(`Business category: ${primaryCat.name}`);

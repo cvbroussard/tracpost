@@ -42,22 +42,22 @@ export const pillarFillStrategy: BlogStrategy = {
 
     // Resolve gap pillar to its tag IDs (LOCKED 2026-05-09 — pillars
     // not stored on assets, filter via tag-overlap instead).
-    const [pcRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${assessment.siteId}`;
+    const [pcRow] = await sql`SELECT pillar_config FROM businesses WHERE id = ${assessment.siteId}`;
     const pc = (pcRow?.pillar_config || []) as PillarConfig;
     const gapTagIds = pc.find((p) => p.id === gap)?.tags.map((t) => t.id) || [];
 
     const usedRows = await sql`
       SELECT DISTINCT id FROM (
-        SELECT seed_asset_id AS id FROM blog_posts_v2 WHERE site_id = ${assessment.siteId} AND seed_asset_id IS NOT NULL
+        SELECT seed_asset_id AS id FROM blog_posts_v2 WHERE business_id = ${assessment.siteId} AND seed_asset_id IS NOT NULL
         UNION
-        SELECT hero_asset_id AS id FROM blog_posts_v2 WHERE site_id = ${assessment.siteId}
+        SELECT hero_asset_id AS id FROM blog_posts_v2 WHERE business_id = ${assessment.siteId}
       ) u
     `;
     const usedIds = usedRows.map((r) => r.id as string);
 
     const [seed] = await sql`
       SELECT id FROM media_assets
-      WHERE site_id = ${assessment.siteId}
+      WHERE business_id = ${assessment.siteId}
         AND (media_type ILIKE 'image%' OR media_type = 'video')
         AND processing_stage = 'analyzed' AND archived_at IS NULL
         AND content_tags && ${gapTagIds}::text[]
@@ -72,7 +72,7 @@ export const pillarFillStrategy: BlogStrategy = {
 
     const bodyCandidates = await sql`
       SELECT id FROM media_assets
-      WHERE site_id = ${assessment.siteId}
+      WHERE business_id = ${assessment.siteId}
         AND id <> ${seed.id}
         AND processing_stage = 'analyzed' AND archived_at IS NULL
         AND (media_type ILIKE 'image%' OR media_type = 'video')

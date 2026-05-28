@@ -98,8 +98,8 @@ export async function POST(req: NextRequest) {
 
     // Verify ownership + load per-site keyword cue overrides
     const [site] = await sql`
-      SELECT id, tag_group_config FROM sites
-      WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+      SELECT id, tag_group_config FROM businesses
+      WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
     `;
     if (!site) {
       return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -179,10 +179,10 @@ export async function POST(req: NextRequest) {
       tagSuggestion,
       ner,
     ] = await Promise.all([
-      sql`SELECT id, name FROM brands WHERE site_id = ${site_id}`,
-      sql`SELECT id, name FROM services WHERE site_id = ${site_id}`,
-      sql`SELECT id, name FROM projects WHERE site_id = ${site_id}`,
-      sql`SELECT id, name FROM branches WHERE site_id = ${site_id}`,
+      sql`SELECT id, name FROM brands WHERE business_id = ${site_id}`,
+      sql`SELECT id, name FROM services WHERE business_id = ${site_id}`,
+      sql`SELECT id, name FROM projects WHERE business_id = ${site_id}`,
+      sql`SELECT id, name FROM locations WHERE business_id = ${site_id}`,
       // Story Angle: multimodal Haiku call when we have an image URL.
       // Image-aware Story Angle is correct for editorial framing — vision
       // genuinely informs which pillar fits because the picture IS the

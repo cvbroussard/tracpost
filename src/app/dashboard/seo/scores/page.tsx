@@ -24,10 +24,10 @@ export default async function SeoScoresPage() {
     sql`
       SELECT url, performance, seo, accessibility, best_practices, scored_at
       FROM page_scores
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY url ASC
     `,
-    sql`SELECT id, name FROM sites WHERE id = ${siteId}`,
+    sql`SELECT id, name FROM businesses WHERE id = ${siteId}`,
   ]);
 
   return (

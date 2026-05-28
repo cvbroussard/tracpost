@@ -25,7 +25,7 @@ export async function detectContentGaps(
   const posts = await sql`
     SELECT slug, title, tags, content_type
     FROM blog_posts
-    WHERE site_id = ${siteId} AND status = 'published'
+    WHERE business_id = ${siteId} AND status = 'published'
     ORDER BY published_at DESC
   `;
 
@@ -33,7 +33,7 @@ export async function detectContentGaps(
 
   // Fetch pillar config for tag labels
   const [site] = await sql`
-    SELECT pillar_config FROM sites WHERE id = ${siteId}
+    SELECT pillar_config FROM businesses WHERE id = ${siteId}
   `;
   const pillarConfig = (site?.pillar_config || []) as Array<{
     id: string;

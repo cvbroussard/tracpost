@@ -26,7 +26,7 @@ export async function POST(
   const body = await req.json().catch(() => ({}));
   const action = body.action || "status";
 
-  const [site] = await sql`SELECT id FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT id FROM businesses WHERE id = ${siteId}`;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
@@ -46,13 +46,13 @@ export async function POST(
 
   if (action === "status") {
     const [config] = await sql`
-      SELECT autopilot_enabled, cadence_config FROM sites WHERE id = ${siteId}
+      SELECT autopilot_enabled, cadence_config FROM businesses WHERE id = ${siteId}
     `;
     const accounts = await sql`
       SELECT sa.platform, sa.status, sa.account_name
       FROM social_accounts sa
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId}
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId}
       ORDER BY sa.platform
     `;
     const [postCounts] = await sql`
@@ -62,8 +62,8 @@ export async function POST(
         COUNT(*) FILTER (WHERE sp.status = 'failed')::int AS failed
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId}
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId}
     `;
     return NextResponse.json({
       autopilot_enabled: config?.autopilot_enabled,

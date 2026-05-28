@@ -29,10 +29,10 @@ export async function POST(
   const { id: assetId } = await params;
 
   const [asset] = await sql`
-    SELECT ma.id, ma.site_id
+    SELECT ma.id, ma.business_id
     FROM media_assets ma
-    JOIN sites s ON ma.site_id = s.id
-    WHERE ma.id = ${assetId} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON ma.business_id = s.id
+    WHERE ma.id = ${assetId} AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!asset) {
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });

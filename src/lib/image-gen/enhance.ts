@@ -49,11 +49,11 @@ export async function enhanceAssetPhoto(
   assetId: string
 ): Promise<string | null> {
   const [asset] = await sql`
-    SELECT ma.id, ma.site_id, ma.storage_url, ma.media_type,
+    SELECT ma.id, ma.business_id, ma.storage_url, ma.media_type,
            ma.quality_score, ma.context_note, ma.metadata, ma.ai_analysis,
            s.image_style, s.image_processing_mode
     FROM media_assets ma
-    JOIN sites s ON s.id = ma.site_id
+    JOIN businesses s ON s.id = ma.business_id
     WHERE ma.id = ${assetId}
   `;
 

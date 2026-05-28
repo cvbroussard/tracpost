@@ -113,7 +113,7 @@ function buildLocationPath(accountMetadata: Record<string, unknown>, platformAcc
  */
 export async function fetchProfile(siteId: string): Promise<GbpProfile | null> {
   // Try local cache first
-  const [site] = await sql`SELECT gbp_profile FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT gbp_profile FROM businesses WHERE id = ${siteId}`;
   const cached = (site?.gbp_profile || {}) as Record<string, unknown>;
 
   if (cached.title && cached.completeness) {
@@ -262,7 +262,7 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
   }
 
   // Check if this is initial sync or re-sync
-  const [existingSite] = await sql`SELECT gbp_profile FROM sites WHERE id = ${siteId}`;
+  const [existingSite] = await sql`SELECT gbp_profile FROM businesses WHERE id = ${siteId}`;
   const existing = (existingSite?.gbp_profile || {}) as Record<string, unknown>;
   const isInitialSync = !existing.title;
 
@@ -271,7 +271,7 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
     // Reset dirty state too: by definition there are no local-side edits
     // pending push when we just pulled fresh from Google.
     await sql`
-      UPDATE sites
+      UPDATE businesses
       SET gbp_profile = ${JSON.stringify(result)}::jsonb,
           gbp_sync_dirty = false,
           gbp_dirty_fields = '{}'
@@ -292,7 +292,7 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
         : result.socialProfiles,
     };
     await sql`
-      UPDATE sites SET gbp_profile = ${JSON.stringify(safeUpdate)}::jsonb WHERE id = ${siteId}
+      UPDATE businesses SET gbp_profile = ${JSON.stringify(safeUpdate)}::jsonb WHERE id = ${siteId}
     `;
   }
 
@@ -337,7 +337,7 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
     }
 
     const localCats = await sql`
-      SELECT gcid, is_primary FROM site_gbp_categories WHERE site_id = ${siteId}
+      SELECT gcid, is_primary FROM business_gbp_categories WHERE business_id = ${siteId}
     `;
 
     if (localCats.length === 0) {
@@ -346,7 +346,7 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
       // coaching-applied rows ('coaching') and operator-edited rows ('operator').
       for (const c of parsedCats) {
         await sql`
-          INSERT INTO site_gbp_categories (site_id, gcid, is_primary, chosen_at, chosen_by)
+          INSERT INTO business_gbp_categories (business_id, gcid, is_primary, chosen_at, chosen_by)
           VALUES (${siteId}, ${c.gcid}, ${c.isPrimary}, NOW(), 'gbp_sync_seed')
         `;
       }
@@ -381,7 +381,7 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
   const placeIds = placeInfos.map((p) => p.placeId).filter((id): id is string => Boolean(id));
   if (placeIds.length > 0) {
     const known = await sql`
-      SELECT place_id FROM service_areas_canonical
+      SELECT place_id FROM service_areas
       WHERE place_id = ANY(${placeIds}::text[]) AND viewport IS NOT NULL
     `;
     const knownIds = new Set(known.map((r) => r.place_id as string));
@@ -426,7 +426,7 @@ export async function updateProfile(
   },
 ): Promise<{ success: boolean; error?: string }> {
   // Read current cached profile
-  const [site] = await sql`SELECT gbp_profile FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT gbp_profile FROM businesses WHERE id = ${siteId}`;
   const cached = (site?.gbp_profile || {}) as Record<string, unknown>;
 
   if (!cached.title) {
@@ -449,7 +449,7 @@ export async function updateProfile(
 
   // Save locally + append dirty fields (deduped)
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET gbp_profile = ${JSON.stringify(cached)}::jsonb,
         gbp_sync_dirty = true,
         gbp_dirty_fields = (
@@ -469,7 +469,7 @@ export async function pushProfileToGoogle(siteId: string): Promise<{ success: bo
   const creds = await getGbpCredentials(siteId);
   if (!creds) return { success: false, error: "No active GBP connection" };
 
-  const [site] = await sql`SELECT gbp_profile, gbp_dirty_fields FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT gbp_profile, gbp_dirty_fields FROM businesses WHERE id = ${siteId}`;
   const profile = (site?.gbp_profile || {}) as Record<string, unknown>;
   const dirtyFields = new Set((site?.gbp_dirty_fields || []) as string[]);
 
@@ -578,7 +578,7 @@ export async function pushProfileToGoogle(siteId: string): Promise<{ success: bo
       // Preserve socialProfiles — the Location PATCH doesn't include them.
       refreshed.socialProfiles = (profile.socialProfiles as GbpProfile["socialProfiles"]) || [];
       await sql`
-        UPDATE sites SET gbp_profile = ${JSON.stringify(refreshed)}::jsonb WHERE id = ${siteId}
+        UPDATE businesses SET gbp_profile = ${JSON.stringify(refreshed)}::jsonb WHERE id = ${siteId}
       `;
     } catch (err) {
       console.warn("GBP push: failed to parse PATCH response, cache will reflect what we sent:", err instanceof Error ? err.message : err);
@@ -623,7 +623,7 @@ export async function pushProfileToGoogle(siteId: string): Promise<{ success: bo
       const attrPatched = await attrRes.json();
       const refreshedSocial = parseAttributesResponse(attrPatched);
       await sql`
-        UPDATE sites
+        UPDATE businesses
         SET gbp_profile = jsonb_set(COALESCE(gbp_profile, '{}'::jsonb), '{socialProfiles}', ${JSON.stringify(refreshedSocial)}::jsonb)
         WHERE id = ${siteId}
       `;
@@ -641,7 +641,7 @@ export async function pushProfileToGoogle(siteId: string): Promise<{ success: bo
   }
 
   // Clear dirty flag + dirty fields on full success
-  await sql`UPDATE sites SET gbp_sync_dirty = false, gbp_dirty_fields = '{}' WHERE id = ${siteId}`;
+  await sql`UPDATE businesses SET gbp_sync_dirty = false, gbp_dirty_fields = '{}' WHERE id = ${siteId}`;
 
   return { success: true, pushed: updateMask.length > 0 ? updateMask : ["categories"] };
 }
@@ -652,7 +652,7 @@ export async function pushProfileToGoogle(siteId: string): Promise<{ success: bo
  */
 export async function syncDirtySites(): Promise<{ pushed: number; failed: number }> {
   const dirtySites = await sql`
-    SELECT id, name FROM sites WHERE gbp_sync_dirty = true AND is_active = true
+    SELECT id, name FROM businesses WHERE gbp_sync_dirty = true AND is_active = true
   `;
 
   let pushed = 0;
@@ -692,9 +692,9 @@ export async function pushCategoriesToGoogle(siteId: string): Promise<{ success:
 
   const categories = await sql`
     SELECT sgc.gcid, sgc.is_primary, gc.name
-    FROM site_gbp_categories sgc
+    FROM business_gbp_categories sgc
     JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.site_id = ${siteId}
+    WHERE sgc.business_id = ${siteId}
     ORDER BY sgc.is_primary DESC
   `;
 

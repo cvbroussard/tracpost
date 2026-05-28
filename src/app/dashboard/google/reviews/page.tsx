@@ -15,8 +15,8 @@ export default async function GoogleReviewsPage() {
   const reviews = await sql`
     SELECT *
     FROM inbox_reviews
-    WHERE site_id = ${siteId}
-      AND subscription_id = ${session.subscriptionId}
+    WHERE business_id = ${siteId}
+      AND billing_account_id = ${session.subscriptionId}
       AND is_hidden = false
     ORDER BY reviewed_at DESC
     LIMIT 50
@@ -29,8 +29,8 @@ export default async function GoogleReviewsPage() {
       COUNT(*) FILTER (WHERE reply_status = 'draft_ready')::int AS draft_ready,
       COUNT(*) FILTER (WHERE reply_status = 'replied')::int AS replied
     FROM inbox_reviews
-    WHERE site_id = ${siteId}
-      AND subscription_id = ${session.subscriptionId}
+    WHERE business_id = ${siteId}
+      AND billing_account_id = ${session.subscriptionId}
       AND is_hidden = false
   `;
 

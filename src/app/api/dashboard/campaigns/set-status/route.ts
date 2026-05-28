@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   const [grant] = await sql`
     SELECT access_token_encrypted
     FROM social_accounts
-    WHERE subscription_id = ${session.subscriptionId}
+    WHERE billing_account_id = ${session.subscriptionId}
       AND platform = 'meta_ads'
     ORDER BY created_at DESC
     LIMIT 1

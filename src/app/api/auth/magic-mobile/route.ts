@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
   }
 
   const sites = await sql`
-    SELECT id, name, url, is_active FROM sites
-    WHERE subscription_id = ${subscriber.subscriptionId}
+    SELECT id, name, url, is_active FROM businesses
+    WHERE billing_account_id = ${subscriber.subscriptionId}
     ORDER BY is_active DESC, created_at ASC
   `;
 

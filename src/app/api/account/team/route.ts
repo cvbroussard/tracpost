@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
 
   // Create team member user under the current subscription
   const [member] = await sql`
-    INSERT INTO users (name, email, role, subscription_id, site_id, is_active, password_hash)
+    INSERT INTO users (name, email, role, billing_account_id, business_id, is_active, password_hash)
     VALUES (${name.trim()}, ${email.trim()}, ${role}, ${auth.subscriptionId}, ${siteId || null}, true, ${passwordHash})
-    RETURNING id, name, email, role, site_id
+    RETURNING id, name, email, role, business_id
   `;
 
   // Send magic link invite for web-eligible roles when no password was set.

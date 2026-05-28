@@ -21,11 +21,11 @@ export async function POST(req: NextRequest) {
   await sql`
     UPDATE spotlight_sessions
     SET google_review_opened = true, updated_at = NOW()
-    WHERE id = ${session_id} AND site_id = ${kiosk.siteId}
+    WHERE id = ${session_id} AND business_id = ${kiosk.siteId}
   `;
 
   await sql`
-    INSERT INTO spotlight_analytics (session_id, site_id, event)
+    INSERT INTO spotlight_analytics (session_id, business_id, event)
     VALUES (${session_id}, ${kiosk.siteId}, 'google_link_opened')
   `;
 

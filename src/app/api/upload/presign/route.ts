@@ -48,8 +48,8 @@ export async function POST(req: NextRequest) {
 
     // Verify site belongs to this subscriber
     const [site] = await sql`
-      SELECT id, name FROM sites
-      WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+      SELECT id, name FROM businesses
+      WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
     `;
     if (!site) {
       return NextResponse.json(

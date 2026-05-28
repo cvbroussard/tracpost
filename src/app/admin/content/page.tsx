@@ -11,8 +11,8 @@ export default async function ContentQueuePage() {
              COALESCE(owner.name, owner.email, '—') AS subscriber_name
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      JOIN subscriptions sub ON sa.subscription_id = sub.id
-      LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
+      JOIN accounts sub ON sa.billing_account_id = sub.id
+      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
       WHERE sp.status = 'scheduled'
       ORDER BY sp.scheduled_at ASC
     `,
@@ -22,8 +22,8 @@ export default async function ContentQueuePage() {
              COALESCE(owner.name, owner.email, '—') AS subscriber_name
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      JOIN subscriptions sub ON sa.subscription_id = sub.id
-      LEFT JOIN users owner ON owner.subscription_id = sub.id AND owner.role = 'owner'
+      JOIN accounts sub ON sa.billing_account_id = sub.id
+      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
       WHERE sp.status IN ('published', 'failed')
       ORDER BY COALESCE(sp.published_at, sp.updated_at) DESC
       LIMIT 20
@@ -32,7 +32,7 @@ export default async function ContentQueuePage() {
       SELECT ma.id, ma.storage_url, ma.media_type, ma.context_note, ma.flag_reason,
              ma.quality_score, ma.created_at, s.name AS site_name
       FROM media_assets ma
-      JOIN sites s ON ma.site_id = s.id
+      JOIN businesses s ON ma.business_id = s.id
       WHERE ma.archived_at IS NOT NULL
       ORDER BY ma.created_at DESC
     `,

@@ -56,9 +56,9 @@ export async function deriveTargetQueries(
   // Load categories (with primary flag) — sorted primary first
   const categories = await sql`
     SELECT gc.gcid, gc.name, sgc.is_primary
-    FROM site_gbp_categories sgc
+    FROM business_gbp_categories sgc
     JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.site_id = ${siteId}
+    WHERE sgc.business_id = ${siteId}
     ORDER BY sgc.is_primary DESC, gc.name
   `;
 
@@ -67,7 +67,7 @@ export async function deriveTargetQueries(
   // Load service areas from GBP profile cache
   const [site] = await sql`
     SELECT gbp_profile->'serviceArea'->'places'->'placeInfos' AS place_infos
-    FROM sites
+    FROM businesses
     WHERE id = ${siteId}
   `;
   const placeInfos = (site?.place_infos || []) as Array<{ placeId: string; placeName: string }>;
@@ -94,7 +94,7 @@ export async function deriveTargetQueries(
   const placeIds = placeInfos.map((p) => p.placeId).filter(Boolean);
   const kindRows = await sql`
     SELECT place_id, kind
-    FROM service_areas_canonical
+    FROM service_areas
     WHERE place_id = ANY(${placeIds}::text[])
   `;
   const kindMap = new Map(kindRows.map((r) => [r.place_id as string, r.kind as string]));

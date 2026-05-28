@@ -7,11 +7,11 @@ export default async function SitesPage() {
   const sites = await sql`
     SELECT s.id, s.name, s.provisioning_status, s.autopilot_enabled,
            u.name AS subscriber_name, sub.plan,
-           (SELECT COUNT(*)::int FROM media_assets WHERE site_id = s.id) AS asset_count,
-           (SELECT COUNT(*)::int FROM blog_posts WHERE site_id = s.id AND status = 'published') AS published_posts
-    FROM sites s
-    JOIN subscriptions sub ON sub.id = s.subscription_id
-    JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+           (SELECT COUNT(*)::int FROM media_assets WHERE business_id = s.id) AS asset_count,
+           (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = s.id AND status = 'published') AS published_posts
+    FROM businesses s
+    JOIN accounts sub ON sub.id = s.billing_account_id
+    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
     WHERE s.is_active = true
     ORDER BY s.name ASC
   `;

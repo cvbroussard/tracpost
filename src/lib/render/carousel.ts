@@ -189,7 +189,7 @@ export async function composeCarousel(
   // Store composition
   const assetIds = slides.map((s) => s.assetId);
   const [comp] = await sql`
-    INSERT INTO carousel_compositions (site_id, project_id, platform, slide_asset_ids, slide_configs, status)
+    INSERT INTO carousel_compositions (business_id, project_id, platform, slide_asset_ids, slide_configs, status)
     VALUES (${siteId}, ${projectId}, ${config.platform}, ${assetIds}, ${JSON.stringify(slideConfigs)}::jsonb, 'rendered')
     RETURNING id
   `;

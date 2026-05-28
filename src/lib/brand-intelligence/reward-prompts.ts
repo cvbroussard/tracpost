@@ -42,7 +42,7 @@ export async function generateRewardPrompts(
   // Fetch playbook and site context
   const [site] = await sql`
     SELECT name, brand_playbook, brand_voice, business_type, pillar_config
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
 
   if (!site?.brand_playbook) {
@@ -141,7 +141,7 @@ Return ONLY a JSON array, no markdown:
   // Store on the site
   if (allPrompts.length > 0) {
     await sql`
-      UPDATE sites
+      UPDATE businesses
       SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ reward_prompts: allPrompts })}::jsonb
       WHERE id = ${siteId}
     `;
@@ -156,7 +156,7 @@ Return ONLY a JSON array, no markdown:
  */
 export async function getRewardPrompts(siteId: string): Promise<RewardPrompt[]> {
   const [site] = await sql`
-    SELECT metadata FROM sites WHERE id = ${siteId}
+    SELECT metadata FROM businesses WHERE id = ${siteId}
   `;
   const metadata = (site?.metadata || {}) as Record<string, unknown>;
   return (metadata.reward_prompts as RewardPrompt[]) || [];

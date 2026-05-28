@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
     // exactly one site, and exactly one FB page (or IG account) was just
     // recorded, link them. Anything else falls back to manual assignment.
     const siteRows = await sql`
-      SELECT id FROM sites WHERE subscription_id = ${state.subscription_id} LIMIT 2
+      SELECT id FROM businesses WHERE billing_account_id = ${state.subscription_id} LIMIT 2
     `;
     if (siteRows.length === 1) {
       const siteId = siteRows[0].id as string;
@@ -139,7 +139,7 @@ export async function GET(req: NextRequest) {
 
     // Log usage
     await sql`
-      INSERT INTO usage_log (subscription_id, action, metadata)
+      INSERT INTO usage_log (billing_account_id, action, metadata)
       VALUES (${state.subscription_id}, 'meta_connect', ${JSON.stringify({
         user_id: userInfo.id,
         user_name: userInfo.name,

@@ -29,7 +29,7 @@ export async function generateProjectChapter(
   const [chapter] = await sql`
     SELECT pc.id, pc.project_id, pc.slug, pc.title, pc.intent,
            pc.asset_filter, pc.structure_template, pc.status,
-           pv.site_id
+           pv.business_id
     FROM project_chapters pc
     JOIN projects_v2 pv ON pv.id = pc.project_id
     WHERE pc.id = ${spec.chapterId}

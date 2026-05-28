@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const services = await sql`
     SELECT id, name, slug, description, price_range, duration, display_order,
            hero_asset_id, metadata, source, created_at, updated_at
-    FROM services WHERE site_id = ${siteId}
+    FROM services WHERE business_id = ${siteId}
     ORDER BY display_order ASC, name ASC
   `;
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT id FROM sites WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -66,13 +66,13 @@ export async function POST(req: NextRequest) {
     : "{}";
 
   const [service] = await sql`
-    INSERT INTO services (site_id, name, slug, description, price_range, duration,
+    INSERT INTO services (business_id, name, slug, description, price_range, duration,
       display_order, hero_asset_id, metadata, source)
     VALUES (${site_id}, ${name.trim()}, ${slug}, ${description || null},
       ${price_range || null}, ${duration || null},
       ${display_order || 0}, ${hero_asset_id || null},
       ${metadataJson}::jsonb, ${source || "manual"})
-    ON CONFLICT (site_id, slug) DO UPDATE SET
+    ON CONFLICT (business_id, slug) DO UPDATE SET
       name = ${name.trim()},
       description = ${description || null},
       price_range = ${price_range || null},

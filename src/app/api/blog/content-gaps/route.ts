@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const auth = authResult as AuthContext;
 
   const [sub] = await sql`
-    SELECT active_site_id FROM subscriptions WHERE id = ${auth.subscriptionId}
+    SELECT active_site_id FROM accounts WHERE id = ${auth.subscriptionId}
   `;
   if (!sub?.active_site_id) {
     return NextResponse.json({ gaps: [] });

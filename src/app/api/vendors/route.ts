@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const vendors = await sql`
     SELECT id, name, slug, url, created_at
     FROM entities
-    WHERE site_id = ${siteId} AND slot = 1
+    WHERE business_id = ${siteId} AND slot = 1
     ORDER BY name ASC
   `;
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
   // Verify site ownership
   const [site] = await sql`
-    SELECT id FROM sites WHERE id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -62,9 +62,9 @@ export async function POST(req: NextRequest) {
     .slice(0, 40);
 
   const [vendor] = await sql`
-    INSERT INTO entities (subscription_id, site_id, name, slug, url, slot)
+    INSERT INTO entities (billing_account_id, business_id, name, slug, url, slot)
     VALUES (${auth.subscriptionId}, ${siteId}, ${name.trim()}, ${slug}, ${url || null}, 1)
-    ON CONFLICT (site_id, slot, slug) WHERE site_id IS NOT NULL DO UPDATE SET name = ${name.trim()}, url = ${url || null}
+    ON CONFLICT (business_id, slot, slug) WHERE business_id IS NOT NULL DO UPDATE SET name = ${name.trim()}, url = ${url || null}
     RETURNING id, name, slug, url
   `;
 

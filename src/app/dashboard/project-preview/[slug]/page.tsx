@@ -20,7 +20,7 @@ export default async function ProjectPreviewPage({
   const [project] = await sql`
     SELECT id, name, description, address, start_date, end_date, status
     FROM projects
-    WHERE site_id = ${siteId} AND slug = ${slug}
+    WHERE business_id = ${siteId} AND slug = ${slug}
   `;
 
   if (!project) notFound();
@@ -53,8 +53,8 @@ export default async function ProjectPreviewPage({
   // Fetch branch (formerly "location" — repurposed per migration 110)
   const [location] = await sql`
     SELECT DISTINCT b.name, b.address, b.city, b.state
-    FROM branches b
-    JOIN asset_branches ab ON ab.branch_id = b.id
+    FROM locations b
+    JOIN asset_locations ab ON ab.location_id = b.id
     JOIN asset_projects ap ON ap.asset_id = ab.asset_id
     WHERE ap.project_id = ${projectId}
     LIMIT 1

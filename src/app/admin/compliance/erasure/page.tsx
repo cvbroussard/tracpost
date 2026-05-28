@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function ComplianceErasurePage() {
   const wipes = await sql`
     SELECT
-      id, subscription_id, reason, operator_id, notes,
+      id, billing_account_id, reason, operator_id, notes,
       stripe_subscription_id, stripe_customer_id,
       stripe_subscription_cancelled, stripe_customer_deleted,
       wiped_at

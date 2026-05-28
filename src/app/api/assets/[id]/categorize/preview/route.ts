@@ -42,12 +42,12 @@ export async function POST(
   const { id: assetId } = await params;
 
   const [asset] = await sql`
-    SELECT id, site_id, storage_url, media_type, poster_asset_id, gps_lat, gps_lng
+    SELECT id, business_id, storage_url, media_type, poster_asset_id, gps_lat, gps_lng
     FROM media_assets WHERE id = ${assetId}
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   const [owned] = await sql`
-    SELECT id FROM sites WHERE id = ${asset.site_id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${asset.site_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
@@ -73,11 +73,11 @@ export async function POST(
   }
 
   const [siteCategories, siteRow] = await Promise.all([
-    sql`SELECT sgc.gcid, gc.name FROM site_gbp_categories sgc
+    sql`SELECT sgc.gcid, gc.name FROM business_gbp_categories sgc
         JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-        WHERE sgc.site_id = ${asset.site_id}
+        WHERE sgc.business_id = ${asset.site_id}
         ORDER BY sgc.is_primary DESC, gc.name`,
-    sql`SELECT pillar_config, brand_dna FROM sites WHERE id = ${asset.site_id}`,
+    sql`SELECT pillar_config, brand_dna FROM businesses WHERE id = ${asset.site_id}`,
   ]);
 
   if (siteCategories.length === 0) {

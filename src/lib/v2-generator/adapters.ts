@@ -29,14 +29,14 @@ export async function generateBlogPost(opts: {
   const [seed] = await sql`
     SELECT id, media_type, context_note, content_tags
     FROM media_assets
-    WHERE id = ${opts.seedAssetId} AND site_id = ${opts.siteId}
+    WHERE id = ${opts.seedAssetId} AND business_id = ${opts.siteId}
   `;
   if (!seed) throw new Error(`Seed asset ${opts.seedAssetId} not found in site ${opts.siteId}`);
 
   // Pull body-candidate assets — same site, similar pillar, recent, quality-sorted.
   // The LLM selects which ones to actually place via {{asset:UUID}} in the body.
   // Pillar derived from seed's tags via site pillar_config (LOCKED 2026-05-09).
-  const [pcRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${opts.siteId}`;
+  const [pcRow] = await sql`SELECT pillar_config FROM businesses WHERE id = ${opts.siteId}`;
   const pc = (pcRow?.pillar_config || []) as PillarConfig;
   const pillar = primaryPillarFromTags(
     (seed.content_tags as string[] | null) || null,
@@ -49,7 +49,7 @@ export async function generateBlogPost(opts: {
   const bodyCandidates = pillarTagIds.length > 0
     ? await sql`
         SELECT id FROM media_assets
-        WHERE site_id = ${opts.siteId}
+        WHERE business_id = ${opts.siteId}
           AND id <> ${opts.seedAssetId}
           AND processing_stage = 'analyzed'
           AND archived_at IS NULL
@@ -59,7 +59,7 @@ export async function generateBlogPost(opts: {
       `
     : await sql`
         SELECT id FROM media_assets
-        WHERE site_id = ${opts.siteId}
+        WHERE business_id = ${opts.siteId}
           AND id <> ${opts.seedAssetId}
           AND processing_stage = 'analyzed'
           AND archived_at IS NULL

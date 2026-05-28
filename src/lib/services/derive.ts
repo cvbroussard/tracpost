@@ -47,9 +47,9 @@ interface CategoryAnchor {
 async function loadCategoryAnchors(siteId: string): Promise<CategoryAnchor[]> {
   const rows = await sql`
     SELECT sgc.gcid, sgc.is_primary, gc.name
-    FROM site_gbp_categories sgc
+    FROM business_gbp_categories sgc
     JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.site_id = ${siteId}
+    WHERE sgc.business_id = ${siteId}
     ORDER BY sgc.is_primary DESC
   `;
   return rows.map((r) => ({
@@ -134,7 +134,7 @@ export async function deriveServicesForSite(
   opts: { force?: boolean } = {},
 ): Promise<{ created: number; skipped: boolean; reason?: string }> {
   const [site] = await sql`
-    SELECT business_type, brand_playbook FROM sites WHERE id = ${siteId}
+    SELECT business_type, brand_playbook FROM businesses WHERE id = ${siteId}
   `;
   if (!site?.brand_playbook) {
     return { created: 0, skipped: true, reason: "no playbook" };
@@ -146,12 +146,12 @@ export async function deriveServicesForSite(
   }
 
   if (!opts.force) {
-    const [existing] = await sql`SELECT COUNT(*)::int AS n FROM services WHERE site_id = ${siteId}`;
+    const [existing] = await sql`SELECT COUNT(*)::int AS n FROM services WHERE business_id = ${siteId}`;
     if ((existing?.n as number) > 0) {
       return { created: 0, skipped: true, reason: "services already exist" };
     }
   } else {
-    await sql`DELETE FROM services WHERE site_id = ${siteId} AND source = 'auto'`;
+    await sql`DELETE FROM services WHERE business_id = ${siteId} AND source = 'auto'`;
   }
 
   const services = await generateServices(
@@ -181,7 +181,7 @@ export async function deriveServicesForSite(
     let attempt = 1;
     while (true) {
       const [clash] = await sql`
-        SELECT 1 FROM services WHERE site_id = ${siteId} AND slug = ${slug} LIMIT 1
+        SELECT 1 FROM services WHERE business_id = ${siteId} AND slug = ${slug} LIMIT 1
       `;
       if (!clash) break;
       attempt++;
@@ -190,7 +190,7 @@ export async function deriveServicesForSite(
     }
 
     const [row] = await sql`
-      INSERT INTO services (site_id, name, slug, description, price_range, duration, display_order, source)
+      INSERT INTO services (business_id, name, slug, description, price_range, duration, display_order, source)
       VALUES (${siteId}, ${s.name}, ${slug}, ${s.description}, ${s.priceRange || null}, ${s.duration || null}, ${i}, 'auto')
       RETURNING id
     `;

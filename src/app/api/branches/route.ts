@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
 
   const branches = await sql`
     SELECT id, name, slug, address, city, state, description,
-           phone, hours, gbp_location_id, is_primary, hero_asset_id, metadata, created_at
-    FROM branches WHERE site_id = ${siteId}
+           phone, hours, gbp_profile_id AS gbp_location_id, is_primary, hero_asset_id, metadata, created_at
+    FROM locations WHERE business_id = ${siteId}
     ORDER BY is_primary DESC, name ASC
   `;
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT id FROM sites WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -70,13 +70,13 @@ export async function POST(req: NextRequest) {
     : "{}";
 
   const [branch] = await sql`
-    INSERT INTO branches (site_id, name, slug, address, city, state, description,
-      phone, hours, gbp_location_id, is_primary, hero_asset_id)
+    INSERT INTO locations (business_id, name, slug, address, city, state, description,
+      phone, hours, gbp_profile_id, is_primary, hero_asset_id)
     VALUES (${site_id}, ${name.trim()}, ${slug}, ${address || null}, ${city || null},
       ${state || null}, ${description || null}, ${phone || null},
       ${hoursJson}::jsonb, ${gbp_location_id || null}, ${!!is_primary},
       ${hero_asset_id || null})
-    ON CONFLICT (site_id, slug) DO UPDATE SET
+    ON CONFLICT (business_id, slug) DO UPDATE SET
       name = ${name.trim()},
       address = ${address || null},
       city = ${city || null},
@@ -84,11 +84,11 @@ export async function POST(req: NextRequest) {
       description = ${description || null},
       phone = ${phone || null},
       hours = ${hoursJson}::jsonb,
-      gbp_location_id = ${gbp_location_id || null},
+      gbp_profile_id = ${gbp_location_id || null},
       is_primary = ${!!is_primary},
       hero_asset_id = ${hero_asset_id || null}
     RETURNING id, name, slug, address, city, state, description, phone, hours,
-              gbp_location_id, is_primary, hero_asset_id
+              gbp_profile_id AS gbp_location_id, is_primary, hero_asset_id
   `;
 
   // Geo-match: geocode address and backfill matching assets — non-blocking

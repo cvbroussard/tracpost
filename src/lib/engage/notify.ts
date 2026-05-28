@@ -35,7 +35,7 @@ async function getOwner(subscriptionId: string): Promise<OwnerRow | null> {
   const [row] = await sql`
     SELECT email, notify_via
     FROM users
-    WHERE subscription_id = ${subscriptionId}
+    WHERE billing_account_id = ${subscriptionId}
       AND role = 'owner'
       AND is_active = true
     LIMIT 1
@@ -103,7 +103,7 @@ export async function sendEngagementDigest(subscriptionId: string): Promise<bool
            ep.display_name AS person_name
     FROM engagement_events ee
     LEFT JOIN engaged_persons ep ON ep.id = ee.engaged_person_id
-    WHERE ee.subscription_id = ${subscriptionId}
+    WHERE ee.billing_account_id = ${subscriptionId}
       AND ee.discovered_at > NOW() - INTERVAL '24 hours'
       AND ee.review_status != 'archived'
     ORDER BY ee.occurred_at DESC

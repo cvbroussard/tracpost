@@ -22,7 +22,7 @@ export async function lookupTenantByCustomDomain(hostname: string): Promise<stri
   const rows = await sql`
     SELECT s.blog_slug
     FROM blog_settings bs
-    JOIN sites s ON s.id = bs.site_id
+    JOIN businesses s ON s.id = bs.business_id
     WHERE bs.custom_domain = ${normalized}
       AND s.is_active = true
     LIMIT 1
@@ -44,7 +44,7 @@ export async function lookupCustomDomainBySlug(siteSlug: string): Promise<string
   const rows = await sql`
     SELECT bs.custom_domain
     FROM blog_settings bs
-    JOIN sites s ON s.id = bs.site_id
+    JOIN businesses s ON s.id = bs.business_id
     WHERE s.blog_slug = ${siteSlug}
       AND s.is_active = true
     LIMIT 1

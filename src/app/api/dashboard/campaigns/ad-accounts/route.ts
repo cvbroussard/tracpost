@@ -30,20 +30,20 @@ export async function GET(_req: NextRequest) {
       pa.asset_name    AS account_name,
       pa.metadata,
       EXISTS(
-        SELECT 1 FROM site_platform_assets spa
+        SELECT 1 FROM business_platform_assets spa
         WHERE spa.platform_asset_id = pa.id
-          AND spa.site_id = ${session.activeSiteId}
+          AND spa.business_id = ${session.activeSiteId}
           AND spa.is_primary = true
       ) AS is_primary,
       EXISTS(
-        SELECT 1 FROM site_platform_assets spa
+        SELECT 1 FROM business_platform_assets spa
         WHERE spa.platform_asset_id = pa.id
-          AND spa.site_id = ${session.activeSiteId}
+          AND spa.business_id = ${session.activeSiteId}
       ) AS is_assigned
     FROM platform_assets pa
     JOIN social_accounts sa ON sa.id = pa.social_account_id
     WHERE pa.asset_type = 'meta_ad_account'
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
     ORDER BY is_primary DESC, pa.created_at ASC
   `;
 

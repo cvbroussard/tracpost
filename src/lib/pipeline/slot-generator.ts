@@ -18,7 +18,7 @@ export async function generateSlots(
   // Fetch site config
   const [site] = await sql`
     SELECT cadence_config, content_pillars
-    FROM sites
+    FROM businesses
     WHERE id = ${siteId} AND autopilot_enabled = true
   `;
 
@@ -31,8 +31,8 @@ export async function generateSlots(
   const accounts = await sql`
     SELECT sa.id, sa.platform
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId} AND sa.status = 'active'
   `;
 
   if (accounts.length === 0) return 0;
@@ -100,7 +100,7 @@ export async function generateSlots(
 
         // Insert only if no slot exists for this account + platform + time
         const [inserted] = await sql`
-          INSERT INTO publishing_slots (site_id, account_id, platform, content_pillar, scheduled_at)
+          INSERT INTO publishing_slots (business_id, account_id, platform, content_pillar, scheduled_at)
           SELECT ${siteId}, ${acct.id}, ${format}, ${pillar}, ${slotTime.toISOString()}
           WHERE NOT EXISTS (
             SELECT 1 FROM publishing_slots

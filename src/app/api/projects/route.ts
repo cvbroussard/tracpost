@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     SELECT id, name, slug, status, start_date, end_date, address, description,
            hero_asset_id, metadata, caption_mode, manual_caption_count,
            place_id, gps_lat, gps_lng, created_at
-    FROM projects WHERE site_id = ${siteId}
+    FROM projects WHERE business_id = ${siteId}
     ORDER BY name ASC
   `;
 
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT id FROM sites WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   const metadataJson = metadata ? JSON.stringify(metadata) : "{}";
 
   const [project] = await sql`
-    INSERT INTO projects (site_id, name, slug, status, start_date, end_date,
+    INSERT INTO projects (business_id, name, slug, status, start_date, end_date,
       address, description, hero_asset_id, metadata, caption_mode,
       place_id, gps_lat, gps_lng)
     VALUES (${site_id}, ${name.trim()}, ${slug}, ${status || "active"},
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       ${description || null}, ${hero_asset_id || null},
       ${metadataJson}::jsonb, ${caption_mode || "seeding"},
       ${place_id || null}, ${gps_lat ?? null}, ${gps_lng ?? null})
-    ON CONFLICT (site_id, slug) DO UPDATE SET
+    ON CONFLICT (business_id, slug) DO UPDATE SET
       name = ${name.trim()},
       status = ${status || "active"},
       address = ${address || null},

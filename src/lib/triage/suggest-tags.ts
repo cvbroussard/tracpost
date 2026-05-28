@@ -36,7 +36,7 @@ export async function suggestTags(
 
   // Fetch pillar config
   const [site] = await sql`
-    SELECT pillar_config FROM sites WHERE id = ${siteId}
+    SELECT pillar_config FROM businesses WHERE id = ${siteId}
   `;
 
   const config = (site?.pillar_config || []) as Array<{

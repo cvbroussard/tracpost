@@ -30,8 +30,8 @@ export async function GET(req: NextRequest) {
   const reviews = await sql`
     SELECT *
     FROM inbox_reviews
-    WHERE site_id = ${siteId}
-      AND subscription_id = ${auth.subscriptionId}
+    WHERE business_id = ${siteId}
+      AND billing_account_id = ${auth.subscriptionId}
       AND is_hidden = false
       ${unreadOnly ? sql`AND is_read = false` : sql``}
       ${replyStatus ? sql`AND reply_status = ${replyStatus}` : sql``}
@@ -50,8 +50,8 @@ export async function GET(req: NextRequest) {
       COUNT(*) FILTER (WHERE reply_status = 'draft_ready')::int AS draft_ready,
       COUNT(*) FILTER (WHERE reply_status = 'replied')::int AS replied
     FROM inbox_reviews
-    WHERE site_id = ${siteId}
-      AND subscription_id = ${auth.subscriptionId}
+    WHERE business_id = ${siteId}
+      AND billing_account_id = ${auth.subscriptionId}
       AND is_hidden = false
   `;
 

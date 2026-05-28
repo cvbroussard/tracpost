@@ -25,10 +25,10 @@ export async function GET(req: NextRequest) {
                pa.health_status, pa.health_checked_at, pa.health_error,
                sa.id AS social_account_id, sa.account_name AS user_name,
                sa.status AS account_status,
-               (SELECT COUNT(*)::int FROM site_platform_assets WHERE platform_asset_id = pa.id) AS assigned_sites
+               (SELECT COUNT(*)::int FROM business_platform_assets WHERE platform_asset_id = pa.id) AS assigned_sites
         FROM platform_assets pa
         JOIN social_accounts sa ON sa.id = pa.social_account_id
-        WHERE sa.subscription_id = ${subscriptionId}
+        WHERE sa.billing_account_id = ${subscriptionId}
         ORDER BY pa.health_status, pa.platform, pa.asset_name
       `
     : await sql`
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
                pa.health_status, pa.health_checked_at, pa.health_error,
                sa.id AS social_account_id, sa.account_name AS user_name,
                sa.status AS account_status,
-               (SELECT COUNT(*)::int FROM site_platform_assets WHERE platform_asset_id = pa.id) AS assigned_sites
+               (SELECT COUNT(*)::int FROM business_platform_assets WHERE platform_asset_id = pa.id) AS assigned_sites
         FROM platform_assets pa
         JOIN social_accounts sa ON sa.id = pa.social_account_id
         ORDER BY pa.health_status, pa.platform, pa.asset_name

@@ -20,7 +20,7 @@ export async function seedBlogContent(siteId: string): Promise<{
 }> {
   // Check if blog already has posts (don't re-seed)
   const [existing] = await sql`
-    SELECT COUNT(*)::int AS count FROM blog_posts WHERE site_id = ${siteId}
+    SELECT COUNT(*)::int AS count FROM blog_posts WHERE business_id = ${siteId}
   `;
   if (existing.count > 0) {
     return { welcomePostId: null, queuedTopics: 0 };
@@ -29,7 +29,7 @@ export async function seedBlogContent(siteId: string): Promise<{
   // Load site data
   const [site] = await sql`
     SELECT name, url, brand_playbook, brand_voice
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   if (!site) return { welcomePostId: null, queuedTopics: 0 };
 
@@ -45,7 +45,7 @@ export async function seedBlogContent(siteId: string): Promise<{
   let queuedTopics = 0;
   const topics = await sql`
     SELECT id FROM content_topics
-    WHERE site_id = ${siteId} AND status = 'queued'
+    WHERE business_id = ${siteId} AND status = 'queued'
     ORDER BY
       CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
       created_at ASC
@@ -140,7 +140,7 @@ Browse our latest posts below, or [visit our website](${siteUrl}) to learn more 
 
   const [post] = await sql`
     INSERT INTO blog_posts (
-      site_id, slug, title, body, excerpt,
+      business_id, slug, title, body, excerpt,
       meta_title, meta_description, schema_json,
       tags, content_pillar, status, published_at, source
     ) VALUES (
@@ -150,7 +150,7 @@ Browse our latest posts below, or [visit our website](${siteUrl}) to learn more 
       ${["welcome", "about"]}, ${"showcase"},
       'published', NOW(), 'generated'
     )
-    ON CONFLICT (site_id, slug) DO NOTHING
+    ON CONFLICT (business_id, slug) DO NOTHING
     RETURNING id
   `;
 

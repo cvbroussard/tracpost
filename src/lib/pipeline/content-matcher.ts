@@ -66,7 +66,7 @@ async function getNextSlot(
   const recent = await sql`
     SELECT metadata->>'scene_type' AS scene
     FROM blog_posts
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND created_at > NOW() - INTERVAL '14 days'
       AND metadata->>'scene_type' IS NOT NULL
     ORDER BY created_at DESC
@@ -94,7 +94,7 @@ async function getNextSlot(
   const recentCategories = await sql`
     SELECT metadata->>'reward_category' AS cat
     FROM blog_posts
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND created_at > NOW() - INTERVAL '7 days'
       AND metadata->>'reward_category' IS NOT NULL
     ORDER BY created_at DESC
@@ -141,7 +141,7 @@ async function findMatchingAsset(
            ma.metadata->>'last_used_at' AS last_used_at
     FROM media_assets ma
     LEFT JOIN blog_posts bp ON bp.source_asset_id = ma.id
-    WHERE ma.site_id = ${siteId}
+    WHERE ma.business_id = ${siteId}
       AND ma.processing_stage = 'analyzed'
       AND ma.quality_score >= ${publishAbove(qt)}
       AND bp.id IS NULL
@@ -225,7 +225,7 @@ async function buildAssetResult(
   // Derive contentPillar from content_tags + pillar_config (LOCKED 2026-05-09).
   // Pillars are no longer stored on the asset; load site pillar_config and
   // compute the primary pillar via parents-of-tags lookup.
-  const [siteRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${siteId}`;
+  const [siteRow] = await sql`SELECT pillar_config FROM businesses WHERE id = ${siteId}`;
   const pillarConfig = (siteRow?.pillar_config || []) as PillarConfig;
   const derivedPillar = primaryPillarFromTags(
     (asset.content_tags as string[] | null) || null,

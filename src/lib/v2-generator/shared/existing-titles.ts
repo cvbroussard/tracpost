@@ -24,7 +24,7 @@ export async function getExistingTitles(
   if (pool === "blog") {
     const rows = await sql`
       SELECT title FROM blog_posts_v2
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY created_at DESC
       LIMIT ${limit}
     `;
@@ -33,7 +33,7 @@ export async function getExistingTitles(
   if (pool === "project") {
     const rows = await sql`
       SELECT name AS title FROM projects_v2
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY created_at DESC
       LIMIT ${limit}
     `;
@@ -42,7 +42,7 @@ export async function getExistingTitles(
   if (pool === "service") {
     const rows = await sql`
       SELECT name AS title FROM services_v2
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY created_at DESC
       LIMIT ${limit}
     `;

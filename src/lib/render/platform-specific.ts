@@ -90,14 +90,14 @@ export interface LocationTag {
 export async function resolveLocationTag(siteId: string): Promise<LocationTag | null> {
   const [site] = await sql`
     SELECT location, business_phone
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   if (!site?.location) return null;
 
   const [loc] = await sql`
     SELECT name, metadata->>'lat' AS lat, metadata->>'lng' AS lng
-    FROM branches
-    WHERE site_id = ${siteId}
+    FROM locations
+    WHERE business_id = ${siteId}
     ORDER BY is_primary DESC, created_at ASC
     LIMIT 1
   `;

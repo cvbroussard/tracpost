@@ -39,11 +39,11 @@ export async function POST(
   // Load the recording; verify it belongs to the caller's subscription
   // and has stored audio (typed recordings have no storage_url).
   const [rec] = await sql`
-    SELECT r.id, r.site_id, r.storage_url, r.source
+    SELECT r.id, r.business_id, r.storage_url, r.source
     FROM recordings r
-    JOIN sites s ON s.id = r.site_id
+    JOIN businesses s ON s.id = r.business_id
     WHERE r.id = ${id}
-      AND s.subscription_id = ${auth.subscriptionId}
+      AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!rec) {
     return NextResponse.json({ error: "Recording not found" }, { status: 404 });

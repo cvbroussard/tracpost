@@ -62,7 +62,7 @@ export async function boostPostAfterPublish(
 
   // Look up subscription + active site for ad account resolution
   const [postContext] = await sql`
-    SELECT sp.id AS post_id, sp.site_id, sa.subscription_id
+    SELECT sp.id AS post_id, sp.business_id, sa.billing_account_id
     FROM social_posts sp
     JOIN social_accounts sa ON sa.id = sp.account_id
     WHERE sp.id = ${postId}

@@ -25,13 +25,13 @@ export async function GET(req: NextRequest) {
         COUNT(*) FILTER (WHERE photo_consent = true)::int AS consented,
         AVG(star_rating) FILTER (WHERE star_rating IS NOT NULL) AS avg_rating
       FROM spotlight_sessions
-      WHERE site_id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+      WHERE business_id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
     `,
     // Funnel events
     sql`
       SELECT event, COUNT(*)::int AS count
       FROM spotlight_analytics
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       GROUP BY event
       ORDER BY count DESC
     `,
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     sql`
       SELECT star_rating, COUNT(*)::int AS count
       FROM spotlight_sessions
-      WHERE site_id = ${siteId} AND subscription_id = ${auth.subscriptionId} AND star_rating IS NOT NULL
+      WHERE business_id = ${siteId} AND billing_account_id = ${auth.subscriptionId} AND star_rating IS NOT NULL
       GROUP BY star_rating
       ORDER BY star_rating DESC
     `,
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       SELECT id, session_code, status, customer_name, star_rating,
              google_review_opened, photo_consent, captured_at, completed_at
       FROM spotlight_sessions
-      WHERE site_id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+      WHERE business_id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
       ORDER BY created_at DESC
       LIMIT 10
     `,

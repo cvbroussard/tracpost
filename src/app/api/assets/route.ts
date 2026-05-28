@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
 
     // Verify site ownership
     const [site] = await sql`
-      SELECT id FROM sites
-      WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+      SELECT id FROM businesses
+      WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
     `;
     if (!site) {
       return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         const assetIds = await processPdf(finalUrl, site_id, project_id || null, context_note || null);
 
         await sql`
-          INSERT INTO usage_log (subscription_id, site_id, action, metadata)
+          INSERT INTO usage_log (billing_account_id, business_id, action, metadata)
           VALUES (${auth.subscriptionId}, ${site_id}, 'pdf_upload', ${JSON.stringify({
             pdf_url: finalUrl,
             pages: assetIds.length,
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
 
     const [asset] = await sql`
       INSERT INTO media_assets (
-        site_id, storage_url, media_type, context_note,
+        business_id, storage_url, media_type, context_note,
         source, processing_stage, triaged_at, briefable_at,
         metadata, sort_order
       )
@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
         ${briefableAtInsert},
         ${JSON.stringify({ ...assetMeta, ...briefedMeta })}, EXTRACT(EPOCH FROM NOW())
       )
-      RETURNING id, site_id, storage_url, media_type, context_note, processing_stage, briefable_at, created_at
+      RETURNING id, business_id, storage_url, media_type, context_note, processing_stage, briefable_at, created_at
     `;
 
     // Post-upload work, all non-blocking via waitUntil. Two cases:
@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
 
     // Log usage
     await sql`
-      INSERT INTO usage_log (subscription_id, site_id, action, metadata)
+      INSERT INTO usage_log (billing_account_id, business_id, action, metadata)
       VALUES (${auth.subscriptionId}, ${site_id}, 'asset_upload', ${JSON.stringify({
         asset_id: asset.id,
         media_type,
@@ -287,7 +287,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT id FROM sites WHERE id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -302,14 +302,14 @@ export async function GET(req: NextRequest) {
     ? await sql`
         SELECT id, storage_url, media_type, context_note, processing_stage, quality_score, created_at, archived_at, briefable_at
         FROM media_assets
-        WHERE site_id = ${siteId} AND processing_stage = ${status}
+        WHERE business_id = ${siteId} AND processing_stage = ${status}
           AND (${showArchived} OR archived_at IS NULL)
         ORDER BY created_at DESC LIMIT 100
       `
     : await sql`
         SELECT id, storage_url, media_type, context_note, processing_stage, quality_score, created_at, archived_at, briefable_at
         FROM media_assets
-        WHERE site_id = ${siteId}
+        WHERE business_id = ${siteId}
           AND (${showArchived} OR archived_at IS NULL)
         ORDER BY created_at DESC LIMIT 100
       `;

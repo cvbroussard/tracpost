@@ -101,13 +101,13 @@ export async function promoteBlogPost(blogPostId: string): Promise<PromotionResu
 
   // Fetch blog post + site + playbook + blog settings
   const [post] = await sql`
-    SELECT bp.id, bp.site_id, bp.title, bp.excerpt, bp.body, bp.tags,
+    SELECT bp.id, bp.business_id, bp.title, bp.excerpt, bp.body, bp.tags,
            bp.og_image_url, bp.slug, bp.content_pillar,
            s.name AS site_name, s.blog_slug, s.brand_playbook, s.brand_voice,
            bs.subdomain, bs.custom_domain
     FROM blog_posts bp
-    JOIN sites s ON s.id = bp.site_id
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    JOIN businesses s ON s.id = bp.business_id
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE bp.id = ${blogPostId} AND bp.status = 'published'
   `;
 
@@ -137,8 +137,8 @@ export async function promoteBlogPost(blogPostId: string): Promise<PromotionResu
   const accounts = await sql`
     SELECT sa.id, sa.platform, sa.account_name
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${post.site_id} AND sa.status = 'active'
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${post.site_id} AND sa.status = 'active'
   `;
 
   if (accounts.length === 0) {

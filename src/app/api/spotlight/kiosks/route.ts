@@ -18,13 +18,13 @@ export async function POST(req: NextRequest) {
   }
 
   // Verify site ownership
-  const [site] = await sql`SELECT id FROM sites WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}`;
+  const [site] = await sql`SELECT id FROM businesses WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}`;
   if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
   const kioskToken = generateKioskToken();
 
   const [kiosk] = await sql`
-    INSERT INTO spotlight_kiosks (site_id, name, kiosk_token, settings)
+    INSERT INTO spotlight_kiosks (business_id, name, kiosk_token, settings)
     VALUES (${site_id}, ${name}, ${kioskToken}, ${JSON.stringify(settings || {})})
     RETURNING id, name, kiosk_token, created_at
   `;
@@ -45,8 +45,8 @@ export async function GET(req: NextRequest) {
   const kiosks = await sql`
     SELECT id, name, is_active, settings, last_seen_at, created_at
     FROM spotlight_kiosks
-    WHERE site_id = ${siteId}
-      AND site_id IN (SELECT id FROM sites WHERE subscription_id = ${auth.subscriptionId})
+    WHERE business_id = ${siteId}
+      AND business_id IN (SELECT id FROM businesses WHERE billing_account_id = ${auth.subscriptionId})
     ORDER BY created_at DESC
   `;
 

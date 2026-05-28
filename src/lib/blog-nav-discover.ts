@@ -68,8 +68,8 @@ export async function discoverNavLinks(
   const [bs] = await sql`
     SELECT bs.subdomain, bs.custom_domain, s.blog_slug
     FROM blog_settings bs
-    JOIN sites s ON s.id = bs.site_id
-    WHERE bs.site_id = ${siteId}
+    JOIN businesses s ON s.id = bs.business_id
+    WHERE bs.business_id = ${siteId}
   `;
   const slug = (bs?.blog_slug as string) || (bs?.subdomain as string) || "";
   const customDomain = (bs?.custom_domain as string) || null;
@@ -102,7 +102,7 @@ export async function discoverNavLinks(
   await sql`
     UPDATE blog_settings
     SET nav_links = ${JSON.stringify(navLinks)}::jsonb, updated_at = NOW()
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
   `;
 
   return navLinks;

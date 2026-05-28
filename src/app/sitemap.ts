@@ -84,7 +84,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const posts = await sql`
       SELECT slug, published_at
       FROM blog_posts bp
-      JOIN sites s ON s.id = bp.site_id
+      JOIN businesses s ON s.id = bp.business_id
       WHERE s.blog_slug = 'tracpost' AND bp.status = 'published'
     `;
     blogPages = posts.map((post) => ({

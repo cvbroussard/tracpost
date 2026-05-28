@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
 
   // Verify ownership
   const [site] = await sql`
-    SELECT id, name FROM sites
+    SELECT id, name FROM businesses
     WHERE id = ${siteId}
-      AND subscription_id = ${session.subscriptionId}
+      AND billing_account_id = ${session.subscriptionId}
       AND deleted_at IS NULL
       AND deletion_status IS NULL
   `;
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET deletion_requested_at = NOW(),
         deletion_reason = ${reason || null},
         deletion_status = 'pending',
@@ -71,9 +71,9 @@ export async function DELETE(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT id FROM sites
+    SELECT id FROM businesses
     WHERE id = ${siteId}
-      AND subscription_id = ${session.subscriptionId}
+      AND billing_account_id = ${session.subscriptionId}
       AND deletion_status = 'pending'
   `;
 
@@ -82,7 +82,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET deletion_requested_at = NULL,
         deletion_reason = NULL,
         deletion_status = NULL,

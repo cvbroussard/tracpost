@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const { sql } = await import("@/lib/db");
     const [site] = await sql`
       SELECT gbp_sync_dirty, gbp_dirty_fields
-      FROM sites WHERE id = ${siteId}
+      FROM businesses WHERE id = ${siteId}
     `;
     const dirtyFields = (site?.gbp_dirty_fields as string[] | null) || [];
 
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     if (dirtyFields.includes("categories")) {
       const rows = await sql`
         SELECT chosen_by AS source, COUNT(*)::int AS count, MAX(chosen_at) AS latest_at
-        FROM site_gbp_categories WHERE site_id = ${siteId}
+        FROM business_gbp_categories WHERE business_id = ${siteId}
         GROUP BY chosen_by
         ORDER BY MAX(chosen_at) DESC NULLS LAST
       `;
@@ -76,8 +76,8 @@ export async function GET(req: NextRequest) {
     const gbpCheck = await sql`
       SELECT sa.id, sa.status, sa.account_id, sa.metadata->>'account_id' AS meta_acct
       FROM social_accounts sa
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp'
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp'
       LIMIT 1
     `;
     return NextResponse.json({
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
   // Enrich with branding assets from sites table
   const { sql: dbSql } = await import("@/lib/db");
   const [siteAssets] = await dbSql`
-    SELECT business_logo, gbp_cover_asset_id FROM sites WHERE id = ${siteId}
+    SELECT business_logo, gbp_cover_asset_id FROM businesses WHERE id = ${siteId}
   `;
   let enrichedCoverUrl: string | null = null;
   if (siteAssets?.gbp_cover_asset_id) {
@@ -105,9 +105,9 @@ export async function GET(req: NextRequest) {
   // Get TracPost categories (source of truth)
   const tpCategories = await dbSql`
     SELECT sgc.gcid, sgc.is_primary, gc.name
-    FROM site_gbp_categories sgc
+    FROM business_gbp_categories sgc
     JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.site_id = ${siteId}
+    WHERE sgc.business_id = ${siteId}
     ORDER BY sgc.is_primary DESC, gc.name
   `;
   const primaryCat = tpCategories.find((c) => c.is_primary);
@@ -157,24 +157,24 @@ export async function POST(req: NextRequest) {
   if (updates.gbp_cover_asset_id !== undefined || updates.gbp_logo_asset_id !== undefined) {
     const { sql } = await import("@/lib/db");
     if (updates.gbp_cover_asset_id !== undefined) {
-      await sql`UPDATE sites SET gbp_cover_asset_id = ${updates.gbp_cover_asset_id} WHERE id = ${site_id}`;
+      await sql`UPDATE businesses SET gbp_cover_asset_id = ${updates.gbp_cover_asset_id} WHERE id = ${site_id}`;
 
       // Also store the URL in the cached profile for the hero banner
       const [asset] = await sql`SELECT storage_url FROM media_assets WHERE id = ${updates.gbp_cover_asset_id}`;
       if (asset) {
         await sql`
-          UPDATE sites SET gbp_profile = jsonb_set(COALESCE(gbp_profile, '{}'::jsonb), '{coverPhotoUrl}', ${JSON.stringify(asset.storage_url)}::jsonb)
+          UPDATE businesses SET gbp_profile = jsonb_set(COALESCE(gbp_profile, '{}'::jsonb), '{coverPhotoUrl}', ${JSON.stringify(asset.storage_url)}::jsonb)
           WHERE id = ${site_id}
         `;
       }
     }
     if (updates.gbp_logo_asset_id !== undefined) {
-      await sql`UPDATE sites SET gbp_logo_asset_id = ${updates.gbp_logo_asset_id} WHERE id = ${site_id}`;
+      await sql`UPDATE businesses SET gbp_logo_asset_id = ${updates.gbp_logo_asset_id} WHERE id = ${site_id}`;
 
       const [asset] = await sql`SELECT storage_url FROM media_assets WHERE id = ${updates.gbp_logo_asset_id}`;
       if (asset) {
         await sql`
-          UPDATE sites SET gbp_profile = jsonb_set(COALESCE(gbp_profile, '{}'::jsonb), '{logoUrl}', ${JSON.stringify(asset.storage_url)}::jsonb)
+          UPDATE businesses SET gbp_profile = jsonb_set(COALESCE(gbp_profile, '{}'::jsonb), '{logoUrl}', ${JSON.stringify(asset.storage_url)}::jsonb)
           WHERE id = ${site_id}
         `;
       }

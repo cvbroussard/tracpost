@@ -18,7 +18,7 @@ export async function checkAndActivateAutopilot(siteId: string): Promise<boolean
            metadata->'reward_prompts' IS NOT NULL AS has_prompts,
            jsonb_array_length(COALESCE(metadata->'reward_prompts', '[]'::jsonb)) AS prompt_count,
            metadata->>'autopilot_locked' AS autopilot_locked
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
 
   if (!site) return false;
@@ -36,13 +36,13 @@ export async function checkAndActivateAutopilot(siteId: string): Promise<boolean
   // Check 3+ triaged assets
   const [count] = await sql`
     SELECT COUNT(*)::int AS c FROM media_assets
-    WHERE site_id = ${siteId} AND processing_stage = 'analyzed'
+    WHERE business_id = ${siteId} AND processing_stage = 'analyzed'
   `;
   if ((count?.c || 0) < 3) return false;
 
   // All conditions met — activate
   await sql`
-    UPDATE sites SET autopilot_enabled = true, updated_at = NOW()
+    UPDATE businesses SET autopilot_enabled = true, updated_at = NOW()
     WHERE id = ${siteId}
   `;
   console.log(`Autopilot activated for site ${siteId}`);

@@ -124,7 +124,7 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
 
   // ── 1. Load asset state ──────────────────────────────────────────
   const [asset] = await sql`
-    SELECT id, site_id, storage_url, media_type, poster_asset_id, gps_lat, gps_lng
+    SELECT id, business_id, storage_url, media_type, poster_asset_id, gps_lat, gps_lng
     FROM media_assets WHERE id = ${assetId}
   `;
   if (!asset) throw new Error(`Asset ${assetId} not found`);
@@ -162,13 +162,13 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
     const transcript = (transcriptRow?.transcript as string) || "";
 
     const [siteRow] = await sql`
-      SELECT pillar_config, brand_dna FROM sites WHERE id = ${siteId}
+      SELECT pillar_config, brand_dna FROM businesses WHERE id = ${siteId}
     `;
     const siteCategories = await sql`
       SELECT sgc.gcid, gc.name
-      FROM site_gbp_categories sgc
+      FROM business_gbp_categories sgc
       JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-      WHERE sgc.site_id = ${siteId}
+      WHERE sgc.business_id = ${siteId}
     `;
 
     const nerInputSnapshot = { transcript };
@@ -198,7 +198,7 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
     await sql.transaction([
       sql`
         INSERT INTO analysis_events
-          (asset_id, site_id, process, model, prompt, input_snapshot, output, cost)
+          (asset_id, business_id, process, model, prompt, input_snapshot, output, cost)
         VALUES (
           ${assetId}, ${siteId}, 'ner_call', ${analysis.model_versions.ner},
           ${NER_SYSTEM_PROMPT},
@@ -212,7 +212,7 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
       `,
       sql`
         INSERT INTO analysis_events
-          (asset_id, site_id, process, model, prompt, input_snapshot, output, cost)
+          (asset_id, business_id, process, model, prompt, input_snapshot, output, cost)
         VALUES (
           ${assetId}, ${siteId}, 'vision_call', ${analysis.model_versions.vision},
           ${buildVisionSystemPrompt()},
@@ -302,13 +302,13 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
         .slice(0, 40);
       const insertResult = await sql`
         INSERT INTO brands (
-          site_id, name, slug, seed_source, seed_asset_id, authorized_at, enrichment_status
+          business_id, name, slug, seed_source, seed_asset_id, authorized_at, enrichment_status
         )
         VALUES (
           ${siteId}, ${name}, ${slug},
           'audio_transcript', ${assetId}, NOW(), 'pending'
         )
-        ON CONFLICT (site_id, slug) DO NOTHING
+        ON CONFLICT (business_id, slug) DO NOTHING
         RETURNING id
       `;
       let brandId: string;
@@ -317,7 +317,7 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
         brandId = insertResult[0].id as string;
       } else {
         const [existing] = await sql`
-          SELECT id FROM brands WHERE site_id = ${siteId} AND slug = ${slug}
+          SELECT id FROM brands WHERE business_id = ${siteId} AND slug = ${slug}
         `;
         if (!existing) continue; // shouldn't happen but be defensive
         brandId = existing.id as string;

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   }
 
   const subs = await sql`
-    SELECT DISTINCT subscription_id
+    SELECT DISTINCT billing_account_id
     FROM engagement_events
     WHERE discovered_at > NOW() - INTERVAL '24 hours'
       AND review_status != 'archived'

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     SELECT s.id, s.name, s.url, s.business_type, s.location,
            s.brand_playbook, s.brand_voice, s.content_vibe, s.image_style,
            s.provisioning_status
-    FROM sites s
+    FROM businesses s
     WHERE s.id = ${siteId}
   `;
 

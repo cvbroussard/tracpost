@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const [siteRow] = await sql`
     SELECT s.id, s.name, ct.slug, ct.label
-    FROM sites s
+    FROM businesses s
     LEFT JOIN commercial_tiers ct ON ct.id = s.commercial_tier_id
     WHERE s.id = ${siteId}
   `;
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   }
 
   await sql`
-    UPDATE sites SET commercial_tier_id = ${tier.id} WHERE id = ${siteId}
+    UPDATE businesses SET commercial_tier_id = ${tier.id} WHERE id = ${siteId}
   `;
 
   return NextResponse.json({

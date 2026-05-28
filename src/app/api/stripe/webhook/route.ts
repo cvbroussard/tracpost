@@ -70,15 +70,15 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
   // Check if subscription already exists (re-subscribe) by owner email
   const [existing] = await sql`
     SELECT s.id
-    FROM subscriptions s
-    JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
+    FROM accounts s
+    JOIN users u ON u.billing_account_id = s.id AND u.role = 'owner'
     WHERE u.email = ${email}
   `;
 
   if (existing) {
     // Reactivate existing subscription
     await sql`
-      UPDATE subscriptions
+      UPDATE accounts
       SET is_active = true,
           cancelled_at = NULL,
           cancel_reason = NULL,
@@ -96,7 +96,7 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
       const sub = await stripe.subscriptions.retrieve(subscriptionId);
       const priceId = sub.items.data[0]?.price.id;
       const plan = PRICE_TO_PLAN[priceId] || "starter";
-      await sql`UPDATE subscriptions SET plan = ${plan} WHERE id = ${existing.id}`;
+      await sql`UPDATE accounts SET plan = ${plan} WHERE id = ${existing.id}`;
     }
 
     // Generate magic link for returning subscriber
@@ -126,7 +126,7 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
 
   // Create subscription (billing entity)
   const [subscription] = await sql`
-    INSERT INTO subscriptions (api_key_hash, plan, is_active, metadata)
+    INSERT INTO accounts (api_key_hash, plan, is_active, metadata)
     VALUES (
       ${apiKeyHash},
       ${plan},
@@ -142,7 +142,7 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
 
   // Create owner user attached to the subscription
   const [owner] = await sql`
-    INSERT INTO users (subscription_id, name, email, role, is_active)
+    INSERT INTO users (billing_account_id, name, email, role, is_active)
     VALUES (
       ${subscription.id},
       ${email.split("@")[0]},
@@ -160,7 +160,7 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
 
   // Log
   await sql`
-    INSERT INTO usage_log (subscription_id, action, metadata)
+    INSERT INTO usage_log (billing_account_id, action, metadata)
     VALUES (${subscription.id}, 'stripe_checkout', ${JSON.stringify({
       plan,
       customer_id: customerId,
@@ -184,7 +184,7 @@ async function handleSubscriptionUpdated(subscription: Record<string, unknown>) 
   const plan = PRICE_TO_PLAN[priceId] || "starter";
 
   await sql`
-    UPDATE subscriptions
+    UPDATE accounts
     SET plan = ${plan}, updated_at = NOW()
     WHERE metadata @> ${JSON.stringify({ stripe: { customer_id: customerId } })}::jsonb
   `;
@@ -200,7 +200,7 @@ async function handleSubscriptionDeleted(subscription: Record<string, unknown>) 
   if (!customerId) return;
 
   await sql`
-    UPDATE subscriptions
+    UPDATE accounts
     SET cancelled_at = NOW(), updated_at = NOW()
     WHERE metadata @> ${JSON.stringify({ stripe: { customer_id: customerId } })}::jsonb
   `;

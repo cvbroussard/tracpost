@@ -20,10 +20,10 @@ export async function POST(req: NextRequest) {
   }
 
   const rows = await sql`
-    SELECT u.id, u.name, u.role, u.password_hash, u.subscription_id, u.site_id,
+    SELECT u.id, u.name, u.role, u.password_hash, u.billing_account_id, u.business_id,
            s.plan, s.name AS subscription_name
     FROM users u
-    JOIN subscriptions s ON u.subscription_id = s.id
+    JOIN accounts s ON u.billing_account_id = s.id
     WHERE u.email = ${email}
       AND u.is_active = true
   `;
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
   // If user has a site_id scope (Site Access bound to a single business),
   // filter sites to just that one. Otherwise return all subscription sites.
   const rawSites = await sql`
-    SELECT id, name, url, is_active FROM sites
-    WHERE subscription_id = ${subscriptionId}
+    SELECT id, name, url, is_active FROM businesses
+    WHERE billing_account_id = ${subscriptionId}
     ORDER BY is_active DESC, created_at ASC
   `;
   const sites = userSiteScope

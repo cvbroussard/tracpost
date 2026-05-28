@@ -63,7 +63,7 @@ export async function enrichBrand(
   const { force = false } = opts;
 
   const [current] = await sql`
-    SELECT site_id, enrichment_status, enriched_at, url, hero_asset_id
+    SELECT business_id, enrichment_status, enriched_at, url, hero_asset_id
     FROM brands WHERE id = ${brandId}
   `;
   if (!current) return;
@@ -410,7 +410,7 @@ export async function captureLogoAsHeroAsset(
     const assetId = randomUUID();
     await sql`
       INSERT INTO media_assets (
-        id, site_id, storage_url, media_type, source,
+        id, business_id, storage_url, media_type, source,
         processing_stage, archived_at, context_note, metadata, created_at
       )
       VALUES (

@@ -14,22 +14,22 @@ export default async function TeamPage() {
   if (role !== "owner") redirect("/dashboard/account");
 
   const [subRow, members, sites] = await Promise.all([
-    sql`SELECT plan FROM subscriptions WHERE id = ${session.subscriptionId}`,
+    sql`SELECT plan FROM accounts WHERE id = ${session.subscriptionId}`,
     sql`
-      SELECT id, name, email, phone, role, site_id, notify_via,
+      SELECT id, name, email, phone, role, business_id, notify_via,
              password_hash IS NOT NULL AS has_password,
              session_token_hash IS NOT NULL AS has_device,
              last_active_at, is_active, created_at
       FROM users
-      WHERE subscription_id = ${session.subscriptionId}
+      WHERE billing_account_id = ${session.subscriptionId}
         AND is_active = true
       ORDER BY
         CASE role WHEN 'owner' THEN 0 WHEN 'member' THEN 1 WHEN 'capture' THEN 2 ELSE 3 END,
         created_at ASC
     `,
     sql`
-      SELECT id, name FROM sites
-      WHERE subscription_id = ${session.subscriptionId} AND is_active = true
+      SELECT id, name FROM businesses
+      WHERE billing_account_id = ${session.subscriptionId} AND is_active = true
       ORDER BY created_at ASC
     `,
   ]);

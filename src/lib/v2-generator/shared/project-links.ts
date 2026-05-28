@@ -29,7 +29,7 @@ export async function getProjectLinks(
   const rows = await sql`
     SELECT id, slug, COALESCE(display_name, name) AS display_label
     FROM projects_v2
-    WHERE site_id = ${siteId} AND status = 'active'
+    WHERE business_id = ${siteId} AND status = 'active'
     ORDER BY created_at DESC
   `;
 

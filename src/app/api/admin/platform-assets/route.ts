@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     SELECT sa.id AS social_account_id, sa.platform, sa.account_name AS user_name,
            sa.status, sa.token_expires_at
     FROM social_accounts sa
-    WHERE sa.subscription_id = ${subscriptionId}
+    WHERE sa.billing_account_id = ${subscriptionId}
     ORDER BY sa.platform, sa.created_at DESC
   `;
 
@@ -40,17 +40,17 @@ export async function GET(req: NextRequest) {
            pa.health_status, pa.health_checked_at, pa.health_error,
            ARRAY(
              SELECT json_build_object(
-               'site_id', spa.site_id,
+               'business_id', spa.business_id,
                'site_name', s.name,
                'is_primary', spa.is_primary
              )
-             FROM site_platform_assets spa
-             JOIN sites s ON s.id = spa.site_id
+             FROM business_platform_assets spa
+             JOIN businesses s ON s.id = spa.business_id
              WHERE spa.platform_asset_id = pa.id
            ) AS assignments
     FROM platform_assets pa
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE sa.subscription_id = ${subscriptionId}
+    WHERE sa.billing_account_id = ${subscriptionId}
     ORDER BY pa.platform, pa.asset_type, pa.asset_name
   `;
 

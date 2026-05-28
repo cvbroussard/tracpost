@@ -35,7 +35,7 @@ function resolveCategory(contentType: string | null, contentPillar: string | nul
 }
 
 export default async function MarketingBlogPage() {
-  const [site] = await sql`SELECT id FROM sites WHERE blog_slug = 'tracpost'`;
+  const [site] = await sql`SELECT id FROM businesses WHERE blog_slug = 'tracpost'`;
   if (!site) {
     return (
       <section className="mp-section">
@@ -53,7 +53,7 @@ export default async function MarketingBlogPage() {
     SELECT slug, title, excerpt, og_image_url, published_at,
            content_type, content_pillar, content_tags
     FROM blog_posts
-    WHERE site_id = ${siteId} AND status = 'published'
+    WHERE business_id = ${siteId} AND status = 'published'
     ORDER BY published_at DESC NULLS LAST
     LIMIT 60
   `;

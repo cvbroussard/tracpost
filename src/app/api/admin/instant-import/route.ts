@@ -33,27 +33,27 @@ export async function GET(req: NextRequest) {
                (SELECT COUNT(*)::int FROM historical_posts hp WHERE hp.platform_asset_id = pa.id) AS historical_count
         FROM platform_assets pa
         JOIN social_accounts sa ON sa.id = pa.social_account_id
-        JOIN site_platform_assets spa ON spa.platform_asset_id = pa.id AND spa.is_primary = true
-        JOIN sites s ON s.id = spa.site_id
-        WHERE sa.subscription_id = ${subscriptionId}
+        JOIN business_platform_assets spa ON spa.platform_asset_id = pa.id AND spa.is_primary = true
+        JOIN businesses s ON s.id = spa.business_id
+        WHERE sa.billing_account_id = ${subscriptionId}
           AND s.id = ${siteId}
         ORDER BY pa.platform, pa.asset_name
       `
     : await sql`
         SELECT pa.id, pa.platform, pa.asset_name, pa.health_status,
                pa.imported_at, pa.created_at,
-               (SELECT s.name FROM site_platform_assets spa
-                JOIN sites s ON s.id = spa.site_id
+               (SELECT s.name FROM business_platform_assets spa
+                JOIN businesses s ON s.id = spa.business_id
                 WHERE spa.platform_asset_id = pa.id AND spa.is_primary = true
                 LIMIT 1) AS primary_site_name,
-               (SELECT s.gbp_profile FROM site_platform_assets spa
-                JOIN sites s ON s.id = spa.site_id
+               (SELECT s.gbp_profile FROM business_platform_assets spa
+                JOIN businesses s ON s.id = spa.business_id
                 WHERE spa.platform_asset_id = pa.id AND spa.is_primary = true
                 LIMIT 1) AS gbp_profile_snapshot,
                (SELECT COUNT(*)::int FROM historical_posts hp WHERE hp.platform_asset_id = pa.id) AS historical_count
         FROM platform_assets pa
         JOIN social_accounts sa ON sa.id = pa.social_account_id
-        WHERE sa.subscription_id = ${subscriptionId}
+        WHERE sa.billing_account_id = ${subscriptionId}
         ORDER BY pa.platform, pa.asset_name
       `;
 

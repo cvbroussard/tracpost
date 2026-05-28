@@ -21,9 +21,9 @@ export default async function TestSubscriptionsPage() {
       s.id, s.plan, s.status, s.is_test, s.created_at, s.metadata,
       u.email AS owner_email,
       u.name AS owner_name,
-      (SELECT COUNT(*)::int FROM sites WHERE subscription_id = s.id) AS site_count
-    FROM subscriptions s
-    LEFT JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
+      (SELECT COUNT(*)::int FROM businesses WHERE billing_account_id = s.id) AS site_count
+    FROM accounts s
+    LEFT JOIN users u ON u.billing_account_id = s.id AND u.role = 'owner'
     WHERE s.is_test = true
     ORDER BY s.created_at DESC
   `) as unknown as Row[];

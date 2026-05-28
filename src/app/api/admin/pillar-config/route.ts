@@ -30,13 +30,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const [site] = await sql`SELECT id FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT id FROM businesses WHERE id = ${siteId}`;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET pillar_config = ${JSON.stringify(config)}::jsonb, updated_at = NOW()
     WHERE id = ${siteId}
   `;

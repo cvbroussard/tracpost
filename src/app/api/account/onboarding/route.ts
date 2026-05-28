@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const { status } = await req.json();
 
   await sql`
-    UPDATE subscriptions
+    UPDATE accounts
     SET metadata = jsonb_set(
       COALESCE(metadata, '{}'::jsonb),
       '{onboarding_status}',

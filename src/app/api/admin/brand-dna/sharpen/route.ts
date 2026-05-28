@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [site] = await sql`
-    SELECT business_type, location, url, brand_dna FROM sites WHERE id = ${siteId}
+    SELECT business_type, location, url, brand_dna FROM businesses WHERE id = ${siteId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   };
 
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET brand_dna = ${JSON.stringify(envelope)}::jsonb, updated_at = NOW()
     WHERE id = ${siteId}
   `;

@@ -30,12 +30,12 @@ export const assetDrivenStrategy: BlogStrategy = {
     const [seed] = await sql`
       SELECT id, content_tags
       FROM media_assets
-      WHERE id = ${seedId} AND site_id = ${assessment.siteId}
+      WHERE id = ${seedId} AND business_id = ${assessment.siteId}
     `;
     if (!seed) return null;
 
     // Pillar derived from seed's tags (LOCKED 2026-05-09).
-    const [pcRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${assessment.siteId}`;
+    const [pcRow] = await sql`SELECT pillar_config FROM businesses WHERE id = ${assessment.siteId}`;
     const pc = (pcRow?.pillar_config || []) as PillarConfig;
     const pillar = primaryPillarFromTags(
       (seed.content_tags as string[] | null) || null,
@@ -48,7 +48,7 @@ export const assetDrivenStrategy: BlogStrategy = {
     const bodyCandidates = pillarTagIds.length > 0
       ? await sql`
           SELECT id FROM media_assets
-          WHERE site_id = ${assessment.siteId}
+          WHERE business_id = ${assessment.siteId}
             AND id <> ${seedId}
             AND processing_stage = 'analyzed' AND archived_at IS NULL
             AND (media_type ILIKE 'image%' OR media_type = 'video')
@@ -58,7 +58,7 @@ export const assetDrivenStrategy: BlogStrategy = {
         `
       : await sql`
           SELECT id FROM media_assets
-          WHERE site_id = ${assessment.siteId}
+          WHERE business_id = ${assessment.siteId}
             AND id <> ${seedId}
             AND processing_stage = 'analyzed' AND archived_at IS NULL
             AND (media_type ILIKE 'image%' OR media_type = 'video')

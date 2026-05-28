@@ -49,7 +49,7 @@ async function getWhySocialEntries(): Promise<SeriesEntry[]> {
     const rows = await sql`
       SELECT bp.slug, bp.metadata
       FROM blog_posts bp
-      JOIN sites s ON s.id = bp.site_id
+      JOIN businesses s ON s.id = bp.business_id
       WHERE s.blog_slug = 'tracpost'
         AND bp.status = 'published'
         AND bp.metadata->'series'->>'slug' = 'why-social-matters'

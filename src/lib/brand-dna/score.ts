@@ -56,7 +56,7 @@ export async function scoreBrandSignals(siteId: string): Promise<SignalScore> {
     SELECT caption,
            COALESCE(like_count, 0) + COALESCE(comment_count, 0) AS engagement
     FROM historical_posts
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND caption IS NOT NULL
       AND length(caption) >= 15
       AND (posted_at IS NULL OR posted_at >= NOW() - INTERVAL '18 months')
@@ -69,7 +69,7 @@ export async function scoreBrandSignals(siteId: string): Promise<SignalScore> {
   const reviewRows = await sql`
     SELECT COUNT(*)::int AS n
     FROM engagement_events
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND platform = 'gbp'
       AND event_type = 'review'
       AND body IS NOT NULL
@@ -82,7 +82,7 @@ export async function scoreBrandSignals(siteId: string): Promise<SignalScore> {
   // ── 3. GBP profile completeness ──────────────────────────────────────
   const [siteRow] = await sql`
     SELECT gbp_profile, business_phone
-    FROM sites
+    FROM businesses
     WHERE id = ${siteId}
   `;
   const gbp = (siteRow?.gbp_profile || {}) as Record<string, unknown>;

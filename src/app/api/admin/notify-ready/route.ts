@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   const [subscriber] = await sql`
     SELECT u.name, u.email
     FROM users u
-    WHERE u.subscription_id = ${subscription_id} AND u.role = 'owner'
+    WHERE u.billing_account_id = ${subscription_id} AND u.role = 'owner'
   `;
 
   if (!subscriber?.email) {
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
   // Update onboarding status
   await sql`
-    UPDATE subscriptions
+    UPDATE accounts
     SET metadata = jsonb_set(
       COALESCE(metadata, '{}'::jsonb),
       '{onboarding_status}',
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   `;
 
   await sql`
-    INSERT INTO usage_log (subscription_id, action, metadata)
+    INSERT INTO usage_log (billing_account_id, action, metadata)
     VALUES (${subscription_id}, 'provisioning_complete', '{}')
   `;
 

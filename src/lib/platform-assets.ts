@@ -58,7 +58,7 @@ export async function recordOAuthGrant(args: {
   const refreshTokenEncrypted = args.refreshToken ? encrypt(args.refreshToken) : null;
   const [row] = await sql`
     INSERT INTO social_accounts (
-      subscription_id, platform, account_name, account_id,
+      billing_account_id, platform, account_name, account_id,
       access_token_encrypted, refresh_token_encrypted,
       token_expires_at, scopes, status, metadata
     )
@@ -71,7 +71,7 @@ export async function recordOAuthGrant(args: {
       'active',
       ${JSON.stringify(args.metadata || {})}
     )
-    ON CONFLICT (subscription_id, platform, account_id)
+    ON CONFLICT (billing_account_id, platform, account_id)
     DO UPDATE SET
       account_name = EXCLUDED.account_name,
       access_token_encrypted = EXCLUDED.access_token_encrypted,
@@ -127,9 +127,9 @@ export async function assignSiteToAsset(args: {
   isPrimary?: boolean;
 }): Promise<void> {
   await sql`
-    INSERT INTO site_platform_assets (site_id, platform_asset_id, is_primary)
+    INSERT INTO business_platform_assets (business_id, platform_asset_id, is_primary)
     VALUES (${args.siteId}, ${args.platformAssetId}, ${args.isPrimary ?? true})
-    ON CONFLICT (site_id, platform_asset_id)
+    ON CONFLICT (business_id, platform_asset_id)
     DO UPDATE SET is_primary = EXCLUDED.is_primary
   `;
 }
@@ -139,8 +139,8 @@ export async function assignSiteToAsset(args: {
  */
 export async function unassignSiteFromAsset(siteId: string, platformAssetId: string): Promise<void> {
   await sql`
-    DELETE FROM site_platform_assets
-    WHERE site_id = ${siteId} AND platform_asset_id = ${platformAssetId}
+    DELETE FROM business_platform_assets
+    WHERE business_id = ${siteId} AND platform_asset_id = ${platformAssetId}
   `;
 }
 
@@ -174,17 +174,17 @@ export async function getSiteAssets(siteId: string, platform?: string): Promise<
     ? await sql`
         SELECT pa.id, pa.social_account_id, pa.platform, pa.asset_type, pa.asset_id, pa.asset_name, pa.metadata,
                spa.is_primary
-        FROM site_platform_assets spa
+        FROM business_platform_assets spa
         JOIN platform_assets pa ON pa.id = spa.platform_asset_id
-        WHERE spa.site_id = ${siteId} AND pa.platform = ${platform}
+        WHERE spa.business_id = ${siteId} AND pa.platform = ${platform}
         ORDER BY spa.is_primary DESC, pa.asset_name
       `
     : await sql`
         SELECT pa.id, pa.social_account_id, pa.platform, pa.asset_type, pa.asset_id, pa.asset_name, pa.metadata,
                spa.is_primary
-        FROM site_platform_assets spa
+        FROM business_platform_assets spa
         JOIN platform_assets pa ON pa.id = spa.platform_asset_id
-        WHERE spa.site_id = ${siteId}
+        WHERE spa.business_id = ${siteId}
         ORDER BY pa.platform, spa.is_primary DESC, pa.asset_name
       `;
   return rows.map((r) => ({
@@ -236,10 +236,10 @@ export async function resolvePublishTargets(siteId: string): Promise<PublishTarg
            pa.metadata AS asset_metadata,
            sa.id AS social_account_id, sa.access_token_encrypted,
            sa.metadata AS account_metadata, sa.status
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${siteId}
+    WHERE spa.business_id = ${siteId}
       AND spa.is_primary = true
       AND sa.status = 'active'
   `;
@@ -269,9 +269,9 @@ export async function resolvePublishTargets(siteId: string): Promise<PublishTarg
     SELECT sa.id AS social_account_id, sa.platform, sa.account_id AS platform_account_id,
            sa.account_name, sa.access_token_encrypted, sa.metadata AS account_metadata,
            sa.status
-    FROM site_social_links ssl
+    FROM business_social_links ssl
     JOIN social_accounts sa ON sa.id = ssl.social_account_id
-    WHERE ssl.site_id = ${siteId}
+    WHERE ssl.business_id = ${siteId}
       AND sa.status = 'active'
   `;
 
@@ -300,9 +300,9 @@ export async function resolvePublishTargets(siteId: string): Promise<PublishTarg
 export async function getPrimaryAssetForSitePlatform(siteId: string, platform: string): Promise<(PlatformAsset & { socialAccountId: string }) | null> {
   const [row] = await sql`
     SELECT pa.id, pa.social_account_id, pa.platform, pa.asset_type, pa.asset_id, pa.asset_name, pa.metadata
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
-    WHERE spa.site_id = ${siteId} AND pa.platform = ${platform} AND spa.is_primary = true
+    WHERE spa.business_id = ${siteId} AND pa.platform = ${platform} AND spa.is_primary = true
     LIMIT 1
   `;
   if (!row) return null;

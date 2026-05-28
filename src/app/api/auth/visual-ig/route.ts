@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const auth = authResult as AuthContext;
 
   // Guard: an IG connection has nowhere to attach without a Business
-  const sites = await sql`SELECT 1 FROM sites WHERE subscription_id = ${auth.subscriptionId} LIMIT 1`;
+  const sites = await sql`SELECT 1 FROM businesses WHERE billing_account_id = ${auth.subscriptionId} LIMIT 1`;
   if (sites.length === 0) {
     return NextResponse.json({ error: "no_sites" }, { status: 400 });
   }

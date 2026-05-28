@@ -31,9 +31,9 @@ export async function GET(req: NextRequest) {
 
   const categories = await sql`
     SELECT sgc.id, sgc.gcid, sgc.is_primary, sgc.reasoning, gc.name
-    FROM site_gbp_categories sgc
+    FROM business_gbp_categories sgc
     JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.site_id = ${siteId}
+    WHERE sgc.business_id = ${siteId}
     ORDER BY sgc.is_primary DESC, gc.name
   `;
 
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   if (action === "add" && gcid) {
     const [count] = await sql`
-      SELECT COUNT(*)::int AS total FROM site_gbp_categories WHERE site_id = ${site_id}
+      SELECT COUNT(*)::int AS total FROM business_gbp_categories WHERE business_id = ${site_id}
     `;
     if (count.total >= 10) {
       return NextResponse.json({ error: "Maximum 10 categories (1 primary + 9 additional)" }, { status: 400 });
@@ -64,47 +64,47 @@ export async function POST(req: NextRequest) {
     const isPrimary = count.total === 0;
 
     await sql`
-      INSERT INTO site_gbp_categories (site_id, gcid, is_primary, chosen_by)
+      INSERT INTO business_gbp_categories (business_id, gcid, is_primary, chosen_by)
       VALUES (${site_id}, ${gcid}, ${isPrimary}, 'operator')
       ON CONFLICT DO NOTHING
     `;
-    await sql`UPDATE sites SET gbp_sync_dirty = true, gbp_dirty_fields = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(gbp_dirty_fields, '{}') || ARRAY['categories']))) WHERE id = ${site_id}`;
+    await sql`UPDATE businesses SET gbp_sync_dirty = true, gbp_dirty_fields = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(gbp_dirty_fields, '{}') || ARRAY['categories']))) WHERE id = ${site_id}`;
 
     return NextResponse.json({ success: true });
   }
 
   if (action === "remove" && gcid) {
     const [removed] = await sql`
-      DELETE FROM site_gbp_categories
-      WHERE site_id = ${site_id} AND gcid = ${gcid}
+      DELETE FROM business_gbp_categories
+      WHERE business_id = ${site_id} AND gcid = ${gcid}
       RETURNING is_primary
     `;
 
     if (removed?.is_primary) {
       await sql`
-        UPDATE site_gbp_categories
+        UPDATE business_gbp_categories
         SET is_primary = true
         WHERE id = (
-          SELECT id FROM site_gbp_categories
-          WHERE site_id = ${site_id}
+          SELECT id FROM business_gbp_categories
+          WHERE business_id = ${site_id}
           ORDER BY chosen_at ASC
           LIMIT 1
         )
       `;
     }
-    await sql`UPDATE sites SET gbp_sync_dirty = true, gbp_dirty_fields = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(gbp_dirty_fields, '{}') || ARRAY['categories']))) WHERE id = ${site_id}`;
+    await sql`UPDATE businesses SET gbp_sync_dirty = true, gbp_dirty_fields = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(gbp_dirty_fields, '{}') || ARRAY['categories']))) WHERE id = ${site_id}`;
 
     return NextResponse.json({ success: true });
   }
 
   if (action === "set_primary" && gcid) {
     await sql`
-      UPDATE site_gbp_categories SET is_primary = false WHERE site_id = ${site_id}
+      UPDATE business_gbp_categories SET is_primary = false WHERE business_id = ${site_id}
     `;
     await sql`
-      UPDATE site_gbp_categories SET is_primary = true WHERE site_id = ${site_id} AND gcid = ${gcid}
+      UPDATE business_gbp_categories SET is_primary = true WHERE business_id = ${site_id} AND gcid = ${gcid}
     `;
-    await sql`UPDATE sites SET gbp_sync_dirty = true, gbp_dirty_fields = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(gbp_dirty_fields, '{}') || ARRAY['categories']))) WHERE id = ${site_id}`;
+    await sql`UPDATE businesses SET gbp_sync_dirty = true, gbp_dirty_fields = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(gbp_dirty_fields, '{}') || ARRAY['categories']))) WHERE id = ${site_id}`;
 
     return NextResponse.json({ success: true });
   }

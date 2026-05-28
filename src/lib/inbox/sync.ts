@@ -40,8 +40,8 @@ export async function syncInboxEngagement(siteId: string): Promise<InboxSyncResu
 async function notifyNewEngagement(siteId: string, result: InboxSyncResult): Promise<void> {
   try {
     const siteRows = await sql`
-      SELECT si.subscription_id, si.name as site_name
-      FROM sites si
+      SELECT si.billing_account_id, si.name as site_name
+      FROM businesses si
       WHERE si.id = ${siteId}
     `;
     if (siteRows.length === 0) return;

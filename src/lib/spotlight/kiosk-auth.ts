@@ -40,9 +40,9 @@ export async function authenticateKiosk(
   if (!token || !token.startsWith(TOKEN_PREFIX)) return null;
 
   const [kiosk] = await sql`
-    SELECT k.id, k.site_id, k.settings, s.subscription_id
+    SELECT k.id, k.business_id, k.settings, s.billing_account_id
     FROM spotlight_kiosks k
-    JOIN sites s ON s.id = k.site_id
+    JOIN businesses s ON s.id = k.business_id
     WHERE k.kiosk_token = ${token} AND k.is_active = true
   `;
 

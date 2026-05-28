@@ -129,7 +129,7 @@ export async function logMalformedAttempt(
 ): Promise<void> {
   try {
     await sql`
-      INSERT INTO subscriber_actions (site_id, action_type, target_type, target_id, payload)
+      INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
       VALUES (
         ${siteId},
         'pillar_config_rejected',

@@ -98,8 +98,8 @@ export async function loadTenantContext(siteSlug: string): Promise<TenantContext
            s.business_phone, s.business_email, s.business_logo, s.business_favicon,
            s.brand_playbook, s.brand_assets, s.page_config, s.ga4_measurement_id, s.gsc_verification_token,
            bs.custom_domain, bs.theme
-    FROM sites s
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    FROM businesses s
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE s.blog_slug = ${siteSlug} AND s.is_active = true
   `;
 

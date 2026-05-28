@@ -30,7 +30,7 @@ export async function GET(_req: NextRequest) {
   const [siteRow] = await sql`
     SELECT place_id, place_lat, place_lon, place_name, place_set_at,
            reach_default_radius_miles, location, name
-    FROM sites
+    FROM businesses
     WHERE id = ${siteId}
     LIMIT 1
   `;
@@ -63,13 +63,13 @@ export async function GET(_req: NextRequest) {
     // Try FB Page lat/lon cache from platform_assets metadata
     const [fbPage] = await sql`
       SELECT pa.metadata
-      FROM site_platform_assets spa
+      FROM business_platform_assets spa
       JOIN platform_assets pa ON pa.id = spa.platform_asset_id
       JOIN social_accounts sa ON sa.id = pa.social_account_id
-      WHERE spa.site_id = ${siteId}
+      WHERE spa.business_id = ${siteId}
         AND pa.platform = 'facebook'
         AND spa.is_primary = true
-        AND sa.subscription_id = ${session.subscriptionId}
+        AND sa.billing_account_id = ${session.subscriptionId}
       LIMIT 1
     `;
     const fbMeta = (fbPage?.metadata as Record<string, unknown> | undefined) ?? null;
@@ -104,12 +104,12 @@ export async function GET(_req: NextRequest) {
   // and Both tiles, and to coach which specific connection is missing.
   const connRows = await sql`
     SELECT pa.platform, pa.asset_type
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${siteId}
+    WHERE spa.business_id = ${siteId}
       AND spa.is_primary = true
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
   `;
   let hasFacebookPage = false;
   let hasInstagram = false;

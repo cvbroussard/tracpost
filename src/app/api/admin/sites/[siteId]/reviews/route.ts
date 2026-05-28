@@ -20,7 +20,7 @@ export async function POST(
 
   const { siteId } = await params;
 
-  const [site] = await sql`SELECT id FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT id FROM businesses WHERE id = ${siteId}`;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }

@@ -23,7 +23,7 @@ export async function POST() {
 
   // 1. Archive: cancellation grace expired (>30 days), status still 'active'
   const toArchive = await sql`
-    SELECT id FROM subscriptions
+    SELECT id FROM accounts
     WHERE cancelled_at IS NOT NULL
       AND cancelled_at < NOW() - INTERVAL '30 days'
       AND status = 'active'
@@ -31,7 +31,7 @@ export async function POST() {
 
   for (const sub of toArchive) {
     await sql`
-      UPDATE subscriptions
+      UPDATE accounts
       SET status = 'archived',
           archived_at = NOW(),
           archived_by = 'auto_grace_expiry',
@@ -42,14 +42,14 @@ export async function POST() {
     `;
     // Disable autopilot on all sites — archive means no further automation
     await sql`
-      UPDATE sites SET autopilot_enabled = false
-      WHERE subscription_id = ${sub.id}
+      UPDATE businesses SET autopilot_enabled = false
+      WHERE billing_account_id = ${sub.id}
     `;
 
     // Notify the owner
     const [owner] = await sql`
       SELECT email, name FROM users
-      WHERE subscription_id = ${sub.id} AND role = 'owner'
+      WHERE billing_account_id = ${sub.id} AND role = 'owner'
       LIMIT 1
     `;
     if (owner?.email) {

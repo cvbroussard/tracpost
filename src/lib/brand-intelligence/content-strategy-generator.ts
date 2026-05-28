@@ -102,12 +102,12 @@ Rules:
   let inserted = 0;
   for (const topic of parsed.topics) {
     const [row] = await sql`
-      INSERT INTO content_topics (site_id, title, search_query, intent, priority, pillar, cluster, status)
+      INSERT INTO content_topics (business_id, title, search_query, intent, priority, pillar, cluster, status)
       SELECT ${siteId}, ${topic.title}, ${topic.searchQuery}, ${topic.intent},
              ${topic.priority}, ${topic.pillar}, ${topic.cluster}, 'queued'
       WHERE NOT EXISTS (
         SELECT 1 FROM content_topics
-        WHERE site_id = ${siteId} AND title = ${topic.title}
+        WHERE business_id = ${siteId} AND title = ${topic.title}
       )
       RETURNING id
     `;

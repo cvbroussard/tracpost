@@ -16,7 +16,7 @@ export async function assessBlogSite(siteId: string): Promise<BlogSiteAssessment
   const pillarRows = await sql`
     SELECT unnest(content_pillars) AS pillar, COUNT(*)::int AS n
     FROM blog_posts_v2
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND status NOT IN ('archived', 'flagged')
     GROUP BY pillar
   `;
@@ -29,7 +29,7 @@ export async function assessBlogSite(siteId: string): Promise<BlogSiteAssessment
   const recentRows = await sql`
     SELECT content_pillars
     FROM blog_posts_v2
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND status NOT IN ('archived', 'flagged')
     ORDER BY created_at DESC
     LIMIT ${RECENT_ARTICLE_LOOKBACK}
@@ -41,16 +41,16 @@ export async function assessBlogSite(siteId: string): Promise<BlogSiteAssessment
     .filter((p): p is string => p !== null);
 
   const [count] = await sql`
-    SELECT COUNT(*)::int AS n FROM blog_posts_v2 WHERE site_id = ${siteId}
+    SELECT COUNT(*)::int AS n FROM blog_posts_v2 WHERE business_id = ${siteId}
   `;
   const publishedCount = (count?.n as number) || 0;
 
   // Fresh + high-quality assets, excluding any already used as seed/hero
   const usedRows = await sql`
     SELECT DISTINCT id FROM (
-      SELECT seed_asset_id AS id FROM blog_posts_v2 WHERE site_id = ${siteId} AND seed_asset_id IS NOT NULL
+      SELECT seed_asset_id AS id FROM blog_posts_v2 WHERE business_id = ${siteId} AND seed_asset_id IS NOT NULL
       UNION
-      SELECT hero_asset_id AS id FROM blog_posts_v2 WHERE site_id = ${siteId}
+      SELECT hero_asset_id AS id FROM blog_posts_v2 WHERE business_id = ${siteId}
     ) u
   `;
   const usedIds = new Set(usedRows.map((r) => r.id as string));
@@ -63,7 +63,7 @@ export async function assessBlogSite(siteId: string): Promise<BlogSiteAssessment
   const candidateRows = await sql`
     SELECT id
     FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND (media_type ILIKE 'image%' OR media_type = 'video')
       AND processing_stage = 'analyzed' AND archived_at IS NULL
       AND context_note IS NOT NULL
@@ -79,7 +79,7 @@ export async function assessBlogSite(siteId: string): Promise<BlogSiteAssessment
     .slice(0, FRESH_ASSET_LIMIT);
 
   // Reward prompts from brand_dna
-  const [siteRow] = await sql`SELECT brand_dna FROM sites WHERE id = ${siteId}`;
+  const [siteRow] = await sql`SELECT brand_dna FROM businesses WHERE id = ${siteId}`;
   const dna = (siteRow?.brand_dna || {}) as Record<string, unknown>;
   const signals = (dna.signals as Record<string, unknown> | null) || {};
   const rawPrompts = Array.isArray(signals.reward_prompts) ? signals.reward_prompts : [];

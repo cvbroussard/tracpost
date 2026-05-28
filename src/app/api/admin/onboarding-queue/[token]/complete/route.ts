@@ -38,7 +38,7 @@ export async function POST(
 
   const [owner] = await sql`
     SELECT id, email, name FROM users
-    WHERE subscription_id = ${submission.subscription_id} AND role = 'owner'
+    WHERE billing_account_id = ${submission.subscription_id} AND role = 'owner'
     LIMIT 1
   `;
 
@@ -73,7 +73,7 @@ export async function POST(
   }
 
   await sql`
-    INSERT INTO usage_log (subscription_id, action, metadata)
+    INSERT INTO usage_log (billing_account_id, action, metadata)
     VALUES (${submission.subscription_id}, 'onboarding_completed', ${JSON.stringify({
       token,
       operator_action: true,

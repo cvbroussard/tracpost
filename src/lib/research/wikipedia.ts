@@ -481,7 +481,7 @@ Content note: "${contextNote}"
   if (siteId) {
     // Fetch site image style + corrections
     const [siteStyle] = await sql`
-      SELECT image_style, image_variations, content_vibe FROM sites WHERE id = ${siteId}
+      SELECT image_style, image_variations, content_vibe FROM businesses WHERE id = ${siteId}
     `;
     const baseStyle = (siteStyle?.image_style as string) || "";
     const variations = (siteStyle?.image_variations || []) as string[];
@@ -496,7 +496,7 @@ Content note: "${contextNote}"
     if (allEntityKeys.length > 0) {
       corrections = await sql`
         SELECT entity_key, correction FROM image_corrections
-        WHERE site_id = ${siteId} AND entity_key = ANY(${allEntityKeys})
+        WHERE business_id = ${siteId} AND entity_key = ANY(${allEntityKeys})
       ` as Array<{ entity_key: string; correction: string }>;
     }
 
@@ -529,7 +529,7 @@ Content note: "${contextNote}"
             try {
               const [newAsset] = await sql`
                 INSERT INTO media_assets (
-                  site_id, storage_url, media_type, context_note,
+                  business_id, storage_url, media_type, context_note,
                   source, processing_stage, quality_score,
                   content_tags, metadata
                 ) VALUES (

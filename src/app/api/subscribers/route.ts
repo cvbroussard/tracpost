@@ -33,14 +33,14 @@ export async function POST(req: NextRequest) {
 
     // Create subscription (billing entity)
     const [subscription] = await sql`
-      INSERT INTO subscriptions (api_key_hash, plan, is_active)
+      INSERT INTO accounts (api_key_hash, plan, is_active)
       VALUES (${apiKeyHash}, ${plan || "free"}, true)
       RETURNING id, plan, created_at
     `;
 
     // Create owner user
     await sql`
-      INSERT INTO users (subscription_id, name, email, password_hash, role, is_active)
+      INSERT INTO users (billing_account_id, name, email, password_hash, role, is_active)
       VALUES (${subscription.id}, ${name}, ${email || null}, ${passwordHash}, 'owner', true)
     `;
 
@@ -63,8 +63,8 @@ export async function GET() {
     const rows = await sql`
       SELECT s.id, s.plan, s.is_active, s.created_at, s.updated_at,
              COALESCE(owner.name, owner.email, '—') AS name
-      FROM subscriptions s
-      LEFT JOIN users owner ON owner.subscription_id = s.id AND owner.role = 'owner'
+      FROM accounts s
+      LEFT JOIN users owner ON owner.billing_account_id = s.id AND owner.role = 'owner'
       ORDER BY s.created_at DESC
     `;
     return NextResponse.json({ subscribers: rows });

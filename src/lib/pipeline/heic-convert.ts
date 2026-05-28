@@ -26,7 +26,7 @@ export async function convertHeicAsset(assetId: string): Promise<{
   newUrl: string | null;
 }> {
   const [asset] = await sql`
-    SELECT id, site_id, storage_url, metadata
+    SELECT id, business_id, storage_url, metadata
     FROM media_assets
     WHERE id = ${assetId}
   `;

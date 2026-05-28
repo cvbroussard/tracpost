@@ -29,7 +29,7 @@ export async function GET(
   const rows = await sql`
     SELECT url, query, impressions, clicks, ctr, position, date
     FROM search_performance
-    WHERE site_id = ${siteId} AND date >= ${cutoff.toISOString().split("T")[0]}
+    WHERE business_id = ${siteId} AND date >= ${cutoff.toISOString().split("T")[0]}
     ORDER BY impressions DESC
     LIMIT 500
   `;
@@ -96,7 +96,7 @@ export async function POST(
   const body = await req.json();
 
   if (body.action === "set_property") {
-    await sql`UPDATE sites SET gsc_property = ${body.property} WHERE id = ${siteId}`;
+    await sql`UPDATE businesses SET gsc_property = ${body.property} WHERE id = ${siteId}`;
     return NextResponse.json({ success: true, property: body.property });
   }
 
@@ -110,8 +110,8 @@ export async function POST(
     // Get the site's custom domain and GBP access token
     const [site] = await sql`
       SELECT bs.custom_domain
-      FROM sites s
-      LEFT JOIN blog_settings bs ON bs.site_id = s.id
+      FROM businesses s
+      LEFT JOIN blog_settings bs ON bs.business_id = s.id
       WHERE s.id = ${siteId}
     `;
     const customDomain = site?.custom_domain as string | null;
@@ -122,8 +122,8 @@ export async function POST(
     const [account] = await sql`
       SELECT sa.access_token_encrypted, sa.refresh_token_encrypted
       FROM social_accounts sa
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
       LIMIT 1
     `;
     if (!account) {

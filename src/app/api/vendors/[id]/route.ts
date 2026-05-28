@@ -20,7 +20,7 @@ export async function PATCH(
 
   // Verify ownership
   const [vendor] = await sql`
-    SELECT id FROM entities WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}
+    SELECT id FROM entities WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!vendor) {
     return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
@@ -55,7 +55,7 @@ export async function DELETE(
   const { id } = await params;
 
   await sql`
-    DELETE FROM entities WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}
+    DELETE FROM entities WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}
   `;
 
   return NextResponse.json({ success: true });

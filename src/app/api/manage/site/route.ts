@@ -26,31 +26,31 @@ export async function GET(req: NextRequest) {
       SELECT s.id, s.name, s.url, s.business_type, s.location,
              s.autopilot_enabled, s.provisioning_status,
              u.name AS subscriber_name, sub.plan
-      FROM sites s
-      JOIN subscriptions sub ON sub.id = s.subscription_id
-      JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+      FROM businesses s
+      JOIN accounts sub ON sub.id = s.billing_account_id
+      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
       WHERE s.id = ${siteId}
     `;
     if (!site) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const [counts] = await sql`
       SELECT
-        (SELECT COUNT(*)::int FROM media_assets WHERE site_id = ${siteId}) AS total_assets,
-        (SELECT COUNT(*)::int FROM media_assets WHERE site_id = ${siteId} AND source = 'upload') AS uploads,
-        (SELECT COUNT(*)::int FROM media_assets WHERE site_id = ${siteId} AND source = 'ai_generated') AS ai_assets,
-        (SELECT COUNT(*)::int FROM blog_posts WHERE site_id = ${siteId}) AS total_posts,
-        (SELECT COUNT(*)::int FROM blog_posts WHERE site_id = ${siteId} AND status = 'published') AS published_posts,
-        (SELECT COUNT(*)::int FROM blog_posts WHERE site_id = ${siteId} AND status = 'draft') AS draft_posts,
-        (SELECT COUNT(*)::int FROM brands WHERE site_id = ${siteId}) AS vendors,
-        (SELECT COUNT(*)::int FROM projects WHERE site_id = ${siteId}) AS projects,
+        (SELECT COUNT(*)::int FROM media_assets WHERE business_id = ${siteId}) AS total_assets,
+        (SELECT COUNT(*)::int FROM media_assets WHERE business_id = ${siteId} AND source = 'upload') AS uploads,
+        (SELECT COUNT(*)::int FROM media_assets WHERE business_id = ${siteId} AND source = 'ai_generated') AS ai_assets,
+        (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = ${siteId}) AS total_posts,
+        (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = ${siteId} AND status = 'published') AS published_posts,
+        (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = ${siteId} AND status = 'draft') AS draft_posts,
+        (SELECT COUNT(*)::int FROM brands WHERE business_id = ${siteId}) AS vendors,
+        (SELECT COUNT(*)::int FROM projects WHERE business_id = ${siteId}) AS projects,
         0 AS personas
     `;
 
     const platforms = await sql`
       SELECT sa.platform, sa.account_name, sa.status
       FROM social_accounts sa
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId}
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId}
       ORDER BY sa.platform
     `;
 
@@ -62,16 +62,16 @@ export async function GET(req: NextRequest) {
       SELECT s.autopilot_enabled, s.cadence_config, s.video_ratio,
              s.blog_cadence, s.article_mix,
              bs.blog_enabled, bs.subdomain, bs.blog_title
-      FROM sites s
-      LEFT JOIN blog_settings bs ON bs.site_id = s.id
+      FROM businesses s
+      LEFT JOIN blog_settings bs ON bs.business_id = s.id
       WHERE s.id = ${siteId}
     `;
 
     const platforms = await sql`
       SELECT sa.platform, sa.account_name, sa.status
       FROM social_accounts sa
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId}
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId}
       ORDER BY sa.platform
     `;
 
@@ -83,14 +83,14 @@ export async function GET(req: NextRequest) {
       SELECT s.image_style, s.image_variations, s.image_processing_mode,
              s.inline_upload_count, s.inline_ai_count, s.content_vibe,
              s.hero_asset_id, s.pillar_config, s.metadata
-      FROM sites s
+      FROM businesses s
       WHERE s.id = ${siteId}
     `;
 
     const heroAssets = await sql`
       SELECT id, storage_url, context_note, quality_score
       FROM media_assets
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
         AND processing_stage = 'briefed'
         AND media_type LIKE 'image%'
       ORDER BY quality_score DESC NULLS LAST
@@ -105,8 +105,8 @@ export async function GET(req: NextRequest) {
       SELECT s.page_config, s.work_content, s.business_type,
              (s.website_copy IS NOT NULL) AS has_website_copy,
              bs.custom_domain
-      FROM sites s
-      LEFT JOIN blog_settings bs ON bs.site_id = s.id
+      FROM businesses s
+      LEFT JOIN blog_settings bs ON bs.business_id = s.id
       WHERE s.id = ${siteId}
     `;
 
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
       SELECT id, category, rule, scope, example_before, example_after,
              source_note, is_active, created_at
       FROM content_corrections
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY created_at DESC
     `.catch(() => []);
 

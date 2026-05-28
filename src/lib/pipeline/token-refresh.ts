@@ -92,13 +92,13 @@ export async function forceRefreshExpired(siteId?: string): Promise<{ recovered:
           AND sa.refresh_token_encrypted IS NOT NULL
           AND (
             EXISTS (
-              SELECT 1 FROM site_social_links ssl
-              WHERE ssl.social_account_id = sa.id AND ssl.site_id = ${siteId}
+              SELECT 1 FROM business_social_links ssl
+              WHERE ssl.social_account_id = sa.id AND ssl.business_id = ${siteId}
             )
             OR EXISTS (
-              SELECT 1 FROM site_platform_assets spa
+              SELECT 1 FROM business_platform_assets spa
               JOIN platform_assets pa ON pa.id = spa.platform_asset_id
-              WHERE pa.social_account_id = sa.id AND spa.site_id = ${siteId}
+              WHERE pa.social_account_id = sa.id AND spa.business_id = ${siteId}
             )
           )
       `

@@ -44,7 +44,7 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
   // Gate: check that all "existing" accounts the subscriber owns are connected
   // before running the pipeline. New accounts created by admin can backfill later.
   const [siteRow] = await sql`
-    SELECT metadata FROM sites WHERE id = ${siteId}
+    SELECT metadata FROM businesses WHERE id = ${siteId}
   `;
   const siteMeta = (siteRow?.metadata || {}) as Record<string, unknown>;
   const existingAccounts = (siteMeta.existing_accounts || []) as string[];
@@ -53,8 +53,8 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     const connectedPlatforms = await sql`
       SELECT DISTINCT sa.platform
       FROM social_accounts sa
-      JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-      WHERE ssl.site_id = ${siteId} AND sa.status = 'active'
+      JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+      WHERE ssl.business_id = ${siteId} AND sa.status = 'active'
     `;
     const connected = new Set(connectedPlatforms.map((r) => r.platform as string));
     const missing = existingAccounts.filter((p) => !connected.has(p));
@@ -77,7 +77,7 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
   // NOT change state — only human briefing flips to 'briefed'.
   const receivedAssets = await sql`
     SELECT id FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND processing_stage = 'onboarded'
       AND ai_analysis IS NULL
     ORDER BY created_at ASC
@@ -101,7 +101,7 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
 
   // Step 2: Autopilot content generation (reward prompt → asset → blog post)
   const [siteVoice] = await sql`
-    SELECT brand_voice, metadata FROM sites WHERE id = ${siteId}
+    SELECT brand_voice, metadata FROM businesses WHERE id = ${siteId}
   `;
   const isSharpened = !!(siteVoice?.brand_voice as Record<string, unknown>)?._subscriberAngle;
   const hasRewardPrompts = !!((siteVoice?.metadata as Record<string, unknown>)?.reward_prompts as unknown[])?.length;
@@ -123,7 +123,7 @@ export async function runPipeline(siteId: string): Promise<PipelineRunResult> {
     const { promoteBlogPost } = await import("./blog-promoter");
     const unpromoted = await sql`
       SELECT id FROM blog_posts
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
         AND status = 'published'
         AND promotion_status IS NULL
         AND published_at > NOW() - INTERVAL '24 hours'
@@ -175,8 +175,8 @@ async function notifyPipelineResults(
   try {
     // Look up subscription_id from the site
     const siteRows = await sql`
-      SELECT subscription_id, name as site_name
-      FROM sites
+      SELECT billing_account_id, name as site_name
+      FROM businesses
       WHERE id = ${siteId}
     `;
     if (siteRows.length === 0) return;
@@ -210,7 +210,7 @@ async function notifyPipelineResults(
  */
 export async function runAllPipelines(): Promise<PipelineRunResult[]> {
   const sites = await sql`
-    SELECT id FROM sites
+    SELECT id FROM businesses
     WHERE autopilot_enabled = true
       AND is_active = true
       AND provisioning_status = 'complete'

@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     FROM media_components c
     LEFT JOIN production_events e ON e.output_component_id = c.id
     LEFT JOIN media_assets a       ON a.id = c.source_asset_id
-    WHERE c.site_id = ${siteId}
+    WHERE c.business_id = ${siteId}
     GROUP BY c.id, a.storage_url, a.media_type
     ORDER BY c.created_at DESC
     LIMIT 100

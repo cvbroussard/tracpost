@@ -28,11 +28,11 @@ export default async function DashboardOverview() {
   const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const [site, accounts, postStats, assetStats, upcoming, healthData, contentGaps, blogStats] = await Promise.all([
-    sql`SELECT name, url, autopilot_enabled FROM sites WHERE id = ${siteId}`,
+    sql`SELECT name, url, autopilot_enabled FROM businesses WHERE id = ${siteId}`,
     sql`
       SELECT COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE status = 'active')::int AS active
-      FROM social_accounts WHERE site_id = ${siteId}
+      FROM social_accounts WHERE business_id = ${siteId}
     `,
     sql`
       SELECT
@@ -42,7 +42,7 @@ export default async function DashboardOverview() {
         COUNT(*) FILTER (WHERE sp.status = 'vetoed')::int AS vetoed
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      WHERE sa.site_id = ${siteId}
+      WHERE sa.business_id = ${siteId}
     `,
     sql`
       SELECT
@@ -50,34 +50,34 @@ export default async function DashboardOverview() {
         COUNT(*) FILTER (WHERE processing_stage = 'briefed')::int AS briefed,
         COUNT(*) FILTER (WHERE processing_stage = 'analyzed')::int AS analyzed,
         COUNT(*) FILTER (WHERE processing_stage = 'failed')::int AS failed
-      FROM media_assets WHERE site_id = ${siteId}
+      FROM media_assets WHERE business_id = ${siteId}
     `,
     sql`
       SELECT sp.id, sp.caption, sp.scheduled_at, sp.content_pillar, sp.status,
              sa.account_name, sa.platform
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
-      WHERE sa.site_id = ${siteId} AND sp.status = 'scheduled'
+      WHERE sa.business_id = ${siteId} AND sp.status = 'scheduled'
       ORDER BY sp.scheduled_at ASC
       LIMIT 5
     `,
     sql`
       SELECT
         (SELECT COUNT(*)::int FROM media_assets
-         WHERE site_id = ${siteId} AND processing_stage = 'briefed') AS triaged,
+         WHERE business_id = ${siteId} AND processing_stage = 'briefed') AS triaged,
         (SELECT COUNT(*)::int FROM publishing_slots
-         WHERE site_id = ${siteId} AND status = 'open'
+         WHERE business_id = ${siteId} AND status = 'open'
            AND scheduled_at <= ${sevenDaysFromNow}) AS open_slots,
         (SELECT MAX(created_at) FROM media_assets
-         WHERE site_id = ${siteId}) AS last_upload,
+         WHERE business_id = ${siteId}) AS last_upload,
         (SELECT COUNT(*)::int FROM media_assets
-         WHERE site_id = ${siteId}
+         WHERE business_id = ${siteId}
            AND created_at > NOW() - INTERVAL '14 days') AS recent_uploads,
         (SELECT COUNT(*)::int FROM blog_posts
-         WHERE site_id = ${siteId}
+         WHERE business_id = ${siteId}
            AND status IN ('draft', 'published')) AS total_posts,
         (SELECT COUNT(DISTINCT source_asset_id)::int FROM blog_posts
-         WHERE site_id = ${siteId}
+         WHERE business_id = ${siteId}
            AND status IN ('draft', 'published')) AS unique_assets_used
     `,
     detectContentGaps(siteId),
@@ -86,7 +86,7 @@ export default async function DashboardOverview() {
         COUNT(*) FILTER (WHERE status = 'draft')::int AS drafts,
         COUNT(*) FILTER (WHERE status = 'flagged')::int AS flagged,
         COUNT(*) FILTER (WHERE status = 'published')::int AS published
-      FROM blog_posts WHERE site_id = ${siteId}
+      FROM blog_posts WHERE business_id = ${siteId}
     `,
   ]);
 

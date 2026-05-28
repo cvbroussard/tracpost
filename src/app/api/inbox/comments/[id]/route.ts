@@ -27,9 +27,9 @@ export async function GET(
   const comments = await sql`
     SELECT ic.*, sp.caption AS post_caption, sp.media_urls AS post_media_urls, sp.platform_post_url
     FROM inbox_comments ic
-    LEFT JOIN social_posts sp ON sp.platform_post_id = ic.platform_post_id     WHERE ic.subscription_id = ${auth.subscriptionId}
+    LEFT JOIN social_posts sp ON sp.platform_post_id = ic.platform_post_id     WHERE ic.billing_account_id = ${auth.subscriptionId}
       AND (ic.platform_post_id = ${id} OR ic.post_id::text = ${id})
-      ${siteId ? sql`AND ic.site_id = ${siteId}` : sql``}
+      ${siteId ? sql`AND ic.business_id = ${siteId}` : sql``}
       AND ic.is_hidden = false
     ORDER BY ic.commented_at ASC
   `;
@@ -38,7 +38,7 @@ export async function GET(
   if (comments.length > 0) {
     await sql`
       UPDATE inbox_comments SET is_read = true
-      WHERE subscription_id = ${auth.subscriptionId}
+      WHERE billing_account_id = ${auth.subscriptionId}
         AND platform_post_id = ${comments[0].platform_post_id}
         AND is_read = false
     `;
@@ -60,12 +60,12 @@ export async function PATCH(
   const updates: string[] = [];
 
   if (body.is_read !== undefined) {
-    await sql`UPDATE inbox_comments SET is_read = ${body.is_read} WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}`;
+    await sql`UPDATE inbox_comments SET is_read = ${body.is_read} WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}`;
     updates.push("is_read");
   }
 
   if (body.is_hidden !== undefined) {
-    await sql`UPDATE inbox_comments SET is_hidden = ${body.is_hidden} WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}`;
+    await sql`UPDATE inbox_comments SET is_hidden = ${body.is_hidden} WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}`;
     updates.push("is_hidden");
   }
 

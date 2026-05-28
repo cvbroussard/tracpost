@@ -30,8 +30,8 @@ export async function GET(
 
   const [project] = await sql`
     SELECT p.id, p.metadata FROM projects p
-    JOIN sites s ON p.site_id = s.id
-    WHERE p.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON p.business_id = s.id
+    WHERE p.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -59,9 +59,9 @@ export async function POST(
   const { id } = await params;
 
   const [project] = await sql`
-    SELECT p.id, p.site_id, p.metadata FROM projects p
-    JOIN sites s ON p.site_id = s.id
-    WHERE p.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    SELECT p.id, p.business_id, p.metadata FROM projects p
+    JOIN businesses s ON p.business_id = s.id
+    WHERE p.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -150,7 +150,7 @@ export async function POST(
     }
 
     const [post] = await sql`
-      INSERT INTO blog_posts (site_id, title, slug, body, excerpt, status, source_asset_id, og_image_url, metadata)
+      INSERT INTO blog_posts (business_id, title, slug, body, excerpt, status, source_asset_id, og_image_url, metadata)
       VALUES (
         ${project.site_id},
         ${article.title},

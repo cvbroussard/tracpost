@@ -73,7 +73,7 @@ Return ONLY JSON, no markdown:
 
     // Save to site
     await sql`
-      UPDATE sites
+      UPDATE businesses
       SET image_style = ${config.style},
           image_variations = ${JSON.stringify(config.variations)}::jsonb
       WHERE id = ${siteId}

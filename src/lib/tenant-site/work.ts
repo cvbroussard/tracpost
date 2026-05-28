@@ -28,7 +28,7 @@ export interface WorkPageData {
 }
 
 export async function loadWorkPage(siteId: string): Promise<WorkPageData> {
-  const [site] = await sql`SELECT website_copy FROM sites WHERE id = ${siteId}`;
+  const [site] = await sql`SELECT website_copy FROM businesses WHERE id = ${siteId}`;
   const copy = (site?.website_copy as WebsiteCopy | null) || null;
   const workCopy = copy?.work;
 
@@ -41,7 +41,7 @@ export async function loadWorkPage(siteId: string): Promise<WorkPageData> {
             ORDER BY ma.quality_score DESC NULLS LAST LIMIT 1
            ) AS cover_image
     FROM projects p
-    WHERE p.site_id = ${siteId}
+    WHERE p.business_id = ${siteId}
       AND (SELECT COUNT(*) FROM asset_projects ap WHERE ap.project_id = p.id) >= 3
     ORDER BY p.start_date DESC NULLS LAST
   `;
@@ -49,7 +49,7 @@ export async function loadWorkPage(siteId: string): Promise<WorkPageData> {
   const articleRows = await sql`
     SELECT title, slug, excerpt, og_image_url, published_at
     FROM blog_posts
-    WHERE site_id = ${siteId} AND status = 'published'
+    WHERE business_id = ${siteId} AND status = 'published'
     ORDER BY published_at DESC
     LIMIT 6
   `;

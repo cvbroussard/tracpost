@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
 
   const projects = await sql`
     SELECT slug, created_at FROM projects
-    WHERE site_id = ${site.siteId}
+    WHERE business_id = ${site.siteId}
     ORDER BY created_at DESC
     LIMIT 500
   `;

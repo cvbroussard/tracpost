@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     SELECT query, SUM(impressions)::int AS impressions, SUM(clicks)::int AS clicks,
            ROUND(AVG(position)::numeric, 1) AS avg_position
     FROM search_performance
-    WHERE site_id = ${siteId} AND date >= ${cutoff.toISOString().split("T")[0]}
+    WHERE business_id = ${siteId} AND date >= ${cutoff.toISOString().split("T")[0]}
     GROUP BY query
     ORDER BY impressions DESC
     LIMIT 100
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     SELECT url, SUM(clicks)::int AS clicks, SUM(impressions)::int AS impressions,
            COUNT(DISTINCT query)::int AS query_count
     FROM search_performance
-    WHERE site_id = ${siteId} AND date >= ${cutoff.toISOString().split("T")[0]}
+    WHERE business_id = ${siteId} AND date >= ${cutoff.toISOString().split("T")[0]}
     GROUP BY url
     ORDER BY clicks DESC
     LIMIT 50

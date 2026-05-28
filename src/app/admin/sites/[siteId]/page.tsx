@@ -26,10 +26,10 @@ export default async function SiteControlPanel({ params }: Props) {
            u.name AS subscriber_name, sub.plan,
            bs.blog_enabled, bs.subdomain, bs.custom_domain,
            bs.blog_title, bs.blog_description, bs.nav_links
-    FROM sites s
-    JOIN subscriptions sub ON sub.id = s.subscription_id
-    JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    FROM businesses s
+    JOIN accounts sub ON sub.id = s.billing_account_id
+    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE s.id = ${siteId}
   `;
 
@@ -38,17 +38,17 @@ export default async function SiteControlPanel({ params }: Props) {
   // Counts
   const [counts] = await sql`
     SELECT
-      (SELECT COUNT(*)::int FROM media_assets WHERE site_id = ${siteId}) AS total_assets,
-      (SELECT COUNT(*)::int FROM media_assets WHERE site_id = ${siteId} AND source = 'upload') AS uploads,
-      (SELECT COUNT(*)::int FROM media_assets WHERE site_id = ${siteId} AND source = 'ai_generated') AS ai_assets,
-      (SELECT COUNT(*)::int FROM blog_posts WHERE site_id = ${siteId}) AS total_posts,
-      (SELECT COUNT(*)::int FROM blog_posts WHERE site_id = ${siteId} AND status = 'published') AS published_posts,
-      (SELECT COUNT(*)::int FROM blog_posts WHERE site_id = ${siteId} AND status = 'draft') AS draft_posts,
-      (SELECT COUNT(*)::int FROM brands WHERE site_id = ${siteId}) AS vendors,
-      (SELECT COUNT(*)::int FROM projects WHERE site_id = ${siteId}) AS projects,
+      (SELECT COUNT(*)::int FROM media_assets WHERE business_id = ${siteId}) AS total_assets,
+      (SELECT COUNT(*)::int FROM media_assets WHERE business_id = ${siteId} AND source = 'upload') AS uploads,
+      (SELECT COUNT(*)::int FROM media_assets WHERE business_id = ${siteId} AND source = 'ai_generated') AS ai_assets,
+      (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = ${siteId}) AS total_posts,
+      (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = ${siteId} AND status = 'published') AS published_posts,
+      (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = ${siteId} AND status = 'draft') AS draft_posts,
+      (SELECT COUNT(*)::int FROM brands WHERE business_id = ${siteId}) AS vendors,
+      (SELECT COUNT(*)::int FROM projects WHERE business_id = ${siteId}) AS projects,
       0 AS personas,
-      (SELECT COUNT(*)::int FROM branches WHERE site_id = ${siteId}) AS branches,
-      (SELECT COUNT(*)::int FROM image_corrections WHERE site_id = ${siteId}) AS corrections
+      (SELECT COUNT(*)::int FROM locations WHERE business_id = ${siteId}) AS locations,
+      (SELECT COUNT(*)::int FROM image_corrections WHERE business_id = ${siteId}) AS corrections
   `;
 
   // Reward prompts count
@@ -59,28 +59,28 @@ export default async function SiteControlPanel({ params }: Props) {
   const [projectPromptCount] = await sql`
     SELECT COALESCE(SUM(jsonb_array_length(metadata->'article_prompts')), 0)::int AS total
     FROM projects
-    WHERE site_id = ${siteId} AND metadata->'article_prompts' IS NOT NULL
+    WHERE business_id = ${siteId} AND metadata->'article_prompts' IS NOT NULL
   `;
 
   // Connected platforms
   const platforms = await sql`
     SELECT sa.platform, sa.account_name, sa.status
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
     ORDER BY sa.platform
   `;
 
   // Projects for article generation
   const projects = await sql`
-    SELECT id, name, slug FROM projects WHERE site_id = ${siteId} ORDER BY name
+    SELECT id, name, slug FROM projects WHERE business_id = ${siteId} ORDER BY name
   `;
 
   // Hero candidates — top 12 image assets the admin can pick from
   const heroAssetCandidates = await sql`
     SELECT id, storage_url, context_note, quality_score
     FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND processing_stage = 'briefed'
       AND media_type LIKE 'image%'
     ORDER BY quality_score DESC NULLS LAST

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     SELECT id, task_key, title, owner, depends_on, status, milestone,
            sort_order, step_label, started_at, completed_at, notes
     FROM provisioning_tasks
-    WHERE subscription_id = ${subscriberId}
+    WHERE billing_account_id = ${subscriberId}
     ORDER BY sort_order ASC
   `;
 
@@ -85,7 +85,7 @@ export async function PATCH(req: NextRequest) {
       started_at = COALESCE(${startedAt || null}, started_at),
       completed_at = ${completedAt || null},
       notes = COALESCE(${notes || null}, notes)
-    WHERE subscription_id = ${subscriber_id} AND task_key = ${task_key}
+    WHERE billing_account_id = ${subscriber_id} AND task_key = ${task_key}
   `;
 
   return NextResponse.json({ success: true });

@@ -48,13 +48,13 @@ export async function GET(req: NextRequest) {
   if (template.platform !== "blog") {
     const [bound] = await sql`
       SELECT pa.id
-      FROM site_platform_assets spa
+      FROM business_platform_assets spa
       JOIN platform_assets pa ON pa.id = spa.platform_asset_id
       JOIN social_accounts sa ON sa.id = pa.social_account_id
-      WHERE spa.site_id = ${siteId}
+      WHERE spa.business_id = ${siteId}
         AND pa.platform = ${template.platform}
         AND spa.is_primary = true
-        AND sa.subscription_id = ${session.subscriptionId}
+        AND sa.billing_account_id = ${session.subscriptionId}
       LIMIT 1
     `;
     if (!bound) {
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
   const typePatterns = allowedTypes.map((t) => `${t}%`);
 
   // Site URL — anchor URL prefix
-  const [siteRow] = await sql`SELECT url FROM sites WHERE id = ${siteId}`;
+  const [siteRow] = await sql`SELECT url FROM businesses WHERE id = ${siteId}`;
   const siteUrl = (siteRow?.url as string | null)?.replace(/\/+$/, "") || "";
 
   // Anchor lookup from v2 — pool-specific table
@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
     // pillar to its tag IDs via site pillar_config.
     let pillarTagIds: string[] = [];
     if (pillar) {
-      const [pcRow] = await sql`SELECT pillar_config FROM sites WHERE id = ${siteId}`;
+      const [pcRow] = await sql`SELECT pillar_config FROM businesses WHERE id = ${siteId}`;
       const pc = (pcRow?.pillar_config || []) as PillarConfig;
       pillarTagIds = pc.find((p) => p.id === pillar)?.tags.map((t) => t.id) || [];
     }
@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
           SELECT id, storage_url, media_type, context_note,
                  content_tags, ai_analysis, quality_score, created_at
           FROM media_assets
-          WHERE site_id = ${siteId}
+          WHERE business_id = ${siteId}
             AND media_type ILIKE ANY(${typePatterns}::text[])
             AND processing_stage IN ('briefed', 'analyzed')
             AND archived_at IS NULL
@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
           SELECT id, storage_url, media_type, context_note,
                  content_tags, ai_analysis, quality_score, created_at
           FROM media_assets
-          WHERE site_id = ${siteId}
+          WHERE business_id = ${siteId}
             AND media_type ILIKE ANY(${typePatterns}::text[])
             AND processing_stage IN ('briefed', 'analyzed')
             AND archived_at IS NULL
@@ -235,7 +235,7 @@ async function loadAnchor(
     const [r] = await sql`
       SELECT title, slug, excerpt, content_pillars, content_kit
       FROM blog_posts_v2
-      WHERE id = ${id} AND site_id = ${siteId}
+      WHERE id = ${id} AND business_id = ${siteId}
     `;
     if (!r) return null;
     return {
@@ -250,7 +250,7 @@ async function loadAnchor(
     const [r] = await sql`
       SELECT name AS title, slug, description AS excerpt, content_pillars, content_kit
       FROM projects_v2
-      WHERE id = ${id} AND site_id = ${siteId}
+      WHERE id = ${id} AND business_id = ${siteId}
     `;
     if (!r) return null;
     return {
@@ -265,7 +265,7 @@ async function loadAnchor(
     const [r] = await sql`
       SELECT name AS title, slug, excerpt, content_pillars, content_kit
       FROM services_v2
-      WHERE id = ${id} AND site_id = ${siteId}
+      WHERE id = ${id} AND business_id = ${siteId}
     `;
     if (!r) return null;
     return {

@@ -43,7 +43,7 @@ export interface RecordConsentInput {
 export async function recordConsent(input: RecordConsentInput): Promise<string> {
   const [row] = await sql`
     INSERT INTO comms_consent (
-      subscription_id, user_id, channel, consent_type, action, source,
+      billing_account_id, user_id, channel, consent_type, action, source,
       consent_text, phone_number, email_address, ip_address, user_agent, metadata
     ) VALUES (
       ${input.subscriptionId},
@@ -77,7 +77,7 @@ export async function getCurrentConsent(
   const [latest] = await sql`
     SELECT action
     FROM comms_consent
-    WHERE subscription_id = ${subscriptionId}
+    WHERE billing_account_id = ${subscriptionId}
       AND channel = ${channel}
       AND consent_type = ${consentType}
     ORDER BY created_at DESC
@@ -97,7 +97,7 @@ export async function getConsentSnapshot(
     SELECT DISTINCT ON (channel, consent_type)
       channel, consent_type, action
     FROM comms_consent
-    WHERE subscription_id = ${subscriptionId}
+    WHERE billing_account_id = ${subscriptionId}
     ORDER BY channel, consent_type, created_at DESC
   `;
   const snapshot: Record<string, ConsentAction> = {};
@@ -117,7 +117,7 @@ export async function findSubscriptionByPhone(
   // Prefer the latest consent row that has this phone associated; fall
   // back to the users.phone column.
   const [fromConsent] = await sql`
-    SELECT subscription_id, user_id
+    SELECT billing_account_id, user_id
     FROM comms_consent
     WHERE phone_number = ${phoneNumber}
     ORDER BY created_at DESC
@@ -131,7 +131,7 @@ export async function findSubscriptionByPhone(
   }
 
   const [fromUsers] = await sql`
-    SELECT subscription_id, id AS user_id
+    SELECT billing_account_id, id AS user_id
     FROM users
     WHERE phone = ${phoneNumber} AND is_active = true
     LIMIT 1

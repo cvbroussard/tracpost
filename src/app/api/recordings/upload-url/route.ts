@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
 
     // Verify site ownership
     const [site] = await sql`
-      SELECT id FROM sites
-      WHERE id = ${site_id} AND subscription_id = ${auth.subscriptionId}
+      SELECT id FROM businesses
+      WHERE id = ${site_id} AND billing_account_id = ${auth.subscriptionId}
     `;
     if (!site) {
       return NextResponse.json(

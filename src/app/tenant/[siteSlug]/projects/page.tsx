@@ -41,11 +41,11 @@ export default async function ProjectsIndexPage({ params }: Props) {
 
   // Fetch shell data + projects
   const [blogSettings, siteRow, logoAsset, projects, recentPosts] = await Promise.all([
-    sql`SELECT nav_links, theme FROM blog_settings WHERE site_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo, business_type, page_config FROM sites WHERE id = ${site.siteId}`,
+    sql`SELECT nav_links, theme FROM blog_settings WHERE business_id = ${site.siteId}`,
+    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo, business_type, page_config FROM businesses WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
-      WHERE site_id = ${site.siteId}
+      WHERE business_id = ${site.siteId}
         AND media_type LIKE 'image%'
         AND metadata->>'is_logo' = 'true'
       LIMIT 1
@@ -59,7 +59,7 @@ export default async function ProjectsIndexPage({ params }: Props) {
               ORDER BY ma.quality_score DESC NULLS LAST LIMIT 1
              ) AS cover_image
       FROM projects p
-      WHERE p.site_id = ${site.siteId}
+      WHERE p.business_id = ${site.siteId}
         AND (SELECT COUNT(*) FROM asset_projects ap WHERE ap.project_id = p.id) >= 3
       ORDER BY p.start_date DESC NULLS LAST
     `,

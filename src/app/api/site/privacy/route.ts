@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     SELECT face_policy, face_waiver_signed_at, face_waiver_version,
            minor_face_policy, minor_face_waiver_signed_at, minor_face_waiver_version,
            identity_policy, identity_waiver_signed_at, identity_waiver_version
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   if (!row) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
@@ -140,7 +140,7 @@ export async function PUT(req: NextRequest) {
   // sign_*_waiver=true in the same call OR a prior signed waiver.
   const [current] = await sql`
     SELECT face_waiver_signed_at, minor_face_waiver_signed_at, identity_waiver_signed_at
-    FROM sites WHERE id = ${site_id}
+    FROM businesses WHERE id = ${site_id}
   `;
   if (!current) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
@@ -174,7 +174,7 @@ export async function PUT(req: NextRequest) {
     sign_identity_waiver === true && !current.identity_waiver_signed_at;
 
   await sql`
-    UPDATE sites SET
+    UPDATE businesses SET
       face_policy = COALESCE(${face_policy ?? null}, face_policy),
       face_waiver_signed_at = CASE WHEN ${willSignFaceWaiver}
         THEN NOW() ELSE face_waiver_signed_at END,

@@ -35,8 +35,8 @@ export async function PATCH(
   // Verify ownership via site → subscription
   const [recording] = await sql`
     SELECT r.id FROM recordings r
-    JOIN sites s ON s.id = r.site_id
-    WHERE r.id = ${id} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON s.id = r.business_id
+    WHERE r.id = ${id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!recording) {
     return NextResponse.json({ error: "Recording not found" }, { status: 404 });

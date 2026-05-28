@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
   const sites = await sql`
     SELECT s.id, s.name, s.blog_cadence
-    FROM sites s
+    FROM businesses s
     WHERE s.is_active = true
       AND s.autopilot_enabled = true
       AND s.blog_cadence > 0
@@ -64,11 +64,11 @@ export async function GET(req: NextRequest) {
       // total cadence, not per-pool cadence.
       const [lastV2] = await sql`
         SELECT created_at FROM (
-          SELECT created_at FROM blog_posts_v2 WHERE site_id = ${siteId}
+          SELECT created_at FROM blog_posts_v2 WHERE business_id = ${siteId}
           UNION ALL
-          SELECT created_at FROM projects_v2 WHERE site_id = ${siteId}
+          SELECT created_at FROM projects_v2 WHERE business_id = ${siteId}
           UNION ALL
-          SELECT created_at FROM services_v2 WHERE site_id = ${siteId}
+          SELECT created_at FROM services_v2 WHERE business_id = ${siteId}
         ) t
         ORDER BY created_at DESC LIMIT 1
       `;

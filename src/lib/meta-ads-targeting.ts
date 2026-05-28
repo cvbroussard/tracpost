@@ -53,10 +53,10 @@ export async function buildQuickBoostTargeting(args: {
   // Step 1: try the connected FB Page's location
   const pageRows = await sql`
     SELECT pa.id, pa.asset_id AS page_id, pa.metadata
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${args.siteId}
+    WHERE spa.business_id = ${args.siteId}
       AND pa.asset_type = 'facebook_page'
       AND spa.is_primary = true
     LIMIT 1
@@ -147,7 +147,7 @@ export async function buildQuickBoostTargeting(args: {
 
   // Step 2: fallback to sites.location lookup (less authoritative)
   const [site] = await sql`
-    SELECT location FROM sites WHERE id = ${args.siteId}
+    SELECT location FROM businesses WHERE id = ${args.siteId}
   `;
   const locationText = site?.location ? String(site.location).trim() : "";
   if (locationText) {

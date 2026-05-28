@@ -30,7 +30,7 @@ export interface KitGenerateInput {
 export async function generateContentKit(input: KitGenerateInput): Promise<ContentKit> {
   // Pull DNA-derived brand context for voice continuity
   const [site] = await sql`
-    SELECT name, url, brand_dna FROM sites WHERE id = ${input.siteId}
+    SELECT name, url, brand_dna FROM businesses WHERE id = ${input.siteId}
   `;
   if (!site) throw new Error(`Site ${input.siteId} not found for content_kit generation`);
   const dna = (site.brand_dna || {}) as Record<string, unknown>;

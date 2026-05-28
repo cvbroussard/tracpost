@@ -17,7 +17,7 @@ export default async function SpotlightPage() {
       SELECT id, session_code, status, photo_url, customer_name, star_rating,
              google_review_opened, photo_consent, captured_at, completed_at
       FROM spotlight_sessions
-      WHERE site_id = ${siteId} AND subscription_id = ${session.subscriptionId}
+      WHERE business_id = ${siteId} AND billing_account_id = ${session.subscriptionId}
       ORDER BY created_at DESC
       LIMIT 10
     `,
@@ -28,12 +28,12 @@ export default async function SpotlightPage() {
         COUNT(*) FILTER (WHERE google_review_opened = true)::int AS reviews,
         AVG(star_rating) FILTER (WHERE star_rating IS NOT NULL) AS avg_rating
       FROM spotlight_sessions
-      WHERE site_id = ${siteId} AND subscription_id = ${session.subscriptionId}
+      WHERE business_id = ${siteId} AND billing_account_id = ${session.subscriptionId}
     `,
     sql`
       SELECT id, name, is_active, last_seen_at
       FROM spotlight_kiosks
-      WHERE site_id = ${siteId} AND is_active = true
+      WHERE business_id = ${siteId} AND is_active = true
     `,
   ]);
 

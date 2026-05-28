@@ -30,11 +30,11 @@ export async function POST(req: NextRequest) {
 
   // Verify ownership
   const [post] = await sql`
-    SELECT bp.id, bp.site_id, bp.body, bp.metadata, bp.title,
+    SELECT bp.id, bp.business_id, bp.body, bp.metadata, bp.title,
            s.image_style
     FROM blog_posts bp
-    JOIN sites s ON s.id = bp.site_id
-    WHERE bp.id = ${post_id} AND s.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON s.id = bp.business_id
+    WHERE bp.id = ${post_id} AND s.billing_account_id = ${auth.subscriptionId}
   `;
   if (!post) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
@@ -149,9 +149,9 @@ export async function POST(req: NextRequest) {
   if (mode === "new" && isEditorial && imageEntry) {
     for (const entityKey of imageEntry.entities) {
       await sql`
-        INSERT INTO image_corrections (site_id, entity_key, correction)
+        INSERT INTO image_corrections (business_id, entity_key, correction)
         VALUES (${post.site_id as string}, ${entityKey.toLowerCase()}, ${adjustment})
-        ON CONFLICT (site_id, entity_key, correction) DO NOTHING
+        ON CONFLICT (business_id, entity_key, correction) DO NOTHING
       `;
     }
   }

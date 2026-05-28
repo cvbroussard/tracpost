@@ -14,7 +14,7 @@ export async function POST(
   const [review] = await sql`
     UPDATE inbox_reviews
     SET reply_status = 'ignored', is_hidden = true, is_read = true
-    WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}
+    WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}
     RETURNING id
   `;
 

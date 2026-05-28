@@ -29,8 +29,8 @@ export async function GET(req: NextRequest) {
   try {
     // Verify ownership
     const [site] = await sql`
-      SELECT id FROM sites
-      WHERE id = ${siteId} AND subscription_id = ${auth.subscriptionId}
+      SELECT id FROM businesses
+      WHERE id = ${siteId} AND billing_account_id = ${auth.subscriptionId}
     `;
 
     if (!site) {
@@ -48,20 +48,20 @@ export async function GET(req: NextRequest) {
       sql`
         SELECT
           (SELECT COUNT(*)::int FROM media_assets
-           WHERE site_id = ${siteId} AND processing_stage = 'briefed') AS triaged_count,
+           WHERE business_id = ${siteId} AND processing_stage = 'briefed') AS triaged_count,
           (SELECT COUNT(*)::int FROM publishing_slots
-           WHERE site_id = ${siteId} AND status = 'open'
+           WHERE business_id = ${siteId} AND status = 'open'
              AND scheduled_at <= ${sevenDaysFromNow}) AS open_slots_7d,
           (SELECT COUNT(*)::int FROM social_posts sp
            JOIN social_accounts sa ON sp.account_id = sa.id
-           WHERE sa.site_id = ${siteId} AND sp.status = 'scheduled') AS scheduled_count,
+           WHERE sa.business_id = ${siteId} AND sp.status = 'scheduled') AS scheduled_count,
           (SELECT COUNT(*)::int FROM media_assets
-           WHERE site_id = ${siteId} AND processing_stage = 'onboarded') AS pending_count
+           WHERE business_id = ${siteId} AND processing_stage = 'onboarded') AS pending_count
       `,
       sql`
         SELECT id, storage_url AS url, media_type, context_note, processing_stage, created_at
         FROM media_assets
-        WHERE site_id = ${siteId}
+        WHERE business_id = ${siteId}
         ORDER BY created_at DESC
         LIMIT 5
       `,

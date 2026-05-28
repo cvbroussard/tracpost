@@ -100,10 +100,10 @@ export async function renderAsset(
   if (plans.length === 0) return {};
 
   const [asset] = await sql`
-    SELECT ma.storage_url, ma.site_id, ma.variants,
+    SELECT ma.storage_url, ma.business_id, ma.variants,
            s.brand_assets
     FROM media_assets ma
-    JOIN sites s ON s.id = ma.site_id
+    JOIN businesses s ON s.id = ma.business_id
     WHERE ma.id = ${assetId}
   `;
   if (!asset?.storage_url) throw new Error(`Asset ${assetId} not found`);

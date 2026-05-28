@@ -25,7 +25,7 @@ export async function renderAssetVariants(assetId: string): Promise<{
   reason?: string;
 }> {
   const [asset] = await sql`
-    SELECT site_id, render_status, media_type
+    SELECT business_id, render_status, media_type
     FROM media_assets WHERE id = ${assetId}
   `;
   if (!asset) return { rendered: 0, skipped: true, reason: "not found" };
@@ -95,7 +95,7 @@ export async function renderPendingAssets(siteId: string): Promise<{
 }> {
   const pending = await sql`
     SELECT id FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND render_status = 'pending'
       AND processing_stage = 'analyzed'
       AND media_type LIKE 'image%'

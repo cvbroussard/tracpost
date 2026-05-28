@@ -45,10 +45,10 @@ export async function validateMagicToken(token: string): Promise<{
   const { sub: userId, tok: raw } = parsed;
 
   const [user] = await sql`
-    SELECT u.id, u.name, u.role, u.subscription_id, u.magic_token_hash, u.magic_token_expires,
+    SELECT u.id, u.name, u.role, u.billing_account_id, u.magic_token_hash, u.magic_token_expires,
            s.plan
     FROM users u
-    JOIN subscriptions s ON u.subscription_id = s.id
+    JOIN accounts s ON u.billing_account_id = s.id
     WHERE u.id = ${userId} AND u.is_active = true
   `;
 

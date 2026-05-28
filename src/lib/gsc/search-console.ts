@@ -21,8 +21,8 @@ async function getAccessToken(siteId: string): Promise<string | null> {
   const [account] = await sql`
     SELECT sa.access_token_encrypted, sa.refresh_token_encrypted, sa.token_expires_at
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
       AND sa.platform = 'gbp'
       AND sa.status = 'active'
     LIMIT 1
@@ -52,8 +52,8 @@ async function getAccessToken(siteId: string): Promise<string | null> {
           token_expires_at = ${newExpiry.toISOString()}
       WHERE id = (
         SELECT sa.id FROM social_accounts sa
-        JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-        WHERE ssl.site_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
+        JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+        WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp' AND sa.status = 'active'
         LIMIT 1
       )
     `;
@@ -80,8 +80,8 @@ export async function fetchSearchAnalytics(
 
   const [site] = await sql`
     SELECT bs.custom_domain, s.gsc_property
-    FROM sites s
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    FROM businesses s
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE s.id = ${siteId}
   `;
 
@@ -149,9 +149,9 @@ export async function syncSearchPerformance(siteId: string, days: number = 28): 
   for (const row of rows) {
     try {
       await sql`
-        INSERT INTO search_performance (site_id, url, query, impressions, clicks, ctr, position, date)
+        INSERT INTO search_performance (business_id, url, query, impressions, clicks, ctr, position, date)
         VALUES (${siteId}, ${row.page}, ${row.query}, ${row.impressions}, ${row.clicks}, ${row.ctr}, ${row.position}, ${dateStr})
-        ON CONFLICT (site_id, url, query, date) DO UPDATE SET
+        ON CONFLICT (business_id, url, query, date) DO UPDATE SET
           impressions = EXCLUDED.impressions,
           clicks = EXCLUDED.clicks,
           ctr = EXCLUDED.ctr,

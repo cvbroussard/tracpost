@@ -30,10 +30,10 @@ export async function GET(
   const { id: assetId } = await params;
 
   const [row] = await sql`
-    SELECT ma.id, ma.site_id, ma.media_type, ma.metadata,
+    SELECT ma.id, ma.business_id, ma.media_type, ma.metadata,
            s.face_policy, s.face_waiver_signed_at, s.face_waiver_version,
            s.minor_face_policy, s.minor_face_waiver_signed_at, s.minor_face_waiver_version
-    FROM media_assets ma JOIN sites s ON s.id = ma.site_id
+    FROM media_assets ma JOIN businesses s ON s.id = ma.business_id
     WHERE ma.id = ${assetId}
   `;
   if (!row) return NextResponse.json({ error: "Asset not found" }, { status: 404 });

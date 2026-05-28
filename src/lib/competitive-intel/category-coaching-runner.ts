@@ -30,7 +30,7 @@ export interface RunCategoryCoachingResult {
  */
 export async function runCategoryCoachingForSite(siteId: string): Promise<RunCategoryCoachingResult> {
   const [row] = await sql`
-    INSERT INTO category_coaching_runs (site_id, status)
+    INSERT INTO category_coaching_runs (business_id, status)
     VALUES (${siteId}, 'running')
     RETURNING id
   `;
@@ -42,7 +42,7 @@ export async function runCategoryCoachingForSite(siteId: string): Promise<RunCat
     const [existingCma] = await sql`
       SELECT id, analysis_data
       FROM competitive_market_analyses
-      WHERE site_id = ${siteId} AND status = 'complete'
+      WHERE business_id = ${siteId} AND status = 'complete'
       ORDER BY generated_at DESC LIMIT 1
     `;
 
@@ -108,7 +108,7 @@ export async function applyCoachingRun(
   appliedBy: string,
 ): Promise<{ applied: number; primaryGcid: string | null }> {
   const [run] = await sql`
-    SELECT id, site_id, status, coaching_data, applied
+    SELECT id, business_id, status, coaching_data, applied
     FROM category_coaching_runs
     WHERE id = ${runId}
   `;
@@ -145,17 +145,17 @@ export async function applyCoachingRun(
   }
 
   // Replace site_gbp_categories with the coaching plan.
-  await sql`DELETE FROM site_gbp_categories WHERE site_id = ${siteId}`;
+  await sql`DELETE FROM business_gbp_categories WHERE business_id = ${siteId}`;
   for (const c of toApply) {
     await sql`
-      INSERT INTO site_gbp_categories (site_id, gcid, is_primary, chosen_by, chosen_at)
+      INSERT INTO business_gbp_categories (business_id, gcid, is_primary, chosen_by, chosen_at)
       VALUES (${siteId}, ${c.gcid}, ${c.proposedPrimary}, 'coaching', NOW())
     `;
   }
 
   // Mark dirty so the existing GBP sync pipeline pushes on next cycle (#118).
   await sql`
-    UPDATE sites
+    UPDATE businesses
     SET gbp_sync_dirty = true,
         gbp_dirty_fields = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(gbp_dirty_fields, '{}') || ARRAY['categories'])))
     WHERE id = ${siteId}
@@ -179,7 +179,7 @@ export async function getLatestCoachingRun(siteId: string) {
     SELECT id, status, generated_at, applied, applied_at, applied_by,
            coaching_data, source_analysis_id, error_message
     FROM category_coaching_runs
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
     ORDER BY generated_at DESC
     LIMIT 1
   `;

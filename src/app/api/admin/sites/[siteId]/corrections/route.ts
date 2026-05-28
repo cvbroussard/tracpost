@@ -19,7 +19,7 @@ export async function GET(
 
   const corrections = await sql`
     SELECT * FROM content_corrections
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
     ORDER BY is_active DESC, created_at DESC
   `;
 
@@ -54,7 +54,7 @@ export async function POST(
 
   const [correction] = await sql`
     INSERT INTO content_corrections (
-      site_id, category, rule, scope,
+      business_id, category, rule, scope,
       example_before, example_after, source_note, created_by
     ) VALUES (
       ${siteId}, ${category}, ${rule}, ${scope || "all"},

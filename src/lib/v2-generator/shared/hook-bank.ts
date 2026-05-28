@@ -17,7 +17,7 @@ export async function pullHook(
 ): Promise<string | null> {
   const [hook] = await sql`
     SELECT text FROM hook_bank
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
     ORDER BY
       CASE rating WHEN 'loved' THEN 0 ELSE 1 END,
       used_count ASC,
@@ -35,7 +35,7 @@ export async function pullHook(
     await sql`
       UPDATE hook_bank
       SET used_count = used_count + 1, last_used_at = NOW()
-      WHERE site_id = ${siteId} AND text = ${text}
+      WHERE business_id = ${siteId} AND text = ${text}
     `;
   }
   return text;
@@ -43,6 +43,6 @@ export async function pullHook(
 
 /** Total hook count for a site — feeds the readiness panel. */
 export async function getHookBankDepth(siteId: string): Promise<number> {
-  const [r] = await sql`SELECT COUNT(*)::int AS n FROM hook_bank WHERE site_id = ${siteId}`;
+  const [r] = await sql`SELECT COUNT(*)::int AS n FROM hook_bank WHERE business_id = ${siteId}`;
   return (r?.n as number) || 0;
 }

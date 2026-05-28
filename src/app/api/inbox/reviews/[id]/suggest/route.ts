@@ -22,8 +22,8 @@ export async function POST(
   const [review] = await sql`
     SELECT ir.*, s.name AS site_name, s.brand_voice, s.brand_playbook
     FROM inbox_reviews ir
-    JOIN sites s ON s.id = ir.site_id
-    WHERE ir.id = ${id} AND ir.subscription_id = ${auth.subscriptionId}
+    JOIN businesses s ON s.id = ir.business_id
+    WHERE ir.id = ${id} AND ir.billing_account_id = ${auth.subscriptionId}
   `;
 
   if (!review) {

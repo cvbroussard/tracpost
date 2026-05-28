@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const [project] = await sql`
     SELECT name, description FROM projects
-    WHERE site_id = ${site.siteId} AND slug = ${projectSlug}
+    WHERE business_id = ${site.siteId} AND slug = ${projectSlug}
   `;
   if (!project) return {};
 
@@ -48,7 +48,7 @@ export default async function ProjectPage({ params }: Props) {
   const [project] = await sql`
     SELECT id, name, slug, description, address, start_date, end_date, status
     FROM projects
-    WHERE site_id = ${site.siteId} AND slug = ${projectSlug}
+    WHERE business_id = ${site.siteId} AND slug = ${projectSlug}
   `;
   if (!project) notFound();
 
@@ -77,17 +77,17 @@ export default async function ProjectPage({ params }: Props) {
     Promise.resolve([] as Array<{ id: string; name: string; display_name: string | null; type: string; consent_given: boolean }>),
     sql`
       SELECT DISTINCT b.name, b.city, b.state
-      FROM branches b
-      JOIN asset_branches ab ON ab.branch_id = b.id
+      FROM locations b
+      JOIN asset_locations ab ON ab.location_id = b.id
       JOIN asset_projects ap ON ap.asset_id = ab.asset_id
       WHERE ap.project_id = ${projectId}
       LIMIT 1
     `,
-    sql`SELECT nav_links, theme FROM blog_settings WHERE site_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo FROM sites WHERE id = ${site.siteId}`,
+    sql`SELECT nav_links, theme FROM blog_settings WHERE business_id = ${site.siteId}`,
+    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo FROM businesses WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
-      WHERE site_id = ${site.siteId}
+      WHERE business_id = ${site.siteId}
         AND media_type LIKE 'image%'
         AND metadata->>'is_logo' = 'true'
       LIMIT 1
@@ -100,7 +100,7 @@ export default async function ProjectPage({ params }: Props) {
               ORDER BY ma.quality_score DESC NULLS LAST LIMIT 1
              ) AS cover_image
       FROM projects p
-      WHERE p.site_id = ${site.siteId}
+      WHERE p.business_id = ${site.siteId}
         AND (SELECT COUNT(*) FROM asset_projects ap WHERE ap.project_id = p.id) >= 3
       ORDER BY p.start_date DESC NULLS LAST
     `,

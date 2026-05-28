@@ -51,34 +51,34 @@ export default async function UnifeedPage() {
       ), 0)::int
       FROM social_accounts sa
       WHERE sa.id IN (
-        SELECT account_id FROM social_posts WHERE site_id = ${siteId}
+        SELECT account_id FROM social_posts WHERE business_id = ${siteId}
       ) AND sa.status = 'active'
       ) AS total_followers,
       (SELECT
          (SELECT COUNT(*)::int FROM social_posts
-          WHERE site_id = ${siteId} AND status = 'published'
+          WHERE business_id = ${siteId} AND status = 'published'
           AND published_at > NOW() - INTERVAL '7 days')
        +
          (SELECT COUNT(*)::int FROM blog_posts_v2
-          WHERE site_id = ${siteId} AND status = 'published'
+          WHERE business_id = ${siteId} AND status = 'published'
           AND published_at > NOW() - INTERVAL '7 days')
        +
          (SELECT COUNT(*)::int FROM projects_v2
-          WHERE site_id = ${siteId} AND status IN ('active','complete')
+          WHERE business_id = ${siteId} AND status IN ('active','complete')
           AND created_at > NOW() - INTERVAL '7 days')
        +
          (SELECT COUNT(*)::int FROM services_v2
-          WHERE site_id = ${siteId} AND status = 'active'
+          WHERE business_id = ${siteId} AND status = 'active'
           AND created_at > NOW() - INTERVAL '7 days')
       ) AS posts_this_week,
       (SELECT
-         (SELECT COUNT(*)::int FROM social_posts WHERE site_id = ${siteId} AND status = 'published')
+         (SELECT COUNT(*)::int FROM social_posts WHERE business_id = ${siteId} AND status = 'published')
        +
-         (SELECT COUNT(*)::int FROM blog_posts_v2 WHERE site_id = ${siteId} AND status = 'published')
+         (SELECT COUNT(*)::int FROM blog_posts_v2 WHERE business_id = ${siteId} AND status = 'published')
        +
-         (SELECT COUNT(*)::int FROM projects_v2 WHERE site_id = ${siteId} AND status IN ('active','complete'))
+         (SELECT COUNT(*)::int FROM projects_v2 WHERE business_id = ${siteId} AND status IN ('active','complete'))
        +
-         (SELECT COUNT(*)::int FROM services_v2 WHERE site_id = ${siteId} AND status = 'active')
+         (SELECT COUNT(*)::int FROM services_v2 WHERE business_id = ${siteId} AND status = 'active')
       ) AS total_posts
   `;
 
@@ -106,7 +106,7 @@ export default async function UnifeedPage() {
       FROM social_posts sp
       LEFT JOIN social_accounts sa ON sp.account_id = sa.id
       LEFT JOIN media_assets ma ON ma.id = sp.source_asset_id
-      WHERE sp.site_id = ${siteId}
+      WHERE sp.business_id = ${siteId}
         AND sp.status IN ('published', 'scheduled', 'failed', 'draft', 'held')
 
       UNION ALL
@@ -128,8 +128,8 @@ export default async function UnifeedPage() {
              NULL::text AS error_message
       FROM blog_posts_v2 bp
       LEFT JOIN media_assets ma ON ma.id = bp.hero_asset_id
-      LEFT JOIN blog_settings bs ON bs.site_id = bp.site_id
-      WHERE bp.site_id = ${siteId}
+      LEFT JOIN blog_settings bs ON bs.business_id = bp.business_id
+      WHERE bp.business_id = ${siteId}
         AND bp.status IN ('published', 'draft')
 
       UNION ALL
@@ -149,7 +149,7 @@ export default async function UnifeedPage() {
              NULL::text AS error_message
       FROM projects_v2 pv
       LEFT JOIN media_assets ma ON ma.id = pv.hero_asset_id
-      WHERE pv.site_id = ${siteId}
+      WHERE pv.business_id = ${siteId}
         AND pv.status IN ('active','complete')
 
       UNION ALL
@@ -169,7 +169,7 @@ export default async function UnifeedPage() {
              NULL::text AS error_message
       FROM services_v2 sv
       LEFT JOIN media_assets ma ON ma.id = sv.hero_asset_id
-      WHERE sv.site_id = ${siteId}
+      WHERE sv.business_id = ${siteId}
         AND sv.status = 'active'
     ) feed
     ORDER BY COALESCE(published_at, scheduled_at, created_at) DESC NULLS LAST
@@ -181,18 +181,18 @@ export default async function UnifeedPage() {
   const assignedPlatforms = await sql`
     SELECT pa.platform, pa.asset_name AS account_name, sa.status,
            NULL AS followers
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${siteId}
+    WHERE spa.business_id = ${siteId}
       AND spa.is_primary = true
   `;
   const legacyPlatforms = await sql`
     SELECT sa.platform, sa.account_name, sa.status,
            sa.metadata->>'followers_count' AS followers
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
   `;
   const platformSet = new Set(assignedPlatforms.map(p => p.platform));
   const platforms = [
@@ -206,12 +206,12 @@ export default async function UnifeedPage() {
   // articles, only their projects, etc.
   const [anchorPresence] = await sql`
     SELECT
-      (SELECT COUNT(*)::int FROM blog_posts_v2 WHERE site_id = ${siteId}) AS blog_count,
-      (SELECT COUNT(*)::int FROM projects_v2 WHERE site_id = ${siteId}) AS project_count,
-      (SELECT COUNT(*)::int FROM services_v2 WHERE site_id = ${siteId}) AS service_count
+      (SELECT COUNT(*)::int FROM blog_posts_v2 WHERE business_id = ${siteId}) AS blog_count,
+      (SELECT COUNT(*)::int FROM projects_v2 WHERE business_id = ${siteId}) AS project_count,
+      (SELECT COUNT(*)::int FROM services_v2 WHERE business_id = ${siteId}) AS service_count
   `;
   if ((anchorPresence?.blog_count as number) > 0) {
-    const [bs] = await sql`SELECT blog_title FROM blog_settings WHERE site_id = ${siteId}`;
+    const [bs] = await sql`SELECT blog_title FROM blog_settings WHERE business_id = ${siteId}`;
     platforms.push({
       platform: "blog",
       account_name: (bs?.blog_title as string) || "Blog",
@@ -249,7 +249,7 @@ export default async function UnifeedPage() {
     FROM social_posts sp
     LEFT JOIN social_accounts sa ON sp.account_id = sa.id
     LEFT JOIN media_assets ma ON ma.id = sp.source_asset_id
-    WHERE sp.site_id = ${siteId}
+    WHERE sp.business_id = ${siteId}
       AND sp.source_asset_id IS NOT NULL
       AND sp.status = 'published'
     GROUP BY sp.source_asset_id, ma.storage_url, ma.context_note

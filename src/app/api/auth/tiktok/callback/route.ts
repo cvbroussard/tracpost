@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
     // Store in social_accounts
     await sql`
       INSERT INTO social_accounts (
-        subscription_id, platform, account_name, account_id,
+        billing_account_id, platform, account_name, account_id,
         access_token_encrypted, refresh_token_encrypted, token_expires_at,
         scopes, status, metadata
       )
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
         'active',
         ${JSON.stringify(userMeta)}
       )
-      ON CONFLICT (subscription_id, platform, account_id)
+      ON CONFLICT (billing_account_id, platform, account_id)
       DO UPDATE SET
         account_name = EXCLUDED.account_name,
         access_token_encrypted = EXCLUDED.access_token_encrypted,
@@ -96,11 +96,11 @@ export async function GET(req: NextRequest) {
     if (state.site_id) {
       const [acct] = await sql`
         SELECT id FROM social_accounts
-        WHERE subscription_id = ${state.subscription_id} AND platform = 'tiktok' AND account_id = ${openId}
+        WHERE billing_account_id = ${state.subscription_id} AND platform = 'tiktok' AND account_id = ${openId}
       `;
       if (acct) {
         await sql`
-          INSERT INTO site_social_links (site_id, social_account_id)
+          INSERT INTO business_social_links (business_id, social_account_id)
           VALUES (${state.site_id}, ${acct.id})
           ON CONFLICT DO NOTHING
         `;
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 
     // Log usage
     await sql`
-      INSERT INTO usage_log (subscription_id, action, metadata)
+      INSERT INTO usage_log (billing_account_id, action, metadata)
       VALUES (${state.subscription_id}, 'tiktok_connect', ${JSON.stringify({
         account_name: accountName,
       })})

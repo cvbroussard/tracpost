@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     sql`
       SELECT title, status, published_at
       FROM blog_posts
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY created_at DESC
       LIMIT 20
     `,
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       SELECT id, name,
         COALESCE(jsonb_array_length(metadata->'article_prompts'), 0)::int AS prompt_count
       FROM projects
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
       ORDER BY name
     `,
   ]);

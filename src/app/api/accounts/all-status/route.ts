@@ -18,21 +18,21 @@ export async function GET(req: NextRequest) {
   // 1. Assigned platform_assets for this site (new model)
   const assigned = await sql`
     SELECT pa.platform, pa.asset_name, sa.token_expires_at
-    FROM site_platform_assets spa
+    FROM business_platform_assets spa
     JOIN platform_assets pa ON pa.id = spa.platform_asset_id
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE spa.site_id = ${siteId}
+    WHERE spa.business_id = ${siteId}
       AND spa.is_primary = true
-      AND sa.subscription_id = ${session.subscriptionId}
+      AND sa.billing_account_id = ${session.subscriptionId}
   `;
 
   // 2. Legacy site_social_links rows
   const legacy = await sql`
     SELECT sa.platform, sa.account_name, sa.status, sa.token_expires_at
     FROM social_accounts sa
-    JOIN site_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.site_id = ${siteId}
-      AND sa.subscription_id = ${session.subscriptionId}
+    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
+    WHERE ssl.business_id = ${siteId}
+      AND sa.billing_account_id = ${session.subscriptionId}
     ORDER BY sa.created_at DESC
   `;
 
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     SELECT pa.platform, COUNT(*)::int AS count
     FROM platform_assets pa
     JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE sa.subscription_id = ${session.subscriptionId}
+    WHERE sa.billing_account_id = ${session.subscriptionId}
     GROUP BY pa.platform
   `;
 

@@ -24,7 +24,7 @@ export default async function MessagesPage() {
     SELECT id, name, email, phone, message, created_at,
            email_sent, email_error, is_spam, spam_reason
     FROM contact_submissions
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
     ORDER BY created_at DESC
     LIMIT 100
   `;

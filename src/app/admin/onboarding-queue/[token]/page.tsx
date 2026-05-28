@@ -45,8 +45,8 @@ export default async function OnboardingQueueDetail({ params }: Props) {
       sub.created_at AS subscription_created_at,
       sub.metadata AS subscription_metadata
     FROM onboarding_submissions os
-    LEFT JOIN subscriptions sub ON sub.id = os.subscription_id
-    LEFT JOIN users u ON u.subscription_id = os.subscription_id AND u.role = 'owner'
+    LEFT JOIN accounts sub ON sub.id = os.billing_account_id
+    LEFT JOIN users u ON u.billing_account_id = os.billing_account_id AND u.role = 'owner'
     WHERE os.token = ${token}
     LIMIT 1
   `;

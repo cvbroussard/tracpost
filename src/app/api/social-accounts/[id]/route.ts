@@ -21,7 +21,7 @@ export async function DELETE(
   // Verify ownership and get token for revocation
   const [account] = await sql`
     SELECT id, account_id, access_token_encrypted FROM social_accounts
-    WHERE id = ${id} AND subscription_id = ${auth.subscriptionId}
+    WHERE id = ${id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!account) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
@@ -58,7 +58,7 @@ export async function DELETE(
   const cancelledScheduledCount = cascadeResult.length;
 
   // Remove site links (legacy site_social_links + new site_platform_assets via cascade)
-  await sql`DELETE FROM site_social_links WHERE social_account_id = ${id}`;
+  await sql`DELETE FROM business_social_links WHERE social_account_id = ${id}`;
 
   // platform_assets row(s) for this social_account; site_platform_assets cascades on FK
   await sql`DELETE FROM platform_assets WHERE social_account_id = ${id}`;

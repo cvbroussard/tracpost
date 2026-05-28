@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
   const [subscriber] = await sql`
     SELECT sub.id, sub.plan, sub.is_active, sub.created_at, sub.metadata,
            u.name, u.email
-    FROM subscriptions sub
-    JOIN users u ON u.subscription_id = sub.id AND u.role = 'owner'
+    FROM accounts sub
+    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
     WHERE sub.id = ${id}
   `;
 
@@ -28,12 +28,12 @@ export async function GET(req: NextRequest) {
   const sites = await sql`
     SELECT s.id, s.name, s.url, s.autopilot_enabled, s.provisioning_status,
            bs.custom_domain,
-           (SELECT COUNT(*)::int FROM media_assets WHERE site_id = s.id) AS assets,
-           (SELECT COUNT(*)::int FROM blog_posts WHERE site_id = s.id AND status = 'published') AS published,
-           (SELECT COUNT(*)::int FROM social_accounts sa JOIN site_social_links ssl ON ssl.social_account_id = sa.id WHERE ssl.site_id = s.id AND sa.status = 'active') AS connections
-    FROM sites s
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
-    WHERE s.subscription_id = ${id} AND s.is_active = true
+           (SELECT COUNT(*)::int FROM media_assets WHERE business_id = s.id) AS assets,
+           (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = s.id AND status = 'published') AS published,
+           (SELECT COUNT(*)::int FROM social_accounts sa JOIN business_social_links ssl ON ssl.social_account_id = sa.id WHERE ssl.business_id = s.id AND sa.status = 'active') AS connections
+    FROM businesses s
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
+    WHERE s.billing_account_id = ${id} AND s.is_active = true
     ORDER BY s.name
   `;
 

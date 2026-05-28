@@ -16,8 +16,8 @@ export async function GET(_req: Request, { params }: RouteParams) {
   const [siteRow] = await sql`
     SELECT s.name, s.business_logo,
            bs.theme
-    FROM sites s
-    LEFT JOIN blog_settings bs ON bs.site_id = s.id
+    FROM businesses s
+    LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE s.id = ${site.siteId}
   `;
 

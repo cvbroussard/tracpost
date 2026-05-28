@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest) {
   if (body.is_read !== undefined) {
     const result = await sql`
       UPDATE inbox_comments SET is_read = ${body.is_read}
-      WHERE id = ANY(${ids}) AND subscription_id = ${auth.subscriptionId}
+      WHERE id = ANY(${ids}) AND billing_account_id = ${auth.subscriptionId}
     `;
     updated = Array.isArray(result) ? result.length : 0;
   }
@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest) {
   if (body.is_hidden !== undefined) {
     const result = await sql`
       UPDATE inbox_comments SET is_hidden = ${body.is_hidden}
-      WHERE id = ANY(${ids}) AND subscription_id = ${auth.subscriptionId}
+      WHERE id = ANY(${ids}) AND billing_account_id = ${auth.subscriptionId}
     `;
     updated = Array.isArray(result) ? result.length : 0;
   }

@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
   if (!assetId) {
     const [row] = await sql`
       SELECT id FROM media_assets
-      WHERE site_id = ${siteId}
+      WHERE business_id = ${siteId}
         AND media_type ILIKE 'image%'
         AND processing_stage = 'analyzed'
         AND archived_at IS NULL
@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
           await sql.transaction([
             sql`
               INSERT INTO media_components
-                (id, site_id, kind, storage_url, source_asset_id, status, render_settings)
+                (id, business_id, kind, storage_url, source_asset_id, status, render_settings)
               VALUES (
                 ${componentId}, ${siteId}, 'visual_render', ${video.url},
                 ${assetId}, 'ready',
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
             `,
             sql`
               INSERT INTO production_events
-                (site_id, process, model, prompt, settings, inputs, output_component_id)
+                (business_id, process, model, prompt, settings, inputs, output_component_id)
               VALUES (
                 ${siteId}, 'director_call', ${DIRECTOR_MODEL},
                 ${directorInstructions},
@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
             `,
             sql`
               INSERT INTO production_events
-                (site_id, process, model, prompt, settings, inputs, output_component_id)
+                (business_id, process, model, prompt, settings, inputs, output_component_id)
               VALUES (
                 ${siteId}, 'producer_call', ${producer},
                 ${promptToRender},
@@ -281,7 +281,7 @@ export async function GET(req: NextRequest) {
   const rows = await sql`
     SELECT id, storage_url, created_at
     FROM media_assets
-    WHERE site_id = ${siteId}
+    WHERE business_id = ${siteId}
       AND media_type ILIKE 'image%'
       AND processing_stage = 'analyzed'
       AND archived_at IS NULL

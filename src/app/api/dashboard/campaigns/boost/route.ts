@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   let ctaUrl = body.ctaUrl ? String(body.ctaUrl).trim() : "";
   const ctaNeedsUrl = ctaType && ctaType !== "NONE" && ctaType !== "CALL_NOW" && ctaType !== "MESSAGE_PAGE";
   if (ctaNeedsUrl && !ctaUrl && session.activeSiteId) {
-    const [site] = await sql`SELECT url FROM sites WHERE id = ${session.activeSiteId} LIMIT 1`;
+    const [site] = await sql`SELECT url FROM businesses WHERE id = ${session.activeSiteId} LIMIT 1`;
     if (site?.url) ctaUrl = String(site.url);
   }
   // URL parameters (UTM tracking). Subscriber-provided wins; backend falls

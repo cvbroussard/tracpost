@@ -22,7 +22,7 @@ export interface ActiveBrandPlaybook {
 export async function getActiveBrandPlaybook(siteId: string): Promise<ActiveBrandPlaybook> {
   const [row] = await sql`
     SELECT brand_playbook, brand_dna, active_brand_source
-    FROM sites WHERE id = ${siteId}
+    FROM businesses WHERE id = ${siteId}
   `;
   if (!row) return { source: "playbook", playbook: null };
 

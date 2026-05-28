@@ -27,7 +27,7 @@ async function loadService(siteId: string, slug: string): Promise<ServiceRow | n
            ma.storage_url AS hero_url
     FROM services s
     LEFT JOIN media_assets ma ON ma.id = s.hero_asset_id
-    WHERE s.site_id = ${siteId} AND s.slug = ${slug}
+    WHERE s.business_id = ${siteId} AND s.slug = ${slug}
   `;
   if (!row) return null;
 
@@ -102,7 +102,7 @@ export default async function ServiceDetailPage({ params }: Props) {
     JOIN asset_services asv ON asv.asset_id = bp.source_asset_id
     WHERE asv.service_id = ${service.id}
       AND bp.status = 'published'
-      AND bp.site_id = ${ctx.siteId}
+      AND bp.business_id = ${ctx.siteId}
     ORDER BY bp.published_at DESC NULLS LAST
     LIMIT 3
   `;

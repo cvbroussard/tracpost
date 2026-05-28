@@ -59,8 +59,9 @@ export async function POST(
     if (notifyVia) {
       const wantsSms = notifyVia === "both";
       const [owner] = await sql`
-        SELECT id FROM users
-        WHERE billing_account_id = ${updated.billing_account_id} AND role = 'owner'
+        SELECT u.id FROM accounts a
+        JOIN users u ON u.id = a.owner_user_id
+        WHERE a.id = ${updated.billing_account_id}
         LIMIT 1
       `;
 

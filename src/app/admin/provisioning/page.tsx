@@ -51,7 +51,7 @@ export default async function ProvisioningPage() {
         SELECT blog_enabled FROM blog_settings WHERE business_id = s.id
       ) AS blog_enabled
     FROM accounts sub
-    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+    JOIN users u ON u.id = sub.owner_user_id
     JOIN businesses s ON s.billing_account_id = sub.id
     WHERE sub.is_active = true AND s.is_active = true
     ORDER BY sub.created_at DESC

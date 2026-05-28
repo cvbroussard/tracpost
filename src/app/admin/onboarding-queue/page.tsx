@@ -67,7 +67,7 @@ export default async function OnboardingQueuePage() {
       sub.plan
     FROM onboarding_submissions os
     LEFT JOIN accounts sub ON sub.id = os.billing_account_id
-    LEFT JOIN users u ON u.billing_account_id = os.billing_account_id AND u.role = 'owner'
+    LEFT JOIN users u ON u.id = sub.owner_user_id
     WHERE os.completed_at IS NULL
     ORDER BY
       CASE WHEN os.submitted_at IS NOT NULL THEN 0 ELSE 1 END,

@@ -16,7 +16,7 @@ export default async function ManageLayout({
     SELECT sub.id, u.name AS subscriber_name, sub.plan, sub.is_active,
            (SELECT COUNT(*)::int FROM businesses WHERE billing_account_id = sub.id AND is_active = true) AS site_count
     FROM accounts sub
-    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+    JOIN users u ON u.id = sub.owner_user_id
     WHERE sub.is_active = true
     ORDER BY u.name ASC
   `;

@@ -55,7 +55,7 @@ export async function AdminAlerts() {
       SELECT sub.id AS billing_account_id, u.name AS subscriber_name,
              s.name AS site_name, s.metadata AS site_metadata, s.created_at
       FROM accounts sub
-      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+      JOIN users u ON u.id = sub.owner_user_id
       JOIN businesses s ON s.billing_account_id = sub.id
       WHERE s.provisioning_status = 'requested'
         AND s.is_active = true
@@ -67,7 +67,7 @@ export async function AdminAlerts() {
              sub.id AS billing_account_id, u.name AS subscriber_name
       FROM social_accounts sa
       JOIN accounts sub ON sa.billing_account_id = sub.id
-      JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+      JOIN users u ON u.id = sub.owner_user_id
       WHERE sa.status = 'active'
         AND sa.token_expires_at IS NOT NULL
         AND sa.token_expires_at < NOW() + INTERVAL '7 days'

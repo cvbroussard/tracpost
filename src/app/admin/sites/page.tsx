@@ -11,7 +11,7 @@ export default async function SitesPage() {
            (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = s.id AND status = 'published') AS published_posts
     FROM businesses s
     JOIN accounts sub ON sub.id = s.billing_account_id
-    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+    JOIN users u ON u.id = sub.owner_user_id
     WHERE s.is_active = true
     ORDER BY s.name ASC
   `;

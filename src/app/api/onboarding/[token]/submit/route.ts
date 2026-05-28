@@ -45,8 +45,9 @@ export async function POST(
   }
 
   const [owner] = await sql`
-    SELECT id, email, name FROM users
-    WHERE billing_account_id = ${submission.billing_account_id} AND role = 'owner'
+    SELECT u.id, u.email, u.name FROM accounts a
+    JOIN users u ON u.id = a.owner_user_id
+    WHERE a.id = ${submission.billing_account_id}
     LIMIT 1
   `;
 

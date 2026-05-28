@@ -33,11 +33,11 @@ interface OwnerRow {
 
 async function getOwner(subscriptionId: string): Promise<OwnerRow | null> {
   const [row] = await sql`
-    SELECT email, notify_via
-    FROM users
-    WHERE billing_account_id = ${subscriptionId}
-      AND role = 'owner'
-      AND is_active = true
+    SELECT u.email, u.notify_via
+    FROM accounts a
+    JOIN users u ON u.id = a.owner_user_id
+    WHERE a.id = ${subscriptionId}
+      AND u.is_active = true
     LIMIT 1
   `;
   return (row as OwnerRow) || null;

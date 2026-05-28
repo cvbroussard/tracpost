@@ -48,8 +48,9 @@ export async function POST() {
 
     // Notify the owner
     const [owner] = await sql`
-      SELECT email, name FROM users
-      WHERE billing_account_id = ${sub.id} AND role = 'owner'
+      SELECT u.email, u.name FROM accounts a
+      JOIN users u ON u.id = a.owner_user_id
+      WHERE a.id = ${sub.id}
       LIMIT 1
     `;
     if (owner?.email) {

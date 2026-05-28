@@ -23,7 +23,7 @@ export default async function TestSubscriptionsPage() {
       u.name AS owner_name,
       (SELECT COUNT(*)::int FROM businesses WHERE billing_account_id = s.id) AS site_count
     FROM accounts s
-    LEFT JOIN users u ON u.billing_account_id = s.id AND u.role = 'owner'
+    LEFT JOIN users u ON u.id = s.owner_user_id
     WHERE s.is_test = true
     ORDER BY s.created_at DESC
   `) as unknown as Row[];

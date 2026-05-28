@@ -44,7 +44,7 @@ export async function publishSpotlight(sessionId: string): Promise<{
     SELECT sa.id, sa.platform, sa.account_id, sa.access_token_encrypted, sa.metadata
     FROM social_accounts sa
     JOIN business_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.business_id = ${session.site_id} AND sa.status = 'active'
+    WHERE ssl.business_id = ${session.business_id} AND sa.status = 'active'
   `;
 
   if (accounts.length === 0) {
@@ -122,7 +122,7 @@ export async function publishSpotlight(sessionId: string): Promise<{
       // Log analytics
       await sql`
         INSERT INTO spotlight_analytics (session_id, business_id, event, metadata)
-        VALUES (${sessionId}, ${session.site_id}, 'social_posted', ${JSON.stringify({ platform: account.platform, post_id: post.id })})
+        VALUES (${sessionId}, ${session.business_id}, 'social_posted', ${JSON.stringify({ platform: account.platform, post_id: post.id })})
       `;
 
       result.published++;
@@ -139,10 +139,10 @@ export async function publishSpotlight(sessionId: string): Promise<{
     const ratingLabel = session.star_rating ? ` (${session.star_rating}★)` : "";
 
     await sendPushNotification(
-      session.subscription_id,
+      session.billing_account_id,
       "New Spotlight!",
       `${customerLabel} was Spotlighted${ratingLabel} — posted to ${result.published} account${result.published > 1 ? "s" : ""}`,
-      { type: "spotlight", sessionId, siteId: session.site_id }
+      { type: "spotlight", sessionId, siteId: session.business_id }
     );
   }
 

@@ -96,7 +96,7 @@ export async function POST(
         return NextResponse.json({ error: "Article prompt not found at that index" }, { status: 400 });
       }
       const { generateProjectArticleFromPrompt } = await import("@/lib/pipeline/project-blog-generator");
-      article = await generateProjectArticleFromPrompt(id, project.site_id as string, articlePrompt);
+      article = await generateProjectArticleFromPrompt(id, project.business_id as string, articlePrompt);
       selectedIndex = promptIndex;
     } else if (prompts && prompts.length > 0) {
       // Pick next unused angle
@@ -107,16 +107,16 @@ export async function POST(
         selectedIndex = unusedIndices[Math.floor(Math.random() * unusedIndices.length)];
         const articlePrompt = prompts[selectedIndex];
         const { generateProjectArticleFromPrompt } = await import("@/lib/pipeline/project-blog-generator");
-        article = await generateProjectArticleFromPrompt(id, project.site_id as string, articlePrompt);
+        article = await generateProjectArticleFromPrompt(id, project.business_id as string, articlePrompt);
       } else {
         // All angles used — fall back to general chronological
         const { generateProjectArticle } = await import("@/lib/pipeline/project-blog-generator");
-        article = await generateProjectArticle(id, project.site_id as string);
+        article = await generateProjectArticle(id, project.business_id as string);
       }
     } else {
       // No prompts available — general article
       const { generateProjectArticle } = await import("@/lib/pipeline/project-blog-generator");
-      article = await generateProjectArticle(id, project.site_id as string);
+      article = await generateProjectArticle(id, project.business_id as string);
     }
 
     // Mark angle as used
@@ -152,7 +152,7 @@ export async function POST(
     const [post] = await sql`
       INSERT INTO blog_posts (business_id, title, slug, body, excerpt, status, source_asset_id, og_image_url, metadata)
       VALUES (
-        ${project.site_id},
+        ${project.business_id},
         ${article.title},
         ${slug},
         ${article.body},

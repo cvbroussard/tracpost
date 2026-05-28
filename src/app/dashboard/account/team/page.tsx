@@ -56,7 +56,7 @@ export default async function TeamPage() {
     email: (m.email as string) || null,
     phone: (m.phone as string) || null,
     role: m.role as string,
-    siteId: (m.site_id as string) || null,
+    siteId: (m.business_id as string) || null,
     hasPassword: m.has_password as boolean,
     hasDevice: m.has_device as boolean,
     notifyVia: (m.notify_via as string) || "email",

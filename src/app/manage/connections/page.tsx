@@ -14,7 +14,7 @@ interface Asset {
   health_status: string;
   health_checked_at: string | null;
   health_error: string | null;
-  assignments: Array<{ site_id: string; site_name: string; is_primary: boolean }>;
+  assignments: Array<{ business_id: string; site_name: string; is_primary: boolean }>;
 }
 
 const HEALTH_LABEL: Record<string, string> = {
@@ -94,7 +94,7 @@ function ConnectionsContent({ siteId, subscriberId }: { siteId: string; subscrib
   function getSitePrimary(platform: string): Asset | undefined {
     const assets = assetsByPlatform[platform] || [];
     for (const asset of assets) {
-      const assigned = asset.assignments.find(a => a.site_id === siteId && a.is_primary);
+      const assigned = asset.assignments.find(a => a.business_id === siteId && a.is_primary);
       if (assigned) return asset;
     }
     return undefined;
@@ -232,7 +232,7 @@ function ConnectionsContent({ siteId, subscriberId }: { siteId: string; subscrib
                         <option value="">— Pending assignment —</option>
                         {assets.map(asset => {
                           const otherSites = asset.assignments
-                            .filter(a => a.site_id !== siteId && a.is_primary)
+                            .filter(a => a.business_id !== siteId && a.is_primary)
                             .map(a => a.site_name);
                           const label = otherSites.length > 0
                             ? `${asset.asset_name}  [→ ${otherSites.join(", ")}]`

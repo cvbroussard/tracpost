@@ -92,10 +92,10 @@ export default async function ProvisioningPage() {
             }
 
             // Fetch assets for context review
-            const siteAssets = sub.site_id ? await sql`
+            const siteAssets = sub.business_id ? await sql`
               SELECT id, storage_url, context_note, quality_score, metadata, ai_analysis
               FROM media_assets
-              WHERE business_id = ${sub.site_id}
+              WHERE business_id = ${sub.business_id}
                 AND processing_stage IN ('briefed', 'analyzed')
               ORDER BY quality_score DESC
               LIMIT 50
@@ -112,7 +112,7 @@ export default async function ProvisioningPage() {
 
             return (
               <div
-                key={`${sub.subscription_id}-${sub.site_id}`}
+                key={`${sub.billing_account_id}-${sub.business_id}`}
                 className="mb-6 border-b border-border pb-6 last:border-0"
               >
                 {/* Header */}
@@ -121,7 +121,7 @@ export default async function ProvisioningPage() {
                     <div className="flex items-center gap-3">
                       <h2 style={{ marginTop: 0 }}>{sub.site_name || sub.subscriber_name}</h2>
                       <a
-                        href={`/admin/sites/${sub.site_id}`}
+                        href={`/admin/sites/${sub.business_id}`}
                         className="text-[10px] text-accent hover:underline"
                       >
                         Controls
@@ -143,11 +143,11 @@ export default async function ProvisioningPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <ProvisionActions
-                      siteId={sub.site_id as string}
+                      siteId={sub.business_id as string}
                       status={sub.provisioning_status as string | null}
                     />
                     <Link
-                      href={`/admin/subscribers/${sub.subscription_id}`}
+                      href={`/admin/subscribers/${sub.billing_account_id}`}
                       className="text-sm text-accent hover:underline"
                     >
                       View subscriber
@@ -170,14 +170,14 @@ export default async function ProvisioningPage() {
                 {/* Profile Kit */}
                 {/* Connect accounts (admin OAuth on behalf of subscriber) */}
                 <AdminConnectButton
-                  siteId={sub.site_id as string}
-                  subscriptionId={sub.subscription_id as string}
+                  siteId={sub.business_id as string}
+                  subscriptionId={sub.billing_account_id as string}
                   connectedPlatforms={connected}
                 />
 
                 {/* Pillar+Tag Config */}
                 <AdminPillarEditor
-                  siteId={sub.site_id as string}
+                  siteId={sub.business_id as string}
                   initialConfig={
                     (sub.pillar_config as Array<{ id: string; framework?: string; label: string; description: string; tags: Array<{ id: string; label: string }> }>) || []
                   }
@@ -185,7 +185,7 @@ export default async function ProvisioningPage() {
 
                 {/* Image Style */}
                 <ImageStyleEditor
-                  siteId={sub.site_id as string}
+                  siteId={sub.business_id as string}
                   initialStyle={(sub.image_style as string) || ""}
                   initialVariations={(sub.image_variations as string[]) || []}
                   initialProcessingMode={(sub.image_processing_mode as string) || "auto"}
@@ -195,7 +195,7 @@ export default async function ProvisioningPage() {
                 {/* Context Note Review */}
                 {contextAssets.length > 0 && (
                   <ContextReview
-                    siteId={sub.site_id as string}
+                    siteId={sub.business_id as string}
                     initialAssets={contextAssets}
                   />
                 )}

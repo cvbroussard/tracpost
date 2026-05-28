@@ -129,7 +129,7 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
   `;
   if (!asset) throw new Error(`Asset ${assetId} not found`);
 
-  const siteId = asset.site_id as string;
+  const siteId = asset.business_id as string;
   const oldSourceUrl = asset.storage_url as string;
 
   // ── 2. Persist cascade artifact + structured tags ────────────────

@@ -55,7 +55,7 @@ export async function GET(
   }
 
   const state = buildOnboardingState({
-    subscriptionId: submission.subscription_id,
+    subscriptionId: submission.billing_account_id,
     onboardingToken: token,
     platform,
   });

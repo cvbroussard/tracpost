@@ -68,7 +68,7 @@ export async function validateMagicToken(token: string): Promise<{
   return {
     id: user.id as string,
     name: user.name as string,
-    subscriptionId: user.subscription_id as string,
+    subscriptionId: user.billing_account_id as string,
     plan: (user.plan as string) || "free",
     role: (user.role as string) || "owner",
   };

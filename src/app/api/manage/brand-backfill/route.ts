@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
           } catch { /* invalid url */ }
           let newAssetId: string | null = null;
           if (bfUrl) {
-            newAssetId = await captureLogoAsHeroAsset(brandRow.site_id as string, id, name, brandUrl, bfUrl);
+            newAssetId = await captureLogoAsHeroAsset(brandRow.business_id as string, id, name, brandUrl, bfUrl);
           }
           if (newAssetId) {
             await sql`

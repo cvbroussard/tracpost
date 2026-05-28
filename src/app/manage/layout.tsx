@@ -40,7 +40,7 @@ export default async function ManageLayout({
       sites={sites.map(s => ({
         id: s.id as string,
         name: s.name as string,
-        subscriptionId: s.subscription_id as string,
+        subscriptionId: s.billing_account_id as string,
         customDomain: (s.custom_domain as string) || null,
       }))}
     >

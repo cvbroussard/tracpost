@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const subscriptionId = user.subscription_id as string;
-  const userSiteScope = (user.site_id as string | null) || null;
+  const subscriptionId = user.billing_account_id as string;
+  const userSiteScope = (user.business_id as string | null) || null;
 
   // If user has a site_id scope (Site Access bound to a single business),
   // filter sites to just that one. Otherwise return all subscription sites.

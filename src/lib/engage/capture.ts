@@ -49,7 +49,7 @@ async function getCaptureTargets(): Promise<AssetWithToken[]> {
     asset_name: r.asset_name as string,
     asset_metadata: (r.asset_metadata || {}) as Record<string, unknown>,
     social_account_id: r.social_account_id as string,
-    subscription_id: r.subscription_id as string,
+    subscription_id: r.billing_account_id as string,
     oauth_provider: r.oauth_provider as string,
     access_token_encrypted: r.access_token_encrypted as string,
     platform_native_id: r.platform_native_id as string,

@@ -8,7 +8,7 @@ import { generateOnboardingToken } from "./token";
 
 export interface OnboardingSubmission {
   id: string;
-  subscription_id: string;
+  billing_account_id: string;
   token: string;
   current_step: number;
   data: Record<string, unknown>;

@@ -33,7 +33,7 @@ export async function sendOtp(userId: string, action: string): Promise<boolean> 
       ${JSON.stringify({ hash, expires_at: expiresAt, action })}::jsonb
     ),
     updated_at = NOW()
-    WHERE id = ${user.subscription_id}
+    WHERE id = ${user.billing_account_id}
   `;
 
   return sendOtpEmail(user.email as string, code, action);
@@ -50,7 +50,7 @@ export async function verifyOtp(userId: string, code: string, action: string): P
   if (!user) return false;
 
   const [sub] = await sql`
-    SELECT metadata FROM accounts WHERE id = ${user.subscription_id}
+    SELECT metadata FROM accounts WHERE id = ${user.billing_account_id}
   `;
   if (!sub) return false;
 
@@ -68,7 +68,7 @@ export async function verifyOtp(userId: string, code: string, action: string): P
   await sql`
     UPDATE accounts
     SET metadata = metadata - 'otp', updated_at = NOW()
-    WHERE id = ${user.subscription_id}
+    WHERE id = ${user.billing_account_id}
   `;
 
   return true;

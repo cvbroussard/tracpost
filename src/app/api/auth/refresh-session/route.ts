@@ -22,7 +22,7 @@ export async function POST() {
   const [userRow] = await sql`
     SELECT business_id FROM users WHERE id = ${session.userId}
   `;
-  const userSiteScope = (userRow?.site_id as string | null) || null;
+  const userSiteScope = (userRow?.business_id as string | null) || null;
 
   const rawSites = await sql`
     SELECT id, name, url, is_active FROM businesses

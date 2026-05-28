@@ -44,7 +44,7 @@ export async function POST(
 
   const [owner] = await sql`
     SELECT id, email, name FROM users
-    WHERE billing_account_id = ${submission.subscription_id} AND role = 'owner'
+    WHERE billing_account_id = ${submission.billing_account_id} AND role = 'owner'
     LIMIT 1
   `;
   if (!owner?.email) {
@@ -81,7 +81,7 @@ export async function POST(
     INSERT INTO notifications (
       billing_account_id, category, severity, title, body, metadata
     ) VALUES (
-      ${submission.subscription_id},
+      ${submission.billing_account_id},
       'onboarding',
       'info',
       ${template.notificationTitle},
@@ -98,7 +98,7 @@ export async function POST(
 
   await sql`
     INSERT INTO usage_log (billing_account_id, action, metadata)
-    VALUES (${submission.subscription_id}, 'onboarding_nudge_sent', ${JSON.stringify({
+    VALUES (${submission.billing_account_id}, 'onboarding_nudge_sent', ${JSON.stringify({
       template_key: template.key,
       platform: template.platform,
       email_sent: emailSent,

@@ -47,7 +47,7 @@ async function getPendingImports(): Promise<PendingImport[]> {
     asset_metadata: (r.asset_metadata || {}) as Record<string, unknown>,
     access_token_encrypted: r.access_token_encrypted as string,
     primary_site_id: r.primary_site_id as string | null,
-    subscription_id: r.subscription_id as string,
+    subscription_id: r.billing_account_id as string,
   }));
 }
 

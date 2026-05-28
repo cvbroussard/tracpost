@@ -270,7 +270,7 @@ export async function generateArticlePrompts(
   // and playbook audience define the reader and the rhetorical stance.
   const [site] = await sql`
     SELECT business_type, content_vibe, brand_playbook
-    FROM businesses WHERE id = ${project.site_id}
+    FROM businesses WHERE id = ${project.business_id}
   `;
 
   const businessType = (site?.business_type as string) || "business";

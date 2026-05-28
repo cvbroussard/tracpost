@@ -61,11 +61,11 @@ export async function POST(
     // sources use gpt-4o-transcribe (default) for stronger proper-
     // noun recognition.
     const needsSegments = rec.source === "voice_over" || rec.source === "captured_ambient";
-    const prompt = await buildTranscriptionPromptForSite(rec.site_id as string);
+    const prompt = await buildTranscriptionPromptForSite(rec.business_id as string);
     const result = await transcribe(rec.storage_url as string, { prompt, needsSegments });
     // Catalog case normalization — re-asserts canonical casing on
     // known proper nouns regardless of what the STT model produced.
-    const normalizedText = await normalizeTranscriptCase(result.text, rec.site_id as string);
+    const normalizedText = await normalizeTranscriptCase(result.text, rec.business_id as string);
 
     // Preview only — return the new text + provider + segments
     // without writing. Caller (asset modal) stages this in client

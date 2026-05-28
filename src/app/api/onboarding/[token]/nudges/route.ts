@@ -33,7 +33,7 @@ export async function GET(
     ? await sql`
         SELECT id, title, body, severity, metadata, created_at, read_at
         FROM notifications
-        WHERE billing_account_id = ${submission.subscription_id}
+        WHERE billing_account_id = ${submission.billing_account_id}
           AND category = 'onboarding'
           AND dismissed_at IS NULL
           AND (metadata->>'platform') = ${platform}
@@ -42,7 +42,7 @@ export async function GET(
     : await sql`
         SELECT id, title, body, severity, metadata, created_at, read_at
         FROM notifications
-        WHERE billing_account_id = ${submission.subscription_id}
+        WHERE billing_account_id = ${submission.billing_account_id}
           AND category = 'onboarding'
           AND dismissed_at IS NULL
         ORDER BY created_at DESC

@@ -57,7 +57,7 @@ export async function syncReviews(siteId: string): Promise<number> {
             reply_status
           )
           VALUES (
-            ${account.subscription_id}, ${siteId}, ${account.id},
+            ${account.billing_account_id}, ${siteId}, ${account.id},
             ${account.platform}, ${review.platformReviewId},
             ${review.reviewerName}, ${review.reviewerAvatarUrl || null},
             ${review.rating}, ${review.body}, ${review.reviewedAt},

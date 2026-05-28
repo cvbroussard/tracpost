@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
   // Upload to R2
   const ext = image.mimeType.includes("png") ? "png" : "jpg";
   const fname = seoFilename(isEditorial ? (imageEntry?.alt || adjustment) : adjustment, ext);
-  const key = `sites/${post.site_id}/media/${fname}`;
+  const key = `sites/${post.business_id}/media/${fname}`;
   const newUrl = await uploadBufferToR2(key, image.data, image.mimeType);
 
   // Replace URL — hero updates og_image_url, inline updates body
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     for (const entityKey of imageEntry.entities) {
       await sql`
         INSERT INTO image_corrections (business_id, entity_key, correction)
-        VALUES (${post.site_id as string}, ${entityKey.toLowerCase()}, ${adjustment})
+        VALUES (${post.business_id as string}, ${entityKey.toLowerCase()}, ${adjustment})
         ON CONFLICT (business_id, entity_key, correction) DO NOTHING
       `;
     }

@@ -40,7 +40,7 @@ export async function POST(
 
   const body = await req.json().catch(() => ({}));
   const type = body.type || "all_platforms";
-  const siteId = asset.site_id as string;
+  const siteId = asset.business_id as string;
 
   try {
     if (type === "before_after") {

@@ -97,7 +97,7 @@ export async function POST(
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   const [owned] = await sql`
-    SELECT id FROM businesses WHERE id = ${asset.site_id} AND billing_account_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${asset.business_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });

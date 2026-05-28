@@ -37,7 +37,7 @@ export async function GET(
     WHERE ma.id = ${assetId}
   `;
   if (!row) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
-  if (!session.sites.some((s) => s.id === row.site_id)) {
+  if (!session.sites.some((s) => s.id === row.business_id)) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
   }
 

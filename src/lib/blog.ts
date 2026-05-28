@@ -16,7 +16,7 @@ export interface BlogSite {
 
 function toBlogSite(row: Record<string, unknown>): BlogSite {
   return {
-    siteId: row.site_id as string,
+    siteId: row.business_id as string,
     siteName: row.site_name as string,
     blogSlug: (row.blog_slug as string) || "",
     blogTitle: (row.blog_title as string) || "",
@@ -175,7 +175,7 @@ export async function getAllBlogSites(): Promise<Array<{
     ORDER BY s.name ASC
   `;
   return rows.map((r) => ({
-    siteId: r.site_id as string,
+    siteId: r.business_id as string,
     siteName: r.site_name as string,
     blogSlug: r.blog_slug as string,
     blogTitle: (r.blog_title as string) || "",

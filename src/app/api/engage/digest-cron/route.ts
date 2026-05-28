@@ -28,12 +28,12 @@ export async function GET(req: NextRequest) {
   let sent = 0, skipped = 0, errored = 0;
   for (const s of subs) {
     try {
-      const did = await sendEngagementDigest(s.subscription_id as string);
+      const did = await sendEngagementDigest(s.billing_account_id as string);
       if (did) sent++;
       else skipped++;
     } catch (err) {
       errored++;
-      console.error(`Digest failed for ${s.subscription_id}:`, err);
+      console.error(`Digest failed for ${s.billing_account_id}:`, err);
     }
   }
 

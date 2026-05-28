@@ -77,7 +77,7 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
   const serviceAssets = await buildAssetContexts(
     allServiceAssetIds,
     service.hero_asset_id as string,
-    service.site_id as string,
+    service.business_id as string,
   );
   const heroAsset = serviceAssets.find((a) => a.isHero) || serviceAssets[0];
   if (!heroAsset) throw new Error(`Service ${spec.serviceId} hero asset not resolvable`);
@@ -87,7 +87,7 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
   const allProjectsForSite = await sql`
     SELECT id, slug, name, hero_asset_id
     FROM projects_v2
-    WHERE business_id = ${service.site_id} AND status = 'active'
+    WHERE business_id = ${service.business_id} AND status = 'active'
     ORDER BY created_at DESC
   `;
   // Cap to 4 cited projects to keep article focused
@@ -109,7 +109,7 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
     if (projAssetRows.length === 0) continue;
     const projAssetIds = projAssetRows.map((r) => r.id as string);
     const projHeroId = (p.hero_asset_id as string) || projAssetIds[0];
-    const projAssets = await buildAssetContexts(projAssetIds, projHeroId, service.site_id as string);
+    const projAssets = await buildAssetContexts(projAssetIds, projHeroId, service.business_id as string);
     citedProjects.push({
       id: p.id as string,
       name: p.name as string,
@@ -120,8 +120,8 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
 
   // 4. Parallel context gathering
   const [hookText, existingTitles, vendorData, research] = await Promise.all([
-    pullHook(service.site_id as string),
-    getExistingTitles(service.site_id as string, "service"),
+    pullHook(service.business_id as string),
+    getExistingTitles(service.business_id as string, "service"),
     getVendorLinks(service.hero_asset_id as string),
     researchAssetContext(heroAsset.contextNote || ""),
   ]);
@@ -229,7 +229,7 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
   // Content kit — same as blog
   try {
     const kit = await generateContentKit({
-      siteId: service.site_id as string,
+      siteId: service.business_id as string,
       title: body.title,
       body: body.body,
       excerpt: body.excerpt,

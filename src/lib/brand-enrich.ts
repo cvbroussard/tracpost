@@ -86,7 +86,7 @@ export async function enrichBrand(
     WHERE id = ${brandId}
   `;
 
-  const siteId = current.site_id as string;
+  const siteId = current.business_id as string;
   const existingUrl = (current.url as string | null) || null;
   const existingHeroId = (current.hero_asset_id as string | null) || null;
 

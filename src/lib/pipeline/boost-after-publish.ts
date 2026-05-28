@@ -72,8 +72,8 @@ export async function boostPostAfterPublish(
   }
 
   const resolved = await resolveAdAccount({
-    subscriptionId: postContext.subscription_id as string,
-    activeSiteId: postContext.site_id as string,
+    subscriptionId: postContext.billing_account_id as string,
+    activeSiteId: postContext.business_id as string,
     platformAssetId: null,
   });
   if (!resolved) {

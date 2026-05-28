@@ -19,7 +19,7 @@ export async function runBlogImport(importId: string): Promise<void> {
   `;
   if (!job) throw new Error(`Import job ${importId} not found`);
 
-  const siteId = job.site_id as string;
+  const siteId = job.business_id as string;
   const discoveredUrls = job.discovered_urls as DiscoveredPost[];
   const errors: Array<{ url: string; error: string }> = [];
   let importedCount = 0;

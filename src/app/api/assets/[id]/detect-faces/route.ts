@@ -39,7 +39,7 @@ export async function POST(
     FROM media_assets WHERE id = ${assetId}
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
-  if (!session.sites.some((s) => s.id === asset.site_id)) {
+  if (!session.sites.some((s) => s.id === asset.business_id)) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
   }
 

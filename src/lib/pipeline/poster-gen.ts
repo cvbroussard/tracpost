@@ -41,7 +41,7 @@ export async function generatePosterForAsset(
   }
 
   const sourceUrl = asset.storage_url as string;
-  const siteId = asset.site_id as string;
+  const siteId = asset.business_id as string;
 
   let posterUrl: string;
   try {

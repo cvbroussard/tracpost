@@ -60,17 +60,17 @@ export async function POST(
       const wantsSms = notifyVia === "both";
       const [owner] = await sql`
         SELECT id FROM users
-        WHERE billing_account_id = ${updated.subscription_id} AND role = 'owner'
+        WHERE billing_account_id = ${updated.billing_account_id} AND role = 'owner'
         LIMIT 1
       `;
 
-      const current = await getCurrentConsent(updated.subscription_id, "sms", "transactional");
+      const current = await getCurrentConsent(updated.billing_account_id, "sms", "transactional");
       const desired = wantsSms ? "opt_in" : "opt_out";
 
       if (current !== desired) {
         try {
           await recordConsent({
-            subscriptionId: updated.subscription_id,
+            subscriptionId: updated.billing_account_id,
             userId: (owner?.id as string) || null,
             channel: "sms",
             consentType: "transactional",

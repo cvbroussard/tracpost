@@ -136,10 +136,10 @@ export async function generateCaption({ postId }: CaptionRequest): Promise<Capti
 
   // Pull a hook from the bank if playbook exists
   let hookText: string | undefined;
-  if (playbook && post.site_id) {
+  if (playbook && post.business_id) {
     const [hook] = await sql`
       SELECT text FROM hook_bank
-      WHERE business_id = ${post.site_id}
+      WHERE business_id = ${post.business_id}
       ORDER BY CASE rating WHEN 'loved' THEN 0 ELSE 1 END, used_count ASC, RANDOM()
       LIMIT 1
     `;
@@ -147,7 +147,7 @@ export async function generateCaption({ postId }: CaptionRequest): Promise<Capti
       hookText = hook.text;
       await sql`
         UPDATE hook_bank SET used_count = used_count + 1, last_used_at = NOW()
-        WHERE business_id = ${post.site_id} AND text = ${hook.text}
+        WHERE business_id = ${post.business_id} AND text = ${hook.text}
       `;
     }
   }

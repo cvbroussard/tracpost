@@ -66,7 +66,7 @@ export async function syncComments(siteId: string): Promise<number> {
               body, commented_at, raw_data
             )
             VALUES (
-              ${account.subscription_id}, ${siteId}, ${account.id}, ${post.id},
+              ${account.billing_account_id}, ${siteId}, ${account.id}, ${post.id},
               ${account.platform}, ${post.platform_post_id}, ${comment.platformCommentId},
               ${comment.authorName}, ${comment.authorUsername || null}, ${comment.authorAvatarUrl || null}, ${comment.authorPlatformId || null},
               ${comment.body}, ${comment.commentedAt}, ${JSON.stringify(comment.rawData || {})}

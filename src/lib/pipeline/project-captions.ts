@@ -226,7 +226,7 @@ export async function maybeGenerateArticlePrompts(projectId: string): Promise<bo
   // Check playbook exists
   const [site] = await sql`
     SELECT brand_playbook IS NOT NULL AS has_playbook
-    FROM businesses WHERE id = ${project.site_id}
+    FROM businesses WHERE id = ${project.business_id}
   `;
   if (!site?.has_playbook) return false;
 
@@ -361,7 +361,7 @@ export async function generateAssetText(
   snapshot: ProjectSnapshot,
 ): Promise<GeneratedText | null> {
   const storageUrl = asset.storage_url as string;
-  const siteId = asset.site_id as string;
+  const siteId = asset.business_id as string;
   const meta = (asset.metadata || {}) as Record<string, unknown>;
   const dateTaken = asset.date_taken
     ? new Date(asset.date_taken as string).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })

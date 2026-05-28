@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       scopes, status, metadata
     )
     VALUES (
-      ${pending.subscription_id}, 'gbp',
+      ${pending.billing_account_id}, 'gbp',
       ${selectedLocation.locationName},
       ${selectedLocation.locationId},
       ${pending.access_token_encrypted},
@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
         await sql`
           INSERT INTO notifications (billing_account_id, category, severity, title, body, metadata)
           VALUES (
-            ${pending.subscription_id}, 'campaigns', 'info',
+            ${pending.billing_account_id}, 'campaigns', 'info',
             ${"Search Console not verified"},
             ${`${customDomain} is not verified in the tenant's Google Search Console. Search analytics won't be available until the tenant adds the domain as a property.`},
             ${JSON.stringify({ type: "gsc_not_verified", site_id, domain: customDomain })}

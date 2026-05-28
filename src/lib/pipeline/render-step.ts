@@ -46,7 +46,7 @@ export async function renderAssetVariants(assetId: string): Promise<{
     return { rendered: 0, skipped: true, reason: "video (Phase 5)" };
   }
 
-  const siteId = asset.site_id as string;
+  const siteId = asset.business_id as string;
 
   try {
     const [tenantSignals, contentSignals] = await Promise.all([

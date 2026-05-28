@@ -212,7 +212,7 @@ export async function renderTemplateVariant(
   try {
     const sourceUrl = asset.storage_url as string;
     const sourceType = (asset.media_type as string) || "";
-    const siteId = asset.site_id as string;
+    const siteId = asset.business_id as string;
     const isVideo = sourceType.startsWith("video");
 
     let outputUrl: string;

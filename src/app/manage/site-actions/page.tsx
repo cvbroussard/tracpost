@@ -115,7 +115,7 @@ function ConnectionHealth({ siteId, subscriberId }: { siteId: string; subscriber
         const rows: AssignedAssetHealth[] = [];
         for (const asset of d.assets) {
           const isPrimaryHere = asset.assignments?.find(
-            (a: { site_id: string; is_primary: boolean }) => a.site_id === siteId && a.is_primary
+            (a: { business_id: string; is_primary: boolean }) => a.business_id === siteId && a.is_primary
           );
           if (isPrimaryHere) {
             rows.push({

@@ -87,7 +87,7 @@ async function _archivedTriageAssetBody(assetId: string): Promise<TriageResult> 
   const [site] = await sql`
     SELECT autopilot_config, content_pillars, pillar_config, brand_voice
     FROM businesses
-    WHERE id = ${asset.site_id}
+    WHERE id = ${asset.business_id}
   `;
 
   const config = (site?.autopilot_config || {}) as AutopilotConfig;
@@ -104,7 +104,7 @@ async function _archivedTriageAssetBody(assetId: string): Promise<TriageResult> 
   // Fetch site's brand list for auto-detection
   const brands = await sql`
     SELECT id, name, slug FROM brands
-    WHERE business_id = ${asset.site_id}
+    WHERE business_id = ${asset.business_id}
   `;
 
   // Resolve the URL we'll feed into vision: image source uses its own URL,
@@ -182,13 +182,13 @@ async function _archivedTriageAssetBody(assetId: string): Promise<TriageResult> 
   // Recalculate site-relative quality thresholds
   try {
     const { recalculateThresholds } = await import("./quality-thresholds");
-    await recalculateThresholds(asset.site_id as string);
+    await recalculateThresholds(asset.business_id as string);
   } catch { /* non-fatal */ }
 
   // Log triage in history
   await sql`
     INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
-    VALUES (${asset.site_id}, 'triage', 'media_asset', ${assetId}, ${JSON.stringify({
+    VALUES (${asset.business_id}, 'triage', 'media_asset', ${assetId}, ${JSON.stringify({
       status: result.processing_stage,
       quality_score: result.quality_score,
       pillar: result.content_pillar,
@@ -250,7 +250,7 @@ async function visionTriage(
     : "";
 
   // Load enriched context for text generation (playbook, services, GBP)
-  const siteId = asset.site_id as string;
+  const siteId = asset.business_id as string;
   let enrichedContext = "";
   try {
     const [siteExtra] = await sql`
@@ -283,7 +283,7 @@ async function visionTriage(
   let correctionsBlock = "";
   try {
     const { loadCorrections, formatCorrectionsForPrompt } = await import("@/lib/corrections");
-    const corrections = await loadCorrections(asset.site_id as string, "social");
+    const corrections = await loadCorrections(asset.business_id as string, "social");
     correctionsBlock = formatCorrectionsForPrompt(corrections);
   } catch { /* non-fatal */ }
 

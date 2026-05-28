@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       WHERE sp.id = ${post_id}
     `;
 
-    if (!post || post.subscription_id !== auth.subscriptionId) {
+    if (!post || post.billing_account_id !== auth.subscriptionId) {
       return NextResponse.json(
         { error: "Post not found" },
         { status: 404 }
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 
     await sql`
       INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
-      VALUES (${post.site_id}, 'veto', 'social_post', ${post_id}, ${JSON.stringify({ reason })})
+      VALUES (${post.business_id}, 'veto', 'social_post', ${post_id}, ${JSON.stringify({ reason })})
     `;
 
     return NextResponse.json({

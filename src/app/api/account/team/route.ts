@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
       name: member.name,
       email: member.email,
       role: member.role,
-      siteId: member.site_id || null,
+      siteId: member.business_id || null,
     },
   });
 }

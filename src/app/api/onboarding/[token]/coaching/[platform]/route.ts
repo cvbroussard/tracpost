@@ -52,7 +52,7 @@ export async function GET(
   const [progress] = await sql`
     SELECT last_node_id, path_taken, reached_terminal, completed_at
     FROM coaching_progress
-    WHERE billing_account_id = ${submission.subscription_id} AND platform = ${platform}
+    WHERE billing_account_id = ${submission.billing_account_id} AND platform = ${platform}
   `;
 
   return NextResponse.json({
@@ -107,7 +107,7 @@ export async function POST(
       INSERT INTO coaching_progress (
         billing_account_id, platform, last_node_id, path_taken, reached_terminal, completed_at
       ) VALUES (
-        ${submission.subscription_id},
+        ${submission.billing_account_id},
         ${platform},
         ${node_id},
         ARRAY[${node_id}::TEXT],
@@ -125,7 +125,7 @@ export async function POST(
       INSERT INTO coaching_progress (
         billing_account_id, platform, last_node_id, path_taken, reached_terminal, completed_at
       ) VALUES (
-        ${submission.subscription_id},
+        ${submission.billing_account_id},
         ${platform},
         ${node_id},
         ARRAY[${node_id}::TEXT],

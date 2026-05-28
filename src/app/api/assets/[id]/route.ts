@@ -78,7 +78,7 @@ export async function PATCH(
       try {
         await sql`
           INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
-          VALUES (${asset.site_id}, 'restore', 'media_asset', ${id}, '{}'::jsonb)
+          VALUES (${asset.business_id}, 'restore', 'media_asset', ${id}, '{}'::jsonb)
         `;
       } catch { /* non-fatal */ }
     }
@@ -138,7 +138,7 @@ export async function PATCH(
     // vendor_ids is kept for backward compat — treated as brand IDs
     let resolvedBrandIds = Array.isArray(brand_ids) ? [...brand_ids] : Array.isArray(vendor_ids) ? [...vendor_ids] : null;
     if (context_note !== undefined && typeof context_note === "string") {
-      const parsed = await parseContextNote(context_note, asset.site_id as string);
+      const parsed = await parseContextNote(context_note, asset.business_id as string);
       if (parsed.vendorIds.length > 0) {
         const existing = resolvedBrandIds || [];
         const merged = [...new Set([...existing, ...parsed.vendorIds])];
@@ -179,7 +179,7 @@ export async function PATCH(
     // Log the edit
     await sql`
       INSERT INTO subscriber_actions (business_id, action_type, target_type, target_id, payload)
-      VALUES (${asset.site_id}, 'edit', 'media_asset', ${id}, ${JSON.stringify({
+      VALUES (${asset.business_id}, 'edit', 'media_asset', ${id}, ${JSON.stringify({
         context_note: context_note !== undefined ? "updated" : undefined,
         pillar: pillar !== undefined ? pillar : undefined,
       })})

@@ -95,7 +95,7 @@ export async function generateProjectChapter(
 
   // 4. Generate via blog pipeline (chapters are blog articles tied to a project)
   const result = await generateBlogArticle({
-    siteId: chapter.site_id as string,
+    siteId: chapter.business_id as string,
     heroAssetId: heroAsset.id as string,
     bodyAssetIds: bodyAssets.map((a) => a.id as string),
     seedAssetId: heroAsset.id as string,

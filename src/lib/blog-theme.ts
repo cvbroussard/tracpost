@@ -118,10 +118,10 @@ export async function refreshStaleThemes(): Promise<number> {
   let refreshed = 0;
   for (const row of stale) {
     try {
-      await refreshSiteTheme(row.site_id as string);
+      await refreshSiteTheme(row.business_id as string);
       refreshed++;
     } catch (err) {
-      console.error(`Theme refresh failed for site ${row.site_id}:`, err instanceof Error ? err.message : err);
+      console.error(`Theme refresh failed for site ${row.business_id}:`, err instanceof Error ? err.message : err);
     }
   }
 

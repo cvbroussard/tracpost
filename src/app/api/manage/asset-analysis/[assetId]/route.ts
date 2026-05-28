@@ -31,7 +31,7 @@ export async function GET(
   if (!asset) {
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   }
-  const siteId = asset.site_id as string;
+  const siteId = asset.business_id as string;
 
   const [site] = await sql`
     SELECT billing_account_id, pillar_config,

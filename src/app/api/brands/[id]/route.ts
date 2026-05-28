@@ -52,7 +52,7 @@ export async function PATCH(
   if (typeof body.hero_image_url === "string" && body.hero_image_url.trim()) {
     const heroUrl = body.hero_image_url.trim();
     const heroAssetId = await captureLogoAsHeroAsset(
-      brand.site_id as string,
+      brand.business_id as string,
       id,
       brand.name as string,
       (brand.url as string) || heroUrl,

@@ -124,7 +124,7 @@ export async function applyCoachingRun(
       proposedPrimary: boolean;
     }>;
   };
-  const siteId = run.site_id as string;
+  const siteId = run.business_id as string;
 
   // Filter out any 'drop' actions — we apply keeps + adds + promotes only.
   // GBP allows max 10 categories; the coaching engine targets exactly 10

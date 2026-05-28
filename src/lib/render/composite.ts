@@ -117,7 +117,7 @@ export async function detectBeforeAfterPair(
 
   // Get site_id from project to load adaptive thresholds
   const [proj] = await sql`SELECT business_id FROM projects WHERE id = ${projectId}`;
-  const qt = proj ? await getThresholds(proj.site_id as string) : null;
+  const qt = proj ? await getThresholds(proj.business_id as string) : null;
   const minScore = qt ? publishAbove(qt) : 0.5;
 
   const assets = await sql`

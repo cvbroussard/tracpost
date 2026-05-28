@@ -125,7 +125,7 @@ export async function findSubscriptionByPhone(
   `;
   if (fromConsent) {
     return {
-      subscription_id: fromConsent.subscription_id as string,
+      subscription_id: fromConsent.billing_account_id as string,
       user_id: (fromConsent.user_id as string) || null,
     };
   }
@@ -138,7 +138,7 @@ export async function findSubscriptionByPhone(
   `;
   if (fromUsers) {
     return {
-      subscription_id: fromUsers.subscription_id as string,
+      subscription_id: fromUsers.billing_account_id as string,
       user_id: fromUsers.user_id as string,
     };
   }

@@ -53,8 +53,8 @@ export async function authenticateKiosk(
 
   return {
     kioskId: kiosk.id,
-    siteId: kiosk.site_id,
-    subscriptionId: kiosk.subscription_id,
+    siteId: kiosk.business_id,
+    subscriptionId: kiosk.billing_account_id,
     settings: (kiosk.settings as Record<string, unknown>) || {},
   };
 }

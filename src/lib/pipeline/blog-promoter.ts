@@ -138,7 +138,7 @@ export async function promoteBlogPost(blogPostId: string): Promise<PromotionResu
     SELECT sa.id, sa.platform, sa.account_name
     FROM social_accounts sa
     JOIN business_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.business_id = ${post.site_id} AND sa.status = 'active'
+    WHERE ssl.business_id = ${post.business_id} AND sa.status = 'active'
   `;
 
   if (accounts.length === 0) {

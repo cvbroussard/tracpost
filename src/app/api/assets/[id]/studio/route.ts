@@ -76,7 +76,7 @@ export async function POST(
           return NextResponse.json({ error: "Edit failed" }, { status: 500 });
         }
         const newId = await persistGeneratedAsset({
-          siteId: asset.site_id as string,
+          siteId: asset.business_id as string,
           buffer: image.data,
           mimeType: image.mimeType,
           mediaType: "image",
@@ -106,7 +106,7 @@ export async function POST(
           return NextResponse.json({ error: `${tool} failed` }, { status: 500 });
         }
         const newId = await persistGeneratedAsset({
-          siteId: asset.site_id as string,
+          siteId: asset.business_id as string,
           buffer: image.data,
           mimeType: image.mimeType,
           mediaType: "image",
@@ -132,7 +132,7 @@ export async function POST(
         const video = await generateVideoFromImage(
           asset.storage_url as string,
           motionPrompt,
-          asset.site_id as string,
+          asset.business_id as string,
           { duration },
         );
         if (!video) {
@@ -144,7 +144,7 @@ export async function POST(
             source, processing_stage, source_asset_id,
             content_tags, metadata
           ) VALUES (
-            ${asset.site_id}, ${video.url}, 'video',
+            ${asset.business_id}, ${video.url}, 'video',
             NULL,
             'ai_generated', 'briefed', ${assetId},
             ${asset.content_tags || []},
@@ -180,7 +180,7 @@ export async function POST(
           return NextResponse.json({ error: "Variation failed" }, { status: 500 });
         }
         const newId = await persistGeneratedAsset({
-          siteId: asset.site_id as string,
+          siteId: asset.business_id as string,
           buffer: image.data,
           mimeType: image.mimeType,
           mediaType: "image",
@@ -209,7 +209,7 @@ export async function POST(
           return NextResponse.json({ error: "Generation failed" }, { status: 500 });
         }
         const newId = await persistGeneratedAsset({
-          siteId: asset.site_id as string,
+          siteId: asset.business_id as string,
           buffer: image.data,
           mimeType: image.mimeType,
           mediaType: "image",

@@ -46,7 +46,7 @@ export async function convertHeicAsset(assetId: string): Promise<{
     return { ok: true, converted: false, newUrl: storageUrl };
   }
 
-  const siteId = asset.site_id as string;
+  const siteId = asset.business_id as string;
   const meta = (asset.metadata || {}) as Record<string, unknown>;
   const originalFilename = (meta.original_filename as string) || "upload";
 

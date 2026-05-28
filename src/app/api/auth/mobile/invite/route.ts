@@ -59,14 +59,14 @@ export async function POST(req: NextRequest) {
   `;
 
   // Fetch sites for this subscriber (filtered by site scope if set)
-  const sites = member.site_id
+  const sites = member.business_id
     ? await sql`
         SELECT id, name, url FROM businesses
-        WHERE id = ${member.site_id} AND is_active = true
+        WHERE id = ${member.business_id} AND is_active = true
       `
     : await sql`
         SELECT id, name, url FROM businesses
-        WHERE billing_account_id = ${member.subscription_id} AND is_active = true
+        WHERE billing_account_id = ${member.billing_account_id} AND is_active = true
         ORDER BY created_at ASC
       `;
 
@@ -74,10 +74,10 @@ export async function POST(req: NextRequest) {
     session_token: sessionToken,
     user: {
       id: member.id,
-      subscriptionId: member.subscription_id,
+      subscriptionId: member.billing_account_id,
       name: member.name,
       role: member.role,
-      siteId: member.site_id || null,
+      siteId: member.business_id || null,
       plan: member.plan,
     },
     sites: sites.map((s) => ({

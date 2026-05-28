@@ -66,7 +66,7 @@ export async function POST(
 
   const snapshot = projectLink
     ? await buildProjectSnapshot(projectLink.id as string)
-    : await buildSiteSnapshot(asset.site_id as string);
+    : await buildSiteSnapshot(asset.business_id as string);
 
   const result = await generateAssetText(asset, snapshot);
 

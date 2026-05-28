@@ -57,7 +57,7 @@ export async function GET(
   `;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   const [owned] = await sql`
-    SELECT id FROM businesses WHERE id = ${asset.site_id} AND billing_account_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${asset.business_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
@@ -66,7 +66,7 @@ export async function GET(
   const siteCategories = await sql`
     SELECT sgc.gcid, gc.name
     FROM business_gbp_categories sgc JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.business_id = ${asset.site_id}
+    WHERE sgc.business_id = ${asset.business_id}
     ORDER BY sgc.is_primary DESC, gc.name
   `;
 
@@ -113,10 +113,10 @@ export async function GET(
         WHERE ap.asset_id = ${assetId}
         ORDER BY p.name
       `,
-      matchBrandsFromNer(asset.site_id as string, nerBrandCandidates),
+      matchBrandsFromNer(asset.business_id as string, nerBrandCandidates),
       transcript.length > 0
         ? matchServiceAreas(
-            asset.site_id as string,
+            asset.business_id as string,
             transcript,
             asset.gps_lat as number | null,
             asset.gps_lng as number | null,
@@ -170,7 +170,7 @@ export async function POST(
   const [asset] = await sql`SELECT business_id FROM media_assets WHERE id = ${assetId}`;
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   const [owned] = await sql`
-    SELECT id FROM businesses WHERE id = ${asset.site_id} AND billing_account_id = ${auth.subscriptionId}
+    SELECT id FROM businesses WHERE id = ${asset.business_id} AND billing_account_id = ${auth.subscriptionId}
   `;
   if (!owned) {
     return NextResponse.json({ error: "Asset not in your subscription" }, { status: 403 });
@@ -178,7 +178,7 @@ export async function POST(
 
   // Validate gcid is in site's catalog
   const [valid] = await sql`
-    SELECT 1 FROM business_gbp_categories WHERE business_id = ${asset.site_id} AND gcid = ${gcid}
+    SELECT 1 FROM business_gbp_categories WHERE business_id = ${asset.business_id} AND gcid = ${gcid}
   `;
   if (!valid) return NextResponse.json({ error: "gcid not in site's category set" }, { status: 400 });
 

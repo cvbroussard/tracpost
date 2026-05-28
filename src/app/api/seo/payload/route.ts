@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
-  const subscriptionId = subRows[0].subscription_id;
+  const subscriptionId = subRows[0].billing_account_id;
 
   // Verify site belongs to subscription
   const siteRows = await sql`

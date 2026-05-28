@@ -51,7 +51,7 @@ export default async function ComplianceErasurePage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-xs text-foreground">
-                    {w.subscription_id as string}
+                    {w.billing_account_id as string}
                   </div>
                   <div className="mt-1 text-xs text-muted">
                     {new Date(w.wiped_at as string).toLocaleString()} · operator{" "}

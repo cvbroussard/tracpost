@@ -37,7 +37,7 @@ export async function POST(
 
   const body = await req.json().catch(() => ({}));
   const type = body.type || "ken_burns";
-  const siteId = asset.site_id as string;
+  const siteId = asset.business_id as string;
 
   try {
     if (type === "ken_burns") {

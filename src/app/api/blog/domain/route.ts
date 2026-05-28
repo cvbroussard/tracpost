@@ -145,10 +145,10 @@ export async function POST(req: NextRequest) {
     // Get tenant owner email + site name
     const [owner] = await sql`
       SELECT u.email, u.name
-      FROM users u
-      JOIN accounts sub ON sub.id = u.billing_account_id
-      JOIN businesses s ON s.billing_account_id = sub.id
-      WHERE s.id = ${site_id} AND u.role = 'owner'
+      FROM businesses s
+      JOIN accounts sub ON sub.id = s.billing_account_id
+      JOIN users u ON u.id = sub.owner_user_id
+      WHERE s.id = ${site_id}
     `;
     if (!owner?.email) {
       return NextResponse.json({ error: "Tenant owner email not found" }, { status: 404 });

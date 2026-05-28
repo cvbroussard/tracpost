@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
 
   const [subscriber] = await sql`
     SELECT u.name, u.email
-    FROM users u
-    WHERE u.billing_account_id = ${subscription_id} AND u.role = 'owner'
+    FROM accounts a
+    JOIN users u ON u.id = a.owner_user_id
+    WHERE a.id = ${subscription_id}
   `;
 
   if (!subscriber?.email) {

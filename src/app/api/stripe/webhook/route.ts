@@ -71,7 +71,7 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
   const [existing] = await sql`
     SELECT s.id
     FROM accounts s
-    JOIN users u ON u.billing_account_id = s.id AND u.role = 'owner'
+    JOIN users u ON u.id = s.owner_user_id
     WHERE u.email = ${email}
   `;
 

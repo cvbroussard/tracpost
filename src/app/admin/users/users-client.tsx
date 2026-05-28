@@ -38,12 +38,14 @@ const SCOPE_BADGE: Record<Membership["scope_type"], string> = {
 };
 
 const selectCls = "rounded-lg border border-border bg-surface px-2 py-1.5 text-sm";
+const inputCls = "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm";
 
 export function UsersClient({ initialRows }: { initialRows: UserRow[] }) {
   const [rows, setRows] = useState<UserRow[]>(initialRows);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const patch = (id: string, fn: (u: UserRow) => UserRow) =>
     setRows((prev) => prev.map((u) => (u.id === id ? fn(u) : u)));
@@ -134,6 +136,12 @@ export function UsersClient({ initialRows }: { initialRows: UserRow[] }) {
         <span className="whitespace-nowrap text-sm text-muted">
           {filtered.length} / {rows.length}
         </span>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="whitespace-nowrap rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+        >
+          Add user
+        </button>
       </div>
 
       {error && (
@@ -160,6 +168,16 @@ export function UsersClient({ initialRows }: { initialRows: UserRow[] }) {
           </div>
         )}
       </div>
+
+      {showCreate && (
+        <CreateUserModal
+          onClose={() => setShowCreate(false)}
+          onCreated={(u) => {
+            setRows((prev) => [u, ...prev]);
+            setShowCreate(false);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -324,11 +342,123 @@ function UserCard({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] uppercase tracking-wide text-muted">{label}</span>
       {children}
     </label>
+  );
+}
+
+function CreateUserModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (u: UserRow) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [grant, setGrant] = useState("none");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      let membership: { scope_type: string; role: string } | undefined;
+      if (grant !== "none") {
+        const [scope_type, role] = grant.split("-");
+        membership = { scope_type, role };
+      }
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name, password, membership }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+      onCreated(data.user as UserRow);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Create failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-1 text-lg font-semibold">Add user</h2>
+        <p className="mb-4 text-sm text-muted">
+          Creates an accountless staff user (platform / operator). Customer team members are added
+          via onboarding, not here.
+        </p>
+        <div className="space-y-3">
+          <Field label="Email">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoFocus
+              className={inputCls}
+              placeholder="staff@tracpost.com"
+            />
+          </Field>
+          <Field label="Name">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={inputCls}
+              placeholder="Full name (defaults to email)"
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={inputCls}
+              placeholder="At least 8 characters"
+            />
+          </Field>
+          <Field label="Grant membership on create">
+            <select value={grant} onChange={(e) => setGrant(e.target.value)} className={selectCls}>
+              <option value="none">No membership</option>
+              <option value="platform-admin">platform · admin (super admin)</option>
+              <option value="platform-member">platform · member</option>
+              <option value="operator-admin">operator · admin</option>
+              <option value="operator-member">operator · member</option>
+            </select>
+          </Field>
+        </div>
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted hover:bg-surface-hover disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={busy || !email || password.length < 8}
+            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+          >
+            {busy ? "Creating…" : "Create user"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

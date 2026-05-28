@@ -10,16 +10,164 @@ interface AdminPayload {
   expires_at: number;
 }
 
+export type PrincipalType = "platform" | "operator" | "agency" | "business" | "guest";
+
+export interface Membership {
+  scopeType: "platform" | "operator" | "account" | "business";
+  scopeId: string | null; // null for cross-cutting platform/operator scopes
+  role: "admin" | "member";
+}
+
 export interface AuthContext {
   userId: string;
   userName: string;
+  /** The paying entity (was `subscriptionId` pre-v3). */
+  accountId: string;
+  /** @deprecated v3 alias for {@link accountId}. Migrate readers off this, then
+   *  drop the alias in the migrate-138 cleanup. Kept so the ~228 existing
+   *  `.subscriptionId` call-sites keep working through the dual-read window. */
   subscriptionId: string;
   plan: string;
+  /** Legacy single role ("owner"/team role). Retained through the dual-read
+   *  window; superseded by {@link memberships}. */
   role: string;
-  /** True when an admin authenticated via Path 3 (acting on a
-   *  subscriber's behalf) — lets routes attribute writes to the
-   *  operator rather than the owner. */
+  /** Which surface this principal belongs to. Derived from memberships.
+   *  Defaults to "business" in legacy/cookie mode (the only pre-v3 principal). */
+  principalType: PrincipalType;
+  /** Resolved membership rows. Empty in legacy mode and on the cookie path
+   *  during the dual-read window (see note on Path 2). */
+  memberships: Membership[];
+  /** True when an operator authenticated via Path 3 (acting on a business's
+   *  behalf) — lets routes attribute writes to the operator rather than the owner. */
   actingAsAdmin?: boolean;
+}
+
+// ── Dual-read schema bridge (v3 migrate-137) ──────────────────────
+// This file ships BEFORE migrate-137 runs (deploy step 1), so it must work
+// against BOTH schemas: legacy (`subscriptions`, `users.subscription_id`) and
+// v3 (`accounts`, `memberships`). Each DB-backed resolver tries the v3 path
+// first; if the v3 relations/columns don't exist yet, it falls back to legacy.
+// Once the v3 path succeeds once, `v3Confirmed` latches on (one-way) so we stop
+// attempting the legacy fallback and surface real errors thereafter.
+// Remove this whole bridge in the migrate-138 cleanup.
+let v3Confirmed = false;
+
+function isMissingSchema(e: unknown): boolean {
+  const err = e as { code?: string; message?: string };
+  return (
+    err?.code === "42P01" || // undefined_table
+    err?.code === "42703" || // undefined_column
+    /relation ".*" does not exist|column ".*" does not exist/i.test(err?.message || "")
+  );
+}
+
+function derivePrincipal(memberships: Membership[]): PrincipalType {
+  const types = new Set(memberships.map((m) => m.scopeType));
+  if (types.has("platform")) return "platform";
+  if (types.has("operator")) return "operator";
+  if (types.has("account")) return "agency"; // account-scoped membership ⟺ agency (direct owners get business memberships)
+  if (types.has("business")) return "business";
+  return "guest";
+}
+
+type UserRow = { user_id: string; name: string; role: string; account_id: string; plan: string };
+
+async function loadMemberships(userId: string): Promise<Membership[]> {
+  const rows = await sql`
+    SELECT scope_type, scope_id, role FROM memberships WHERE user_id = ${userId}
+  `;
+  return rows.map((m) => ({
+    scopeType: m.scope_type as Membership["scopeType"],
+    scopeId: (m.scope_id as string) ?? null,
+    role: m.role as Membership["role"],
+  }));
+}
+
+function assemble(u: UserRow, memberships: Membership[], opts?: { actingAsAdmin?: boolean }): AuthContext {
+  return {
+    userId: u.user_id,
+    userName: u.name,
+    accountId: u.account_id,
+    subscriptionId: u.account_id, // deprecated alias
+    plan: u.plan || "free",
+    role: u.role || "owner",
+    principalType: memberships.length ? derivePrincipal(memberships) : "business",
+    memberships,
+    ...(opts?.actingAsAdmin ? { actingAsAdmin: true } : {}),
+  };
+}
+
+/**
+ * Resolve an AuthContext by user id (cookie / session-token / device-session paths).
+ * Dual-read: v3 schema first, legacy fallback.
+ */
+async function loadContextByUserId(userId: string): Promise<AuthContext | null> {
+  try {
+    const rows = await sql`
+      SELECT u.id AS user_id, u.name, u.role, u.account_id, a.plan
+      FROM users u JOIN accounts a ON a.id = u.account_id
+      WHERE u.id = ${userId} AND u.is_active = true AND a.is_active = true
+    `;
+    if (rows.length === 0) return null;
+    const memberships = await loadMemberships(userId);
+    v3Confirmed = true;
+    return assemble(rows[0] as UserRow, memberships);
+  } catch (e) {
+    if (v3Confirmed || !isMissingSchema(e)) throw e;
+    // ── legacy fallback (pre-migration only) ──
+    const rows = await sql`
+      SELECT u.id AS user_id, u.name, u.role, u.subscription_id AS account_id, s.plan
+      FROM users u JOIN subscriptions s ON u.subscription_id = s.id
+      WHERE u.id = ${userId} AND u.is_active = true AND s.is_active = true
+    `;
+    if (rows.length === 0) return null;
+    return assemble(rows[0] as UserRow, []);
+  }
+}
+
+/**
+ * Resolve an AuthContext for the OWNER of an account, matched on a column of
+ * the accounts/subscriptions table (api_key_hash or id). Dual-read.
+ */
+async function loadContextByAccountOwner(
+  match: { apiKeyHash: string } | { accountId: string },
+  opts?: { actingAsAdmin?: boolean }
+): Promise<AuthContext | null> {
+  try {
+    const rows =
+      "apiKeyHash" in match
+        ? await sql`
+            SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan
+            FROM accounts a JOIN users u ON u.account_id = a.id AND u.role = 'owner'
+            WHERE a.api_key_hash = ${match.apiKeyHash} AND a.is_active = true
+            LIMIT 1`
+        : await sql`
+            SELECT u.id AS user_id, u.name, u.role, a.id AS account_id, a.plan
+            FROM accounts a JOIN users u ON u.account_id = a.id AND u.role = 'owner'
+            WHERE a.id = ${match.accountId} AND a.is_active = true
+            LIMIT 1`;
+    if (rows.length === 0) return null;
+    const memberships = await loadMemberships(rows[0].user_id as string);
+    v3Confirmed = true;
+    return assemble(rows[0] as UserRow, memberships, opts);
+  } catch (e) {
+    if (v3Confirmed || !isMissingSchema(e)) throw e;
+    // ── legacy fallback (pre-migration only) ──
+    const rows =
+      "apiKeyHash" in match
+        ? await sql`
+            SELECT u.id AS user_id, u.name, u.role, s.id AS account_id, s.plan
+            FROM subscriptions s JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
+            WHERE s.api_key_hash = ${match.apiKeyHash} AND s.is_active = true
+            LIMIT 1`
+        : await sql`
+            SELECT u.id AS user_id, u.name, u.role, s.id AS account_id, s.plan
+            FROM subscriptions s JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
+            WHERE s.id = ${match.accountId} AND s.is_active = true
+            LIMIT 1`;
+    if (rows.length === 0) return null;
+    return assemble(rows[0] as UserRow, [], opts);
+  }
 }
 
 /**
@@ -29,7 +177,9 @@ export interface AuthContext {
  * 1. Bearer token in Authorization header:
  *    a. Session token (tp_s_ prefix) → mobile app auth
  *    b. API key (tp_ prefix) → programmatic API auth
+ *    c. Device session token (no prefix) → mobile app via QR invite
  * 2. tp_session cookie → dashboard session auth
+ * 3. tp_admin cookie + account-id param → operator acting on a business's behalf
  */
 export async function authenticateRequest(
   req: NextRequest
@@ -39,19 +189,19 @@ export async function authenticateRequest(
   // Path 1: Bearer token
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
-    // Session tokens (mobile app) have tp_s_ prefix
-    if (token.startsWith("tp_s_")) {
-      return authenticateBySessionToken(token);
-    }
-    // API keys have tp_ prefix (no s_)
-    if (token.startsWith("tp_")) {
-      return authenticateByApiKey(token);
-    }
-    // Device session tokens (mobile app via QR invite) — no prefix
+    if (token.startsWith("tp_s_")) return authenticateBySessionToken(token);
+    if (token.startsWith("tp_")) return authenticateByApiKey(token);
     return authenticateByDeviceSession(token);
   }
 
-  // Path 2: Session cookie (dashboard calls)
+  // Path 2: Session cookie (dashboard calls).
+  // The cookie is signed and carries values (not table refs), so it is
+  // rename-safe and needs no DB round-trip here. During the dual-read window
+  // every tp_session holder is a Business principal (operators use Path 3,
+  // agencies don't exist yet), so principalType defaults to "business" and
+  // memberships are left empty. POST-CUTOVER: bake principalType + a membership
+  // summary into the cookie at login (or DB-resolve here) to make this
+  // membership-aware without a per-request query.
   const cookieStore = await cookies();
   const rawSession = cookieStore.get("tp_session")?.value;
   const session = verifyCookie<Session>(rawSession);
@@ -59,36 +209,29 @@ export async function authenticateRequest(
     return {
       userId: session.userId,
       userName: session.userName,
-      subscriptionId: session.subscriptionId,
+      accountId: session.subscriptionId,
+      subscriptionId: session.subscriptionId, // deprecated alias
       plan: session.plan,
       role: session.role || "owner",
+      principalType: "business",
+      memberships: [],
     };
   }
 
-  // Path 3: Admin cookie + subscription_id param (admin acting on behalf)
+  // Path 3: Admin cookie + account-id param (operator acting on behalf).
   const rawAdmin = cookieStore.get("tp_admin")?.value;
   const adminPayload = verifyCookie<AdminPayload>(rawAdmin);
   const adminValid = adminPayload?.admin === true && adminPayload.expires_at >= Date.now();
   if (adminValid) {
     const url = new URL(req.url);
-    const subscriptionId = url.searchParams.get("subscription_id") || url.searchParams.get("subscriber_id");
-    if (subscriptionId) {
-      const [sub] = await sql`
-        SELECT s.id AS subscription_id, s.plan, u.id AS user_id, u.name, u.role
-        FROM subscriptions s
-        JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
-        WHERE s.id = ${subscriptionId} AND s.is_active = true
-        LIMIT 1
-      `;
-      if (sub) {
-        return {
-          userId: sub.user_id as string,
-          userName: sub.name as string,
-          subscriptionId: sub.subscription_id as string,
-          plan: (sub.plan as string) || "free",
-          role: (sub.role as string) || "owner",
-          actingAsAdmin: true,
-        };
+    const accountId =
+      url.searchParams.get("account_id") ||
+      url.searchParams.get("subscription_id") ||
+      url.searchParams.get("subscriber_id");
+    if (accountId) {
+      const ctx = await loadContextByAccountOwner({ accountId }, { actingAsAdmin: true });
+      if (ctx) {
+        return { ...ctx, plan: ctx.plan || "free" };
       }
     }
   }
@@ -105,35 +248,10 @@ export async function authenticateRequest(
 async function authenticateByApiKey(
   token: string
 ): Promise<AuthContext | NextResponse> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(token);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const apiKeyHash = hashArray
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  const rows = await sql`
-    SELECT s.id AS subscription_id, s.plan,
-           u.id AS user_id, u.name, u.role
-    FROM subscriptions s
-    JOIN users u ON u.subscription_id = s.id AND u.role = 'owner'
-    WHERE s.api_key_hash = ${apiKeyHash}
-      AND s.is_active = true
-    LIMIT 1
-  `;
-
-  if (rows.length === 0) {
-    return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
-  }
-
-  return {
-    userId: rows[0].user_id as string,
-    userName: rows[0].name as string,
-    subscriptionId: rows[0].subscription_id as string,
-    plan: rows[0].plan as string,
-    role: rows[0].role as string,
-  };
+  const apiKeyHash = await hashApiKey(token);
+  const ctx = await loadContextByAccountOwner({ apiKeyHash });
+  if (!ctx) return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+  return ctx;
 }
 
 /**
@@ -145,38 +263,23 @@ async function authenticateByDeviceSession(
   const encoder = new TextEncoder();
   const data = encoder.encode(token);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const sessionHash = hashArray
+  const sessionHash = Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  const rows = await sql`
-    SELECT u.id AS user_id, u.name, u.role, u.subscription_id,
-           s.plan
-    FROM users u
-    JOIN subscriptions s ON u.subscription_id = s.id
-    WHERE u.session_token_hash = ${sessionHash}
-      AND u.is_active = true
-      AND s.is_active = true
+  // Resolve the user id by the hashed device token (table-agnostic — `users`
+  // is not renamed), then build context through the dual-read resolver.
+  const idRows = await sql`
+    SELECT id FROM users WHERE session_token_hash = ${sessionHash} AND is_active = true
   `;
-
-  if (rows.length === 0) {
+  if (idRows.length === 0) {
     return NextResponse.json({ error: "Invalid or revoked session" }, { status: 401 });
   }
+  const ctx = await loadContextByUserId(idRows[0].id as string);
+  if (!ctx) return NextResponse.json({ error: "Invalid or revoked session" }, { status: 401 });
 
-  // Update last active
-  sql`
-    UPDATE users SET last_active_at = NOW()
-    WHERE session_token_hash = ${sessionHash}
-  `.catch(() => {});
-
-  return {
-    userId: rows[0].user_id as string,
-    userName: rows[0].name as string,
-    subscriptionId: rows[0].subscription_id as string,
-    plan: (rows[0].plan as string) || "free",
-    role: (rows[0].role as string) || "owner",
-  };
+  sql`UPDATE users SET last_active_at = NOW() WHERE session_token_hash = ${sessionHash}`.catch(() => {});
+  return ctx;
 }
 
 /**
@@ -222,37 +325,17 @@ async function authenticateBySessionToken(
   const [userId, expiryStr, signature] = parts;
   const payload = `${userId}.${expiryStr}`;
 
-  // Verify signature
   const expected = await hmacSign(payload);
   if (signature !== expected) {
     return NextResponse.json({ error: "Invalid session token" }, { status: 401 });
   }
-
-  // Check expiry
   if (Date.now() > parseInt(expiryStr, 10)) {
     return NextResponse.json({ error: "Session token expired" }, { status: 401 });
   }
 
-  // Look up user + subscription
-  const rows = await sql`
-    SELECT u.id AS user_id, u.name, u.role, u.subscription_id,
-           s.plan
-    FROM users u
-    JOIN subscriptions s ON u.subscription_id = s.id
-    WHERE u.id = ${userId} AND u.is_active = true AND s.is_active = true
-  `;
-
-  if (rows.length === 0) {
-    return NextResponse.json({ error: "User not found" }, { status: 401 });
-  }
-
-  return {
-    userId: rows[0].user_id as string,
-    userName: rows[0].name as string,
-    subscriptionId: rows[0].subscription_id as string,
-    plan: rows[0].plan as string,
-    role: rows[0].role as string,
-  };
+  const ctx = await loadContextByUserId(userId);
+  if (!ctx) return NextResponse.json({ error: "User not found" }, { status: 401 });
+  return ctx;
 }
 
 async function hmacSign(payload: string): Promise<string> {

@@ -80,6 +80,14 @@ export async function POST(req: NextRequest) {
     RETURNING id, name, blog_slug, provisioning_status
   `;
 
+  // Give the account owner a business-admin membership for the new business (v3)
+  await sql`
+    INSERT INTO memberships (user_id, scope_type, scope_id, role, capability)
+    SELECT a.owner_user_id, 'business', ${site.id}, 'admin', 'full'
+    FROM accounts a WHERE a.id = ${session.subscriptionId} AND a.owner_user_id IS NOT NULL
+    ON CONFLICT DO NOTHING
+  `;
+
   // Update session cookie to include the new site and switch to it
   const allSites = await sql`
     SELECT id, name, url FROM businesses

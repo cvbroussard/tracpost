@@ -57,6 +57,14 @@ export async function POST(req: NextRequest) {
       RETURNING id, billing_account_id, name, domain, blog_url, url, external_id, brand_voice, business_type, location, created_at
     `;
 
+    // Give the account owner a business-admin membership for the new business (v3)
+    await sql`
+      INSERT INTO memberships (user_id, scope_type, scope_id, role, capability)
+      SELECT a.owner_user_id, 'business', ${rows[0].id}, 'admin', 'full'
+      FROM accounts a WHERE a.id = ${auth.subscriptionId} AND a.owner_user_id IS NOT NULL
+      ON CONFLICT DO NOTHING
+    `;
+
     return NextResponse.json({ site: rows[0] }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

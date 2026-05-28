@@ -6,9 +6,12 @@ export interface Membership {
   id: string;
   scope_type: "platform" | "operator" | "account" | "business";
   role: "admin" | "member";
+  capability: string | null; // function axis — full|capture|reviewer (business scope only)
   scope_id: string | null;
   scope_name: string | null;
 }
+
+const CAPABILITIES = ["full", "capture", "reviewer"];
 
 export interface BizOption {
   id: string;
@@ -81,17 +84,6 @@ export function UsersClient({ initialRows }: { initialRows: UserRow[] }) {
     });
   }
 
-  function assignBusiness(u: UserRow, businessId: string) {
-    return run(u.id + ":biz", async () => {
-      const data = await post(`/api/admin/users/${u.id}`, "PATCH", { business_id: businessId || null });
-      patch(u.id, (x) => ({
-        ...x,
-        businessId: (data.business_id as string) ?? null,
-        businessName: (data.business_name as string) ?? null,
-      }));
-    });
-  }
-
   function removeMembership(u: UserRow, m: Membership) {
     return run(u.id + ":m:" + m.id, async () => {
       await post(`/api/admin/users/${u.id}/memberships?membership_id=${m.id}`, "DELETE");
@@ -104,14 +96,29 @@ export function UsersClient({ initialRows }: { initialRows: UserRow[] }) {
     scopeType: Membership["scope_type"],
     role: Membership["role"],
     scopeId: string | null,
+    capability: string | null,
   ) {
     return run(u.id + ":add", async () => {
       const data = await post(`/api/admin/users/${u.id}/memberships`, "POST", {
         scope_type: scopeType,
         role,
         scope_id: scopeId,
+        capability,
       });
       patch(u.id, (x) => ({ ...x, memberships: [...x.memberships, data.membership as Membership] }));
+    });
+  }
+
+  function setCapability(u: UserRow, m: Membership, capability: string) {
+    return run(u.id + ":cap:" + m.id, async () => {
+      await post(`/api/admin/users/${u.id}/memberships`, "PATCH", {
+        membership_id: m.id,
+        capability,
+      });
+      patch(u.id, (x) => ({
+        ...x,
+        memberships: x.memberships.map((mm) => (mm.id === m.id ? { ...mm, capability } : mm)),
+      }));
     });
   }
 
@@ -157,9 +164,9 @@ export function UsersClient({ initialRows }: { initialRows: UserRow[] }) {
             u={u}
             busy={busy}
             onToggleActive={() => toggleActive(u)}
-            onAssignBusiness={(bid) => assignBusiness(u, bid)}
             onRemoveMembership={(m) => removeMembership(u, m)}
-            onAddMembership={(st, role, sid) => addMembership(u, st, role, sid)}
+            onAddMembership={(st, role, sid, cap) => addMembership(u, st, role, sid, cap)}
+            onSetCapability={(m, cap) => setCapability(u, m, cap)}
           />
         ))}
         {filtered.length === 0 && (
@@ -186,25 +193,26 @@ function UserCard({
   u,
   busy,
   onToggleActive,
-  onAssignBusiness,
   onRemoveMembership,
   onAddMembership,
+  onSetCapability,
 }: {
   u: UserRow;
   busy: string | null;
   onToggleActive: () => void;
-  onAssignBusiness: (businessId: string) => void;
   onRemoveMembership: (m: Membership) => void;
   onAddMembership: (
     scopeType: Membership["scope_type"],
     role: Membership["role"],
     scopeId: string | null,
+    capability: string | null,
   ) => void;
+  onSetCapability: (m: Membership, capability: string) => void;
 }) {
   const [scopeType, setScopeType] = useState<Membership["scope_type"]>("business");
   const [role, setRole] = useState<Membership["role"]>("member");
   const [bizScope, setBizScope] = useState<string>(u.accountBusinesses[0]?.id || "");
-  const [bizAssign, setBizAssign] = useState<string>(u.businessId || "");
+  const [addCapability, setAddCapability] = useState<string>("full");
 
   const needsBiz = scopeType === "business";
   const needsAccount = scopeType === "account";
@@ -213,7 +221,7 @@ function UserCard({
     let scopeId: string | null = null;
     if (needsBiz) scopeId = bizScope || null;
     else if (needsAccount) scopeId = u.billingAccountId;
-    onAddMembership(scopeType, role, scopeId);
+    onAddMembership(scopeType, role, scopeId, needsBiz ? addCapability : null);
   }
 
   return (
@@ -223,7 +231,12 @@ function UserCard({
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-foreground">{u.name || "(no name)"}</span>
             {u.role && (
-              <span className="rounded bg-surface-hover px-2 py-0.5 text-xs text-muted">{u.role}</span>
+              <span
+                title="Legacy users.role — transitional, NOT the access authority. Scope + tier live on memberships; function (full/capture/reviewer) is moving to memberships too."
+                className="rounded bg-surface-hover px-2 py-0.5 text-xs text-muted"
+              >
+                legacy role: {u.role}
+              </span>
             )}
             <span className={`text-xs ${u.isActive ? "text-success" : "text-danger"}`}>
               {u.isActive ? "active" : "inactive"}
@@ -231,7 +244,11 @@ function UserCard({
           </div>
           <div className="mt-0.5 text-sm text-muted">{u.email || "—"}</div>
           <div className="mt-0.5 text-xs text-muted">
-            Account: {u.accountName || "—"} · business_id: {u.businessName || "—"}
+            Account: {u.accountName || "—"}
+            <span title="Legacy users.business_id — read-only here; manage business assignment via a business membership. Slated for retirement with users.role.">
+              {" · legacy business_id: "}
+              {u.businessName || "—"}
+            </span>
           </div>
         </div>
         <button
@@ -254,6 +271,21 @@ function UserCard({
           >
             {m.scope_type}:{m.role}
             {m.scope_name ? ` · ${m.scope_name}` : ""}
+            {m.scope_type === "business" && (
+              <select
+                value={m.capability || "full"}
+                onChange={(e) => onSetCapability(m, e.target.value)}
+                disabled={busy === u.id + ":cap:" + m.id}
+                title="Capability (function): full / capture / reviewer"
+                className="ml-1 rounded border border-border bg-surface px-1 py-0 text-[11px] text-foreground"
+              >
+                {CAPABILITIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               onClick={() => onRemoveMembership(m)}
               disabled={busy === u.id + ":m:" + m.id}
@@ -302,6 +334,17 @@ function UserCard({
               </select>
             </Field>
           )}
+          {needsBiz && (
+            <Field label="capability">
+              <select value={addCapability} onChange={(e) => setAddCapability(e.target.value)} className={selectCls}>
+                {CAPABILITIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           {needsAccount && (
             <span className="pb-1.5 text-xs text-muted">→ {u.accountName || u.billingAccountId || "this account"}</span>
           )}
@@ -315,26 +358,6 @@ function UserCard({
             className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
           >
             Add
-          </button>
-        </div>
-
-        <div className="flex items-end gap-2">
-          <Field label="Assign business_id">
-            <select value={bizAssign} onChange={(e) => setBizAssign(e.target.value)} className={selectCls}>
-              <option value="">(none)</option>
-              {u.accountBusinesses.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <button
-            onClick={() => onAssignBusiness(bizAssign)}
-            disabled={busy === u.id + ":biz"}
-            className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted hover:bg-surface-hover disabled:opacity-50"
-          >
-            Save
           </button>
         </div>
       </div>

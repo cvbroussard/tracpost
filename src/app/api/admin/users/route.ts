@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
     id: string;
     scope_type: ScopeType;
     role: Role;
+    capability: string | null;
     scope_id: string | null;
     scope_name: string | null;
   }> = [];
@@ -105,6 +106,7 @@ export async function POST(req: NextRequest) {
         id: m.id as string,
         scope_type: resolved.scopeType,
         role: resolved.role,
+        capability: null, // create-user only grants platform/operator (no capability)
         scope_id: resolved.scopeId,
         scope_name: resolved.scopeName,
       });

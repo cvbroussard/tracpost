@@ -22,6 +22,7 @@ export default async function UsersPage() {
           'id', m.id,
           'scope_type', m.scope_type,
           'role', m.role,
+          'capability', m.capability,
           'scope_id', m.scope_id,
           'scope_name', CASE m.scope_type
             WHEN 'business' THEN (SELECT name FROM businesses WHERE id = m.scope_id)

@@ -1,10 +1,12 @@
 /**
- * POST   /api/admin/users/[id]/memberships   Body: { scope_type, role, scope_id? }
+ * POST   /api/admin/users/[id]/memberships   Body: { scope_type, role, scope_id?, capability? }
+ * PATCH  /api/admin/users/[id]/memberships   Body: { membership_id, capability }
  * DELETE /api/admin/users/[id]/memberships?membership_id=...
  *
  * Operator-only management of the v3 membership rows that drive auth.
  *  - platform / operator scopes are global (scope_id forced null)
  *  - account / business scopes require a valid scope_id
+ *  - capability (full|capture|reviewer) is the function axis, business scope only
  * Unique indexes prevent duplicate (user, scope_type, scope_id) rows.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -52,9 +54,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     scopeName = acct.name as string;
   }
 
+  // capability (function axis) — only meaningful at business scope
+  let capability: string | null = null;
+  if (scopeType === "business") {
+    const c = (body.capability as string | undefined) || "full";
+    if (!["full", "capture", "reviewer"].includes(c)) {
+      return NextResponse.json({ error: "Invalid capability" }, { status: 400 });
+    }
+    capability = c;
+  }
+
   const [row] = await sql`
-    INSERT INTO memberships (user_id, scope_type, scope_id, role)
-    VALUES (${id}, ${scopeType}, ${scopeId}, ${role})
+    INSERT INTO memberships (user_id, scope_type, scope_id, role, capability)
+    VALUES (${id}, ${scopeType}, ${scopeId}, ${role}, ${capability})
     ON CONFLICT DO NOTHING
     RETURNING id
   `;
@@ -67,8 +79,47 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   return NextResponse.json({
     ok: true,
-    membership: { id: row.id as string, scope_type: scopeType, role, scope_id: scopeId, scope_name: scopeName },
+    membership: {
+      id: row.id as string,
+      scope_type: scopeType,
+      role,
+      capability,
+      scope_id: scopeId,
+      scope_name: scopeName,
+    },
   });
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!isAdminRequest(req.cookies.get("tp_admin")?.value)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const body = await req.json().catch(() => ({}));
+  const membershipId = body.membership_id as string | undefined;
+  const capability = body.capability as string | undefined;
+
+  if (!membershipId) {
+    return NextResponse.json({ error: "membership_id required" }, { status: 400 });
+  }
+  if (!capability || !["full", "capture", "reviewer"].includes(capability)) {
+    return NextResponse.json({ error: "Invalid capability" }, { status: 400 });
+  }
+
+  const [m] = await sql`
+    SELECT id, scope_type FROM memberships WHERE id = ${membershipId} AND user_id = ${id}
+  `;
+  if (!m) return NextResponse.json({ error: "Membership not found" }, { status: 404 });
+  if (m.scope_type !== "business") {
+    return NextResponse.json(
+      { error: "Capability only applies to business memberships" },
+      { status: 400 },
+    );
+  }
+
+  await sql`UPDATE memberships SET capability = ${capability} WHERE id = ${membershipId} AND user_id = ${id}`;
+  return NextResponse.json({ ok: true, capability });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

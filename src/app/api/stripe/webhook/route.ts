@@ -153,6 +153,9 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
     RETURNING id
   `;
 
+  // Point the account at its owner (v3 owner-of-account source of truth)
+  await sql`UPDATE accounts SET owner_user_id = ${owner.id} WHERE id = ${subscription.id}`;
+
   // Generate magic link
   const token = await generateMagicToken(owner.id);
   const magicUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://tracpost.com"}/auth/magic?token=${token}`;

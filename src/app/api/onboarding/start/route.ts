@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
     RETURNING id
   `;
 
-  await sql`
+  const [owner] = await sql`
     INSERT INTO users (billing_account_id, name, email, phone, role, is_active)
     VALUES (
       ${dbSub.id},
@@ -209,7 +209,10 @@ export async function POST(req: NextRequest) {
       'owner',
       true
     )
+    RETURNING id
   `;
+  // Point the account at its owner (v3 owner-of-account source of truth)
+  await sql`UPDATE accounts SET owner_user_id = ${owner.id} WHERE id = ${dbSub.id}`;
 
   // ── Onboarding submission row + token ───────────────────────────────
   const onboarding = await createSubmission(dbSub.id as string);

@@ -38,11 +38,13 @@ export async function POST(req: NextRequest) {
       RETURNING id, plan, created_at
     `;
 
-    // Create owner user
-    await sql`
+    // Create owner user + point the account at it (v3 owner-of-account source of truth)
+    const [owner] = await sql`
       INSERT INTO users (billing_account_id, name, email, password_hash, role, is_active)
       VALUES (${subscription.id}, ${name}, ${email || null}, ${passwordHash}, 'owner', true)
+      RETURNING id
     `;
+    await sql`UPDATE accounts SET owner_user_id = ${owner.id} WHERE id = ${subscription.id}`;
 
     return NextResponse.json({
       subscriber: { ...subscription, name },

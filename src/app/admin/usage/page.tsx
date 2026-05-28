@@ -9,7 +9,7 @@ export default async function UsagePage() {
              COUNT(ul.id)::int AS total_actions,
              MAX(ul.created_at) AS last_action
       FROM accounts sub
-      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+      LEFT JOIN users owner ON owner.id = sub.owner_user_id
       LEFT JOIN usage_log ul ON ul.billing_account_id = sub.id
       WHERE sub.is_active = true
       GROUP BY sub.id, owner.name, owner.email, sub.plan
@@ -28,7 +28,7 @@ export default async function UsagePage() {
              s.name AS site_name
       FROM usage_log ul
       JOIN accounts sub ON ul.billing_account_id = sub.id
-      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+      LEFT JOIN users owner ON owner.id = sub.owner_user_id
       LEFT JOIN businesses s ON ul.business_id = s.id
       ORDER BY ul.created_at DESC
       LIMIT 30

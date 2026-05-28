@@ -28,7 +28,7 @@ export default async function SiteControlPanel({ params }: Props) {
            bs.blog_title, bs.blog_description, bs.nav_links
     FROM businesses s
     JOIN accounts sub ON sub.id = s.billing_account_id
-    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+    JOIN users u ON u.id = sub.owner_user_id
     LEFT JOIN blog_settings bs ON bs.business_id = s.id
     WHERE s.id = ${siteId}
   `;

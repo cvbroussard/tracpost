@@ -16,7 +16,7 @@ export default async function SubscriberDetail({
   const [subscription] = await sql`
     SELECT sub.id, u.name, sub.plan, sub.is_active, sub.metadata, sub.created_at, sub.updated_at
     FROM accounts sub
-    JOIN users u ON u.billing_account_id = sub.id AND u.role = 'owner'
+    JOIN users u ON u.id = sub.owner_user_id
     WHERE sub.id = ${id}
   `;
 

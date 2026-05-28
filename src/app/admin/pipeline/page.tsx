@@ -20,7 +20,7 @@ export default async function PipelinePage() {
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
       JOIN accounts sub ON sa.billing_account_id = sub.id
-      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+      LEFT JOIN users owner ON owner.id = sub.owner_user_id
       WHERE sp.status = 'failed'
       ORDER BY sp.updated_at DESC
       LIMIT 10
@@ -31,7 +31,7 @@ export default async function PipelinePage() {
              (SELECT array_agg(s.name) FROM business_social_links ssl JOIN businesses s ON ssl.business_id = s.id WHERE ssl.social_account_id = sa.id) AS linked_sites
       FROM social_accounts sa
       JOIN accounts sub ON sa.billing_account_id = sub.id
-      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+      LEFT JOIN users owner ON owner.id = sub.owner_user_id
       WHERE sa.token_expires_at IS NOT NULL
       ORDER BY sa.token_expires_at ASC
     `,

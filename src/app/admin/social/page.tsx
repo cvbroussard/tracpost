@@ -17,7 +17,7 @@ export default async function SocialAccountsPage() {
            ) AS linked_sites
     FROM social_accounts sa
     JOIN accounts sub ON sa.billing_account_id = sub.id
-    LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+    LEFT JOIN users owner ON owner.id = sub.owner_user_id
     ORDER BY sa.created_at DESC
   `;
 

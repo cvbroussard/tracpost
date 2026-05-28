@@ -12,7 +12,7 @@ export default async function ContentQueuePage() {
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
       JOIN accounts sub ON sa.billing_account_id = sub.id
-      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+      LEFT JOIN users owner ON owner.id = sub.owner_user_id
       WHERE sp.status = 'scheduled'
       ORDER BY sp.scheduled_at ASC
     `,
@@ -23,7 +23,7 @@ export default async function ContentQueuePage() {
       FROM social_posts sp
       JOIN social_accounts sa ON sp.account_id = sa.id
       JOIN accounts sub ON sa.billing_account_id = sub.id
-      LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+      LEFT JOIN users owner ON owner.id = sub.owner_user_id
       WHERE sp.status IN ('published', 'failed')
       ORDER BY COALESCE(sp.published_at, sp.updated_at) DESC
       LIMIT 20

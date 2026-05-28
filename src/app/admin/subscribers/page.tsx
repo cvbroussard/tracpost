@@ -19,7 +19,7 @@ export default async function SubscribersPage() {
         WHERE sa.billing_account_id = sub.id AND sp.status = 'published'
       ) AS published_count
     FROM accounts sub
-    LEFT JOIN users owner ON owner.billing_account_id = sub.id AND owner.role = 'owner'
+    LEFT JOIN users owner ON owner.id = sub.owner_user_id
     ORDER BY sub.created_at DESC
   `;
 

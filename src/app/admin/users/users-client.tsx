@@ -209,7 +209,11 @@ function UserCard({
   ) => void;
   onSetCapability: (m: Membership, capability: string) => void;
 }) {
-  const [scopeType, setScopeType] = useState<Membership["scope_type"]>("business");
+  const hasBiz = u.accountBusinesses.length > 0;
+  // Default to a viable scope: `business` only when the account actually has a
+  // business to attach to (otherwise Add would be disabled with no recourse —
+  // the case for accountless staff and empty accounts).
+  const [scopeType, setScopeType] = useState<Membership["scope_type"]>(hasBiz ? "business" : "operator");
   const [role, setRole] = useState<Membership["role"]>("member");
   const [bizScope, setBizScope] = useState<string>(u.accountBusinesses[0]?.id || "");
   const [addCapability, setAddCapability] = useState<string>("full");
@@ -308,8 +312,12 @@ function UserCard({
             >
               <option value="platform">platform</option>
               <option value="operator">operator</option>
-              <option value="account">account (agency)</option>
-              <option value="business">business</option>
+              <option value="account" disabled={!u.billingAccountId}>
+                account (agency){u.billingAccountId ? "" : " — no account"}
+              </option>
+              <option value="business" disabled={!hasBiz}>
+                business{hasBiz ? "" : " — none in account"}
+              </option>
             </select>
           </Field>
           <Field label="role">

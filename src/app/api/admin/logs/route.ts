@@ -6,7 +6,7 @@ const AXIOM_DATASET = process.env.AXIOM_DATASET || "vercel";
 
 export async function GET(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -38,7 +38,7 @@ interface DnaEnvelope {
 // GET — read-only state (score + cached envelope if any). No LLM calls.
 export async function GET(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const siteId = new URL(req.url).searchParams.get("siteId");
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

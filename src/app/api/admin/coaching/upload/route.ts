@@ -33,7 +33,7 @@ const MAX_BYTES = 8 * 1024 * 1024; // 8 MB — generous for screenshots
 
 export async function POST(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

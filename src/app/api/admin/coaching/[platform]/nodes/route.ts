@@ -33,7 +33,7 @@ export async function POST(
   { params }: { params: Promise<{ platform: string }> }
 ) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

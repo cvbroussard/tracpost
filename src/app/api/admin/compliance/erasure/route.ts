@@ -16,7 +16,7 @@ import { wipeSubscription } from "@/lib/subscription-wipe";
 
 export async function POST(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

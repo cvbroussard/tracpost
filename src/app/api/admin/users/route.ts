@@ -16,7 +16,7 @@ import { sql } from "@/lib/db";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req.cookies.get("tp_admin")?.value)) {
+  if (!await isAdminRequest(req.cookies.get("tp_admin")?.value)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -19,7 +19,7 @@ type ScopeType = (typeof SCOPE_TYPES)[number];
 type Role = (typeof ROLES)[number];
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAdminRequest(req.cookies.get("tp_admin")?.value)) {
+  if (!await isAdminRequest(req.cookies.get("tp_admin")?.value)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAdminRequest(req.cookies.get("tp_admin")?.value)) {
+  if (!await isAdminRequest(req.cookies.get("tp_admin")?.value)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -123,7 +123,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAdminRequest(req.cookies.get("tp_admin")?.value)) {
+  if (!await isAdminRequest(req.cookies.get("tp_admin")?.value)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

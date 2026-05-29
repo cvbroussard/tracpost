@@ -17,7 +17,7 @@ import { sql } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest(adminCookie)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

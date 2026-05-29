@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 
 /**
- * GET /api/ops/subscriber?id=xxx
+ * GET /api/ops/account?id=xxx
  * Returns subscriber overview with all sites summary.
  */
 export async function GET(req: NextRequest) {

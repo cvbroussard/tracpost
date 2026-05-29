@@ -1,6 +1,6 @@
 "use client";
 import { ManagePage } from "@/components/manage/manage-page";
-import { BillingCard } from "@/app/admin/subscribers/[id]/billing-card";
+import { BillingCard } from "@/app/admin/accounts/[id]/billing-card";
 export default function Page() {
   return (
     <ManagePage title="Subscription">

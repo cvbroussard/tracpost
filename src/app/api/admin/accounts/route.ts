@@ -5,7 +5,7 @@ import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 
 /**
- * POST /api/subscribers — Create a new subscription + owner user + API key.
+ * POST /api/admin/accounts — Create a new subscription + owner user + API key.
  * Internal/admin only (no auth gate yet — Phase 1 bootstrap).
  *
  * Body: { name, plan?, email?, password? }
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * GET /api/subscribers — List all subscriptions with their owner user info.
+ * GET /api/admin/accounts — List all subscriptions with their owner user info.
  * Internal/admin only.
  */
 export async function GET() {

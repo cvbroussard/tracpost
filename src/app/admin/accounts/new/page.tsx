@@ -29,7 +29,7 @@ export default function NewSubscriberPage() {
     setError("");
 
     try {
-      const res = await fetch("/api/subscribers", {
+      const res = await fetch("/api/admin/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, plan, email, password }),
@@ -50,7 +50,7 @@ export default function NewSubscriberPage() {
   if (result) {
     return (
       <div className="mx-auto max-w-lg">
-        <Link href="/admin/subscribers" className="text-xs text-muted hover:text-accent">
+        <Link href="/admin/accounts" className="text-xs text-muted hover:text-accent">
           &larr; Subscribers
         </Link>
         <h1 className="mt-2 mb-6 text-lg font-semibold">Subscriber Created</h1>
@@ -81,13 +81,13 @@ export default function NewSubscriberPage() {
 
           <div className="flex gap-3">
             <Link
-              href={`/admin/subscribers/${result.id}`}
+              href={`/admin/accounts/${result.id}`}
               className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
             >
               View Subscriber
             </Link>
             <Link
-              href={`/admin/subscribers/${result.id}/sites/new`}
+              href={`/admin/accounts/${result.id}/sites/new`}
               className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface"
             >
               Add Site
@@ -100,7 +100,7 @@ export default function NewSubscriberPage() {
 
   return (
     <div className="mx-auto max-w-lg">
-      <Link href="/admin/subscribers" className="text-xs text-muted hover:text-accent">
+      <Link href="/admin/accounts" className="text-xs text-muted hover:text-accent">
         &larr; Subscribers
       </Link>
       <h1 className="mt-2 mb-6 text-lg font-semibold">New Subscriber</h1>

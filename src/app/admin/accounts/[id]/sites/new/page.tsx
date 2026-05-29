@@ -43,7 +43,7 @@ export default function NewSitePage({
   if (result) {
     return (
       <div className="mx-auto max-w-lg">
-        <Link href={`/admin/subscribers/${subscriptionId}`} className="text-xs text-muted hover:text-accent">
+        <Link href={`/admin/accounts/${subscriptionId}`} className="text-xs text-muted hover:text-accent">
           &larr; Back to subscriber
         </Link>
         <h1 className="mt-2 mb-6 text-lg font-semibold">Site Created</h1>
@@ -56,7 +56,7 @@ export default function NewSitePage({
             </div>
           </div>
           <Link
-            href={`/admin/subscribers/${subscriptionId}`}
+            href={`/admin/accounts/${subscriptionId}`}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
           >
             View Subscriber
@@ -68,7 +68,7 @@ export default function NewSitePage({
 
   return (
     <div className="mx-auto max-w-lg">
-      <Link href={`/admin/subscribers/${subscriptionId}`} className="text-xs text-muted hover:text-accent">
+      <Link href={`/admin/accounts/${subscriptionId}`} className="text-xs text-muted hover:text-accent">
         &larr; Back to subscriber
       </Link>
       <h1 className="mt-2 mb-6 text-lg font-semibold">Add Site</h1>

@@ -57,7 +57,7 @@ export default async function SubscriberDetail({
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-8">
-        <Link href="/admin/subscribers" className="text-xs text-muted hover:text-accent">
+        <Link href="/admin/accounts" className="text-xs text-muted hover:text-accent">
           &larr; Subscribers
         </Link>
         <h1 className="mt-2 text-lg font-semibold">{subscriber.name}</h1>
@@ -80,7 +80,7 @@ export default async function SubscriberDetail({
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-medium">Sites ({sites.length})</h2>
           <Link
-            href={`/admin/subscribers/${id}/sites/new`}
+            href={`/admin/accounts/${id}/sites/new`}
             className="rounded border border-border px-3 py-1 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
           >
             Add Site

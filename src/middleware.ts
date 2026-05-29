@@ -31,7 +31,7 @@ function extractSlugFromHost(hostname: string, prefix: string): string | null {
  *
  * Production:
  *   studio.tracpost.com/on-deck      → rewrites to /dashboard/on-deck
- *   platform.tracpost.com/subscribers → rewrites to /admin/subscribers
+ *   platform.tracpost.com/accounts → rewrites to /admin/accounts
  *   tracpost.com/blog                → /tenant/tracpost/blog (next.config rewrite)
  *   blog.b2construct.com/my-article  → /tenant/b2construct/blog/my-article
  *   staging.tracpost.com/[slug]/...  → /tenant/[slug]/...
@@ -361,7 +361,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Rewrite: /subscribers → /admin/subscribers, / → /admin
+    // Rewrite: /accounts → /admin/accounts, / → /admin
     const rewritePath = pathname === "/" ? "/admin" : `/admin${pathname}`;
 
     // Gate before rewriting

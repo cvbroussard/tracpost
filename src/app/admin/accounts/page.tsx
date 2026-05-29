@@ -31,7 +31,7 @@ export default async function SubscribersPage() {
           <p className="mt-2 text-muted">All registered subscribers and their sites</p>
         </div>
         <Link
-          href="/admin/subscribers/new"
+          href="/admin/accounts/new"
           className="bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
         >
           New Subscriber
@@ -54,7 +54,7 @@ export default async function SubscribersPage() {
           {subscribers.map((sub) => (
             <tr key={sub.id} className="border-b border-border last:border-0 transition-colors hover:bg-surface-hover">
               <td className="py-3 pr-4">
-                <Link href={`/admin/subscribers/${sub.id}`} className="font-medium text-accent hover:underline">
+                <Link href={`/admin/accounts/${sub.id}`} className="font-medium text-accent hover:underline">
                   {sub.name}
                 </Link>
               </td>

@@ -8,7 +8,7 @@ interface RouteParams {
 }
 
 /**
- * GET /api/admin/subscribers/[subscriptionId]/billing
+ * GET /api/admin/accounts/[subscriptionId]/billing
  * Returns Stripe subscription details (when linked), invoices, and the
  * full set of canonical plans for switching. Subscribers without a Stripe
  * link still get availablePlans so the UI can offer manual override.
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 }
 
 /**
- * POST /api/admin/subscribers/[subscriptionId]/billing
+ * POST /api/admin/accounts/[subscriptionId]/billing
  * Body: { action, ... }
  *
  *   cancel             — Stripe cancel_at_period_end = true

@@ -147,7 +147,7 @@ export default async function ProvisioningPage() {
                       status={sub.provisioning_status as string | null}
                     />
                     <Link
-                      href={`/admin/subscribers/${sub.billing_account_id}`}
+                      href={`/admin/accounts/${sub.billing_account_id}`}
                       className="text-sm text-accent hover:underline"
                     >
                       View subscriber

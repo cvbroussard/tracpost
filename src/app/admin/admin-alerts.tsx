@@ -111,7 +111,7 @@ export async function AdminAlerts() {
       severity: daysLeft <= 2 ? "danger" : "warning",
       title: `Token expiring: ${token.account_name}`,
       detail: `${token.platform} — ${daysLeft}d left — ${token.subscriber_name}`,
-      href: `/admin/subscribers/${token.billing_account_id}`,
+      href: `/admin/accounts/${token.billing_account_id}`,
       timestamp: token.token_expires_at as string,
     });
   }

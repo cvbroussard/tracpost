@@ -145,7 +145,7 @@ function SubscriberOverview({ subscriberId }: { subscriberId: string }) {
   useEffect(() => {
     setLoading(true);
     setData(null);
-    fetch(`/api/ops/subscriber?id=${subscriberId}`)
+    fetch(`/api/ops/account?id=${subscriberId}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => setData(d))
       .finally(() => setLoading(false));

@@ -33,7 +33,7 @@ export function BillingCard({ subscriptionId }: { subscriptionId: string }) {
   const [result, setResult] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/admin/subscribers/${subscriptionId}/billing`)
+    fetch(`/api/admin/accounts/${subscriptionId}/billing`)
       .then(r => r.ok ? r.json() : null)
       .then(data => setBilling(data))
       .finally(() => setLoading(false));
@@ -43,7 +43,7 @@ export function BillingCard({ subscriptionId }: { subscriptionId: string }) {
     setActing(act);
     setResult(null);
     try {
-      const res = await fetch(`/api/admin/subscribers/${subscriptionId}/billing`, {
+      const res = await fetch(`/api/admin/accounts/${subscriptionId}/billing`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: act, ...extra }),
@@ -51,7 +51,7 @@ export function BillingCard({ subscriptionId }: { subscriptionId: string }) {
       const data = await res.json();
       setResult(data.success ? `Done: ${act}` : (data.error || "Failed"));
       if (data.success) {
-        const fresh = await fetch(`/api/admin/subscribers/${subscriptionId}/billing`);
+        const fresh = await fetch(`/api/admin/accounts/${subscriptionId}/billing`);
         if (fresh.ok) setBilling(await fresh.json());
       }
     } catch { setResult("Request failed"); }

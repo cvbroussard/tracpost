@@ -91,7 +91,7 @@ export function ManageShell({
   const [selectedSiteId, setSelectedSiteId] = useState<string>("all");
   const [subscriberSearch, setSubscriberSearch] = useState("");
 
-  const prefix = pathname.startsWith("/manage") ? "/manage" : "";
+  const prefix = pathname.startsWith("/ops") ? "/ops" : "";
 
   // Filter sites by selected subscriber
   const filteredSites = useMemo(() => {
@@ -148,7 +148,7 @@ export function ManageShell({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      <TopBar userName="Operator" variant="manage" />
+      <TopBar userName="Operator" variant="ops" />
       <AlertRibbon />
 
       <div className="flex flex-1 overflow-hidden">

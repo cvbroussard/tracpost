@@ -50,7 +50,7 @@ export function AlertRibbon() {
   useEffect(() => {
     setLoading(true);
     setPanOffset(0);
-    fetch(`/api/manage/alerts?range=${timeFilter}`)
+    fetch(`/api/ops/alerts?range=${timeFilter}`)
       .then(r => r.ok ? r.json() : { events: [] })
       .then(data => setEvents(data.events || []))
       .finally(() => setLoading(false));

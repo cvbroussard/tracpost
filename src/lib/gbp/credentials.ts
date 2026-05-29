@@ -5,7 +5,7 @@ import { decrypt, encrypt } from "@/lib/crypto";
  * Resolve GBP API credentials for a site from the unified
  * connection-machinery tables.
  *
- *   platform_assets + site_platform_assets — written by /manage/connections
+ *   platform_assets + site_platform_assets — written by /ops/connections
  *   gbp_credentials — OAuth token store, keyed on site_id
  *
  * Returns the validated access token (refreshing on the fly if expired)

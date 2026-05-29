@@ -69,14 +69,14 @@ function LoginForm() {
           principalType === "platform"
             ? "https://platform.tracpost.com/"
             : principalType === "operator"
-              ? "https://manage.tracpost.com/"
+              ? "https://ops.tracpost.com/"
               : "https://studio.tracpost.com/";
       } else {
         router.push(
           principalType === "platform"
             ? "/admin"
             : principalType === "operator"
-              ? "/manage"
+              ? "/ops"
               : "/dashboard",
         );
       }

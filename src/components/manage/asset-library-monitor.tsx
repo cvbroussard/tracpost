@@ -39,7 +39,7 @@ export function AssetLibraryMonitor({ siteId }: { siteId: string }) {
   const [focalAsset, setFocalAsset] = useState<Asset | null>(null);
 
   useEffect(() => {
-    fetch(`/api/manage/media?site_id=${siteId}`)
+    fetch(`/api/ops/media?site_id=${siteId}`)
       .then(r => r.ok ? r.json() : { assets: [], counts: {} })
       .then(d => { setAssets(d.assets); setCounts(d.counts); })
       .finally(() => setLoading(false));

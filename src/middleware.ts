@@ -58,7 +58,7 @@ const ONBOARDING_TOKEN_PATH = /^\/onboarding\/([A-Za-z0-9_-]{40,})$/;
 // Marketing-site auth gate (tracpost.com / www.tracpost.com only).
 // Activated when MARKETING_GATE_USER + MARKETING_GATE_PASS env vars are set;
 // absent vars = gate disabled (zero-friction rollback).
-// Subdomains (studio/platform/manage/blog/projects/preview/next) and tenant
+// Subdomains (studio/platform/ops/blog/projects/preview/next) and tenant
 // custom domains are UNAFFECTED — they have their own auth or are intended
 // public surfaces for tenant content.
 const MARKETING_GATE_EXEMPT_EXACT = new Set([
@@ -120,6 +120,15 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   const isLocal = hostname.includes("localhost");
+
+  // manage.tracpost.com was renamed to ops.tracpost.com — permanent-redirect
+  // any in-flight links (preserving path + query). Cookies ride the wildcard
+  // .tracpost.com domain, so the session survives the hop.
+  if (hostname.split(":")[0] === "manage.tracpost.com") {
+    const url = req.nextUrl.clone();
+    url.hostname = "ops.tracpost.com";
+    return NextResponse.redirect(url, 301);
+  }
 
   // When a visitor lands on /onboarding/[token], persist that token in a
   // cookie so they can return to /onboarding (bare) and resume. Server
@@ -364,7 +373,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
-  if (subdomain === "manage") {
+  if (subdomain === "ops") {
     if (pathname.startsWith("/dashboard")) {
       return new NextResponse("Not Found", { status: 404 });
     }
@@ -376,8 +385,8 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Rewrite: /subscribers → /manage/subscribers, / → /manage
-    const rewritePath = pathname === "/" ? "/manage" : `/manage${pathname}`;
+    // Rewrite: /subscribers → /ops/subscribers, / → /ops
+    const rewritePath = pathname === "/" ? "/ops" : `/ops${pathname}`;
 
     const gate = await gateAdmin(req, rewritePath);
     if (gate) return gate;
@@ -446,7 +455,7 @@ export async function middleware(req: NextRequest) {
 }
 
 /**
- * Gate admin/manage routes — allow only a signed tp_session carrying a
+ * Gate admin/ops routes — allow only a signed tp_session carrying a
  * platform/operator principal (staff authenticate as real users via the
  * canonical login). Otherwise redirect to that login. Returns a redirect
  * response if blocked, or null if allowed.
@@ -461,7 +470,7 @@ async function gateAdmin(
   }
 
   // Only gate admin and manage routes
-  if (!pathname.startsWith("/admin") && !pathname.startsWith("/manage")) {
+  if (!pathname.startsWith("/admin") && !pathname.startsWith("/ops")) {
     return null;
   }
 

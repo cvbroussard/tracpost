@@ -31,7 +31,7 @@ export function ProvisioningPipeline({ subscriberId }: { subscriberId: string })
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/manage/provisioning?subscriber_id=${subscriberId}`)
+    fetch(`/api/ops/provisioning?subscriber_id=${subscriberId}`)
       .then(r => r.ok ? r.json() : { tasks: [] })
       .then(data => {
         setTasks(data.tasks || []);
@@ -42,13 +42,13 @@ export function ProvisioningPipeline({ subscriberId }: { subscriberId: string })
   }, [subscriberId]);
 
   async function updateStatus(taskKey: string, status: string) {
-    await fetch("/api/manage/provisioning", {
+    await fetch("/api/ops/provisioning", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ subscriber_id: subscriberId, task_key: taskKey, status }),
     });
     // Refresh
-    const res = await fetch(`/api/manage/provisioning?subscriber_id=${subscriberId}`);
+    const res = await fetch(`/api/ops/provisioning?subscriber_id=${subscriberId}`);
     if (res.ok) {
       const data = await res.json();
       setTasks(data.tasks);

@@ -63,7 +63,7 @@ export function FocalPointInspectorModal({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/manage/focal-point/${assetId}`);
+        const res = await fetch(`/api/ops/focal-point/${assetId}`);
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           if (!cancelled) setError(body.error || `fetch failed (${res.status})`);

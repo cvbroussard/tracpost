@@ -161,7 +161,7 @@ export async function sendEngagementDigest(subscriptionId: string): Promise<bool
           <ul style="padding: 0 0 0 20px; margin: 0 0 24px;">${sample}</ul>
           ${events.length > 5 ? `<p style="font-size: 13px; color: #6b7280; margin: 0 0 16px;">+${events.length - 5} more</p>` : ""}
           <p style="margin: 0 0 16px;">
-            <a href="https://manage.tracpost.com/engage" style="display: inline-block; background: #3b82f6; color: #fff; padding: 10px 20px; font-size: 14px; font-weight: 500; text-decoration: none; border-radius: 4px;">
+            <a href="https://ops.tracpost.com/engage" style="display: inline-block; background: #3b82f6; color: #fff; padding: 10px 20px; font-size: 14px; font-weight: 500; text-decoration: none; border-radius: 4px;">
               Open Engage Inbox
             </a>
           </p>

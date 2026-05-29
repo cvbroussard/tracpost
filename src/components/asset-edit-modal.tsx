@@ -903,7 +903,7 @@ export function AssetEditModal({
             belong on the VARIANT level, not the source. The source asset is
             briefed-once / set-and-forget; enhancement (tool application) is
             what transforms vanilla template variants into master final
-            products. The studio surface lives at /manage/variant-studio. */}
+            products. The studio surface lives at /ops/variant-studio. */}
 
         {/* Footer: actions */}
         <div className="flex items-center justify-between border-t border-border px-6 py-3">

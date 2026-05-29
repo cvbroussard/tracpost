@@ -52,20 +52,20 @@ interface TaskAction {
 
 const TASK_ACTIONS: Record<string, TaskAction[]> = {
   checkout: [
-    { label: "View subscription", href: "/manage/billing", icon: "→" },
+    { label: "View subscription", href: "/ops/billing", icon: "→" },
   ],
   business_info: [
-    { label: "View site settings", href: "/manage/sites", icon: "→" },
+    { label: "View site settings", href: "/ops/sites", icon: "→" },
   ],
   playbook: [
-    { label: "View playbook", href: "/manage/brand", icon: "→" },
+    { label: "View playbook", href: "/ops/brand", icon: "→" },
     { label: "Regenerate playbook", action: "regenerate_playbook", icon: "⟳" },
   ],
   social_accounts: [
-    { label: "Manage connections", href: "/manage/connections", icon: "→" },
+    { label: "Manage connections", href: "/ops/connections", icon: "→" },
   ],
   oauth_connect: [
-    { label: "View connections", href: "/manage/connections", icon: "→" },
+    { label: "View connections", href: "/ops/connections", icon: "→" },
     { label: "Send connection invite", action: "send_invite", icon: "✉" },
   ],
   gbp_oauth: [
@@ -75,26 +75,26 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "Assign location", action: "gbp_assign", icon: "◎" },
   ],
   domain_provision: [
-    { label: "Manage domain", href: "/manage/website", icon: "→" },
+    { label: "Manage domain", href: "/ops/website", icon: "→" },
     { label: "Provision domain", action: "provision_domain", icon: "◎" },
   ],
   dns_config: [
-    { label: "Manage domain", href: "/manage/website", icon: "→" },
+    { label: "Manage domain", href: "/ops/website", icon: "→" },
     { label: "Send DNS email to tenant", action: "send_dns_email", icon: "✉" },
   ],
   first_upload: [
-    { label: "View media", href: "/manage/media", icon: "→" },
+    { label: "View media", href: "/ops/media", icon: "→" },
   ],
   first_content: [
-    { label: "View pipeline", href: "/manage/pipeline", icon: "→" },
+    { label: "View pipeline", href: "/ops/pipeline", icon: "→" },
     { label: "Trigger generation", action: "trigger_generation", icon: "▶" },
   ],
   autopilot: [
-    { label: "Manage autopilot", href: "/manage/autopilot", icon: "→" },
+    { label: "Manage autopilot", href: "/ops/autopilot", icon: "→" },
     { label: "Activate autopilot", action: "activate_autopilot", icon: "▶" },
   ],
   search_console: [
-    { label: "View SEO", href: "/manage/seo", icon: "→" },
+    { label: "View SEO", href: "/ops/seo", icon: "→" },
     { label: "Verify domain", action: "verify_gsc", icon: "✓" },
   ],
 };
@@ -111,7 +111,7 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/manage/provisioning?subscriber_id=${subscriberId}`)
+    fetch(`/api/ops/provisioning?subscriber_id=${subscriberId}`)
       .then(r => r.ok ? r.json() : { tasks: [] })
       .then(data => {
         setTasks(data.tasks || []);
@@ -122,7 +122,7 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
   }, [subscriberId]);
 
   const refreshTasks = useCallback(async () => {
-    const res = await fetch(`/api/manage/provisioning?subscriber_id=${subscriberId}`);
+    const res = await fetch(`/api/ops/provisioning?subscriber_id=${subscriberId}`);
     if (res.ok) {
       const data = await res.json();
       setTasks(data.tasks);
@@ -132,7 +132,7 @@ export function ProvisioningGraph({ subscriberId }: { subscriberId: string }) {
   }, [subscriberId]);
 
   async function updateStatus(taskKey: string, status: string) {
-    await fetch("/api/manage/provisioning", {
+    await fetch("/api/ops/provisioning", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ subscriber_id: subscriberId, task_key: taskKey, status }),

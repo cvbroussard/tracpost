@@ -7,7 +7,7 @@ import { makeManageAnalysisApi } from "@/lib/asset-analysis-api";
 import { AssetCategoriesSection } from "@/components/asset-categories-section";
 import type { PillarGroup } from "@/components/tag-picker";
 
-/** Shape returned by GET /api/manage/asset-analysis/[assetId]. */
+/** Shape returned by GET /api/ops/asset-analysis/[assetId]. */
 interface AnalysisContext {
   subscriptionId: string;
   siteId: string;
@@ -52,7 +52,7 @@ export function AnalysisModal({ assetId, onClose }: { assetId: string; onClose: 
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/manage/asset-analysis/${assetId}`)
+    fetch(`/api/ops/asset-analysis/${assetId}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => { if (!cancelled) setCtx(d); })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e)); });

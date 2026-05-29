@@ -139,7 +139,7 @@ export function assessReadiness(a: AssembledBlogPrompt): ReadinessReport {
       diagnostic:
         "Hooks are curated opening lines that anchor each article's voice. With zero hooks, the LLM invents an opener every time — generic and inconsistent. With <5, hooks recycle quickly and articles start to sound similar.",
       onboardingHint:
-        "Seed the hook bank during onboarding (3-5 hooks minimum). Operator: use the hook editor under /manage. Long-term: extract hooks from the subscriber's own published content.",
+        "Seed the hook bank during onboarding (3-5 hooks minimum). Operator: use the hook editor under /ops. Long-term: extract hooks from the subscriber's own published content.",
     },
     {
       key: "research_yield",

@@ -19,8 +19,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ siteId: string }> },
 ) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { siteId } = await params;

@@ -1,4 +1,4 @@
-import { verifyCookie } from "@/lib/cookie-sign";
+import { isAdminRequest } from "@/lib/admin-session";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { encrypt, decrypt } from "@/lib/crypto";
@@ -12,8 +12,7 @@ import { encrypt, decrypt } from "@/lib/crypto";
  * Assigns a specific discovered location to the site, activates the connection.
  */
 export async function GET(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!verifyCookie(adminCookie)) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -49,8 +48,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!verifyCookie(adminCookie)) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

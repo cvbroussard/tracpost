@@ -2,7 +2,7 @@ import type { AssetAnalysisApi, InspectorTagGroup } from "@/hooks/use-asset-anal
 
 /**
  * The data layer for asset analysis. The subscriber surface and the manager
- * (tp_admin) surface differ only by a query-string suffix — the manager
+ * (operator-session) surface differ only by a query-string suffix — the manager
  * appends ?subscription_id=<id> so authenticateRequest's admin-acting-on-
  * behalf path (src/lib/auth.ts Path 3) resolves the right subscriber context.
  */
@@ -92,7 +92,7 @@ function makeAnalysisApi(query: string): AssetAnalysisApi {
 export const subscriberAssetAnalysisApi: AssetAnalysisApi = makeAnalysisApi("");
 
 /**
- * Manager adapter — appends ?subscription_id so the tp_admin operator's
+ * Manager adapter — appends ?subscription_id so the operator's
  * request resolves to the subscriber's context (authenticateRequest Path 3).
  */
 export function makeManageAnalysisApi(subscriptionId: string): AssetAnalysisApi {

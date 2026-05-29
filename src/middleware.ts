@@ -4,7 +4,7 @@ import {
   lookupTenantByCustomDomain,
   lookupCustomDomainBySlug,
 } from "@/lib/custom-domain-lookup";
-import { isAdminCookieValidEdge, verifyCookieEdge } from "@/lib/cookie-sign-edge";
+import { verifyCookieEdge } from "@/lib/cookie-sign-edge";
 
 /**
  * Extract siteSlug from a custom subdomain.
@@ -63,7 +63,6 @@ const ONBOARDING_TOKEN_PATH = /^\/onboarding\/([A-Za-z0-9_-]{40,})$/;
 // public surfaces for tenant content.
 const MARKETING_GATE_EXEMPT_EXACT = new Set([
   "/login",        // Subscribers need to log in
-  "/admin-login",  // Already in sharedPaths, listed for clarity
   "/unauthorized", // Error page — gating it would be circular
   "/privacy",      // Legal/compliance
   "/terms",        // Legal/compliance
@@ -170,7 +169,7 @@ export async function middleware(req: NextRequest) {
 
   // Static/shared public pages — accessible from all subdomains
   // Note: /login is NOT shared — it resolves differently per subdomain
-  const sharedPaths = ["/privacy", "/terms", "/data-deletion", "/admin-login"];
+  const sharedPaths = ["/privacy", "/terms", "/data-deletion"];
   if (sharedPaths.some((p) => pathname === p)) {
     return NextResponse.next();
   }
@@ -339,11 +338,6 @@ export async function middleware(req: NextRequest) {
       return new NextResponse("Not Found", { status: 404 });
     }
 
-    // Admin login page — pass through
-    if (pathname === "/admin-login" || pathname.startsWith("/admin-login")) {
-      return NextResponse.next();
-    }
-
     // Gate admin routes (after rewrite or direct access)
     if (pathname.startsWith("/admin")) {
       const gate = await gateAdmin(req, pathname);
@@ -373,10 +367,6 @@ export async function middleware(req: NextRequest) {
   if (subdomain === "manage") {
     if (pathname.startsWith("/dashboard")) {
       return new NextResponse("Not Found", { status: 404 });
-    }
-
-    if (pathname === "/admin-login" || pathname.startsWith("/admin-login")) {
-      return NextResponse.next();
     }
 
     // /login is retired on this subdomain — redirect to the canonical login.
@@ -456,20 +446,17 @@ export async function middleware(req: NextRequest) {
 }
 
 /**
- * Gate admin routes — redirect to admin login if the tp_admin cookie is
- * missing, malformed, tampered with, or expired.
- *
- * Verifies the HMAC signature using a Web-Crypto-based verifier
- * (`isAdminCookieValidEdge`) — the cookie is set by /api/auth/admin
- * with `signCookie()` and is NOT just the literal string "authenticated".
- * Returns a redirect response if blocked, or null if allowed.
+ * Gate admin/manage routes — allow only a signed tp_session carrying a
+ * platform/operator principal (staff authenticate as real users via the
+ * canonical login). Otherwise redirect to that login. Returns a redirect
+ * response if blocked, or null if allowed.
  */
 async function gateAdmin(
   req: NextRequest,
   pathname: string,
 ): Promise<NextResponse | null> {
-  // Skip API routes and login page
-  if (pathname.startsWith("/api/") || pathname === "/admin-login") {
+  // Skip API routes — they self-gate via isAdminRequest
+  if (pathname.startsWith("/api/")) {
     return null;
   }
 
@@ -478,19 +465,7 @@ async function gateAdmin(
     return null;
   }
 
-  // Allow the admin login page within the admin path (dev mode)
-  if (pathname === "/admin/login") {
-    return null;
-  }
-
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (await isAdminCookieValidEdge(adminCookie)) {
-    return null;
-  }
-
-  // v3: a platform/operator principal baked into the signed tp_session is also
-  // authorized for the admin/manage surfaces — no separate tp_admin cookie
-  // needed. This is the staff login path (accountless super-admin included).
+  // A platform/operator principal in the signed tp_session authorizes staff.
   const session = await verifyCookieEdge<{ principalType?: string }>(
     req.cookies.get("tp_session")?.value,
   );
@@ -501,19 +476,13 @@ async function gateAdmin(
     return null;
   }
 
-  // Redirect to admin login, preserving the intended destination as ?next
-  // so the login page can return the operator there (e.g. /manage) rather
-  // than always falling to the /admin default.
+  // Redirect to the single canonical login, preserving the intended
+  // destination as ?next. Local dev stays on the same host.
   const isLocal = req.headers.get("host")?.includes("localhost");
   const intended = req.nextUrl.pathname + req.nextUrl.search;
   const url = req.nextUrl.clone();
-  if (isLocal) {
-    url.pathname = "/admin-login";
-  } else {
-    // Single canonical login on the root domain.
-    url.hostname = "tracpost.com";
-    url.pathname = "/login";
-  }
+  if (!isLocal) url.hostname = "tracpost.com";
+  url.pathname = "/login";
   url.search = `?next=${encodeURIComponent(intended)}`;
   return NextResponse.redirect(url);
 }

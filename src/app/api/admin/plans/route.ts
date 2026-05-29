@@ -21,8 +21,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -55,8 +54,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -89,8 +87,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -120,8 +117,7 @@ export async function DELETE(req: NextRequest) {
  * Body: { id, action: "create_stripe" | "sync_stripe" }
  */
 export async function PUT(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

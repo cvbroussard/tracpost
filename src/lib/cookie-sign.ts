@@ -7,7 +7,7 @@
  * knowing SESSION_TOKEN_SECRET. Tampering with the payload breaks the
  * HMAC and `verifyCookie` returns null.
  *
- * Used for `tp_session` (subscriber dashboard session) and `tp_admin`
+ * Used for `tp_session` (subscriber dashboard + staff session).
  * (operator admin session). Replaces the prior plain-JSON encoding.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";

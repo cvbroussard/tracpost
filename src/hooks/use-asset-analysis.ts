@@ -44,7 +44,7 @@ export interface CreatedEntity {
 
 /**
  * The data layer for asset analysis — injected so the same hook runs under
- * the subscriber-session API and the manager (tp_admin) API. The hook holds
+ * the subscriber-session API and the manager (operator-session) API. The hook holds
  * zero URL knowledge; each surface passes its own adapter (see
  * src/lib/asset-analysis-api.ts).
  */

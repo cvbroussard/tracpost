@@ -1,4 +1,4 @@
-import { verifyCookie } from "@/lib/cookie-sign";
+import { isAdminRequest } from "@/lib/admin-session";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 
@@ -16,8 +16,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ assetId: string }> },
 ) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!verifyCookie(adminCookie)) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

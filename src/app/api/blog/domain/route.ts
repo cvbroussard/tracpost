@@ -1,4 +1,4 @@
-import { verifyCookie } from "@/lib/cookie-sign";
+import { isAdminRequest } from "@/lib/admin-session";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { addDomain, removeDomain, verifyDomain } from "@/lib/vercel-domains";
@@ -21,9 +21,8 @@ import { isReservedSlug } from "@/lib/urls";
  *     Removes custom domain from Vercel + clears blog_settings
  */
 export async function POST(req: NextRequest) {
-  // Admin-only — check tp_admin cookie
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!verifyCookie(adminCookie)) {
+  // Admin-only (platform/operator session)
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

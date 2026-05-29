@@ -11,7 +11,7 @@ import { isAdminRequest } from "@/lib/admin-session";
 import { sql } from "@/lib/db";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!await isAdminRequest(req.cookies.get("tp_admin")?.value)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

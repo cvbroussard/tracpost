@@ -32,8 +32,7 @@ const ALLOWED_TYPES = new Set([
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB — generous for screenshots
 
 export async function POST(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

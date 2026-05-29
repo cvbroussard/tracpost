@@ -40,8 +40,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ platform: string; nodeId: string }> }
 ) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -97,8 +96,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ platform: string; nodeId: string }> }
 ) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

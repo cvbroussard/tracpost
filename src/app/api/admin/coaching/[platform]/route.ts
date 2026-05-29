@@ -4,7 +4,7 @@
  *   counts) for the operator editor. Includes raw `content` JSONB on each
  *   node so the editor can present every field, including legacy ones.
  *
- * Operator-gated via tp_admin cookie.
+ * Operator-gated (platform/operator session).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";
@@ -47,8 +47,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ platform: string }> }
 ) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -141,8 +140,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ platform: string }> }
 ) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

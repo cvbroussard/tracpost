@@ -1,4 +1,4 @@
-import { verifyCookie } from "@/lib/cookie-sign";
+import { isAdminRequest } from "@/lib/admin-session";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { enrichBrand, captureLogoAsHeroAsset } from "@/lib/brand-enrich";
@@ -20,8 +20,7 @@ import { enrichBrand, captureLogoAsHeroAsset } from "@/lib/brand-enrich";
  * else is manual.
  */
 export async function POST(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!verifyCookie(adminCookie)) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -13,13 +13,8 @@ export function TopBar({ userName, variant = "studio" }: TopBarProps) {
   const router = useRouter();
 
   async function handleLogout() {
-    // Clear the V3 session cookie on every surface; also clear the legacy
-    // tp_admin cookie on platform/manage. Both are dropped so sign-out works
-    // regardless of which credential authenticated the session.
+    // Clear the tp_session cookie (the only staff/subscriber credential now).
     await fetch("/api/auth/logout", { method: "POST" });
-    if (variant === "platform" || variant === "manage") {
-      await fetch("/api/auth/admin", { method: "DELETE" });
-    }
     // Always return to the single canonical login page.
     if (window.location.hostname.endsWith("tracpost.com")) {
       window.location.href = "https://tracpost.com/login";

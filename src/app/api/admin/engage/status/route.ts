@@ -9,8 +9,7 @@ import { sql } from "@/lib/db";
 const ALLOWED = new Set(["new", "reviewed", "archived"]);
 
 export async function POST(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!await isAdminRequest(adminCookie)) {
+  if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

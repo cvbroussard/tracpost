@@ -96,24 +96,3 @@ export async function verifyCookieEdge<T>(
     return null;
   }
 }
-
-interface AdminPayload {
-  admin: boolean;
-  issued_at: number;
-  expires_at: number;
-}
-
-/**
- * Convenience: verify a `tp_admin` cookie value and check expiry.
- * Returns true only if the cookie is signed correctly AND not expired
- * AND carries `admin: true`.
- */
-export async function isAdminCookieValidEdge(
-  raw: string | undefined | null,
-): Promise<boolean> {
-  const payload = await verifyCookieEdge<AdminPayload>(raw);
-  if (!payload || !payload.admin) return false;
-  if (typeof payload.expires_at !== "number") return false;
-  if (payload.expires_at < Date.now()) return false;
-  return true;
-}

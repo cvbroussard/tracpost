@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { verifyCookie } from "@/lib/cookie-sign";
+import { isAdminRequest } from "@/lib/admin-session";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { gatherDirectorContext } from "@/lib/video-gen/director-context";
@@ -52,8 +52,7 @@ export const maxDuration = 300;
 const TEMPLATES: DirectorTemplate[] = ["reel_9x16", "story_9x16", "long_16x9"];
 
 export async function POST(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!verifyCookie(adminCookie)) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -268,8 +267,7 @@ export async function POST(req: NextRequest) {
  * analyzed image" resolves to.
  */
 export async function GET(req: NextRequest) {
-  const adminCookie = req.cookies.get("tp_admin")?.value;
-  if (!verifyCookie(adminCookie)) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

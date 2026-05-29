@@ -4,12 +4,6 @@ import { cookies } from "next/headers";
 import { verifyCookie } from "./cookie-sign";
 import type { Session } from "./session";
 
-interface AdminPayload {
-  admin: true;
-  issued_at: number;
-  expires_at: number;
-}
-
 export type PrincipalType = "platform" | "operator" | "agency" | "business" | "guest";
 
 export interface Membership {
@@ -126,8 +120,9 @@ async function loadContextByAccountOwner(
  *    a. Session token (tp_s_ prefix) → mobile app auth
  *    b. API key (tp_ prefix) → programmatic API auth
  *    c. Device session token (no prefix) → mobile app via QR invite
- * 2. tp_session cookie → dashboard session auth
- * 3. tp_admin cookie + account-id param → operator acting on a business's behalf
+ * 2. tp_session cookie → dashboard session auth. A platform/operator principal
+ *    with an account-id param resolves to that account (operator acting on a
+ *    business's behalf); business principals always get their own context.
  */
 export async function authenticateRequest(
   req: NextRequest
@@ -185,24 +180,6 @@ export async function authenticateRequest(
       principalType,
       memberships: [],
     };
-  }
-
-  // Path 3 (legacy, removed in C2b): tp_admin cookie + account-id param.
-  const rawAdmin = cookieStore.get("tp_admin")?.value;
-  const adminPayload = verifyCookie<AdminPayload>(rawAdmin);
-  const adminValid = adminPayload?.admin === true && adminPayload.expires_at >= Date.now();
-  if (adminValid) {
-    const url = new URL(req.url);
-    const accountId =
-      url.searchParams.get("account_id") ||
-      url.searchParams.get("subscription_id") ||
-      url.searchParams.get("subscriber_id");
-    if (accountId) {
-      const ctx = await loadContextByAccountOwner({ accountId }, { actingAsAdmin: true });
-      if (ctx) {
-        return { ...ctx, plan: ctx.plan || "free" };
-      }
-    }
   }
 
   return NextResponse.json(

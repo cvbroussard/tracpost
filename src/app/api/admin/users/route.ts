@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   const [user] = await sql`
     INSERT INTO users (email, name, password_hash, is_active, billing_account_id)
     VALUES (${email}, ${name}, ${passwordHash}, true, NULL)
-    RETURNING id, name, email, is_active, billing_account_id, business_id, created_at
+    RETURNING id, name, email, is_active, billing_account_id, created_at
   `;
 
   return NextResponse.json({
@@ -57,8 +57,6 @@ export async function POST(req: NextRequest) {
       createdAt: String(user.created_at),
       billingAccountId: (user.billing_account_id as string) ?? null,
       accountName: null,
-      businessId: (user.business_id as string) ?? null,
-      businessName: null,
       memberships: [],
       accountBusinesses: [],
     },

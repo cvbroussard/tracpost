@@ -61,9 +61,9 @@ export async function POST(req: NextRequest) {
 
   // Create team member user under the current subscription
   const [member] = await sql`
-    INSERT INTO users (name, email, billing_account_id, business_id, is_active, password_hash)
-    VALUES (${name.trim()}, ${email.trim()}, ${auth.subscriptionId}, ${siteId || null}, true, ${passwordHash})
-    RETURNING id, name, email, business_id
+    INSERT INTO users (name, email, billing_account_id, is_active, password_hash)
+    VALUES (${name.trim()}, ${email.trim()}, ${auth.subscriptionId}, true, ${passwordHash})
+    RETURNING id, name, email
   `;
 
   // The business membership is the sole authority for this member's role and
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
       name: member.name,
       email: member.email,
       role,
-      siteId: member.business_id || null,
+      siteId: scopeBiz,
     },
   });
 }

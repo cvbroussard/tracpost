@@ -20,10 +20,11 @@ export async function POST(req: NextRequest) {
 
   // Find the invite
   const [member] = await sql`
-    SELECT u.id, u.billing_account_id, u.business_id, u.name,
+    SELECT u.id, u.billing_account_id, u.name,
            u.invite_expires, u.invite_consumed, u.is_active,
            s.plan, s.owner_user_id,
-           (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability
+           (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability,
+           (SELECT scope_id FROM memberships WHERE user_id = u.id AND scope_type = 'business' AND capability IN ('capture','reviewer') ORDER BY created_at LIMIT 1) AS scoped_business_id
     FROM users u
     JOIN accounts s ON u.billing_account_id = s.id
     WHERE u.invite_token = ${token}
@@ -60,10 +61,10 @@ export async function POST(req: NextRequest) {
   `;
 
   // Fetch sites for this subscriber (filtered by site scope if set)
-  const sites = member.business_id
+  const sites = member.scoped_business_id
     ? await sql`
         SELECT id, name, url FROM businesses
-        WHERE id = ${member.business_id} AND is_active = true
+        WHERE id = ${member.scoped_business_id} AND is_active = true
       `
     : await sql`
         SELECT id, name, url FROM businesses
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest) {
           : member.id === member.owner_user_id
             ? "owner"
             : "member",
-      siteId: member.business_id || null,
+      siteId: member.scoped_business_id || null,
       plan: member.plan,
     },
     sites: sites.map((s) => ({

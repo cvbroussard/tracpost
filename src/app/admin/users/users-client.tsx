@@ -26,8 +26,6 @@ export interface UserRow {
   createdAt: string;
   billingAccountId: string | null;
   accountName: string | null;
-  businessId: string | null;
-  businessName: string | null;
   memberships: Membership[];
   accountBusinesses: BizOption[];
 }
@@ -124,7 +122,7 @@ export function UsersClient({ initialRows }: { initialRows: UserRow[] }) {
   const q = search.trim().toLowerCase();
   const filtered = q
     ? rows.filter((u) =>
-        [u.name, u.email, u.accountName, u.businessName].some((v) =>
+        [u.name, u.email, u.accountName].some((v) =>
           (v || "").toLowerCase().includes(q),
         ),
       )
@@ -240,10 +238,6 @@ function UserCard({
           <div className="mt-0.5 text-sm text-muted">{u.email || "—"}</div>
           <div className="mt-0.5 text-xs text-muted">
             Account: {u.accountName || "—"}
-            <span title="Legacy users.business_id — read-only here; manage business assignment via a business membership. Slated for retirement with users.role.">
-              {" · legacy business_id: "}
-              {u.businessName || "—"}
-            </span>
           </div>
         </div>
         <button

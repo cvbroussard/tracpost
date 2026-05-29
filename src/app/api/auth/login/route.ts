@@ -20,9 +20,10 @@ export async function POST(req: NextRequest) {
   }
 
   const rows = await sql`
-    SELECT u.id, u.name, u.password_hash, u.billing_account_id, u.business_id,
+    SELECT u.id, u.name, u.password_hash, u.billing_account_id,
            s.plan, s.name AS subscription_name, s.owner_user_id,
-           (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability
+           (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability,
+           (SELECT scope_id FROM memberships WHERE user_id = u.id AND scope_type = 'business' AND capability IN ('capture','reviewer') ORDER BY created_at LIMIT 1) AS scoped_business_id
     FROM users u
     LEFT JOIN accounts s ON u.billing_account_id = s.id
     WHERE u.email = ${email}
@@ -61,10 +62,12 @@ export async function POST(req: NextRequest) {
   // Accountless staff (platform/operator) have no billing_account_id and thus
   // no businesses — skip the sites query rather than feed "" to a uuid column.
   const subscriptionId = (user.billing_account_id as string) || "";
-  const userSiteScope = (user.business_id as string | null) || null;
+  // Site scope now lives on the user's capture/reviewer business membership
+  // (users.business_id retired). NULL ⇒ unscoped: sees all account sites.
+  const userSiteScope = (user.scoped_business_id as string | null) || null;
 
-  // If user has a site_id scope (Site Access bound to a single business),
-  // filter sites to just that one. Otherwise return all subscription sites.
+  // If the user is scoped to a single business, filter sites to just that one.
+  // Otherwise return all subscription sites.
   const rawSites = subscriptionId
     ? await sql`
         SELECT id, name, url, is_active FROM businesses

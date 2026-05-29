@@ -16,10 +16,11 @@ export default async function TeamPage() {
   const [subRow, members, sites] = await Promise.all([
     sql`SELECT plan FROM accounts WHERE id = ${session.subscriptionId}`,
     sql`
-      SELECT u.id, u.name, u.email, u.phone, u.business_id, u.notify_via,
+      SELECT u.id, u.name, u.email, u.phone, u.notify_via,
              u.password_hash IS NOT NULL AS has_password,
              u.session_token_hash IS NOT NULL AS has_device,
              u.last_active_at, u.is_active, u.created_at,
+             bm.scope_id AS scoped_business_id,
              CASE
                WHEN u.id = a.owner_user_id THEN 'owner'
                WHEN bm.capability = 'capture' THEN 'capture'
@@ -29,7 +30,7 @@ export default async function TeamPage() {
       FROM users u
       JOIN accounts a ON a.id = u.billing_account_id
       LEFT JOIN LATERAL (
-        SELECT capability FROM memberships m
+        SELECT capability, scope_id FROM memberships m
         WHERE m.user_id = u.id AND m.scope_type = 'business'
           AND m.capability IN ('capture', 'reviewer')
         LIMIT 1
@@ -74,7 +75,7 @@ export default async function TeamPage() {
     email: (m.email as string) || null,
     phone: (m.phone as string) || null,
     role: m.role as string,
-    siteId: (m.business_id as string) || null,
+    siteId: (m.scoped_business_id as string) || null,
     hasPassword: m.has_password as boolean,
     hasDevice: m.has_device as boolean,
     notifyVia: (m.notify_via as string) || "email",

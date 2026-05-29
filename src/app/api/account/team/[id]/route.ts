@@ -52,36 +52,52 @@ export async function PATCH(
     await sql`UPDATE users SET phone = ${body.phone.trim() || null} WHERE id = ${id}`;
   }
 
-  if (body.siteId !== undefined) {
-    await sql`UPDATE users SET business_id = ${body.siteId || null} WHERE id = ${id}`;
-  }
+  // Site scope + capability both live on the member's business membership now
+  // (users.business_id retired). Resolve the target scope + capability and
+  // upsert the member's single business membership.
+  const roleChange = body.role !== undefined && ["member", "capture", "reviewer"].includes(body.role);
+  if (body.siteId !== undefined || roleChange) {
+    const [existing] = await sql`
+      SELECT id, scope_id, capability FROM memberships
+      WHERE user_id = ${id} AND scope_type = 'business'
+      ORDER BY created_at LIMIT 1
+    `;
 
-  if (body.role !== undefined && ["member", "capture", "reviewer"].includes(body.role)) {
-    // The business-membership capability is the sole authority (users.role
-    // retired). Uses the member's current business_id — set just above if
-    // siteId changed — or the account's sole business.
-    const capability = body.role === "capture" ? "capture" : body.role === "reviewer" ? "reviewer" : "full";
-    const [m2] = await sql`SELECT business_id FROM users WHERE id = ${id}`;
-    let scopeBiz: string | null = (m2?.business_id as string | null) || null;
-    if (!scopeBiz) {
+    // Capability: explicit role wins; else keep existing; else 'full'.
+    const capability = body.role === "capture" ? "capture"
+      : body.role === "reviewer" ? "reviewer"
+      : body.role === "member" ? "full"
+      : (existing?.capability as string | null) || "full";
+
+    // Target business: explicit siteId wins (null clears scope); else keep the
+    // existing membership's scope; else the account's sole active business.
+    let scopeBiz: string | null =
+      body.siteId !== undefined ? (body.siteId || null)
+      : (existing?.scope_id as string | null) || null;
+    if (!scopeBiz && body.siteId === undefined && !existing) {
       const bizRows = await sql`SELECT id FROM businesses WHERE billing_account_id = ${auth.subscriptionId} AND is_active = true`;
       if (bizRows.length === 1) scopeBiz = bizRows[0].id as string;
     }
-    if ((body.role === "capture" || body.role === "reviewer") && !scopeBiz) {
+
+    if ((capability === "capture" || capability === "reviewer") && !scopeBiz) {
       return NextResponse.json({ error: "Select a site for capture or reviewer members." }, { status: 400 });
     }
-    if (scopeBiz) {
-      const upd = await sql`
-        UPDATE memberships SET capability = ${capability}
-        WHERE user_id = ${id} AND scope_type = 'business' AND scope_id = ${scopeBiz}
-        RETURNING id
-      `;
-      if (upd.length === 0) {
+
+    if (existing) {
+      if (scopeBiz) {
         await sql`
-          INSERT INTO memberships (user_id, scope_type, scope_id, role, capability)
-          VALUES (${id}, 'business', ${scopeBiz}, 'member', ${capability})
+          UPDATE memberships SET scope_id = ${scopeBiz}, capability = ${capability}
+          WHERE id = ${existing.id}
         `;
+      } else {
+        // Scope explicitly cleared + capability full → unscope (all-sites member).
+        await sql`DELETE FROM memberships WHERE id = ${existing.id}`;
       }
+    } else if (scopeBiz) {
+      await sql`
+        INSERT INTO memberships (user_id, scope_type, scope_id, role, capability)
+        VALUES (${id}, 'business', ${scopeBiz}, 'member', ${capability})
+      `;
     }
   }
 

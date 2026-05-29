@@ -16,7 +16,6 @@ export default async function UsersPage() {
     SELECT
       u.id, u.name, u.email, u.is_active, u.created_at,
       u.billing_account_id, a.name AS account_name,
-      u.business_id, b.name AS business_name,
       COALESCE((
         SELECT json_agg(json_build_object(
           'id', m.id,
@@ -37,7 +36,6 @@ export default async function UsersPage() {
       ), '[]'::json) AS account_businesses
     FROM users u
     LEFT JOIN accounts a ON a.id = u.billing_account_id
-    LEFT JOIN businesses b ON b.id = u.business_id
     ORDER BY a.name NULLS LAST, u.created_at
   `;
 
@@ -49,8 +47,6 @@ export default async function UsersPage() {
     createdAt: String(u.created_at),
     billingAccountId: (u.billing_account_id as string) || null,
     accountName: (u.account_name as string) || null,
-    businessId: (u.business_id as string) || null,
-    businessName: (u.business_name as string) || null,
     memberships: (u.memberships as UserRow["memberships"]) || [],
     accountBusinesses: (u.account_businesses as UserRow["accountBusinesses"]) || [],
   }));

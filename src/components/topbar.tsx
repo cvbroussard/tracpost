@@ -6,7 +6,7 @@ import { ThemeToggle } from "./theme-toggle";
 
 interface TopBarProps {
   userName: string;
-  variant?: "studio" | "platform" | "ops";
+  variant?: "studio" | "platform" | "ops" | "agy";
 }
 
 export function TopBar({ userName, variant = "studio" }: TopBarProps) {
@@ -38,6 +38,11 @@ export function TopBar({ userName, variant = "studio" }: TopBarProps) {
         {variant === "ops" && (
           <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
             OPS
+          </span>
+        )}
+        {variant === "agy" && (
+          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">
+            AGENCY
           </span>
         )}
       </div>

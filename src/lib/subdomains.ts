@@ -16,6 +16,7 @@ export type SubdomainType =
   | "studio"
   | "platform"
   | "ops"
+  | "agy"
   | "blog"
   | "projects"
   | "preview";
@@ -35,6 +36,7 @@ export function classifyHost(hostname: string): SubdomainType {
   if (host === "studio.tracpost.com" || host === "app.tracpost.com") return "studio";
   if (host === "platform.tracpost.com") return "platform";
   if (host === "ops.tracpost.com") return "ops";
+  if (host === "agy.tracpost.com") return "agy";
   if (host === "next.tracpost.com") return "next";
   if (host === "preview.tracpost.com" || host === "staging.tracpost.com") return "preview";
 
@@ -71,6 +73,12 @@ export function platformUrl(path = ""): string {
 export function opsUrl(path = ""): string {
   if (useSubdomains()) return `https://ops.tracpost.com${path}`;
   return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3099"}/ops${path}`;
+}
+
+/** Agy (agency console) base URL. */
+export function agyUrl(path = ""): string {
+  if (useSubdomains()) return `https://agy.tracpost.com${path}`;
+  return `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3099"}/agy${path}`;
 }
 
 /** Marketing (public) base URL. */

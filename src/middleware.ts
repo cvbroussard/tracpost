@@ -396,11 +396,39 @@ export async function middleware(req: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  if (subdomain === "agy") {
+    // Agency console. Block the other surfaces' route prefixes.
+    if (
+      pathname.startsWith("/dashboard") ||
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/ops")
+    ) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+    // /login is retired on this subdomain — redirect to the canonical login.
+    if (pathname === "/login") {
+      const url = req.nextUrl.clone();
+      url.hostname = "tracpost.com";
+      return NextResponse.redirect(url);
+    }
+    // Rewrite: /roster → /agy/roster, / → /agy. The /agy layout enforces the
+    // agency/platform principal gate server-side.
+    const rewritePath = pathname === "/" ? "/agy" : `/agy${pathname}`;
+    const url = req.nextUrl.clone();
+    url.pathname = rewritePath;
+    return NextResponse.rewrite(url);
+  }
+
   // next.tracpost.com — new marketing site staging. Routes to the
   // (marketing) route group directly. Blog/projects still rewrite
   // via next.config. Block admin/dashboard.
   if (subdomain === "next") {
-    if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
+    if (
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/dashboard") ||
+      pathname.startsWith("/ops") ||
+      pathname.startsWith("/agy")
+    ) {
       return new NextResponse("Not Found", { status: 404 });
     }
     // Let the route group handle it — no rewrites needed
@@ -430,6 +458,14 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith("/admin")) {
     const rest = pathname.replace(/^\/admin/, "") || "/";
     return NextResponse.redirect(new URL(`https://platform.tracpost.com${rest}`));
+  }
+  if (pathname.startsWith("/ops")) {
+    const rest = pathname.replace(/^\/ops/, "") || "/";
+    return NextResponse.redirect(new URL(`https://ops.tracpost.com${rest}`));
+  }
+  if (pathname.startsWith("/agy")) {
+    const rest = pathname.replace(/^\/agy/, "") || "/";
+    return NextResponse.redirect(new URL(`https://agy.tracpost.com${rest}`));
   }
 
   // tracpost.com — marketing route group serves /, /about, /contact,

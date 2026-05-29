@@ -70,14 +70,18 @@ function LoginForm() {
             ? "https://platform.tracpost.com/"
             : principalType === "operator"
               ? "https://ops.tracpost.com/"
-              : "https://studio.tracpost.com/";
+              : principalType === "agency"
+                ? "https://agy.tracpost.com/"
+                : "https://studio.tracpost.com/";
       } else {
         router.push(
           principalType === "platform"
             ? "/admin"
             : principalType === "operator"
               ? "/ops"
-              : "/dashboard",
+              : principalType === "agency"
+                ? "/agy"
+                : "/dashboard",
         );
       }
     } catch {

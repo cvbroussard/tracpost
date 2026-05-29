@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateMagicToken } from "@/lib/magic-link";
 import { sql } from "@/lib/db";
-import { studioUrl, platformUrl, opsUrl, cookieDomain } from "@/lib/subdomains";
+import { studioUrl, platformUrl, opsUrl, agyUrl, cookieDomain } from "@/lib/subdomains";
 import { signCookie } from "@/lib/cookie-sign";
 import { derivePrincipal, loadMemberships } from "@/lib/auth";
 
@@ -61,9 +61,11 @@ export async function GET(req: NextRequest) {
       ? new URL(platformUrl("/"), req.url)
       : principalType === "operator"
         ? new URL(opsUrl("/"), req.url)
-        : siteRows.length === 0
-          ? new URL("/setup", req.url)
-          : new URL(studioUrl("/") || "/dashboard", req.url);
+        : principalType === "agency"
+          ? new URL(agyUrl("/"), req.url)
+          : siteRows.length === 0
+            ? new URL("/setup", req.url)
+            : new URL(studioUrl("/") || "/dashboard", req.url);
 
   const response = NextResponse.redirect(redirectUrl);
 

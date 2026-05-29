@@ -1,6 +1,6 @@
 import { sql } from "@/lib/db";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getAdminSession } from "@/lib/admin-session";
 import { LocationPickerClient } from "./location-picker-client";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +10,7 @@ export default async function LocationPickerPage({
 }: {
   searchParams: Promise<{ site_id?: string }>;
 }) {
-  const jar = await cookies();
-  if (jar.get("tp_admin")?.value !== "authenticated") redirect("/login");
+  if (!(await getAdminSession())) redirect("/login");
 
   const params = await searchParams;
   const siteId = params.site_id;

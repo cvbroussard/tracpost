@@ -154,6 +154,25 @@ export async function authenticateRequest(
   const rawSession = cookieStore.get("tp_session")?.value;
   const session = verifyCookie<Session>(rawSession);
   if (session && session.userId) {
+    const principalType = (session.principalType as PrincipalType) ?? "business";
+
+    // Staff impersonation: a platform/operator principal acting on a specific
+    // account (via ?account_id / subscription_id / subscriber_id) resolves to
+    // that account's owner context, attributed to the operator (actingAsAdmin).
+    // Business principals never impersonate — they always get their own context,
+    // so the param can't be used to escalate.
+    if (principalType === "platform" || principalType === "operator") {
+      const url = new URL(req.url);
+      const accountId =
+        url.searchParams.get("account_id") ||
+        url.searchParams.get("subscription_id") ||
+        url.searchParams.get("subscriber_id");
+      if (accountId) {
+        const ctx = await loadContextByAccountOwner({ accountId }, { actingAsAdmin: true });
+        if (ctx) return { ...ctx, plan: ctx.plan || "free" };
+      }
+    }
+
     return {
       userId: session.userId,
       userName: session.userName,
@@ -163,12 +182,12 @@ export async function authenticateRequest(
       // isOwner is baked into the cookie at login (Phase 3b). Pre-3b cookies
       // lack it and resolve to false until the user re-logs in.
       isOwner: session.isOwner ?? false,
-      principalType: session.principalType as PrincipalType ?? "business",
+      principalType,
       memberships: [],
     };
   }
 
-  // Path 3: Admin cookie + account-id param (operator acting on behalf).
+  // Path 3 (legacy, removed in C2b): tp_admin cookie + account-id param.
   const rawAdmin = cookieStore.get("tp_admin")?.value;
   const adminPayload = verifyCookie<AdminPayload>(rawAdmin);
   const adminValid = adminPayload?.admin === true && adminPayload.expires_at >= Date.now();

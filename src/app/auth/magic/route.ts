@@ -31,11 +31,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=mobile_only", req.url));
   }
 
-  const [subRows, siteRows, principalType] = await Promise.all([
-    sql`SELECT name, owner_user_id FROM accounts WHERE id = ${subscriber.subscriptionId}`,
+  const [subRows, siteRows, memberships] = await Promise.all([
+    sql`SELECT name, owner_user_id, type FROM accounts WHERE id = ${subscriber.subscriptionId}`,
     sql`SELECT id, name, url, is_active FROM businesses WHERE billing_account_id = ${subscriber.subscriptionId} ORDER BY is_active DESC, created_at ASC`,
-    loadMemberships(subscriber.id).then(derivePrincipal),
+    loadMemberships(subscriber.id),
   ]);
+  const principalType = derivePrincipal(memberships, subRows[0]?.type as string | null);
 
   // Build session
   const session = {

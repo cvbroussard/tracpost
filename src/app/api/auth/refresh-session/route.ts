@@ -21,7 +21,7 @@ export async function POST() {
   // since last login. Session caches go stale across permission changes
   // until refresh fires — this keeps reviewer scoping current.
   const [userRow] = await sql`
-    SELECT a.owner_user_id,
+    SELECT a.owner_user_id, a.type AS account_type,
            (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability,
            (SELECT scope_id FROM memberships WHERE user_id = u.id AND scope_type = 'business' AND capability IN ('capture','reviewer') ORDER BY created_at LIMIT 1) AS scoped_business_id
     FROM users u LEFT JOIN accounts a ON a.id = u.billing_account_id
@@ -30,7 +30,7 @@ export async function POST() {
   // Site scope lives on the capture/reviewer business membership now.
   const userSiteScope = (userRow?.scoped_business_id as string | null) || null;
 
-  const principalType = derivePrincipal(await loadMemberships(session.userId));
+  const principalType = derivePrincipal(await loadMemberships(session.userId), userRow?.account_type as string | null);
 
   // Accountless staff have no businesses — skip the uuid-typed lookup.
   const rawSites = session.subscriptionId

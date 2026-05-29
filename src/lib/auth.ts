@@ -36,16 +36,19 @@ export interface AuthContext {
   actingAsAdmin?: boolean;
 }
 
-export function derivePrincipal(memberships: Membership[]): PrincipalType {
+export function derivePrincipal(memberships: Membership[], accountType?: string | null): PrincipalType {
   const types = new Set(memberships.map((m) => m.scopeType));
   if (types.has("platform")) return "platform";
   if (types.has("operator")) return "operator";
-  if (types.has("account")) return "agency"; // account-scoped membership ⟺ agency (direct owners get business memberships)
+  // An account-scope membership is the account's owner/admin. The SURFACE it
+  // maps to depends on the account's type: only `agency` accounts are agency
+  // principals; direct/client owners are business principals (studio).
+  if (types.has("account")) return accountType === "agency" ? "agency" : "business";
   if (types.has("business")) return "business";
   return "guest";
 }
 
-type UserRow = { user_id: string; name: string; account_id: string; plan: string; owner_user_id?: string | null };
+type UserRow = { user_id: string; name: string; account_id: string; plan: string; owner_user_id?: string | null; account_type?: string | null };
 
 export async function loadMemberships(userId: string): Promise<Membership[]> {
   const rows = await sql`
@@ -66,7 +69,7 @@ function assemble(u: UserRow, memberships: Membership[], opts?: { actingAsAdmin?
     subscriptionId: u.account_id, // deprecated alias
     plan: u.plan || "free",
     isOwner: !!u.owner_user_id && u.user_id === u.owner_user_id,
-    principalType: memberships.length ? derivePrincipal(memberships) : "business",
+    principalType: memberships.length ? derivePrincipal(memberships, u.account_type) : "business",
     memberships,
     ...(opts?.actingAsAdmin ? { actingAsAdmin: true } : {}),
   };
@@ -78,7 +81,7 @@ function assemble(u: UserRow, memberships: Membership[], opts?: { actingAsAdmin?
  */
 async function loadContextByUserId(userId: string): Promise<AuthContext | null> {
   const rows = await sql`
-    SELECT u.id AS user_id, u.name, u.billing_account_id AS account_id, a.plan, a.owner_user_id
+    SELECT u.id AS user_id, u.name, u.billing_account_id AS account_id, a.plan, a.owner_user_id, a.type AS account_type
     FROM users u JOIN accounts a ON a.id = u.billing_account_id
     WHERE u.id = ${userId} AND u.is_active = true AND a.is_active = true
   `;
@@ -98,12 +101,12 @@ async function loadContextByAccountOwner(
   const rows =
     "apiKeyHash" in match
       ? await sql`
-          SELECT u.id AS user_id, u.name, a.id AS account_id, a.plan, a.owner_user_id
+          SELECT u.id AS user_id, u.name, a.id AS account_id, a.plan, a.owner_user_id, a.type AS account_type
           FROM accounts a JOIN users u ON u.id = a.owner_user_id
           WHERE a.api_key_hash = ${match.apiKeyHash} AND a.is_active = true
           LIMIT 1`
       : await sql`
-          SELECT u.id AS user_id, u.name, a.id AS account_id, a.plan, a.owner_user_id
+          SELECT u.id AS user_id, u.name, a.id AS account_id, a.plan, a.owner_user_id, a.type AS account_type
           FROM accounts a JOIN users u ON u.id = a.owner_user_id
           WHERE a.id = ${match.accountId} AND a.is_active = true
           LIMIT 1`;

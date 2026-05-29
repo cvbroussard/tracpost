@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const rows = await sql`
     SELECT u.id, u.name, u.password_hash, u.billing_account_id,
-           s.plan, s.name AS subscription_name, s.owner_user_id,
+           s.plan, s.name AS subscription_name, s.owner_user_id, s.type AS account_type,
            (SELECT capability FROM memberships WHERE user_id = u.id AND scope_type = 'business' ORDER BY created_at LIMIT 1) AS capability,
            (SELECT scope_id FROM memberships WHERE user_id = u.id AND scope_type = 'business' AND capability IN ('capture','reviewer') ORDER BY created_at LIMIT 1) AS scoped_business_id
     FROM users u
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   // Which v3 surface this user belongs to. Drives the post-login redirect
   // (platform/operator staff land on their console, not studio) and lets
   // gateAdmin authorize staff from the session cookie alone.
-  const principalType = derivePrincipal(await loadMemberships(user.id as string));
+  const principalType = derivePrincipal(await loadMemberships(user.id as string), user.account_type as string | null);
 
   // Accountless staff (platform/operator) have no billing_account_id and thus
   // no businesses — skip the sites query rather than feed "" to a uuid column.

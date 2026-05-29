@@ -40,8 +40,10 @@ export interface CreateAccountResult {
  * Owner rules: required for direct/agency, optional for client. Billing is a
  * SEPARATE layer and is intentionally NOT encoded here.
  *
- * Transition note: while accounts.owner_user_id still exists (retired in tasks
- * #32/#34), this dual-writes it when an owner is created.
+ * Ownership model (decision B, 2026-05-29): the account-scope admin membership
+ * is the AUTHORITATIVE owner; accounts.owner_user_id is a denormalized owner
+ * pointer kept in sync with it (a query convenience, deliberately retained — not
+ * a transitional artifact). This sets both atomically.
  */
 export async function createAccount(input: CreateAccountInput): Promise<CreateAccountResult> {
   const {
@@ -92,7 +94,8 @@ export async function createAccount(input: CreateAccountInput): Promise<CreateAc
         INSERT INTO memberships (user_id, scope_type, scope_id, role, capability)
         VALUES (${ownerUserId}, 'account', ${accountId}, 'admin', NULL)
       `,
-      // Transition dual-write — drop with owner_user_id (tasks #32/#34).
+      // Keep the denormalized owner_user_id FK in sync with the (authoritative)
+      // account-admin membership — a query convenience, deliberately retained.
       sql`UPDATE accounts SET owner_user_id = ${ownerUserId} WHERE id = ${accountId}`,
     );
   }

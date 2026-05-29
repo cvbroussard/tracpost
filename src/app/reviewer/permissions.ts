@@ -208,7 +208,7 @@ export const PERMISSIONS: ReviewerPermission[] = [
     whyWeNeed:
       "Subscriber businesses operate one or more Facebook Pages. After the subscriber initiates OAuth on their connected Facebook account, the TracPost platform enumerates the Pages that account administers so the subscriber can select which one becomes the connected Page for publishing.",
     testSteps: [
-      "Log in at https://app.tracpost.com/login with the credentials at the top of this page (acting as the subscriber).",
+      "Log in at https://tracpost.com/login with the credentials at the top of this page (acting as the subscriber).",
       "Click 'Integrations' in the sidebar.",
       "Click 'Connect Facebook' to initiate OAuth on a Facebook account.",
       "Complete the OAuth flow on the connected Facebook account, granting all requested permissions to the TracPost platform.",
@@ -388,7 +388,7 @@ export const PERMISSIONS: ReviewerPermission[] = [
     whyWeNeed:
       "Required to identify the connected Instagram account and display it in the TracPost app as a connected publishing target. Foundation for all other Instagram scopes — this is the SELECT step that makes the connected Instagram account available to the rest of the system.",
     testSteps: [
-      "Log in at https://app.tracpost.com/login with the credentials at the top of this page (acting as the subscriber).",
+      "Log in at https://tracpost.com/login with the credentials at the top of this page (acting as the subscriber).",
       "Navigate to 'Integrations' in the sidebar.",
       "Click 'Connect Instagram' to initiate OAuth on an Instagram Business account.",
       "Complete the OAuth flow at instagram.com, granting all requested permissions to the TracPost platform.",
@@ -576,7 +576,7 @@ export const PERMISSIONS: ReviewerPermission[] = [
     whyWeNeed:
       "TracPost's enterprise tier provides paid campaign management. The Quick Boost flow is the reference implementation of the Select → Recommend → Review → Trigger pattern: the subscriber selects an eligible boostable post on the connected Page, sees the TracPost platform's recommended budget/targeting/CTA, reviews the pre-boost summary, and clicks Boost. The TracPost platform then creates the campaign on the connected Ad Account via the Marketing API.",
     testSteps: [
-      "Log in at https://app.tracpost.com/login with the credentials at the top of this page (acting as the subscriber, on the enterprise tier).",
+      "Log in at https://tracpost.com/login with the credentials at the top of this page (acting as the subscriber, on the enterprise tier).",
       "Navigate to 'Promote' in the sidebar (visible only on enterprise tier).",
       "Connect a Meta Ad Account (one-click OAuth via the TracPost — Ads app, granting permissions on the connected Facebook account).",
       "Select a published post on the connected Page from the list of boost candidates.",
@@ -714,7 +714,7 @@ export const LAST_UPDATED = "2026-05-05";
  * Rotate the full set of credentials after the review window closes.
  */
 export const TEST_CREDENTIALS = {
-  url: "https://app.tracpost.com/login",
+  url: "https://tracpost.com/login",
   email: "test2@tracpost.com",
   password: "ReviewMe-2026!",
   recoveryCodes: [

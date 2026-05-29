@@ -96,7 +96,7 @@ export async function MarketingNav() {
         </nav>
 
         <div className="mp-header-actions">
-          <Link href="https://studio.tracpost.com/login" className="mp-nav-link">
+          <Link href="https://tracpost.com/login" className="mp-nav-link">
             Log in
           </Link>
           <Link href="/pricing" className="mp-btn-primary">

@@ -309,9 +309,12 @@ export async function middleware(req: NextRequest) {
     if (pathname.match(/\.(js|json|xml|txt|ico|svg|png|jpg|webp|woff2?)$/)) {
       return NextResponse.next();
     }
-    // /login serves the subscriber login page directly
+    // /login is retired on this subdomain — the single canonical login lives
+    // at tracpost.com/login. Redirect there, preserving any query (?error=…).
     if (pathname === "/login") {
-      return NextResponse.next();
+      const url = req.nextUrl.clone();
+      url.hostname = "tracpost.com";
+      return NextResponse.redirect(url);
     }
     // /reviewer/* serves the Meta App Reviewer guide pages directly.
     // Same-origin with /dashboard so demo deep-links work without
@@ -348,11 +351,11 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
-    // Login rewrite — /login on platform goes to admin login
+    // /login is retired on this subdomain — redirect to the canonical login.
     if (pathname === "/login") {
       const url = req.nextUrl.clone();
-      url.pathname = "/admin-login";
-      return NextResponse.rewrite(url);
+      url.hostname = "tracpost.com";
+      return NextResponse.redirect(url);
     }
 
     // Rewrite: /subscribers → /admin/subscribers, / → /admin
@@ -376,10 +379,11 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
+    // /login is retired on this subdomain — redirect to the canonical login.
     if (pathname === "/login") {
       const url = req.nextUrl.clone();
-      url.pathname = "/admin-login";
-      return NextResponse.rewrite(url);
+      url.hostname = "tracpost.com";
+      return NextResponse.redirect(url);
     }
 
     // Rewrite: /subscribers → /manage/subscribers, / → /manage
@@ -501,10 +505,15 @@ async function gateAdmin(
   // so the login page can return the operator there (e.g. /manage) rather
   // than always falling to the /admin default.
   const isLocal = req.headers.get("host")?.includes("localhost");
-  const loginPath = isLocal ? "/admin-login" : "/login";
   const intended = req.nextUrl.pathname + req.nextUrl.search;
   const url = req.nextUrl.clone();
-  url.pathname = loginPath;
+  if (isLocal) {
+    url.pathname = "/admin-login";
+  } else {
+    // Single canonical login on the root domain.
+    url.hostname = "tracpost.com";
+    url.pathname = "/login";
+  }
   url.search = `?next=${encodeURIComponent(intended)}`;
   return NextResponse.redirect(url);
 }

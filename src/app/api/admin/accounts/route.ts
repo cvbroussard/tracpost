@@ -1,8 +1,7 @@
 import { sql } from "@/lib/db";
-import { hashApiKey } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { randomBytes } from "crypto";
-import bcrypt from "bcryptjs";
+import { createAccount } from "@/lib/accounts";
+import { isAdminRequest } from "@/lib/admin-session";
 
 /**
  * POST /api/admin/accounts — Create a new subscription + owner user + API key.
@@ -13,6 +12,9 @@ import bcrypt from "bcryptjs";
  * - API key is always generated for programmatic API access
  */
 export async function POST(req: NextRequest) {
+  if (!(await isAdminRequest())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const body = await req.json();
     const { name, plan, email, password } = body;
@@ -24,30 +26,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate a random API key
-    const apiKey = `tp_${randomBytes(24).toString("hex")}`;
-    const apiKeyHash = await hashApiKey(apiKey);
-
-    // Hash password if provided
-    const passwordHash = password ? await bcrypt.hash(password, 10) : null;
-
-    // Create subscription (billing entity)
-    const [subscription] = await sql`
-      INSERT INTO accounts (api_key_hash, plan, is_active)
-      VALUES (${apiKeyHash}, ${plan || "free"}, true)
-      RETURNING id, plan, created_at
-    `;
-
-    // Create owner user + point the account at it (v3 owner-of-account source of truth)
-    const [owner] = await sql`
-      INSERT INTO users (billing_account_id, name, email, password_hash, is_active)
-      VALUES (${subscription.id}, ${name}, ${email || null}, ${passwordHash}, true)
-      RETURNING id
-    `;
-    await sql`UPDATE accounts SET owner_user_id = ${owner.id} WHERE id = ${subscription.id}`;
+    // Single source of truth: creates a direct account + owner user + the
+    // account-scope admin (owner) membership in one transaction. The
+    // new-account UI (#35) will add the type/parent pickers; the admin create
+    // mints a direct account for now.
+    const { accountId, apiKey } = await createAccount({
+      type: "direct",
+      plan: plan || "free",
+      name,
+      owner: { name, email: email || null, password: password || null },
+    });
 
     return NextResponse.json({
-      subscriber: { ...subscription, name },
+      subscriber: { id: accountId, plan: plan || "free", name },
       api_key: apiKey, // Only shown once at creation — for programmatic API access
     }, { status: 201 });
   } catch (err: unknown) {

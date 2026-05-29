@@ -22,7 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { stripe, PRICE_TO_PLAN } from "@/lib/stripe";
 import { createSubmission } from "@/lib/onboarding/queries";
-import { randomBytes, createHash } from "node:crypto";
+import { createAccount } from "@/lib/accounts";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -175,51 +175,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Could not initialize payment intent" }, { status: 502 });
   }
 
-  // ── DB subscription + owner user ────────────────────────────────────
-  const apiKeyRaw = `tp_${randomBytes(24).toString("hex")}`;
-  const apiKeyHash = createHash("sha256").update(apiKeyRaw).digest("hex");
-
+  // ── DB account + owner user (via the single createAccount helper) ────
   // Auto-flag test subscriptions: any signup with an @tracpost.com email
   // (catch-all the operator uses for synthetic test accounts).
   const isTest = emailClean.endsWith("@tracpost.com");
 
-  const [dbSub] = await sql`
-    INSERT INTO accounts (api_key_hash, plan, is_active, is_test, metadata)
-    VALUES (
-      ${apiKeyHash},
-      ${plan},
-      true,
-      ${isTest},
-      ${JSON.stringify({
-        stripe: { customer_id: customer.id, subscription_id: subscription.id },
-        api_key_preview: apiKeyRaw.slice(0, 8) + "...",
-        onboarding_status: "started",
-      })}
-    )
-    RETURNING id
-  `;
-
-  const [owner] = await sql`
-    INSERT INTO users (billing_account_id, name, email, phone, is_active)
-    VALUES (
-      ${dbSub.id},
-      ${nameClean},
-      ${emailClean},
-      ${phoneClean},
-      true
-    )
-    RETURNING id
-  `;
-  // Point the account at its owner (v3 owner-of-account source of truth)
-  await sql`UPDATE accounts SET owner_user_id = ${owner.id} WHERE id = ${dbSub.id}`;
+  const { accountId } = await createAccount({
+    type: "direct",
+    plan,
+    name: nameClean,
+    owner: { name: nameClean, email: emailClean, phone: phoneClean },
+    isTest,
+    metadata: {
+      stripe: { customer_id: customer.id, subscription_id: subscription.id },
+      onboarding_status: "started",
+    },
+  });
 
   // ── Onboarding submission row + token ───────────────────────────────
-  const onboarding = await createSubmission(dbSub.id as string);
+  const onboarding = await createSubmission(accountId);
 
   return NextResponse.json({
     client_secret: clientSecret,
     intent_type: intentType,
     onboarding_token: onboarding.token,
-    subscription_id: dbSub.id,
+    subscription_id: accountId,
   });
 }

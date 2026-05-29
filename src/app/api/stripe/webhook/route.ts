@@ -3,7 +3,7 @@ import { stripe, PRICE_TO_PLAN } from "@/lib/stripe";
 import { sql } from "@/lib/db";
 import { generateMagicToken } from "@/lib/magic-link";
 import { sendWelcomeEmail } from "@/lib/email";
-import { randomBytes, createHash } from "node:crypto";
+import { createAccount } from "@/lib/accounts";
 
 /**
  * POST /api/stripe/webhook
@@ -120,56 +120,33 @@ async function handleCheckoutCompleted(session: Record<string, unknown>) {
     }
   }
 
-  // Generate API key
-  const apiKeyRaw = `tp_${randomBytes(24).toString("hex")}`;
-  const apiKeyHash = createHash("sha256").update(apiKeyRaw).digest("hex");
-
-  // Create subscription (billing entity)
-  const [subscription] = await sql`
-    INSERT INTO accounts (api_key_hash, plan, is_active, metadata)
-    VALUES (
-      ${apiKeyHash},
-      ${plan},
-      true,
-      ${JSON.stringify({
-        stripe: { customer_id: customerId, subscription_id: subscriptionId },
-        api_key_preview: apiKeyRaw.slice(0, 8) + "...",
-        onboarding_status: "new",
-      })}
-    )
-    RETURNING id
-  `;
-
-  // Create owner user attached to the subscription
-  const [owner] = await sql`
-    INSERT INTO users (billing_account_id, name, email, is_active)
-    VALUES (
-      ${subscription.id},
-      ${email.split("@")[0]},
-      ${email},
-      true
-    )
-    RETURNING id
-  `;
-
-  // Point the account at its owner (v3 owner-of-account source of truth)
-  await sql`UPDATE accounts SET owner_user_id = ${owner.id} WHERE id = ${subscription.id}`;
+  // Create account + owner via the single createAccount helper.
+  const { accountId, ownerUserId } = await createAccount({
+    type: "direct",
+    plan,
+    name: email.split("@")[0],
+    owner: { name: email.split("@")[0], email },
+    metadata: {
+      stripe: { customer_id: customerId, subscription_id: subscriptionId },
+      onboarding_status: "new",
+    },
+  });
 
   // Generate magic link
-  const token = await generateMagicToken(owner.id);
+  const token = await generateMagicToken(ownerUserId!);
   const magicUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://tracpost.com"}/auth/magic?token=${token}`;
   await sendWelcomeEmail(email, magicUrl, true);
 
   // Log
   await sql`
     INSERT INTO usage_log (billing_account_id, action, metadata)
-    VALUES (${subscription.id}, 'stripe_checkout', ${JSON.stringify({
+    VALUES (${accountId}, 'stripe_checkout', ${JSON.stringify({
       plan,
       customer_id: customerId,
     })})
   `;
 
-  console.log(`Stripe: provisioned new subscription ${subscription.id} (${email}, ${plan})`);
+  console.log(`Stripe: provisioned new subscription ${accountId} (${email}, ${plan})`);
 }
 
 /**

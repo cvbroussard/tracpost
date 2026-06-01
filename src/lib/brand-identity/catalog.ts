@@ -67,6 +67,42 @@ export interface DescriptorInput {
   required?: boolean;
 }
 
+/**
+ * Validation phase — the development/onboarding order across descriptors.
+ * Lower phases are dependency-free or canonical-anchored; higher phases
+ * depend on earlier phases being completed. Crosses domain boundaries
+ * because dependencies don't respect domain grouping (e.g. verbal.tone is
+ * Phase 1 foundation but verbal.tagline is Phase 4 because tagline depends
+ * on positioning landing first). See [[descriptor-design-protocol]] and
+ * [[brand-identity-schema]] validation-DAG locks.
+ *
+ * Subject to change as the architecture matures; treat as the working
+ * sequence, not the final lock.
+ */
+export type DescriptorPhase = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+export const PHASE_LABELS: Record<DescriptorPhase, string> = {
+  1: "Foundation",
+  2: "Strategic Foundations",
+  3: "Positioning",
+  4: "Strategic Application",
+  5: "Voice Details",
+  6: "Visual Identity",
+  7: "Motion Identity",
+  8: "Sonic Identity",
+};
+
+export const PHASE_DESCRIPTIONS: Record<DescriptorPhase, string> = {
+  1: "Foundational voice + guardrails. No upstream dependencies. Fill first.",
+  2: "Who we serve + what we offer. Depends on Phase 1.",
+  3: "Strategic differentiation (wedge / contrast / example). Depends on Phase 1, 2, and GBP categories.",
+  4: "Tactical surfaces that consume positioning (proof, hooks, CTA, tagline).",
+  5: "Supplemental voice details (lexicon, mechanical style).",
+  6: "Visual brand band — aesthetic, environment, subjects, palette, logo.",
+  7: "Motion identity (pacing, transitions, camera, overall feel).",
+  8: "Sonic identity (voiceover, music, sfx, pronunciation).",
+};
+
 export interface DescriptorSpec {
   /** Stable key, unique within its domain. Full contract id = `${domain}.${key}`. */
   key: string;
@@ -77,6 +113,11 @@ export interface DescriptorSpec {
   media: DescriptorMedium[];
   lean: DescriptorLean;
   override: DescriptorOverride;
+  /**
+   * Validation/onboarding phase. Used by the ops UI to group descriptors by
+   * development sequence rather than by domain. See `PHASE_LABELS`.
+   */
+  phase: DescriptorPhase;
   /**
    * Decomposed sub-inputs. When present, the descriptor card renders structured
    * fields instead of a single textarea, and `declared` is a JSONB object keyed
@@ -97,6 +138,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "extracted"],
     lean: "declared",
     override: "flexible",
+    phase: 1,
   },
   {
     key: "lexicon",
@@ -106,6 +148,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "extracted"],
     lean: "extracted",
     override: "flexible",
+    phase: 5,
   },
   {
     key: "avoid",
@@ -116,6 +159,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "guardrail",
+    phase: 1,
   },
   {
     key: "pov_persona",
@@ -126,6 +170,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 1,
   },
   {
     key: "mechanical_style",
@@ -135,6 +180,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "extracted"],
     lean: "extracted",
     override: "flexible",
+    phase: 5,
   },
   {
     key: "tagline",
@@ -145,6 +191,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 4,
   },
 
   // ── Strategic — feeds angle selection, what-to-say ───────────────────────
@@ -157,6 +204,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 2,
     inputs: [
       {
         key: "benefits",
@@ -186,6 +234,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 3,
     inputs: [
       {
         key: "wedge",
@@ -225,6 +274,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "extracted"],
     lean: "declared",
     override: "flexible",
+    phase: 2,
     inputs: [
       {
         key: "who",
@@ -275,6 +325,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "asset"],
     lean: "declared",
     override: "flexible",
+    phase: 4,
     inputs: [
       {
         key: "signature_projects",
@@ -332,6 +383,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "extracted"],
     lean: "extracted",
     override: "flexible",
+    phase: 4,
   },
   {
     key: "cta",
@@ -342,6 +394,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 4,
     inputs: [
       {
         key: "action",
@@ -382,6 +435,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "extracted"],
     lean: "extracted",
     override: "flexible",
+    phase: 6,
   },
   {
     key: "environmental_look",
@@ -392,6 +446,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "asset", "extracted"],
     lean: "declared",
     override: "flexible",
+    phase: 6,
   },
   {
     key: "subject_style",
@@ -401,6 +456,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "extracted"],
     lean: "extracted",
     override: "flexible",
+    phase: 6,
   },
   {
     key: "palette",
@@ -410,6 +466,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["extracted", "text"],
     lean: "extracted",
     override: "guardrail",
+    phase: 6,
   },
   {
     key: "logo",
@@ -419,6 +476,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["asset"],
     lean: "declared",
     override: "guardrail",
+    phase: 6,
   },
   {
     key: "do_not_show",
@@ -429,6 +487,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "guardrail",
+    phase: 1,
   },
 
   // ── Sonic — feeds voiceover + music/SFX ──────────────────────────────────
@@ -441,6 +500,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 8,
   },
   {
     key: "music_mood",
@@ -451,6 +511,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "asset"],
     lean: "declared",
     override: "flexible",
+    phase: 8,
   },
   {
     key: "sfx_style",
@@ -461,6 +522,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 8,
   },
   {
     key: "pronunciation",
@@ -471,6 +533,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "extracted"],
     lean: "declared",
     override: "guardrail",
+    phase: 8,
   },
 
   // ── Motion / editorial — feeds the Director / video assembly ─────────────
@@ -483,6 +546,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 7,
   },
   {
     key: "transitions",
@@ -493,6 +557,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 7,
   },
   {
     key: "camera_style",
@@ -503,6 +568,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 7,
   },
   {
     key: "overall_feel",
@@ -513,6 +579,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
+    phase: 7,
   },
 ] as const;
 

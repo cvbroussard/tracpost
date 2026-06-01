@@ -11,7 +11,12 @@ import {
   detectForbidden,
   type ForbiddenTerm,
 } from "@/lib/brand-identity/baselines";
-import { declaredDescriptors } from "@/lib/brand-identity/catalog";
+import {
+  declaredDescriptors,
+  PHASE_LABELS,
+  PHASE_DESCRIPTIONS,
+  type DescriptorPhase,
+} from "@/lib/brand-identity/catalog";
 
 // ── Types (mirror the JSON from /api/ops/brand-identity) ────────────────────
 type Domain = "verbal" | "strategic" | "visual" | "sonic" | "motion";
@@ -35,6 +40,7 @@ interface DescriptorSpec {
   media: ("text" | "asset" | "extracted")[];
   lean: "declared" | "extracted";
   override: "flexible" | "guardrail";
+  phase: DescriptorPhase;
   inputs?: DescriptorInput[];
 }
 
@@ -107,14 +113,12 @@ interface PickerAsset {
 }
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const DOMAIN_ORDER: Domain[] = ["strategic", "verbal", "visual", "sonic", "motion"];
-const DOMAIN_LABELS: Record<Domain, string> = {
-  strategic: "Strategic",
-  verbal: "Verbal",
-  visual: "Visual",
-  sonic: "Sonic",
-  motion: "Motion",
-};
+// Page grouping is by VALIDATION PHASE (the development/onboarding sequence),
+// not by domain. Lower phases are dependency-free; higher phases depend on
+// earlier phases being completed. See PHASE_LABELS in catalog.ts for the
+// full ordering rationale. Domain remains as informational metadata on each
+// descriptor card.
+const PHASE_ORDER: DescriptorPhase[] = [1, 2, 3, 4, 5, 6, 7, 8];
 // Completion gate — all declared-lean descriptors required. Per the locked
 // "start with all required, learn what to relax" methodology, we set the bar
 // at maximum input first; relaxations come empirically once we measure each
@@ -1596,16 +1600,21 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
           );
         })()}
 
-      {DOMAIN_ORDER.map((domain) => {
+      {PHASE_ORDER.map((phase) => {
         const group = declared
-          .filter((d) => d.domain === domain)
+          .filter((d) => (d.spec?.phase ?? 99) === phase)
           .sort((a, b) => a.position - b.position);
         if (group.length === 0) return null;
         return (
-          <div key={domain} className="space-y-2">
-            <h4 className="text-[10px] uppercase tracking-wide text-muted px-1">
-              {DOMAIN_LABELS[domain]}
-            </h4>
+          <div key={phase} className="space-y-2">
+            <div className="px-1">
+              <h4 className="text-[10px] uppercase tracking-wide text-muted">
+                Phase {phase} — {PHASE_LABELS[phase]}
+              </h4>
+              <p className="text-[9px] text-muted/70 mt-0.5">
+                {PHASE_DESCRIPTIONS[phase]}
+              </p>
+            </div>
             <div className="space-y-3">
               {group.map((d) => (
                 <DescriptorCard

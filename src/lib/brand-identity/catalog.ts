@@ -153,20 +153,11 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     domain: "strategic",
     label: "Offer",
     describes:
-      "Two parts: (1) the services or products you provide, AND (2) the benefit your clients get from choosing you. Don't fold the benefit into the service list — state it separately.",
+      "Two parts: (1) the services or products you provide — these come from the canonical GBP categories established by competitive market analysis + categories coaching, shown read-only — AND (2) the benefit your clients get from choosing you (owner-declared below). Don't fold the benefit into the service list — state it separately.",
     media: ["text"],
     lean: "declared",
     override: "flexible",
     inputs: [
-      {
-        key: "services",
-        label: "Main services or products",
-        prompt: "List 5 of your main services or products",
-        inputType: "list",
-        slotCount: 5,
-        qualifier: "main",
-        required: true,
-      },
       {
         key: "benefits",
         label: "Benefits clients get from choosing you",

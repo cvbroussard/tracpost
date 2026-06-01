@@ -90,6 +90,13 @@ interface DescriptorRecord {
 interface BrandIdentityData {
   identity: { id: string; name: string | null };
   descriptors: DescriptorRecord[];
+  /**
+   * Read-only GBP categories joined from `business_gbp_categories`. Populated
+   * by CMA + categories coaching (per [[gbp-categories-coaching]]). Surfaces
+   * under the offer descriptor's "Services (from GBP)" section. Up to 10
+   * (1 primary + 9 additional).
+   */
+  gbpCategories: { gcid: string; name: string; isPrimary: boolean }[];
 }
 
 interface PickerAsset {
@@ -264,6 +271,54 @@ function scopeMemberKeysFromSpec(
     return spec.inputs.some((i) => i.key === k) ? [k] : [];
   }
   return [];
+}
+
+/**
+ * Mirror of the store-side `computeAffectedScopes`. Identifies which validation
+ * scopes are invalidated by a declared change. Used by saveValue's local state
+ * mirror so the chip states track per-scope stale-on-edit accurately (without
+ * a full reload after every save).
+ */
+function computeAffectedScopesClient(
+  spec: DescriptorRecord["spec"],
+  oldDeclared: unknown,
+  newDeclared: unknown,
+): Set<string> {
+  const scopes = new Set<string>();
+  if (!spec?.inputs) {
+    const oldStr = typeof oldDeclared === "string" ? oldDeclared : "";
+    const newStr = typeof newDeclared === "string" ? newDeclared : "";
+    if (oldStr !== newStr) scopes.add("prose:text");
+    return scopes;
+  }
+  const toObj = (v: unknown): Record<string, unknown> =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? (v as Record<string, unknown>)
+      : {};
+  const oldObj = toObj(oldDeclared);
+  const newObj = toObj(newDeclared);
+  for (const input of spec.inputs) {
+    const oldVal = oldObj[input.key];
+    const newVal = newObj[input.key];
+    if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+      scopes.add(input.inputType === "list" ? "lists" : `prose:${input.key}`);
+    }
+  }
+  return scopes;
+}
+
+/**
+ * Mirror of the store-side `inputKeyScope`. Maps an input key to its validation
+ * scope identifier.
+ */
+function inputKeyScopeClient(
+  spec: DescriptorRecord["spec"],
+  inputKey: string,
+): string {
+  if (!spec?.inputs) return `prose:${inputKey}`;
+  const input = spec.inputs.find((i) => i.key === inputKey);
+  if (!input) return `prose:${inputKey}`;
+  return input.inputType === "list" ? "lists" : `prose:${inputKey}`;
 }
 
 /** Describes the validation state of a single group. */
@@ -565,9 +620,13 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
           body: JSON.stringify({ siteId, key, declared: value }),
         });
         if (res.ok) {
+          const oldValue = saved[key];
           setSaved((prev) => ({ ...prev, [key]: value }));
-          // Stale-on-edit: server-side `setDeclared` cleared metadata.validationFindings.
-          // Reflect that locally so the quality gate re-locks until re-validated.
+          // Scope-aware stale-on-edit: the server keeps findings for scopes
+          // whose declared content didn't change. The client must mirror that
+          // logic — previously we nuked the whole validationFindings object,
+          // which incorrectly flipped unrelated groups (e.g. editing example
+          // also reset the Lists chip).
           setData((prev) =>
             !prev
               ? prev
@@ -575,9 +634,30 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
                   ...prev,
                   descriptors: prev.descriptors.map((d) => {
                     if (d.key !== key) return d;
-                    if (!d.metadata?.validationFindings) return d;
-                    const meta = { ...(d.metadata ?? {}) };
-                    delete (meta as Record<string, unknown>).validationFindings;
+                    const findings = d.metadata?.validationFindings?.findings;
+                    if (!findings || findings.length === 0) return d;
+                    const affected = computeAffectedScopesClient(
+                      d.spec,
+                      oldValue,
+                      value,
+                    );
+                    if (affected.size === 0) return d; // no diff → keep all findings
+                    const kept = findings.filter((f) => {
+                      const fScope = inputKeyScopeClient(d.spec, f.inputKey);
+                      return !affected.has(fScope);
+                    });
+                    const meta = { ...(d.metadata ?? {}) } as Record<
+                      string,
+                      unknown
+                    >;
+                    if (kept.length === 0) {
+                      delete meta.validationFindings;
+                    } else {
+                      meta.validationFindings = {
+                        ...d.metadata!.validationFindings!,
+                        findings: kept,
+                      };
+                    }
                     return { ...d, metadata: meta };
                   }),
                 },
@@ -589,7 +669,7 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
         setSavingKey(null);
       }
     },
-    [siteId],
+    [siteId, saved],
   );
 
   // Forbidden-term map from the avoid descriptor's currently-applied baselines.
@@ -1564,6 +1644,7 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
                   onStabilityTest={(scope) => runStabilityTest(d.key, scope)}
                   onReset={(scope) => runReset(d.key, scope)}
                   onOpenFindings={(scope) => openFindings(d.key, scope)}
+                  gbpCategories={d.key === "offer" ? data.gbpCategories : undefined}
                 />
               ))}
             </div>
@@ -1603,6 +1684,7 @@ function DescriptorCard({
   onStabilityTest,
   onReset,
   onOpenFindings,
+  gbpCategories,
 }: {
   d: DescriptorRecord;
   draft: unknown; // string for single-textarea descriptors, object for decomposed
@@ -1636,6 +1718,13 @@ function DescriptorCard({
   onReset: (scope?: "lists" | { prose: string }) => void;
   /** Open the findings modal for a scope (scope-aware: only that scope's findings show). */
   onOpenFindings: (scope?: "lists" | { prose: string }) => void;
+  /**
+   * Read-only GBP categories — surfaced under the offer descriptor's
+   * "Services (from GBP)" section in lieu of an owner-declared services
+   * sub-input. Per the offer.services-reconciliation lock. Only passed
+   * when the descriptor key is "offer"; undefined otherwise.
+   */
+  gbpCategories?: { gcid: string; name: string; isPrimary: boolean }[];
 }) {
   const [showInspect, setShowInspect] = useState(false);
   const boundIds = new Set(d.assets.map((a) => a.assetId));
@@ -1644,7 +1733,7 @@ function DescriptorCard({
   const transcribing = dictationActive && dictationState === "transcribing";
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-3 shadow-card space-y-2">
+    <div className="rounded-xl border border-border/60 bg-surface p-3 shadow-card space-y-2">
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold">{d.label ?? d.key}</span>
         {required && (
@@ -1748,6 +1837,44 @@ function DescriptorCard({
         );
       })()}
 
+      {/* Services (from GBP) — read-only canonical section for the offer descriptor.
+          Populated upstream by CMA + categories coaching; brand identity is consumer-only. */}
+      {gbpCategories && (
+        <div className="rounded-lg border border-border bg-background p-2 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+              Services (from GBP)
+            </span>
+            <span className="rounded bg-muted/10 text-muted px-2 py-0.5 text-[10px] font-medium">
+              Canonical · read-only
+            </span>
+          </div>
+          {gbpCategories.length === 0 ? (
+            <p className="text-[10px] text-muted">
+              No GBP categories yet — populated by competitive market analysis + categories
+              coaching during onboarding. Once the CMA runs, the curated 10-best
+              categories will appear here.
+            </p>
+          ) : (
+            <ul className="space-y-0.5">
+              {gbpCategories.map((c) => (
+                <li
+                  key={c.gcid}
+                  className="flex items-center gap-2 text-xs text-foreground"
+                >
+                  <span>{c.name}</span>
+                  {c.isPrimary && (
+                    <span className="rounded bg-accent/10 text-accent px-1.5 py-0.5 text-[9px] font-medium">
+                      primary
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {isTextCapable(d) && d.spec?.inputs && (() => {
         // Decomposed sub-fields wrapped per validation group. Each group renders
         // as a sub-card with its own title + per-group validate control + the
@@ -1770,7 +1897,7 @@ function DescriptorCard({
               return (
                 <div
                   key={g.id}
-                  className="rounded-lg border border-border/60 bg-background p-2 space-y-2"
+                  className="rounded-lg border border-border bg-background p-2 space-y-2"
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">

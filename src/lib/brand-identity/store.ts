@@ -85,9 +85,27 @@ export interface DescriptorRecord {
   spec: DescriptorSpec | null;
 }
 
+/**
+ * GBP category attached to a business via `business_gbp_categories`. Read-only
+ * from brand identity's perspective — populated by CMA + categories coaching
+ * (per [[gbp-categories-coaching]]). Surfaces on the offer descriptor's
+ * "Services (from GBP)" section.
+ */
+export interface GbpCategoryRow {
+  gcid: string;
+  name: string;
+  isPrimary: boolean;
+}
+
 export interface BrandIdentityWithDescriptors {
   identity: BrandIdentity;
   descriptors: DescriptorRecord[];
+  /**
+   * Per-business GBP categories. Joined from `business_gbp_categories` +
+   * `gbp_categories`. Up to 10 (1 primary + 9 additional). The offer
+   * descriptor reads from this in lieu of an owner-declared services input.
+   */
+  gbpCategories: GbpCategoryRow[];
 }
 
 export interface CreateBrandIdentityInput {
@@ -824,6 +842,23 @@ export async function getBrandIdentity(
     spec: getDescriptorByKey(r.key) ?? null,
   }));
 
+  // Pull GBP categories — populated by CMA + categories coaching (canonical
+  // upstream). Read-only from brand identity's perspective. Per the offer
+  // descriptor reconciliation (2026-06-01), `offer.services` reads from here
+  // instead of being an owner-declared sub-input.
+  const gbpCategoryRows = await sql`
+    SELECT gc.gcid, gc.name, sgc.is_primary
+    FROM business_gbp_categories sgc
+    JOIN gbp_categories gc ON gc.gcid = sgc.gcid
+    WHERE sgc.business_id = ${businessId}
+    ORDER BY sgc.is_primary DESC, gc.name
+  `;
+  const gbpCategories: GbpCategoryRow[] = gbpCategoryRows.map((r) => ({
+    gcid: r.gcid as string,
+    name: r.name as string,
+    isPrimary: r.is_primary as boolean,
+  }));
+
   return {
     identity: {
       id: identityRow.id,
@@ -835,5 +870,6 @@ export async function getBrandIdentity(
       version: identityRow.version,
     },
     descriptors,
+    gbpCategories,
   };
 }

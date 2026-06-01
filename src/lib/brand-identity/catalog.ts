@@ -47,8 +47,75 @@ export type DescriptorOverride = "flexible" | "guardrail";
  * `inputs[]` defined renders as a structured form (sub-fields per input) instead
  * of a single textarea. The owner's `declared` for such descriptors is a JSONB
  * object keyed by each input's `key`.
+ *
+ *  - "prose"             — multi-row textarea; declared holds a string
+ *  - "list"              — N short slots; declared holds string[]
+ *  - "slot_composition"  — N structured slots (text + picker), each holding 2-7
+ *                          words. Declared holds an object keyed by slot.key.
+ *                          The slots ARE the substrate — no Stage 1 extraction
+ *                          needed. A composition LLM (Stage 0, deferred) reads
+ *                          the slots + brand voice + GBP categories to produce
+ *                          the rendered prose for downstream consumers.
+ *  - "angle_collection"  — array of complete positioning angles. Each angle is
+ *                          a triple of (wedge + contrast + example) plus
+ *                          applies_to metadata. Brand may have 1-N angles; the
+ *                          orchestrator at generation time selects which angle
+ *                          fits the asset's context. Generalist SMBs have many
+ *                          angles; specialty brands have one. Same data model.
+ *                          Declared holds `{ angles: AngleData[] }`.
  */
-export type InputType = "prose" | "list";
+export type InputType = "prose" | "list" | "slot_composition" | "angle_collection";
+
+/**
+ * Field within an angle section. Mirrors a single question in the owner's
+ * 10-question-per-angle form.
+ */
+export interface AngleField {
+  key: string;
+  label: string;
+  prompt: string;
+  placeholder?: string;
+  kind: "text" | "textarea" | "multi_picker" | "gbp_categories_picker";
+  options?: string[];
+  rows?: number;
+  required?: boolean;
+}
+
+/**
+ * Logical grouping of fields within an angle (e.g. wedge, contrast, example).
+ * Used by the renderer to visually group related questions.
+ */
+export interface AngleSection {
+  key: string;
+  label: string;
+  /** Optional sub-description shown under the section header. */
+  description?: string;
+  fields: AngleField[];
+}
+
+/**
+ * Slot definition for `inputType: "slot_composition"`. Each slot is a small
+ * focused input — text or picker — meant to be answerable in 2-7 words. The
+ * collection of slots IS the canonical substrate; downstream composition
+ * produces prose from these.
+ */
+export interface DescriptorSlot {
+  /** Becomes the key in the declared sub-object. Stable; never rename. */
+  key: string;
+  label: string;
+  prompt: string;
+  /** Example value shown as placeholder. */
+  placeholder?: string;
+  /**
+   *  - "text"   — free-text short input
+   *  - "picker" — owner picks from `options[]` (analogue chips). Free-text
+   *               fallback handled by appending the picked option to declared.
+   */
+  kind: "text" | "picker";
+  /** When `kind: "picker"`, the picker options. */
+  options?: string[];
+  required?: boolean;
+}
 
 export interface DescriptorInput {
   /** Becomes the key in the declared JSONB object. Stable; never rename. */
@@ -65,6 +132,15 @@ export interface DescriptorInput {
   rows?: number;
   /** Drives the completion gate for this descriptor. */
   required?: boolean;
+  /** For `slot_composition` inputs — the structured slot collection. */
+  slots?: DescriptorSlot[];
+  /**
+   * For `angle_collection` inputs — the schema for each angle entry. The owner
+   * fills the same form (sections × fields) for each angle they declare.
+   */
+  angleSchema?: AngleSection[];
+  /** For `angle_collection` inputs — how many empty angle cards to render by default. */
+  defaultAngleCount?: number;
 }
 
 /**
@@ -230,38 +306,233 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     domain: "strategic",
     label: "Positioning",
     describes:
-      "The wedge — what makes this brand a different KIND of choice, not just 'better.' Sharpest when stated as a contrast: what most others in your category do (or refuse) vs. what you do (or refuse). The stance that gets you chosen vs. ignored.",
+      "Positioning isn't ONE wedge for most businesses — it's the inventory of angles you can credibly stand behind. Each angle = a stance (wedge) + the alternatives you're NOT (contrast) + a real example showing the angle in action. Generalists have multiple angles; specialty brands have one. Default: 3 angle slots. Orchestrator picks the right angle per asset at generation time.",
     media: ["text"],
     lean: "declared",
     override: "flexible",
     phase: 3,
     inputs: [
       {
-        key: "wedge",
-        label: "The wedge",
+        key: "angles",
+        label: "Positioning angles",
         prompt:
-          "What makes you a DIFFERENT KIND of choice — not just 'better'? Sharpest as a contrarian stance or sharp identity.",
-        inputType: "prose",
-        rows: 3,
+          "Each angle is a complete stance. Fill as many as your brand credibly has (1-7). Specialty brands often have 1; generalists 2-5.",
+        inputType: "angle_collection",
         required: true,
-      },
-      {
-        key: "contrast",
-        label: "The contrast",
-        prompt:
-          "Most others in your category do (or refuse) X. You do (or refuse) Y. State it explicitly.",
-        inputType: "prose",
-        rows: 3,
-        required: true,
-      },
-      {
-        key: "example",
-        label: "A specific example",
-        prompt:
-          "Describe a project or client situation that exemplified your positioning in action — in your own voice.",
-        inputType: "prose",
-        rows: 4,
-        required: true,
+        defaultAngleCount: 3,
+        angleSchema: [
+          {
+            key: "identity",
+            label: "Identity",
+            fields: [
+              {
+                key: "name",
+                label: "Angle name",
+                prompt:
+                  "1-3 words to refer to this angle internally. Not customer-facing.",
+                placeholder: "(e.g. cooking-first kitchens / heritage construction / weekday lunch)",
+                kind: "text",
+              },
+            ],
+          },
+          {
+            key: "wedge",
+            label: "The wedge",
+            description: "Your strategic stance for this angle.",
+            fields: [
+              {
+                key: "what_we_do",
+                label: "Strategic stance",
+                prompt:
+                  "2-3 words for your APPROACH to this kind of work — your philosophy, not your category.",
+                placeholder: "(your stance for this angle)",
+                kind: "text",
+                required: true,
+              },
+              {
+                key: "what_they_value",
+                label: "What customers value most",
+                prompt:
+                  "Pick everything that matters to these customers, or add your own.",
+                kind: "multi_picker",
+                options: [
+                  "Quality of result / craft",
+                  "Reliability / consistency",
+                  "Speed / fast turnaround",
+                  "Cost-effectiveness",
+                  "Customization / uniqueness",
+                  "Convenience / minimal effort",
+                  "Trust / relationship",
+                  "Expertise / specialization",
+                  "Status / prestige",
+                ],
+                required: true,
+              },
+              {
+                key: "what_not_about",
+                label: "What you DON'T optimize for",
+                prompt:
+                  "Pick the priorities you explicitly reject (multi-select). These define the wedge by what you refuse.",
+                kind: "multi_picker",
+                options: [
+                  "Lowest price",
+                  "Fastest turnaround",
+                  "Largest scale / volume",
+                  "Maximum customization",
+                  "Mass appeal / one-size-fits-all",
+                  "Status / prestige",
+                  "Convenience above all",
+                  "Standard / off-the-shelf approach",
+                ],
+                required: true,
+              },
+              {
+                key: "design_constraint",
+                label: "What you won't compromise on",
+                prompt:
+                  "5-7 words naming the thing every decision defers to. The non-negotiable.",
+                placeholder: "(the thing every decision defers to)",
+                kind: "text",
+                required: true,
+              },
+            ],
+          },
+          {
+            key: "contrast",
+            label: "The contrast",
+            description:
+              "Who else customers might choose instead, and how you're different. Three short answers.",
+            fields: [
+              {
+                key: "alt_archetype_1",
+                label: "Alternative #1",
+                prompt: "A kind of provider customers consider instead.",
+                placeholder: "(an archetype they'd otherwise pick)",
+                kind: "text",
+                required: true,
+              },
+              {
+                key: "alt_archetype_2",
+                label: "Alternative #2 (optional)",
+                prompt: "A second archetype if relevant.",
+                placeholder: "(a second alternative)",
+                kind: "text",
+              },
+              {
+                key: "the_diff",
+                label: "How you're different",
+                prompt: "What you do that those alternatives don't (or won't).",
+                placeholder: "(your distinguishing move)",
+                kind: "text",
+                required: true,
+              },
+            ],
+          },
+          {
+            key: "example",
+            label: "A specific recent example",
+            description:
+              "A real engagement that demonstrates this angle in action. Five short answers.",
+            fields: [
+              {
+                key: "project_name",
+                label: "Name or reference",
+                prompt: "What you'd call this engagement in conversation.",
+                placeholder: "(a memorable name or quick reference)",
+                kind: "text",
+                required: true,
+              },
+              {
+                key: "customer_situation",
+                label: "Customer situation",
+                prompt: "What was happening when they came to you?",
+                placeholder: "(their context when they reached out)",
+                kind: "text",
+                required: true,
+              },
+              {
+                key: "what_they_needed",
+                label: "What they needed",
+                prompt: "The specific ask.",
+                placeholder: "(what they came in asking for)",
+                kind: "text",
+                required: true,
+              },
+              {
+                key: "what_we_did_differently",
+                label: "What you did differently",
+                prompt:
+                  "What you did that an alternative provider wouldn't have done.",
+                placeholder: "(your distinguishing move on this one)",
+                kind: "text",
+                required: true,
+              },
+              {
+                key: "what_they_got",
+                label: "What they got",
+                prompt: "The outcome from the customer's perspective.",
+                placeholder: "(what changed for them)",
+                kind: "text",
+                required: true,
+              },
+            ],
+          },
+          {
+            key: "supplemental",
+            label: "Supplemental signal (optional)",
+            description:
+              "Optional extra context. Skip if the wedge above already captures it.",
+            fields: [
+              {
+                key: "for_whom",
+                label: "Specifically WHO these customers are",
+                prompt:
+                  "Optional — fill ONLY if the values above don't capture demographic / life-stage / context signal (e.g. 'second-home owners with character properties' has more signal than the value list).",
+                placeholder:
+                  "(only if values miss demographic / context signal)",
+                kind: "text",
+              },
+            ],
+          },
+          {
+            key: "applies_to",
+            label: "Applies to",
+            description:
+              "When does this angle apply? The orchestrator uses this to pick which angle frames each piece of content.",
+            fields: [
+              {
+                key: "gbp_categories",
+                label: "GBP categories",
+                prompt:
+                  "Which of your GBP categories does this angle cover? Pick all that apply.",
+                kind: "gbp_categories_picker",
+              },
+              {
+                key: "free_tags",
+                label: "Tags (free-text, comma-separated)",
+                prompt:
+                  "Anything not covered by categories — customer types, contextual cues, situations.",
+                placeholder: "(comma-separated tags)",
+                kind: "text",
+              },
+            ],
+          },
+          {
+            key: "motivation",
+            label: "Why this angle matters (optional)",
+            description: "Color for downstream composition. Optional.",
+            fields: [
+              {
+                key: "text",
+                label: "",
+                prompt:
+                  "In a sentence or two, why does this angle matter to you? What makes it click when you do this work?",
+                kind: "textarea",
+                rows: 2,
+              },
+            ],
+          },
+        ],
       },
     ],
   },

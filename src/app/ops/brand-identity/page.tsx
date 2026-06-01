@@ -21,15 +21,46 @@ import {
 // ── Types (mirror the JSON from /api/ops/brand-identity) ────────────────────
 type Domain = "verbal" | "strategic" | "visual" | "sonic" | "motion";
 
+interface DescriptorSlot {
+  key: string;
+  label: string;
+  prompt: string;
+  placeholder?: string;
+  kind: "text" | "picker";
+  options?: string[];
+  required?: boolean;
+}
+
+interface AngleField {
+  key: string;
+  label: string;
+  prompt: string;
+  placeholder?: string;
+  kind: "text" | "textarea" | "multi_picker" | "gbp_categories_picker";
+  options?: string[];
+  rows?: number;
+  required?: boolean;
+}
+
+interface AngleSection {
+  key: string;
+  label: string;
+  description?: string;
+  fields: AngleField[];
+}
+
 interface DescriptorInput {
   key: string;
   label: string;
   prompt: string;
-  inputType: "prose" | "list";
+  inputType: "prose" | "list" | "slot_composition" | "angle_collection";
   slotCount?: number;
   qualifier?: string;
   rows?: number;
   required?: boolean;
+  slots?: DescriptorSlot[];
+  angleSchema?: AngleSection[];
+  defaultAngleCount?: number;
 }
 
 interface DescriptorSpec {
@@ -139,6 +170,41 @@ function isSatisfied(d: DescriptorRecord): boolean {
       .filter((i) => i.required)
       .every((i) => {
         const v = declared[i.key];
+        if (i.inputType === "slot_composition") {
+          if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+          const slotsObj = v as Record<string, unknown>;
+          const requiredSlots = (i.slots ?? []).filter((s) => s.required);
+          if (requiredSlots.length === 0) return true;
+          return requiredSlots.every((s) => {
+            const sv = slotsObj[s.key];
+            return typeof sv === "string" && sv.trim().length > 0;
+          });
+        }
+        if (i.inputType === "angle_collection") {
+          // At least ONE angle must have all required fields filled across
+          // all sections. Empty angle entries don't disqualify — owner may
+          // have fewer angles than the default count.
+          const angles = (v as { angles?: unknown[] } | null)?.angles;
+          if (!Array.isArray(angles) || angles.length === 0) return false;
+          const schema = i.angleSchema ?? [];
+          return angles.some((angle) => {
+            if (!angle || typeof angle !== "object" || Array.isArray(angle)) return false;
+            const a = angle as Record<string, unknown>;
+            return schema.every((section) => {
+              const sec = a[section.key];
+              if (!sec || typeof sec !== "object" || Array.isArray(sec)) {
+                return !section.fields.some((f) => f.required);
+              }
+              const secObj = sec as Record<string, unknown>;
+              return section.fields.filter((f) => f.required).every((f) => {
+                const fv = secObj[f.key];
+                if (Array.isArray(fv))
+                  return fv.some((x) => typeof x === "string" && x.trim().length > 0);
+                return typeof fv === "string" && fv.trim().length > 0;
+              });
+            });
+          });
+        }
         if (Array.isArray(v))
           return v.some((s) => typeof s === "string" && s.trim().length > 0);
         return typeof v === "string" && v.trim().length > 0;
@@ -335,11 +401,18 @@ type GroupState = "unvalidated" | "validating" | "passed" | "attention";
  * the group's member keys.
  */
 interface ValidationGroup {
-  id: string;                 // "lists" | "prose:<key>"
+  id: string;                 // "lists" | "prose:<key>" | "slots:<key>"
   label: string;              // operator-facing badge label
   members: string[];          // sub-input keys in this group
   state: GroupState;
   attentionCount: number;     // members with non-pass findings
+  /**
+   * Whether this group runs through the validator. False for
+   * slot_composition inputs (no validation yet — slots ARE substrate; the
+   * composition LLM + slot-aware validator are deferred to next iteration).
+   * When false, the renderer hides the chip + Validate/×5/Reset/Findings controls.
+   */
+  validatable: boolean;
 }
 
 /**
@@ -480,36 +553,62 @@ function computeGroups(
       members,
       state: validatingScopeId === "prose:text" ? "validating" : state,
       attentionCount,
+      validatable: true,
     });
     return groups;
   }
 
-  // Lists group (if any list inputs exist)
+  // Iterate inputs in spec order so groups render in declared sequence.
+  // List inputs aggregate into ONE "lists" group; prose inputs each get
+  // their own group; slot_composition inputs get their own group with
+  // validatable: false (no validator yet — slots ARE substrate).
   const listKeys = d.spec.inputs
     .filter((i) => i.inputType === "list")
     .map((i) => i.key);
-  if (listKeys.length > 0) {
-    const { state, attentionCount } = stateFor(listKeys);
-    groups.push({
-      id: "lists",
-      label: "Lists",
-      members: listKeys,
-      state: validatingScopeId === "lists" ? "validating" : state,
-      attentionCount,
-    });
-  }
-  // Per-prose groups
+  let listsGroupAdded = false;
   for (const input of d.spec.inputs) {
-    if (input.inputType !== "prose") continue;
-    const id = `prose:${input.key}`;
-    const { state, attentionCount } = stateFor([input.key]);
-    groups.push({
-      id,
-      label: input.label ?? input.key,
-      members: [input.key],
-      state: validatingScopeId === id ? "validating" : state,
-      attentionCount,
-    });
+    if (input.inputType === "list") {
+      if (listsGroupAdded || listKeys.length === 0) continue;
+      const { state, attentionCount } = stateFor(listKeys);
+      groups.push({
+        id: "lists",
+        label: "Lists",
+        members: listKeys,
+        state: validatingScopeId === "lists" ? "validating" : state,
+        attentionCount,
+        validatable: true,
+      });
+      listsGroupAdded = true;
+    } else if (input.inputType === "prose") {
+      const id = `prose:${input.key}`;
+      const { state, attentionCount } = stateFor([input.key]);
+      groups.push({
+        id,
+        label: input.label ?? input.key,
+        members: [input.key],
+        state: validatingScopeId === id ? "validating" : state,
+        attentionCount,
+        validatable: true,
+      });
+    } else if (input.inputType === "slot_composition") {
+      groups.push({
+        id: `slots:${input.key}`,
+        label: input.label ?? input.key,
+        members: [input.key],
+        state: "unvalidated",
+        attentionCount: 0,
+        validatable: false,
+      });
+    } else if (input.inputType === "angle_collection") {
+      groups.push({
+        id: `angles:${input.key}`,
+        label: input.label ?? input.key,
+        members: [input.key],
+        state: "unvalidated",
+        attentionCount: 0,
+        validatable: false,
+      });
+    }
   }
   return groups;
 }
@@ -945,7 +1044,10 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
 
     for (const finding of actionable) {
       const input = desc.spec?.inputs?.find((i) => i.key === finding.inputKey);
-      const inputType: "list" | "prose" = input?.inputType ?? "prose";
+      // slot_composition inputs never appear in findings (validator skips them);
+      // safe to narrow to list|prose here.
+      const rawType = input?.inputType ?? "prose";
+      const inputType: "list" | "prose" = rawType === "list" ? "list" : "prose";
       const currentRaw = (() => {
         if (inputType !== "prose") return undefined;
         const decl = saved[key] ?? drafts[key];
@@ -1446,7 +1548,9 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
                   // suggestions.
                   const anyExemplars = sortedFindings.some((f) => {
                     const input = desc.spec?.inputs?.find((i) => i.key === f.inputKey);
-                    const inputType: "list" | "prose" = input?.inputType ?? "prose";
+                    const rawType = input?.inputType ?? "prose";
+                    const inputType: "list" | "prose" =
+                      rawType === "list" ? "list" : "prose";
                     return (
                       primaryExemplars(normalizeExemplars(f, inputType), inputType).length > 0
                     );
@@ -1474,7 +1578,9 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
                     const input = desc.spec?.inputs?.find(
                       (i) => i.key === finding.inputKey,
                     );
-                    const inputType: "list" | "prose" = input?.inputType ?? "prose";
+                    const rawType = input?.inputType ?? "prose";
+                    const inputType: "list" | "prose" =
+                      rawType === "list" ? "list" : "prose";
                     const currentRaw = (() => {
                       if (inputType !== "prose") return undefined;
                       const decl = desc.declared;
@@ -1576,7 +1682,9 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
                     // commit — hide the button to avoid an empty action.
                     const hasAnyExemplars = sortedFindings.some((f) => {
                       const input = desc.spec?.inputs?.find((i) => i.key === f.inputKey);
-                      const inputType: "list" | "prose" = input?.inputType ?? "prose";
+                      const rawType = input?.inputType ?? "prose";
+                      const inputType: "list" | "prose" =
+                        rawType === "list" ? "list" : "prose";
                       const exs = primaryExemplars(
                         normalizeExemplars(f, inputType),
                         inputType,
@@ -1667,6 +1775,354 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
 function fmtElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/**
+ * Multi-select picker with custom-additions affordance. Renders the standard
+ * options as checkboxes; custom entries in `value` that aren't in `options`
+ * appear as additional checkboxes tagged "(custom)"; a text input below lets
+ * the owner add their own. Per the industry-agnostic positioning design — the
+ * universal options handle most cases; the free-text fallback handles
+ * industry-specific values (e.g. heritage preservation, cooking workflow,
+ * outcome certainty) without forcing them into every brand's picker list.
+ */
+function MultiPickerField({
+  options,
+  value,
+  onChange,
+  onBlur,
+}: {
+  options: string[];
+  value: string[];
+  onChange: (next: string[]) => void;
+  onBlur: () => void;
+}) {
+  const [adding, setAdding] = useState("");
+  const customs = value.filter((v) => !options.includes(v));
+  const addCustom = () => {
+    const trimmed = adding.trim();
+    if (!trimmed) return;
+    if (!value.includes(trimmed)) onChange([...value, trimmed]);
+    setAdding("");
+    onBlur();
+  };
+  return (
+    <div className="space-y-0.5">
+      {options.map((opt) => {
+        const checked = value.includes(opt);
+        return (
+          <label
+            key={opt}
+            className="flex items-start gap-2 text-[10px] cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={(e) => {
+                const next = e.target.checked
+                  ? [...value, opt]
+                  : value.filter((v) => v !== opt);
+                onChange(next);
+              }}
+              onBlur={onBlur}
+              className="mt-0.5"
+            />
+            <span>{opt}</span>
+          </label>
+        );
+      })}
+      {customs.map((c) => (
+        <label
+          key={c}
+          className="flex items-start gap-2 text-[10px] cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            checked={true}
+            onChange={() => {
+              onChange(value.filter((v) => v !== c));
+              onBlur();
+            }}
+            className="mt-0.5"
+          />
+          <span>
+            {c} <span className="text-muted">(custom)</span>
+          </span>
+        </label>
+      ))}
+      <div className="flex items-center gap-1 mt-1">
+        <input
+          type="text"
+          value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCustom();
+            }
+          }}
+          placeholder="Add your own..."
+          className="flex-1 rounded border border-border bg-background px-2 py-0.5 text-[10px] focus:border-accent focus:outline-none"
+        />
+        <button
+          onClick={addCustom}
+          disabled={!adding.trim()}
+          className="rounded border border-border text-muted px-2 py-0.5 text-[10px] font-medium hover:bg-surface-hover disabled:opacity-50"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Angle collection editor. Renders N angle cards, each with the same set of
+ * sections × fields defined in `input.angleSchema`. Default count comes from
+ * `input.defaultAngleCount` (or 3). Owner can add or remove angles.
+ *
+ * Storage shape:
+ *   declared.<input.key> = { angles: AngleData[] }
+ *   each AngleData = { [sectionKey]: { [fieldKey]: string | string[] } }
+ *
+ * Empty angles (no required fields filled) are kept in the array but ignored
+ * downstream — the orchestrator only consumes angles whose required slots are
+ * complete. This lets the owner sketch placeholders without committing.
+ */
+function AngleCollectionEditor({
+  input,
+  value,
+  onChange,
+  onBlur,
+  gbpCategories,
+}: {
+  input: DescriptorInput;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  onBlur: () => void;
+  gbpCategories?: { gcid: string; name: string; isPrimary: boolean }[];
+}) {
+  const schema = input.angleSchema ?? [];
+  const defaultCount = input.defaultAngleCount ?? 3;
+
+  // Read angles array from current value; ensure default count of placeholders.
+  const angles: Array<Record<string, unknown>> = (() => {
+    const v = value as { angles?: unknown[] } | null;
+    const stored = Array.isArray(v?.angles) ? (v!.angles as unknown[]) : [];
+    const normalized = stored.map((a) =>
+      a && typeof a === "object" && !Array.isArray(a)
+        ? (a as Record<string, unknown>)
+        : {},
+    );
+    while (normalized.length < defaultCount) normalized.push({});
+    return normalized;
+  })();
+
+  const updateAngle = (idx: number, updater: (angle: Record<string, unknown>) => Record<string, unknown>) => {
+    const next = [...angles];
+    next[idx] = updater(next[idx] ?? {});
+    onChange({ angles: next });
+  };
+
+  const setField = (
+    idx: number,
+    sectionKey: string,
+    fieldKey: string,
+    fieldValue: string | string[],
+  ) => {
+    updateAngle(idx, (angle) => {
+      const sec = (angle[sectionKey] && typeof angle[sectionKey] === "object" && !Array.isArray(angle[sectionKey])
+        ? (angle[sectionKey] as Record<string, unknown>)
+        : {});
+      return {
+        ...angle,
+        [sectionKey]: { ...sec, [fieldKey]: fieldValue },
+      };
+    });
+  };
+
+  const addAngle = () => {
+    onChange({ angles: [...angles, {}] });
+  };
+
+  const clearAngle = (idx: number) => {
+    if (!window.confirm(`Clear angle ${idx + 1}? All fields for this angle will be reset.`))
+      return;
+    const next = [...angles];
+    next[idx] = {};
+    onChange({ angles: next });
+    onBlur();
+  };
+
+  const removeAngle = (idx: number) => {
+    if (!window.confirm(`Remove angle ${idx + 1}? This deletes the angle entirely.`))
+      return;
+    const next = angles.filter((_, i) => i !== idx);
+    onChange({ angles: next });
+    onBlur();
+  };
+
+  const readField = (
+    angle: Record<string, unknown>,
+    sectionKey: string,
+    fieldKey: string,
+  ): string | string[] | undefined => {
+    const sec = angle[sectionKey];
+    if (!sec || typeof sec !== "object" || Array.isArray(sec)) return undefined;
+    const fv = (sec as Record<string, unknown>)[fieldKey];
+    if (typeof fv === "string") return fv;
+    if (Array.isArray(fv) && fv.every((s) => typeof s === "string"))
+      return fv as string[];
+    return undefined;
+  };
+
+  return (
+    <div className="space-y-3">
+      {angles.map((angle, idx) => {
+        const name = readField(angle, "identity", "name");
+        const displayName = typeof name === "string" && name.trim().length > 0 ? name : `Angle ${idx + 1}`;
+        return (
+          <div
+            key={idx}
+            className="rounded-lg border border-border/60 bg-surface p-2 space-y-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                {displayName}
+              </span>
+              <div className="ml-auto flex items-center gap-1.5">
+                <button
+                  onClick={() => clearAngle(idx)}
+                  className="rounded border border-border text-muted px-1.5 py-0.5 text-[10px] font-medium hover:bg-surface-hover"
+                  title="Clear this angle's fields"
+                >
+                  Clear
+                </button>
+                {angles.length > 1 && (
+                  <button
+                    onClick={() => removeAngle(idx)}
+                    className="rounded border border-border text-muted px-1.5 py-0.5 text-[10px] font-medium hover:bg-danger/10 hover:text-danger"
+                    title="Remove this angle entirely"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+            {schema.map((section) => (
+              <div key={section.key} className="space-y-1 pl-2 border-l border-border/40">
+                <div>
+                  <p className="text-[10px] font-medium text-foreground">{section.label}</p>
+                  {section.description && (
+                    <p className="text-[9px] text-muted">{section.description}</p>
+                  )}
+                </div>
+                {section.fields.map((field) => {
+                  const fv = readField(angle, section.key, field.key);
+                  const stringVal = typeof fv === "string" ? fv : "";
+                  const arrayVal = Array.isArray(fv) ? fv : [];
+                  return (
+                    <div key={field.key} className="space-y-0.5">
+                      {field.label && (
+                        <label className="text-[10px] font-medium text-foreground">
+                          {field.label}
+                          {field.required && (
+                            <span className="ml-1 text-[9px] text-warning">required</span>
+                          )}
+                          {field.prompt && (
+                            <span className="ml-1 text-[9px] text-muted font-normal">
+                              — {field.prompt}
+                            </span>
+                          )}
+                        </label>
+                      )}
+                      {!field.label && field.prompt && (
+                        <label className="text-[10px] text-muted">{field.prompt}</label>
+                      )}
+                      {field.kind === "text" && (
+                        <input
+                          type="text"
+                          value={stringVal}
+                          onChange={(e) => setField(idx, section.key, field.key, e.target.value)}
+                          onBlur={onBlur}
+                          placeholder={field.placeholder}
+                          className="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-accent focus:outline-none"
+                        />
+                      )}
+                      {field.kind === "textarea" && (
+                        <textarea
+                          value={stringVal}
+                          onChange={(e) => setField(idx, section.key, field.key, e.target.value)}
+                          onBlur={onBlur}
+                          rows={field.rows ?? 2}
+                          placeholder={field.placeholder}
+                          className="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-accent focus:outline-none resize-y"
+                        />
+                      )}
+                      {field.kind === "multi_picker" && (
+                        <MultiPickerField
+                          options={field.options ?? []}
+                          value={arrayVal}
+                          onChange={(next) =>
+                            setField(idx, section.key, field.key, next)
+                          }
+                          onBlur={onBlur}
+                        />
+                      )}
+                      {field.kind === "gbp_categories_picker" && (
+                        <div className="space-y-0.5">
+                          {!gbpCategories || gbpCategories.length === 0 ? (
+                            <p className="text-[10px] text-muted">
+                              No GBP categories yet. Set up categories via CMA + coaching first.
+                            </p>
+                          ) : (
+                            gbpCategories.map((cat) => {
+                              const checked = arrayVal.includes(cat.gcid);
+                              return (
+                                <label
+                                  key={cat.gcid}
+                                  className="flex items-start gap-2 text-[10px] cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      const next = e.target.checked
+                                        ? [...arrayVal, cat.gcid]
+                                        : arrayVal.filter((v) => v !== cat.gcid);
+                                      setField(idx, section.key, field.key, next);
+                                    }}
+                                    onBlur={onBlur}
+                                    className="mt-0.5"
+                                  />
+                                  <span>
+                                    {cat.name}
+                                    {cat.isPrimary && (
+                                      <span className="ml-1 text-accent">(primary)</span>
+                                    )}
+                                  </span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+      <button
+        onClick={addAngle}
+        className="rounded border border-dashed border-border px-3 py-1 text-[10px] font-medium text-muted hover:bg-surface-hover"
+      >
+        + Add another angle
+      </button>
+    </div>
+  );
 }
 
 function DescriptorCard({
@@ -1912,9 +2368,11 @@ function DescriptorCard({
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                       {g.label}
                     </span>
-                    <div className="ml-auto flex items-center gap-1.5">
-                      {renderGroupControl(g, anyValidating, onValidate, onStabilityTest, onReset, onOpenFindings)}
-                    </div>
+                    {g.validatable && (
+                      <div className="ml-auto flex items-center gap-1.5">
+                        {renderGroupControl(g, anyValidating, onValidate, onStabilityTest, onReset, onOpenFindings)}
+                      </div>
+                    )}
                   </div>
                   {memberInputs.map((input) => {
                     const value = obj[input.key];
@@ -1954,6 +2412,70 @@ function DescriptorCard({
                                     onBlur={onBlur}
                                     className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs focus:border-accent focus:outline-none"
                                   />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : input.inputType === "angle_collection" ? (
+                          <AngleCollectionEditor
+                            input={input}
+                            value={value}
+                            onChange={(next) => onChange({ ...obj, [input.key]: next })}
+                            onBlur={onBlur}
+                            gbpCategories={gbpCategories}
+                          />
+                        ) : input.inputType === "slot_composition" ? (
+                          <div className="space-y-2 pl-2 border-l-2 border-border/60">
+                            {(input.slots ?? []).map((slot) => {
+                              const slotObj =
+                                value && typeof value === "object" && !Array.isArray(value)
+                                  ? (value as Record<string, unknown>)
+                                  : {};
+                              const slotValue =
+                                typeof slotObj[slot.key] === "string"
+                                  ? (slotObj[slot.key] as string)
+                                  : "";
+                              const setSlot = (next: string) => {
+                                onChange({
+                                  ...obj,
+                                  [input.key]: { ...slotObj, [slot.key]: next },
+                                });
+                              };
+                              return (
+                                <div key={slot.key} className="space-y-0.5">
+                                  <label className="text-[10px] font-medium text-foreground">
+                                    {slot.label}
+                                    {slot.required && (
+                                      <span className="ml-1 text-[9px] text-warning">required</span>
+                                    )}
+                                    <span className="ml-1 text-[9px] text-muted font-normal">
+                                      — {slot.prompt}
+                                    </span>
+                                  </label>
+                                  {slot.kind === "picker" ? (
+                                    <select
+                                      value={slotValue}
+                                      onChange={(e) => setSlot(e.target.value)}
+                                      onBlur={onBlur}
+                                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-accent focus:outline-none"
+                                    >
+                                      <option value="">— pick one —</option>
+                                      {(slot.options ?? []).map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      value={slotValue}
+                                      onChange={(e) => setSlot(e.target.value)}
+                                      onBlur={onBlur}
+                                      placeholder={slot.placeholder}
+                                      className="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:border-accent focus:outline-none"
+                                    />
+                                  )}
                                 </div>
                               );
                             })}

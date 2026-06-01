@@ -153,7 +153,7 @@ export function Sidebar({ userName, sites, activeSiteId, role = "owner", plan = 
   const prefix = isSubdomain ? "" : "/dashboard";
   const isOwner = role === "owner";
   const isReviewer = role === "reviewer";
-  const isEnterprise = plan.toLowerCase().includes("enterprise");
+  const isEnterprise = (plan ?? "").toLowerCase().includes("enterprise");
   const visibleModules = MODULES.filter((m) => !m.enterpriseOnly || isEnterprise).map((m) => ({
     ...m,
     subs: m.subs

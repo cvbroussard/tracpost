@@ -48,6 +48,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Site Settings",
     items: [
       { label: "Brand Playbook", path: "/brand" },
+      { label: "Brand Identity", path: "/brand-identity" },
       { label: "Copy Generation", path: "/copy-gen" },
       { label: "Media Generation", path: "/media-gen" },
       { label: "Blog", path: "/blog-config" },

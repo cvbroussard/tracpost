@@ -1,0 +1,1993 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { ManagePage } from "@/components/manage/manage-page";
+import { toast } from "@/components/feedback";
+import { useDictation, type DictationState } from "@/hooks/use-dictation";
+import { cdnImage } from "@/lib/cdn-image";
+import {
+  baselinesFor,
+  forbiddenTermsFromAvoid,
+  detectForbidden,
+  type ForbiddenTerm,
+} from "@/lib/brand-identity/baselines";
+import { declaredDescriptors } from "@/lib/brand-identity/catalog";
+
+// ── Types (mirror the JSON from /api/ops/brand-identity) ────────────────────
+type Domain = "verbal" | "strategic" | "visual" | "sonic" | "motion";
+
+interface DescriptorInput {
+  key: string;
+  label: string;
+  prompt: string;
+  inputType: "prose" | "list";
+  slotCount?: number;
+  qualifier?: string;
+  rows?: number;
+  required?: boolean;
+}
+
+interface DescriptorSpec {
+  key: string;
+  domain: Domain;
+  label: string;
+  describes: string;
+  media: ("text" | "asset" | "extracted")[];
+  lean: "declared" | "extracted";
+  override: "flexible" | "guardrail";
+  inputs?: DescriptorInput[];
+}
+
+interface DescriptorAsset {
+  assetId: string;
+  role: string | null;
+  position: number;
+}
+
+interface DescriptorRecord {
+  id: string;
+  domain: Domain;
+  key: string;
+  label: string | null;
+  /**
+   * Either a string (single-textarea descriptors) OR an object keyed by each
+   * input's `key` (descriptors with `spec.inputs`).
+   */
+  declared: string | Record<string, unknown> | null;
+  extracted: { summary?: string; value?: unknown } | null;
+  extractedInputs: unknown | null;
+  extractionModel: string | null;
+  extractionConfidence: number | null;
+  status: string | null;
+  position: number;
+  /** Per-descriptor configuration (baselinesApplied for guardrails, validationFindings for the quality gate). */
+  metadata: {
+    baselinesApplied?: string[];
+    validationFindings?: {
+      findings: Array<{
+        inputKey: string;
+        verdict: "pass" | "warn" | "attention";
+        reason: string;
+        // Exemplars (new shape, post-2026-05-30): per-source-labeled demonstrations.
+        exemplars?: Array<{
+          content: string;
+          source: "existing" | "rephrased" | "new";
+          fromSlot?: number;
+        }>;
+        // Legacy suggestion field (pre-exemplar shape) — kept for backward compat
+        // on cached findings; normalized into exemplars[] at render time.
+        suggestion?: string | string[];
+      }>;
+      checkedAt: string;
+      model: string;
+      error?: string;
+    };
+  } | null;
+  assets: DescriptorAsset[];
+  spec: DescriptorSpec | null;
+}
+
+interface BrandIdentityData {
+  identity: { id: string; name: string | null };
+  descriptors: DescriptorRecord[];
+}
+
+interface PickerAsset {
+  id: string;
+  storage_url: string;
+  media_type: string;
+  context_note: string | null;
+}
+
+// ── Config ──────────────────────────────────────────────────────────────────
+const DOMAIN_ORDER: Domain[] = ["strategic", "verbal", "visual", "sonic", "motion"];
+const DOMAIN_LABELS: Record<Domain, string> = {
+  strategic: "Strategic",
+  verbal: "Verbal",
+  visual: "Visual",
+  sonic: "Sonic",
+  motion: "Motion",
+};
+// Completion gate — all declared-lean descriptors required. Per the locked
+// "start with all required, learn what to relax" methodology, we set the bar
+// at maximum input first; relaxations come empirically once we measure each
+// field's marginal contribution to extraction quality.
+const REQUIRED_KEYS = new Set(declaredDescriptors().map((d) => d.key));
+
+const isAssetCapable = (d: DescriptorRecord) => !!d.spec?.media.includes("asset");
+const isTextCapable = (d: DescriptorRecord) => !!d.spec?.media.includes("text");
+const isGuardrail = (d: DescriptorRecord) => d.spec?.override === "guardrail";
+function isSatisfied(d: DescriptorRecord): boolean {
+  if (d.key === "logo") return d.assets.length > 0;
+  if (d.spec?.inputs) {
+    const declared =
+      d.declared && typeof d.declared === "object"
+        ? (d.declared as Record<string, unknown>)
+        : {};
+    return d.spec.inputs
+      .filter((i) => i.required)
+      .every((i) => {
+        const v = declared[i.key];
+        if (Array.isArray(v))
+          return v.some((s) => typeof s === "string" && s.trim().length > 0);
+        return typeof v === "string" && v.trim().length > 0;
+      });
+  }
+  const text = typeof d.declared === "string" ? d.declared : "";
+  return text.trim().length > 0;
+}
+/** Concatenate all string content in a draft (for cross-descriptor forbidden detection). */
+function draftToText(draft: unknown): string {
+  if (typeof draft === "string") return draft;
+  if (draft && typeof draft === "object") {
+    const obj = draft as Record<string, unknown>;
+    return Object.values(obj)
+      .flatMap((v) => {
+        if (typeof v === "string") return [v];
+        if (Array.isArray(v))
+          return v.filter((s): s is string => typeof s === "string");
+        return [];
+      })
+      .join(" ");
+  }
+  return "";
+}
+interface ExemplarRecord {
+  content: string;
+  source: "existing" | "rephrased" | "new";
+  fromSlot?: number;
+}
+
+/**
+ * Normalize a finding to the post-2026-05-30 exemplar shape. Backward-compat
+ * shim for cached findings produced under earlier prompts (which returned
+ * suggestion as a string or string[]).
+ *
+ * Legacy suggestion → exemplars: every legacy item becomes `source: "new"`
+ * (we have no way to retroactively identify which items were from owner slots).
+ */
+function normalizeExemplars(
+  finding: {
+    exemplars?: Array<{
+      content: string;
+      source: "existing" | "rephrased" | "new";
+      fromSlot?: number;
+    }>;
+    suggestion?: string | string[];
+  },
+  inputType: "list" | "prose",
+): ExemplarRecord[] {
+  if (Array.isArray(finding.exemplars)) return finding.exemplars;
+  // Legacy: suggestion field
+  if (typeof finding.suggestion === "string" && finding.suggestion.trim().length > 0) {
+    if (inputType === "list") {
+      return finding.suggestion
+        .split(";")
+        .map((s) => s.trim().replace(/^\d+\.\s*/, ""))
+        .filter((s) => s.length > 0)
+        .map((content) => ({ content, source: "new" as const }));
+    }
+    return [{ content: finding.suggestion, source: "new" }];
+  }
+  if (Array.isArray(finding.suggestion)) {
+    return finding.suggestion
+      .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+      .map((content) => ({ content, source: "new" as const }));
+  }
+  return [];
+}
+
+function findingFor(d: DescriptorRecord, inputKey: string) {
+  return d.metadata?.validationFindings?.findings?.find(
+    (f) => f.inputKey === inputKey,
+  );
+}
+
+/**
+ * Reduce a prose finding's exemplars to a single primary so the modal shows
+ * exactly one option and "Accept all" is unambiguous (automation-ready: the
+ * same one click that an owner makes manually is what autopilot will make
+ * automatically once a descriptor's validator clears its stability gates).
+ *
+ * Selection rule (locked 2026-05-31): rephrased > new. Rephrased is preferred
+ * because it preserves owner voice/structure with polish removed — closer to
+ * the owner's intent than a fresh narrative angle. Only falls through to new
+ * when no rephrased exists. Existing-source exemplars shouldn't appear here
+ * (verdict would be pass).
+ *
+ * List inputs return all exemplars unchanged — they're complementary slot
+ * members, not alternatives.
+ */
+function primaryExemplars(
+  exemplars: ExemplarRecord[],
+  inputType: "list" | "prose",
+  currentText?: string,
+): ExemplarRecord[] {
+  if (inputType === "list") return exemplars;
+  // Filter out verbatim copies of current — these are model no-ops (the
+  // dominant failure mode for prose Stage 2: model returns current as
+  // "rephrased" without actually transforming). Even when there's only
+  // ONE exemplar returned, if it's verbatim of current it's useless.
+  // Returning [] in that case lets the modal show the non-actionable path.
+  const normalize = (s: string) => s.trim().replace(/\s+/g, " ");
+  const currentNorm = currentText ? normalize(currentText) : null;
+  const usable = currentNorm
+    ? exemplars.filter((e) => normalize(e.content) !== currentNorm)
+    : exemplars;
+  if (usable.length === 0) return [];
+  if (usable.length === 1) return usable;
+  // Multiple usable exemplars: prefer rephrased > new > first.
+  const rephrased = usable.find((e) => e.source === "rephrased");
+  if (rephrased) return [rephrased];
+  const fresh = usable.find((e) => e.source === "new");
+  if (fresh) return [fresh];
+  return [usable[0]];
+}
+
+/**
+ * Mirror of the store-side scopeMemberKeys (kept client-safe). Returns the
+ * sub-input keys belonging to a validation scope:
+ *  - "lists"        → every list-type input
+ *  - "prose:<key>"  → just [<key>]
+ *  - non-decomposed → "prose:text" → ["text"]
+ */
+function scopeMemberKeysFromSpec(
+  spec: DescriptorRecord["spec"],
+  scope: string,
+): string[] {
+  if (!spec?.inputs) return scope === "prose:text" ? ["text"] : [];
+  if (scope === "lists") {
+    return spec.inputs.filter((i) => i.inputType === "list").map((i) => i.key);
+  }
+  if (scope.startsWith("prose:")) {
+    const k = scope.slice("prose:".length);
+    return spec.inputs.some((i) => i.key === k) ? [k] : [];
+  }
+  return [];
+}
+
+/** Describes the validation state of a single group. */
+type GroupState = "unvalidated" | "validating" | "passed" | "attention";
+
+/**
+ * Validation groups for a descriptor, derived from inputType per
+ * [[descriptor-design-protocol]] default rules. Each group carries its own
+ * state computed from `metadata.validationFindings.findings[]` filtered to
+ * the group's member keys.
+ */
+interface ValidationGroup {
+  id: string;                 // "lists" | "prose:<key>"
+  label: string;              // operator-facing badge label
+  members: string[];          // sub-input keys in this group
+  state: GroupState;
+  attentionCount: number;     // members with non-pass findings
+}
+
+/**
+ * Render the three-element control row for ONE validation group:
+ *   [state flag] [Validate button] [×5 button]
+ *
+ * State flag is informational (chip). Validate is the primary action; label
+ * varies by state (Validate / Re-validate / Validating…). ×5 fires the
+ * scope-aware stability diagnostic. Per [[descriptor-design-protocol]] each
+ * validation group has its own three controls, so the owner can validate +
+ * test stability per group without affecting other scopes.
+ */
+function renderGroupControl(
+  g: ValidationGroup,
+  anyValidating: boolean,
+  onValidate: (scope?: "lists" | { prose: string }) => void,
+  onStabilityTest: (scope?: "lists" | { prose: string }) => void,
+  onReset: (scope?: "lists" | { prose: string }) => void,
+  onOpenFindings: (scope?: "lists" | { prose: string }) => void,
+) {
+  const scopeArg: "lists" | { prose: string } | undefined =
+    g.id === "lists"
+      ? "lists"
+      : g.id.startsWith("prose:")
+        ? g.id === "prose:text"
+          ? undefined
+          : { prose: g.id.slice("prose:".length) }
+        : undefined;
+
+  let flag: React.ReactNode;
+  let validateLabel: string;
+  let validateClass: string;
+  const validateDisabled = anyValidating;
+  if (g.state === "passed") {
+    flag = (
+      <span className="rounded bg-success/10 text-success px-2 py-0.5 text-[10px] font-medium">
+        ✓ Validated
+      </span>
+    );
+    validateLabel = "Re-validate";
+    validateClass =
+      "rounded border border-border text-muted px-2 py-0.5 text-[10px] font-medium hover:bg-surface-hover disabled:opacity-50";
+  } else if (g.state === "validating") {
+    flag = (
+      <span className="rounded bg-muted/10 text-muted px-2 py-0.5 text-[10px] font-medium">
+        ⏳ Validating…
+      </span>
+    );
+    validateLabel = "Validating…";
+    validateClass =
+      "rounded border border-border text-muted px-2 py-0.5 text-[10px] font-medium opacity-50";
+  } else if (g.state === "attention") {
+    flag = (
+      <button
+        onClick={() => onOpenFindings(scopeArg)}
+        className="rounded bg-warning/10 text-warning px-2 py-0.5 text-[10px] font-medium hover:bg-warning/20 cursor-pointer"
+        title="Click to view findings"
+      >
+        ⚠ {g.attentionCount} to resolve
+      </button>
+    );
+    validateLabel = "Re-validate";
+    validateClass =
+      "rounded bg-warning/10 text-warning px-2 py-0.5 text-[10px] font-medium hover:bg-warning/20 disabled:opacity-50";
+  } else {
+    flag = (
+      <span className="rounded bg-muted/10 text-muted px-2 py-0.5 text-[10px] font-medium">
+        ⚪ Not validated
+      </span>
+    );
+    validateLabel = "Validate";
+    validateClass =
+      "rounded bg-accent text-white px-2 py-0.5 text-[10px] font-medium hover:bg-accent/90 disabled:opacity-50";
+  }
+  return (
+    <>
+      {flag}
+      <button
+        onClick={() => onValidate(scopeArg)}
+        disabled={validateDisabled}
+        className={validateClass}
+        title={
+          g.state === "unvalidated"
+            ? `Run quality check on ${g.label}`
+            : "Re-validate after edits"
+        }
+      >
+        {validateLabel}
+      </button>
+      <button
+        onClick={() => onStabilityTest(scopeArg)}
+        disabled={anyValidating}
+        className="rounded border border-border text-muted px-1.5 py-0.5 text-[10px] font-medium hover:bg-surface-hover disabled:opacity-50"
+        title={`Run 5 parallel validations of ${g.label} (diagnostic only; not persisted)`}
+      >
+        ×5
+      </button>
+      <button
+        onClick={() => onReset(scopeArg)}
+        disabled={anyValidating}
+        className="rounded border border-border text-muted px-1.5 py-0.5 text-[10px] font-medium hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+        title={`Reset ${g.label} — clear canonical content + substrate + findings. Destructive.`}
+      >
+        ↺
+      </button>
+    </>
+  );
+}
+
+function computeGroups(
+  d: DescriptorRecord,
+  validatingScopeId: string | null,
+): ValidationGroup[] {
+  const groups: ValidationGroup[] = [];
+  const findings = d.metadata?.validationFindings?.findings ?? [];
+
+  function stateFor(members: string[]): { state: GroupState; attentionCount: number } {
+    const memberFindings = findings.filter((f) => members.includes(f.inputKey));
+    if (memberFindings.length === 0) return { state: "unvalidated", attentionCount: 0 };
+    const nonPass = memberFindings.filter((f) => f.verdict !== "pass");
+    if (nonPass.length > 0) return { state: "attention", attentionCount: nonPass.length };
+    // All findings on members pass. But if not every member has a finding,
+    // we still treat that as unvalidated (the group hasn't been fully checked).
+    const everyMemberHasFinding = members.every((m) =>
+      findings.some((f) => f.inputKey === m),
+    );
+    if (!everyMemberHasFinding) return { state: "unvalidated", attentionCount: 0 };
+    return { state: "passed", attentionCount: 0 };
+  }
+
+  if (!d.spec?.inputs) {
+    // Non-decomposed: single prose group
+    const members = ["text"];
+    const { state, attentionCount } = stateFor(members);
+    groups.push({
+      id: "prose:text",
+      label: d.label ?? d.key,
+      members,
+      state: validatingScopeId === "prose:text" ? "validating" : state,
+      attentionCount,
+    });
+    return groups;
+  }
+
+  // Lists group (if any list inputs exist)
+  const listKeys = d.spec.inputs
+    .filter((i) => i.inputType === "list")
+    .map((i) => i.key);
+  if (listKeys.length > 0) {
+    const { state, attentionCount } = stateFor(listKeys);
+    groups.push({
+      id: "lists",
+      label: "Lists",
+      members: listKeys,
+      state: validatingScopeId === "lists" ? "validating" : state,
+      attentionCount,
+    });
+  }
+  // Per-prose groups
+  for (const input of d.spec.inputs) {
+    if (input.inputType !== "prose") continue;
+    const id = `prose:${input.key}`;
+    const { state, attentionCount } = stateFor([input.key]);
+    groups.push({
+      id,
+      label: input.label ?? input.key,
+      members: [input.key],
+      state: validatingScopeId === id ? "validating" : state,
+      attentionCount,
+    });
+  }
+  return groups;
+}
+
+function ValidationWarning({
+  finding,
+}: {
+  finding: {
+    verdict: "pass" | "warn" | "attention";
+    reason: string;
+    suggestion?: string | string[];
+  };
+}) {
+  if (finding.verdict === "pass") return null;
+  const palette =
+    finding.verdict === "attention"
+      ? { border: "border-warning/40", bg: "bg-warning/5", text: "text-warning", icon: "⚠" }
+      : { border: "border-accent/40", bg: "bg-accent/5", text: "text-accent", icon: "ⓘ" };
+  const hasSuggestion =
+    typeof finding.suggestion === "string"
+      ? finding.suggestion.trim().length > 0
+      : Array.isArray(finding.suggestion) && finding.suggestion.length > 0;
+  return (
+    <div className={`space-y-1 rounded border ${palette.border} ${palette.bg} p-1.5`}>
+      <p className={`text-[10px] ${palette.text}`}>
+        {palette.icon} <strong>{finding.reason}</strong>
+      </p>
+      {hasSuggestion &&
+        (Array.isArray(finding.suggestion) ? (
+          <div className="text-[10px] text-muted">
+            <span className="font-medium">Try:</span>
+            <ol className="ml-4 list-decimal mt-0.5 space-y-0.5">
+              {finding.suggestion.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <p className="text-[10px] text-muted">
+            <span className="font-medium">Try:</span> {finding.suggestion}
+          </p>
+        ))}
+    </div>
+  );
+}
+
+const STATUS_BADGE: Record<string, string> = {
+  extracting: "bg-accent/10 text-accent",
+  extracted: "bg-success/10 text-success",
+  failed: "bg-danger/10 text-danger",
+  stale: "bg-warning/10 text-warning",
+};
+
+function BrandIdentityContent({ siteId }: { siteId: string }) {
+  const [data, setData] = useState<BrandIdentityData | null>(null);
+  const [loading, setLoading] = useState(true);
+  // Drafts can be string (single-textarea) OR object (decomposed sub-fields).
+  const [drafts, setDrafts] = useState<Record<string, unknown>>({});
+  const [saved, setSaved] = useState<Record<string, unknown>>({});
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [pickerKey, setPickerKey] = useState<string | null>(null);
+  const [assets, setAssets] = useState<PickerAsset[] | null>(null);
+  const [dictatingKey, setDictatingKey] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [validatingKey, setValidatingKey] = useState<string | null>(null);
+  // Stability test state — diagnostic per-descriptor multi-run, not persisted.
+  const [stabilityKey, setStabilityKey] = useState<string | null>(null);
+  const [stabilityRunning, setStabilityRunning] = useState(false);
+  const [stabilityRuns, setStabilityRuns] = useState<
+    Array<{
+      findings: Array<{
+        inputKey: string;
+        verdict: "pass" | "warn" | "attention";
+        reason: string;
+        exemplars?: Array<{
+          content: string;
+          source: "existing" | "rephrased" | "new";
+          fromSlot?: number;
+        }>;
+        suggestion?: string | string[];
+      }>;
+      error?: string;
+    }>
+  >([]);
+  // Exemplar modal — opens when validation surfaces non-pass findings WITH exemplars.
+  // Display-only (no auto-write; owner copies and manually edits their fields).
+  const [approvalKey, setApprovalKey] = useState<string | null>(null);
+  // Per [[descriptor-design-protocol]]: when validation was scoped (lists or a
+  // single prose), the modal filters findings to that scope so the owner sees
+  // exactly what they just re-validated, not mixed with findings from other
+  // unrelated scopes. `null` = whole-descriptor (legacy/non-decomposed flow).
+  const [approvalScope, setApprovalScope] = useState<string | null>(null);
+  const [approvalCacheInfo, setApprovalCacheInfo] = useState<{
+    cached: boolean;
+    checkedAt: string;
+  } | null>(null);
+
+  // Refs the dictation callback reads (it closes over stale state otherwise).
+  const draftsRef = useRef<Record<string, unknown>>({});
+  const dictatingKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    draftsRef.current = drafts;
+  }, [drafts]);
+
+  const saveValue = useCallback(
+    async (key: string, value: unknown) => {
+      setSavingKey(key);
+      try {
+        const res = await fetch("/api/ops/brand-identity", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ siteId, key, declared: value }),
+        });
+        if (res.ok) {
+          setSaved((prev) => ({ ...prev, [key]: value }));
+          // Stale-on-edit: server-side `setDeclared` cleared metadata.validationFindings.
+          // Reflect that locally so the quality gate re-locks until re-validated.
+          setData((prev) =>
+            !prev
+              ? prev
+              : {
+                  ...prev,
+                  descriptors: prev.descriptors.map((d) => {
+                    if (d.key !== key) return d;
+                    if (!d.metadata?.validationFindings) return d;
+                    const meta = { ...(d.metadata ?? {}) };
+                    delete (meta as Record<string, unknown>).validationFindings;
+                    return { ...d, metadata: meta };
+                  }),
+                },
+          );
+        } else {
+          toast.error("Save failed");
+        }
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [siteId],
+  );
+
+  // Forbidden-term map from the avoid descriptor's currently-applied baselines.
+  // Passed to every text-capable descriptor card (except `avoid` itself) so the
+  // page can warn inline when prose contradicts the owner's own guardrail.
+  const forbiddenTerms: ForbiddenTerm[] = useMemo(() => {
+    if (!data) return [];
+    const avoidDesc = data.descriptors.find((d) => d.key === "avoid");
+    return forbiddenTermsFromAvoid(avoidDesc?.metadata?.baselinesApplied);
+  }, [data]);
+
+  const dictation = useDictation({
+    siteId,
+    onTranscript: (text) => {
+      const key = dictatingKeyRef.current;
+      if (!key) return;
+      // v1: dictation only operates on string drafts (non-decomposed descriptors).
+      // Decomposed descriptors don't render a mic button, so this branch shouldn't fire there.
+      const existing = draftsRef.current[key];
+      if (typeof existing !== "string") return;
+      const next = existing.trim() ? `${existing.trimEnd()}\n${text}` : text;
+      setDrafts((prev) => ({ ...prev, [key]: next }));
+      void saveValue(key, next);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/ops/brand-identity?site_id=${siteId}`);
+      if (!res.ok) {
+        toast.error("Failed to load brand identity");
+        return;
+      }
+      const d: BrandIdentityData = await res.json();
+      setData(d);
+      const initial: Record<string, unknown> = {};
+      for (const desc of d.descriptors) {
+        if (
+          desc.spec?.inputs &&
+          typeof desc.declared === "string" &&
+          desc.declared.length > 0
+        ) {
+          // Legacy string value on a now-decomposed descriptor: stash the
+          // existing prose into the `example` input if one exists (the catch-
+          // all prose slot), else into the first prose input. Either way it
+          // becomes visible and gets saved into the structured shape on next blur.
+          const proseInput =
+            desc.spec.inputs.find(
+              (i) => i.key === "example" && i.inputType === "prose",
+            ) ?? desc.spec.inputs.find((i) => i.inputType === "prose");
+          initial[desc.key] = proseInput
+            ? { [proseInput.key]: desc.declared }
+            : { _legacy: desc.declared };
+        } else {
+          // Decomposed descriptors start as empty object; single-textarea ones as "".
+          const fallback: unknown = desc.spec?.inputs ? {} : "";
+          initial[desc.key] = desc.declared ?? fallback;
+        }
+      }
+      setDrafts(initial);
+      setSaved(initial);
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId]);
+
+  useEffect(() => {
+    load();
+    setPickerKey(null);
+    // Eager-load the asset list so already-bound thumbnails render immediately.
+    setAssets(null);
+    (async () => {
+      const res = await fetch(`/api/ops/brand-identity/asset?site_id=${siteId}`);
+      if (res.ok) {
+        const { assets: list } = await res.json();
+        setAssets(list as PickerAsset[]);
+      }
+    })();
+  }, [load, siteId]);
+
+  function saveDeclared(key: string) {
+    // Deep-compare via JSON.stringify — drafts may be objects (decomposed shape).
+    if (JSON.stringify(drafts[key]) === JSON.stringify(saved[key])) return;
+    void saveValue(key, drafts[key]);
+  }
+
+  function toggleDictate(key: string) {
+    if (!dictation.supported) {
+      toast.error("Microphone not supported in this browser");
+      return;
+    }
+    if (dictation.state === "recording" && dictatingKeyRef.current === key) {
+      void dictation.stop();
+      return;
+    }
+    if (dictation.state === "idle" || dictation.state === "error") {
+      dictatingKeyRef.current = key;
+      setDictatingKey(key);
+      void dictation.start();
+    }
+  }
+
+  async function ensureAssets() {
+    if (assets) return;
+    const res = await fetch(`/api/ops/brand-identity/asset?site_id=${siteId}`);
+    if (res.ok) {
+      const { assets: list } = await res.json();
+      setAssets(list as PickerAsset[]);
+    }
+  }
+
+  function reportQualityState() {
+    if (!data) return;
+    const required = data.descriptors.filter((d) => REQUIRED_KEYS.has(d.key));
+
+    // Required descriptors still missing content
+    const unfilled = required.filter((d) => !isSatisfied(d));
+    if (unfilled.length > 0) {
+      const list = unfilled.map((d) => d.label ?? d.key).join(", ");
+      toast.error(
+        `${unfilled.length} required descriptor${unfilled.length === 1 ? "" : "s"} need content: ${list}`,
+      );
+      return;
+    }
+
+    // Filled but not yet all-pass validated
+    const needsValidation = required.filter((d) => {
+      const findings = d.metadata?.validationFindings?.findings;
+      if (!findings || findings.length === 0) return true;
+      return findings.some((f) => f.verdict !== "pass");
+    });
+    if (needsValidation.length > 0) {
+      const list = needsValidation.map((d) => d.label ?? d.key).join(", ");
+      toast.error(
+        `${needsValidation.length} descriptor${needsValidation.length === 1 ? "" : "s"} need validation: ${list}`,
+      );
+      return;
+    }
+
+    toast.success("All required descriptors filled and validated ✓");
+  }
+
+  /**
+   * Open the findings modal for a descriptor (optionally scoped). Used by
+   * the attention-state chip click — owner clicks ⚠ to see what the findings
+   * actually say (vs. only seeing "1 to resolve"). No LLM call; just reads
+   * the persisted findings.
+   */
+  function openFindings(key: string, scope?: "lists" | { prose: string }) {
+    const scopeId = !scope ? null : scope === "lists" ? "lists" : `prose:${scope.prose}`;
+    setApprovalScope(scopeId);
+    setApprovalKey(key);
+    setApprovalCacheInfo(null); // not from a fresh validate; cached state assumed
+  }
+
+  /**
+   * Reset owner_original (and dependent substrate, findings, declared) for
+   * a group. Per [[brand-identity-schema]] reset semantics: used when the
+   * owner wants to start over from scratch — typically after a hype-only
+   * first attempt locked the substrate cache and they need a fresh canonical.
+   * Destructive; confirm before firing.
+   */
+  async function runReset(
+    key: string,
+    scope?: "lists" | { prose: string },
+  ) {
+    const scopeLabel =
+      !scope
+        ? "this descriptor"
+        : scope === "lists"
+          ? "the lists group"
+          : `the ${scope.prose} input`;
+    const ok = window.confirm(
+      `Reset will clear the canonical content, extracted substrate, and validation findings for ${scopeLabel}. Owner content for this scope will be deleted; you'll need to re-enter it. Continue?`,
+    );
+    if (!ok) return;
+    setSavingKey(key);
+    try {
+      const res = await fetch("/api/ops/brand-identity/reset-original", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, key, ...(scope ? { scope } : {}) }),
+      });
+      if (res.ok) {
+        await load();
+        toast.success("Reset complete — re-enter content to start over.");
+      } else {
+        toast.error("Reset failed");
+      }
+    } finally {
+      setSavingKey(null);
+    }
+  }
+
+  async function runStabilityTest(
+    key: string,
+    scope?: "lists" | { prose: string },
+    n = 5,
+  ) {
+    const scopeId = !scope ? "all" : scope === "lists" ? "lists" : `prose:${scope.prose}`;
+    setStabilityKey(`${key}::${scopeId}`);
+    setStabilityRunning(true);
+    setStabilityRuns([]);
+    try {
+      const res = await fetch("/api/ops/brand-identity/validate-stability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, key, n, ...(scope ? { scope } : {}) }),
+      });
+      if (res.ok) {
+        const { results } = (await res.json()) as { results: typeof stabilityRuns };
+        setStabilityRuns(results);
+      } else {
+        toast.error("Stability test failed");
+        setStabilityKey(null);
+      }
+    } finally {
+      setStabilityRunning(false);
+    }
+  }
+
+  function closeStability() {
+    setStabilityKey(null);
+    setStabilityRuns([]);
+  }
+
+  function closeApproval() {
+    setApprovalKey(null);
+    setApprovalScope(null);
+    setApprovalCacheInfo(null);
+  }
+
+  async function acceptAllExemplars(key: string) {
+    if (!data) return;
+    const desc = data.descriptors.find((d) => d.key === key);
+    if (!desc) return;
+    const findings = desc.metadata?.validationFindings?.findings ?? [];
+    // Scope-aware: when accept is invoked from a scoped modal, only commit
+    // exemplars for inputs in that scope. Inputs outside the scope keep their
+    // existing declared value untouched.
+    const scopeMembers = approvalScope
+      ? new Set(scopeMemberKeysFromSpec(desc.spec, approvalScope))
+      : null;
+    const scoped = scopeMembers
+      ? findings.filter((f) => scopeMembers.has(f.inputKey))
+      : findings;
+    const actionable = scoped.filter(
+      (f) => f.verdict !== "pass" && (f.exemplars?.length ?? 0) > 0,
+    );
+    if (actionable.length === 0) {
+      closeApproval();
+      return;
+    }
+
+    // Build merged declared object — start with current declared, replace each
+    // input that has exemplars. Inputs without findings or with pass verdict
+    // are preserved as-is.
+    const current = saved[key] ?? drafts[key] ?? {};
+    const next: Record<string, unknown> =
+      current && typeof current === "object" && !Array.isArray(current)
+        ? { ...(current as Record<string, unknown>) }
+        : {};
+    const provenance: Record<
+      string,
+      "owner_typed" | "ai_suggested" | Array<"owner_typed" | "ai_suggested">
+    > = {};
+
+    for (const finding of actionable) {
+      const input = desc.spec?.inputs?.find((i) => i.key === finding.inputKey);
+      const inputType: "list" | "prose" = input?.inputType ?? "prose";
+      const currentRaw = (() => {
+        if (inputType !== "prose") return undefined;
+        const decl = saved[key] ?? drafts[key];
+        if (typeof decl === "string") return decl;
+        if (decl && typeof decl === "object" && !Array.isArray(decl)) {
+          const v = (decl as Record<string, unknown>)[finding.inputKey];
+          return typeof v === "string" ? v : undefined;
+        }
+        return undefined;
+      })();
+      const exemplars = primaryExemplars(
+        normalizeExemplars(finding, inputType),
+        inputType,
+        currentRaw,
+      );
+      if (exemplars.length === 0) continue;
+
+      if (inputType === "list") {
+        next[finding.inputKey] = exemplars.map((e) => e.content);
+        provenance[finding.inputKey] = exemplars.map((e) =>
+          e.source === "existing" ? "owner_typed" : "ai_suggested",
+        );
+      } else {
+        // prose: take the first exemplar (validator returns 1 per the schema)
+        next[finding.inputKey] = exemplars[0].content;
+        provenance[finding.inputKey] =
+          exemplars[0].source === "existing" ? "owner_typed" : "ai_suggested";
+      }
+    }
+
+    setSavingKey(key);
+    try {
+      const res = await fetch("/api/ops/brand-identity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, key, declared: next, provenance }),
+      });
+      if (res.ok) {
+        setSaved((prev) => ({ ...prev, [key]: next }));
+        setDrafts((prev) => ({ ...prev, [key]: next }));
+        setData((prev) =>
+          !prev
+            ? prev
+            : {
+                ...prev,
+                descriptors: prev.descriptors.map((d) => {
+                  if (d.key !== key) return d;
+                  const meta = { ...(d.metadata ?? {}) } as Record<string, unknown>;
+                  delete meta.validationFindings;
+                  return { ...d, declared: next, metadata: meta };
+                }),
+              },
+        );
+        toast.success("Suggestions accepted — re-validate when ready");
+        closeApproval();
+      } else {
+        toast.error("Accept failed");
+      }
+    } finally {
+      setSavingKey(null);
+    }
+  }
+
+  /**
+   * Scope-aware descriptor validation. Per [[descriptor-design-protocol]] each
+   * decomposed descriptor has multiple groups (one lists + one per prose); the
+   * UI surfaces per-group triggers so the owner re-validates only what they
+   * edited. `scope` undefined means "all groups" (the original whole-descriptor
+   * behavior, used by `Validate` on non-decomposed descriptors).
+   */
+  async function runDescriptorValidation(
+    key: string,
+    scope?: "lists" | { prose: string },
+  ) {
+    const scopeId = !scope
+      ? "all"
+      : scope === "lists"
+        ? "lists"
+        : `prose:${scope.prose}`;
+    const tag = `${key}::${scopeId}`;
+    setValidatingKey(tag);
+    try {
+      const res = await fetch("/api/ops/brand-identity/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, key, ...(scope ? { scope } : {}) }),
+      });
+      if (res.ok) {
+        const { results } = (await res.json()) as {
+          results: Array<{
+            findings: Array<{
+              inputKey: string;
+              verdict: "pass" | "warn" | "attention";
+              reason: string;
+              exemplars?: Array<{
+                content: string;
+                source: "existing" | "rephrased" | "new";
+                fromSlot?: number;
+              }>;
+              suggestion?: string | string[];
+            }>;
+            cached?: boolean;
+          }>;
+        };
+        const r0 = results[0];
+        const findings = r0?.findings ?? [];
+        const nonPass = findings.filter((f) => f.verdict !== "pass");
+        // Actionable = any non-pass finding with exemplars (or legacy
+        // suggestion). Non-actionable = non-pass without exemplars (e.g. the
+        // empty-substrate short-circuit). Both should surface to the owner.
+        const actionable = nonPass.filter((f) => {
+          if (Array.isArray(f.exemplars) && f.exemplars.length > 0) return true;
+          if (typeof f.suggestion === "string" && f.suggestion.trim().length > 0) return true;
+          if (Array.isArray(f.suggestion) && f.suggestion.length > 0) return true;
+          return false;
+        });
+        const warnings = nonPass.length;
+
+        await load();
+
+        if (nonPass.length > 0) {
+          setApprovalCacheInfo({
+            cached: !!r0?.cached,
+            checkedAt: (r0 as { checkedAt?: string })?.checkedAt ?? "",
+          });
+          setApprovalScope(scopeId === "all" ? null : scopeId);
+          setApprovalKey(key);
+          const msg = (() => {
+            if (actionable.length === 0) {
+              // Non-actionable finding — surface the reason directly.
+              return `${key}: ${nonPass[0].reason || "needs attention — open the findings to review."}`;
+            }
+            return r0?.cached
+              ? `${key}: showing cached findings (no LLM call). ${warnings} to review.`
+              : `${key}: ${warnings} finding${warnings === 1 ? "" : "s"} — review.`;
+          })();
+          if (actionable.length === 0) toast.error(msg);
+          else toast.success(msg);
+          return;
+        }
+
+        // Pass case — no findings flagged.
+        if (r0?.cached) {
+          toast.success(`${key}: cached pass ✓ (no LLM call).`);
+        } else {
+          toast.success(`${key}: passed ✓`);
+        }
+      } else {
+        toast.error("Validation failed");
+      }
+    } finally {
+      setValidatingKey(null);
+    }
+  }
+
+  async function runExtraction() {
+    setExtracting(true);
+    try {
+      const res = await fetch("/api/ops/brand-identity/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId }),
+      });
+      if (res.ok) {
+        const r = (await res.json()) as {
+          ran: { status: string }[];
+          skipped: string[];
+        };
+        const failed = r.ran.filter((x) => x.status === "failed").length;
+        toast.success(
+          `Extraction (stub): ${r.ran.length - failed} ok, ${failed} failed, ${r.skipped.length} skipped`,
+        );
+        await load();
+      } else {
+        toast.error("Extraction failed");
+      }
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  async function toggleBaseline(
+    key: string,
+    baselineId: string,
+    applying: boolean,
+  ) {
+    if (!data) return;
+    const desc = data.descriptors.find((d) => d.key === key);
+    if (!desc) return;
+    const applicableIds = baselinesFor(key).map((b) => b.id);
+    // null/missing baselinesApplied = all applicable apply (default-on)
+    const current = desc.metadata?.baselinesApplied ?? applicableIds;
+    const newApplied = applying
+      ? Array.from(new Set([...current, baselineId]))
+      : current.filter((id) => id !== baselineId);
+
+    const apply = (list: string[]) =>
+      setData((prev) =>
+        !prev
+          ? prev
+          : {
+              ...prev,
+              descriptors: prev.descriptors.map((dx) =>
+                dx.key !== key
+                  ? dx
+                  : {
+                      ...dx,
+                      metadata: { ...(dx.metadata ?? {}), baselinesApplied: list },
+                    },
+              ),
+            },
+      );
+
+    apply(newApplied);
+    const res = await fetch("/api/ops/brand-identity/baselines", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteId, key, applied: newApplied }),
+    });
+    if (!res.ok) {
+      apply(current); // revert
+      toast.error("Baseline update failed");
+    }
+  }
+
+  async function toggleBinding(key: string, assetId: string, bound: boolean) {
+    // Optimistic flip — update local state immediately, reconcile only on failure.
+    const flip = (currentlyBound: boolean) =>
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          descriptors: prev.descriptors.map((desc) =>
+            desc.key !== key
+              ? desc
+              : {
+                  ...desc,
+                  assets: currentlyBound
+                    ? desc.assets.filter((a) => a.assetId !== assetId)
+                    : [
+                        ...desc.assets,
+                        { assetId, role: null, position: desc.assets.length },
+                      ],
+                },
+          ),
+        };
+      });
+    flip(bound);
+    const res = await fetch("/api/ops/brand-identity/asset", {
+      method: bound ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteId, key, assetId }),
+    });
+    if (!res.ok) {
+      flip(!bound); // revert
+      toast.error("Asset update failed");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+  if (!data) {
+    return <p className="p-6 text-xs text-muted">Failed to load brand identity.</p>;
+  }
+
+  // Interview shows DECLARED descriptors only; extracted-lean ones are produced
+  // by the extraction workflow and reviewed separately.
+  const declared = data.descriptors.filter((d) => d.spec?.lean === "declared");
+  const required = data.descriptors.filter((d) => REQUIRED_KEYS.has(d.key));
+  const satisfied = required.filter(isSatisfied).length;
+  const complete = satisfied === REQUIRED_KEYS.size;
+
+  // Quality gate: every required descriptor needs validationFindings with all-pass verdicts.
+  // Hard-pass-only per the locked methodology — no "Keep mine" acknowledgment in v1.
+  let totalFindings = 0;
+  let totalWarnings = 0;
+  let qualityReadyCount = 0;
+  for (const d of required) {
+    const findings = d.metadata?.validationFindings?.findings;
+    if (!findings) continue;
+    totalFindings += findings.length;
+    const warns = findings.filter((f) => f.verdict !== "pass").length;
+    totalWarnings += warns;
+    if (warns === 0) qualityReadyCount += 1;
+  }
+  const qualityPass = complete && qualityReadyCount === REQUIRED_KEYS.size;
+  const extractGateOpen = complete && qualityPass;
+
+  return (
+    <div className="p-4 space-y-4 pb-12">
+      {/* Completion gate */}
+      <div
+        className={`rounded-xl border p-4 shadow-card ${
+          complete ? "border-success/40 bg-success/5" : "border-border bg-surface"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-semibold">Brand Identity Interview</h3>
+            <p className="text-[10px] text-muted mt-0.5">
+              Declared inputs feed extraction. Dictate the open ones — raw spoken input is
+              the signal; the transcript appends to the field.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <span
+              className={`rounded px-2 py-0.5 text-[10px] font-medium ${
+                complete ? "bg-success/10 text-success" : "bg-surface-hover text-foreground"
+              }`}
+            >
+              Required: {satisfied}/{REQUIRED_KEYS.size}
+            </span>
+            <span
+              className={`rounded px-2 py-0.5 text-[10px] font-medium ${
+                qualityPass
+                  ? "bg-success/10 text-success"
+                  : totalWarnings > 0
+                    ? "bg-warning/10 text-warning"
+                    : "bg-surface-hover text-foreground"
+              }`}
+              title={
+                qualityPass
+                  ? "All required descriptors have passing findings"
+                  : totalFindings === 0
+                    ? "Quality check has not been run yet"
+                    : `${totalWarnings} finding${totalWarnings === 1 ? "" : "s"} to resolve`
+              }
+            >
+              Quality: {qualityPass ? "passed" : totalFindings === 0 ? "not run" : `${totalWarnings} to resolve`}
+            </span>
+            <button
+              onClick={reportQualityState}
+              className="rounded border border-border text-foreground px-3 py-1 text-[10px] font-medium hover:bg-surface-hover"
+              title="Surface what still needs content or validation. Validation itself is done per-card."
+            >
+              Check status
+            </button>
+            <button
+              onClick={runExtraction}
+              disabled={extracting || !extractGateOpen}
+              className="rounded bg-accent text-white px-3 py-1 text-[10px] font-medium hover:opacity-90 disabled:opacity-50"
+              title={
+                !complete
+                  ? "Required descriptors not yet filled"
+                  : !qualityPass
+                    ? "Quality check must pass before extraction"
+                    : "Run extraction — currently a stub that fills placeholder extracted values"
+              }
+            >
+              {extracting ? "Extracting…" : "Run extraction (stub)"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {stabilityKey && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-surface rounded-xl border border-border shadow-card p-4 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold">
+                Stability test — <code>{stabilityKey}</code> ({stabilityRuns.length || 0} runs)
+              </h3>
+              <button
+                onClick={closeStability}
+                className="text-muted hover:text-foreground text-xs"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            {stabilityRunning && (
+              <p className="text-[10px] text-muted">Running 5 validations in parallel…</p>
+            )}
+            {!stabilityRunning && stabilityRuns.length > 0 && (() => {
+              // Group findings by inputKey across all runs.
+              const inputKeys = Array.from(
+                new Set(stabilityRuns.flatMap((r) => r.findings.map((f) => f.inputKey))),
+              );
+              const verdictPalette: Record<string, string> = {
+                pass: "bg-success/10 text-success",
+                warn: "bg-accent/10 text-accent",
+                attention: "bg-warning/10 text-warning",
+              };
+              return (
+                <div className="space-y-3">
+                  {inputKeys.map((ik) => (
+                    <div key={ik} className="space-y-1">
+                      <p className="text-[10px] font-semibold text-foreground">
+                        Input: <code>{ik}</code>
+                      </p>
+                      <div className="space-y-1">
+                        {stabilityRuns.map((run, idx) => {
+                          const f = run.findings.find((ff) => ff.inputKey === ik);
+                          if (!f) {
+                            return (
+                              <div key={idx} className="text-[10px] text-muted">
+                                Run {idx + 1}: <em>not present</em>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-start gap-2 text-[10px]"
+                            >
+                              <span className="text-muted w-10">Run {idx + 1}:</span>
+                              <span
+                                className={`rounded px-1.5 py-0.5 font-medium ${verdictPalette[f.verdict] ?? "bg-muted/20 text-muted"}`}
+                              >
+                                {f.verdict}
+                              </span>
+                              <span className="flex-1 text-foreground">
+                                {f.reason || <em className="text-muted">(no reason)</em>}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  <details className="text-[10px] text-muted">
+                    <summary className="cursor-pointer hover:text-foreground">
+                      Full JSON (suggestions + provenance)
+                    </summary>
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-[9px] bg-background border border-border rounded p-2">
+                      {JSON.stringify(stabilityRuns, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {approvalKey &&
+        (() => {
+          const desc = data.descriptors.find((d) => d.key === approvalKey);
+          if (!desc) return null;
+          const findings = desc.metadata?.validationFindings?.findings ?? [];
+          // Scope-filter the findings shown in the modal so a scoped validation
+          // run surfaces only its own findings (not findings from other scopes
+          // that may still be present in metadata).
+          const scopeMembers = approvalScope
+            ? new Set(scopeMemberKeysFromSpec(desc.spec, approvalScope))
+            : null;
+          const scoped = scopeMembers
+            ? findings.filter((f) => scopeMembers.has(f.inputKey))
+            : findings;
+          const actionableFindings = scoped.filter((f) => f.verdict !== "pass");
+          if (actionableFindings.length === 0) return null;
+
+          // Order findings by input position when decomposed; else as-is.
+          const orderMap: Record<string, number> = {};
+          (desc.spec?.inputs ?? []).forEach((i, idx) => {
+            orderMap[i.key] = idx;
+          });
+          const sortedFindings = [...actionableFindings].sort(
+            (a, b) =>
+              (orderMap[a.inputKey] ?? 999) - (orderMap[b.inputKey] ?? 999),
+          );
+
+          return (
+            <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+              <div className="bg-surface rounded-xl border border-border shadow-card p-4 max-w-4xl w-full max-h-[85vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold">
+                    Quality exemplars — <code>{desc.label ?? desc.key}</code>
+                  </h3>
+                  <button
+                    onClick={closeApproval}
+                    className="text-muted hover:text-foreground text-xs"
+                    aria-label="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {approvalCacheInfo?.cached && (
+                  <div className="rounded border border-accent/40 bg-accent/5 p-1.5 mb-3">
+                    <p className="text-[10px] text-accent">
+                      <strong>ⓘ Cached findings</strong> — no new LLM call was made.
+                      {approvalCacheInfo.checkedAt && (
+                        <> Last checked: {approvalCacheInfo.checkedAt}.</>
+                      )}{" "}
+                      Edit any sub-field to refresh.
+                    </p>
+                  </div>
+                )}
+                {(() => {
+                  // Helper text varies by whether any finding carries exemplars
+                  // the owner can accept. Non-actionable findings (empty
+                  // substrate, etc.) need different guidance than rephrase
+                  // suggestions.
+                  const anyExemplars = sortedFindings.some((f) => {
+                    const input = desc.spec?.inputs?.find((i) => i.key === f.inputKey);
+                    const inputType: "list" | "prose" = input?.inputType ?? "prose";
+                    return (
+                      primaryExemplars(normalizeExemplars(f, inputType), inputType).length > 0
+                    );
+                  });
+                  if (anyExemplars) {
+                    return (
+                      <p className="text-[10px] text-muted mb-3">
+                        Exemplars demonstrate the <strong>shape</strong> of strong content
+                        for this descriptor. <strong>Accept all suggestions</strong> below
+                        replaces the inputs flagged here with these exemplars; inputs that
+                        passed are left as-is.
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="text-[10px] text-muted mb-3">
+                      One or more inputs need attention. No automatic exemplar is
+                      available — the reason below explains what to do next (typically:
+                      edit your canonical content, or use Reset to start over).
+                    </p>
+                  );
+                })()}
+                <div className="space-y-4">
+                  {sortedFindings.map((finding) => {
+                    const input = desc.spec?.inputs?.find(
+                      (i) => i.key === finding.inputKey,
+                    );
+                    const inputType: "list" | "prose" = input?.inputType ?? "prose";
+                    const currentRaw = (() => {
+                      if (inputType !== "prose") return undefined;
+                      const decl = desc.declared;
+                      if (typeof decl === "string") return decl;
+                      if (decl && typeof decl === "object" && !Array.isArray(decl)) {
+                        const v = (decl as Record<string, unknown>)[finding.inputKey];
+                        return typeof v === "string" ? v : undefined;
+                      }
+                      return undefined;
+                    })();
+                    const exemplars = primaryExemplars(
+                      normalizeExemplars(finding, inputType),
+                      inputType,
+                      currentRaw,
+                    );
+                    const fromList = exemplars.filter(
+                      (e) => e.source === "existing" || e.source === "rephrased",
+                    );
+                    const fresh = exemplars.filter((e) => e.source === "new");
+                    return (
+                      <div key={finding.inputKey} className="space-y-2">
+                        <p className="text-[10px] font-semibold">
+                          {input?.label ?? finding.inputKey}
+                          <span className="font-normal text-muted">
+                            {" "}
+                            — {finding.reason}
+                          </span>
+                        </p>
+
+                        {fromList.length > 0 && (
+                          <div className="space-y-1 pl-2 border-l-2 border-success/40">
+                            <p className="text-[10px] text-success font-medium">
+                              From your list:
+                            </p>
+                            {fromList.map((e, i) => {
+                              const isRephrased = e.source === "rephrased";
+                              return (
+                                <div
+                                  key={i}
+                                  className="flex items-start gap-2 text-[10px]"
+                                >
+                                  <span className="text-success w-4 shrink-0">
+                                    {isRephrased ? "✎" : "★"}
+                                  </span>
+                                  <span className="flex-1">
+                                    {typeof e.fromSlot === "number" && (
+                                      <span className="text-muted">
+                                        Slot {e.fromSlot + 1}
+                                        {isRephrased
+                                          ? " (sharpened): "
+                                          : " (already strong): "}
+                                      </span>
+                                    )}
+                                    <span className="text-foreground">{e.content}</span>
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {fresh.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted font-medium">
+                              {fromList.length > 0
+                                ? "New exemplars to consider:"
+                                : "Exemplars to consider:"}
+                            </p>
+                            {fresh.map((e, i) => (
+                              <div
+                                key={i}
+                                className="flex items-start gap-2 text-[10px]"
+                              >
+                                <span className="text-muted w-4 text-right shrink-0">
+                                  {i + 1}.
+                                </span>
+                                <span className="flex-1 text-foreground">
+                                  {e.content}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-end gap-2 mt-4">
+                  <button
+                    onClick={closeApproval}
+                    className="rounded border border-border px-3 py-1 text-[10px] font-medium hover:bg-surface-hover"
+                  >
+                    Close
+                  </button>
+                  {(() => {
+                    // Show Accept All only when at least one finding actually
+                    // carries exemplars. Non-actionable findings (e.g. the
+                    // empty-substrate short-circuit) have no exemplars to
+                    // commit — hide the button to avoid an empty action.
+                    const hasAnyExemplars = sortedFindings.some((f) => {
+                      const input = desc.spec?.inputs?.find((i) => i.key === f.inputKey);
+                      const inputType: "list" | "prose" = input?.inputType ?? "prose";
+                      const exs = primaryExemplars(
+                        normalizeExemplars(f, inputType),
+                        inputType,
+                      );
+                      return exs.length > 0;
+                    });
+                    if (!hasAnyExemplars) return null;
+                    return (
+                      <button
+                        onClick={() => void acceptAllExemplars(approvalKey)}
+                        disabled={savingKey === approvalKey}
+                        className="rounded bg-accent text-white px-3 py-1 text-[10px] font-medium hover:bg-accent/90 disabled:opacity-50"
+                      >
+                        {savingKey === approvalKey ? "Accepting…" : "Accept all suggestions"}
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+      {DOMAIN_ORDER.map((domain) => {
+        const group = declared
+          .filter((d) => d.domain === domain)
+          .sort((a, b) => a.position - b.position);
+        if (group.length === 0) return null;
+        return (
+          <div key={domain} className="space-y-2">
+            <h4 className="text-[10px] uppercase tracking-wide text-muted px-1">
+              {DOMAIN_LABELS[domain]}
+            </h4>
+            <div className="space-y-3">
+              {group.map((d) => (
+                <DescriptorCard
+                  key={d.key}
+                  d={d}
+                  draft={drafts[d.key]}
+                  isSaving={savingKey === d.key}
+                  isDirty={
+                    JSON.stringify(drafts[d.key]) !== JSON.stringify(saved[d.key])
+                  }
+                  required={REQUIRED_KEYS.has(d.key)}
+                  pickerOpen={pickerKey === d.key}
+                  assets={assets}
+                  dictationSupported={dictation.supported}
+                  dictationActive={dictatingKey === d.key}
+                  dictationState={dictation.state}
+                  dictationElapsedMs={dictation.elapsedMs}
+                  onDictate={() => toggleDictate(d.key)}
+                  onChange={(v) => setDrafts((prev) => ({ ...prev, [d.key]: v }))} // v is string OR object depending on descriptor shape
+                  onBlur={() => saveDeclared(d.key)}
+                  onOpenPicker={async () => {
+                    await ensureAssets();
+                    setPickerKey(pickerKey === d.key ? null : d.key);
+                  }}
+                  onToggleAsset={(assetId, bound) => toggleBinding(d.key, assetId, bound)}
+                  onToggleBaseline={(baselineId, optingOut) =>
+                    toggleBaseline(d.key, baselineId, optingOut)
+                  }
+                  forbiddenTerms={forbiddenTerms}
+                  validatingScopeId={
+                    validatingKey?.startsWith(`${d.key}::`)
+                      ? validatingKey.slice(`${d.key}::`.length)
+                      : null
+                  }
+                  onValidate={(scope) => runDescriptorValidation(d.key, scope)}
+                  onStabilityTest={(scope) => runStabilityTest(d.key, scope)}
+                  onReset={(scope) => runReset(d.key, scope)}
+                  onOpenFindings={(scope) => openFindings(d.key, scope)}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function fmtElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function DescriptorCard({
+  d,
+  draft,
+  isSaving,
+  isDirty,
+  required,
+  pickerOpen,
+  assets,
+  dictationSupported,
+  dictationActive,
+  dictationState,
+  dictationElapsedMs,
+  onDictate,
+  onChange,
+  onBlur,
+  onOpenPicker,
+  onToggleAsset,
+  onToggleBaseline,
+  forbiddenTerms,
+  validatingScopeId,
+  onValidate,
+  onStabilityTest,
+  onReset,
+  onOpenFindings,
+}: {
+  d: DescriptorRecord;
+  draft: unknown; // string for single-textarea descriptors, object for decomposed
+  isSaving: boolean;
+  isDirty: boolean;
+  required: boolean;
+  pickerOpen: boolean;
+  assets: PickerAsset[] | null;
+  dictationSupported: boolean;
+  dictationActive: boolean;
+  dictationState: DictationState;
+  dictationElapsedMs: number;
+  onDictate: () => void;
+  onChange: (v: unknown) => void; // full updated draft (string OR object)
+  onBlur: () => void;
+  onOpenPicker: () => void;
+  onToggleAsset: (assetId: string, bound: boolean) => void;
+  onToggleBaseline: (baselineId: string, optingOut: boolean) => void;
+  forbiddenTerms: ForbiddenTerm[];
+  /** Scope id currently validating on THIS descriptor (e.g. "lists" or "prose:example"), else null. */
+  validatingScopeId: string | null;
+  /**
+   * Trigger validation. `scope` undefined → all groups (used for non-decomposed
+   * descriptors that have one synthetic prose:text group). Otherwise scope is
+   * the per-group call: "lists" or { prose: <inputKey> }.
+   */
+  onValidate: (scope?: "lists" | { prose: string }) => void;
+  /** Per-scope stability test. `scope` undefined → whole descriptor. */
+  onStabilityTest: (scope?: "lists" | { prose: string }) => void;
+  /** Per-scope reset (destructive — clears canonical, substrate, findings, declared). */
+  onReset: (scope?: "lists" | { prose: string }) => void;
+  /** Open the findings modal for a scope (scope-aware: only that scope's findings show). */
+  onOpenFindings: (scope?: "lists" | { prose: string }) => void;
+}) {
+  const [showInspect, setShowInspect] = useState(false);
+  const boundIds = new Set(d.assets.map((a) => a.assetId));
+  const done = isSatisfied(d);
+  const recording = dictationActive && dictationState === "recording";
+  const transcribing = dictationActive && dictationState === "transcribing";
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-3 shadow-card space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold">{d.label ?? d.key}</span>
+        {required && (
+          <span
+            className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+              done ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+            }`}
+          >
+            required
+          </span>
+        )}
+        {isGuardrail(d) && (
+          <span className="rounded bg-muted/20 text-muted px-1.5 py-0.5 text-[9px] font-medium">
+            guardrail
+          </span>
+        )}
+        {d.status && STATUS_BADGE[d.status] && (
+          <span
+            className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${STATUS_BADGE[d.status]}`}
+          >
+            {d.status === "extracting" ? "extracting…" : d.status}
+          </span>
+        )}
+        {isSaving && <span className="text-[9px] text-muted">saving…</span>}
+        {!isSaving && isDirty && <span className="text-[9px] text-warning">unsaved</span>}
+
+        <div className="ml-auto flex items-center gap-1">
+          {isTextCapable(d) && !d.spec?.inputs && dictationSupported && (
+            <button
+              onClick={onDictate}
+              disabled={transcribing}
+              className={`rounded px-2 py-0.5 text-[10px] font-medium disabled:opacity-50 ${
+                recording
+                  ? "bg-danger/10 text-danger"
+                  : "border border-border text-muted hover:bg-surface-hover"
+              }`}
+              title="Dictate — record and transcribe into this field"
+            >
+              {recording
+                ? `● Stop ${fmtElapsed(dictationElapsedMs)}`
+                : transcribing
+                  ? "Transcribing…"
+                  : "🎙 Dictate"}
+            </button>
+          )}
+          {/* Non-decomposed: state + Validate + ×5 inline in the header. */}
+          {draftToText(d.declared).trim().length > 0 && !d.spec?.inputs && (() => {
+            const groups = computeGroups(d, validatingScopeId);
+            if (groups.length === 0) return null;
+            const g = groups[0];
+            return renderGroupControl(
+              g,
+              validatingScopeId !== null,
+              onValidate,
+              onStabilityTest,
+              onReset,
+              onOpenFindings,
+            );
+          })()}
+        </div>
+      </div>
+      <p className="text-[10px] text-muted">{d.spec?.describes}</p>
+
+      {(() => {
+        const applicable = baselinesFor(d.key);
+        if (applicable.length === 0) return null;
+        // null/missing = all applicable apply (default-on for fresh descriptors)
+        const applied =
+          d.metadata?.baselinesApplied ?? applicable.map((b) => b.id);
+        return (
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase tracking-wide text-muted">
+              Common sets — uncheck what doesn&apos;t apply
+            </p>
+            {applicable.map((b) => {
+              const isApplied = applied.includes(b.id);
+              return (
+                <label
+                  key={b.id}
+                  className="flex items-start gap-2 text-[10px] cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isApplied}
+                    onChange={() => onToggleBaseline(b.id, !isApplied)}
+                    className="mt-0.5"
+                  />
+                  <span className="flex-1">
+                    <span className="font-medium text-foreground">{b.label}</span>
+                    <div className="text-muted">Avoid: {b.terms.join(", ")}</div>
+                    {b.allowed && b.allowed.length > 0 && (
+                      <div className="text-muted">
+                        Use instead: {b.allowed.join(", ")}
+                      </div>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {isTextCapable(d) && d.spec?.inputs && (() => {
+        // Decomposed sub-fields wrapped per validation group. Each group renders
+        // as a sub-card with its own title + per-group validate control + the
+        // member inputs. Per [[descriptor-design-protocol]] this makes
+        // validation boundaries visible to the owner.
+        const inputsByKey: Record<string, NonNullable<typeof d.spec.inputs>[number]> = {};
+        for (const input of d.spec.inputs ?? []) inputsByKey[input.key] = input;
+        const groups = computeGroups(d, validatingScopeId);
+        const obj =
+          draft && typeof draft === "object"
+            ? (draft as Record<string, unknown>)
+            : ({} as Record<string, unknown>);
+        const anyValidating = validatingScopeId !== null;
+        return (
+          <div className="space-y-3">
+            {groups.map((g) => {
+              const memberInputs = g.members
+                .map((k) => inputsByKey[k])
+                .filter((i): i is NonNullable<typeof i> => Boolean(i));
+              return (
+                <div
+                  key={g.id}
+                  className="rounded-lg border border-border/60 bg-background p-2 space-y-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                      {g.label}
+                    </span>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      {renderGroupControl(g, anyValidating, onValidate, onStabilityTest, onReset, onOpenFindings)}
+                    </div>
+                  </div>
+                  {memberInputs.map((input) => {
+                    const value = obj[input.key];
+                    const baseSlots = input.slotCount ?? 5;
+                    const listValue = Array.isArray(value) ? (value as unknown[]) : [];
+                    const slotCount = Math.max(baseSlots, listValue.length);
+                    return (
+                      <div key={input.key} className="space-y-1">
+                        <label className="text-[10px] font-medium text-foreground">
+                          {input.prompt}
+                          {input.required && (
+                            <span className="ml-1 text-[9px] text-warning">required</span>
+                          )}
+                        </label>
+                        {input.inputType === "list" ? (
+                          <div className="space-y-1">
+                            {Array.from({ length: slotCount }).map((_, i) => {
+                              const list = Array.isArray(value) ? (value as string[]) : [];
+                              const slotValue = typeof list[i] === "string" ? list[i] : "";
+                              return (
+                                <div
+                                  key={i}
+                                  className="flex items-center gap-2 text-xs"
+                                >
+                                  <span className="text-[10px] text-muted w-4 text-right">
+                                    {i + 1}.
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={slotValue}
+                                    onChange={(e) => {
+                                      const next = [...list];
+                                      while (next.length < slotCount) next.push("");
+                                      next[i] = e.target.value;
+                                      onChange({ ...obj, [input.key]: next });
+                                    }}
+                                    onBlur={onBlur}
+                                    className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs focus:border-accent focus:outline-none"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <textarea
+                            value={typeof value === "string" ? value : ""}
+                            onChange={(e) =>
+                              onChange({ ...obj, [input.key]: e.target.value })
+                            }
+                            onBlur={onBlur}
+                            rows={input.rows ?? 3}
+                            placeholder="In the owner's own words — raw is fine."
+                            className="w-full text-xs rounded border border-border bg-background px-3 py-2 focus:border-accent focus:outline-none resize-y"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {isTextCapable(d) && !d.spec?.inputs && (
+        <>
+          <textarea
+            value={typeof draft === "string" ? draft : ""}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={onBlur}
+            rows={3}
+            placeholder="Declare in the owner's own words — type or dictate; raw is fine."
+            className="w-full text-xs rounded border border-border bg-background px-3 py-2 focus:border-accent focus:outline-none resize-y"
+          />
+          {(() => {
+            const f = findingFor(d, "text");
+            return f ? <ValidationWarning finding={f} /> : null;
+          })()}
+        </>
+      )}
+
+      {isTextCapable(d) && d.key !== "avoid" && forbiddenTerms.length > 0 && (() => {
+        // Scans ALL text in the draft (string or decomposed object's text content).
+        const detected = detectForbidden(draftToText(draft), forbiddenTerms);
+        if (detected.length === 0) return null;
+        return (
+          <div className="space-y-0.5 rounded border border-warning/40 bg-warning/5 p-1.5">
+            {detected.map((f) => (
+              <p key={f.term} className="text-[9px] text-warning">
+                ⚠ <strong>{f.term}</strong> is on your {f.baselineLabel} baseline.
+                {f.allowed.length > 0 && <> Try: {f.allowed.join(", ")}.</>}
+              </p>
+            ))}
+          </div>
+        );
+      })()}
+
+      {isAssetCapable(d) && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {d.assets.map((a) => {
+              const meta = assets?.find((x) => x.id === a.assetId);
+              return meta ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={a.assetId}
+                  src={cdnImage(meta.storage_url, { width: 96, height: 96 })}
+                  alt=""
+                  className="h-12 w-12 rounded object-cover border border-border"
+                />
+              ) : (
+                <span
+                  key={a.assetId}
+                  className="h-12 w-12 rounded border border-border bg-surface-hover flex items-center justify-center text-[9px] text-muted"
+                >
+                  asset
+                </span>
+              );
+            })}
+            <button
+              onClick={onOpenPicker}
+              className="h-12 rounded border border-dashed border-border px-3 text-[10px] font-medium text-muted hover:bg-surface-hover"
+            >
+              {pickerOpen ? "Close" : d.assets.length ? "Edit assets" : "Add assets"}
+            </button>
+          </div>
+
+          {pickerOpen && (
+            <div className="rounded border border-border bg-background p-2 max-h-48 overflow-y-auto">
+              {assets === null ? (
+                <p className="text-[10px] text-muted">Loading assets…</p>
+              ) : assets.length === 0 ? (
+                <p className="text-[10px] text-muted">No assets for this business yet.</p>
+              ) : (
+                <div className="grid grid-cols-5 gap-1.5">
+                  {assets.map((a) => {
+                    const bound = boundIds.has(a.id);
+                    return (
+                      <button
+                        key={a.id}
+                        onClick={() => onToggleAsset(a.id, bound)}
+                        title={a.context_note ?? a.media_type}
+                        className={`relative rounded overflow-hidden border ${
+                          bound ? "border-accent ring-1 ring-accent" : "border-border"
+                        }`}
+                      >
+                        {a.media_type.startsWith("image") ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={cdnImage(a.storage_url, { width: 160, height: 96 })}
+                            alt=""
+                            loading="lazy"
+                            className="h-12 w-full object-cover"
+                          />
+                        ) : (
+                          <span className="h-12 w-full flex items-center justify-center text-[9px] text-muted bg-surface-hover">
+                            {a.media_type.split("/")[0]}
+                          </span>
+                        )}
+                        {bound && (
+                          <span className="absolute top-0.5 right-0.5 rounded-full bg-accent text-white text-[8px] px-1">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {(d.extracted || d.status === "failed") && (
+        <div className="rounded border border-border bg-background p-2 space-y-1">
+          {d.extracted?.summary && (
+            <p className="text-[10px] text-foreground">{d.extracted.summary}</p>
+          )}
+          <button
+            onClick={() => setShowInspect((v) => !v)}
+            className="text-[9px] text-accent hover:underline"
+          >
+            {showInspect ? "hide" : "inspect"} extraction
+          </button>
+          {showInspect && (
+            <pre className="text-[9px] text-muted overflow-x-auto whitespace-pre-wrap max-h-48">
+              {JSON.stringify(
+                {
+                  value: d.extracted?.value,
+                  model: d.extractionModel,
+                  inputs: d.extractedInputs,
+                },
+                null,
+                2,
+              )}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function ManageBrandIdentityPage() {
+  return (
+    <ManagePage title="Brand Identity" requireSite>
+      {({ siteId }) => <BrandIdentityContent siteId={siteId} />}
+    </ManagePage>
+  );
+}

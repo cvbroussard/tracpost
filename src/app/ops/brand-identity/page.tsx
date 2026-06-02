@@ -17,6 +17,20 @@ import {
   PHASE_DESCRIPTIONS,
   type DescriptorPhase,
 } from "@/lib/brand-identity/catalog";
+import {
+  descriptorBucket,
+  STATISTICAL_DESCRIPTOR_KEYS,
+  type Bucket,
+} from "@/lib/brand-identity/buckets";
+import type {
+  OfferRec,
+  AudienceRec,
+  PositioningRec,
+  HookRec,
+  TaglineRec,
+  CtaRec,
+} from "@/lib/brand-identity/statistical-recommendation";
+import Link from "next/link";
 
 // ── Types (mirror the JSON from /api/ops/brand-identity) ────────────────────
 type Domain = "verbal" | "strategic" | "visual" | "sonic" | "motion";
@@ -662,7 +676,20 @@ const STATUS_BADGE: Record<string, string> = {
   stale: "bg-warning/10 text-warning",
 };
 
-function BrandIdentityContent({ siteId }: { siteId: string }) {
+export function BrandIdentityContent({
+  siteId,
+  bucket = "all",
+}: {
+  siteId: string;
+  /**
+   * Filter the descriptor render loop to a single bucket. "all" preserves
+   * the legacy combined view served at /ops/brand-identity. The bucket-
+   * specific sub-routes pass "statistical" or "creative" to render only
+   * their descriptor set. Completion stats + quality gate scope to the
+   * filtered set automatically.
+   */
+  bucket?: Bucket | "all";
+}) {
   const [data, setData] = useState<BrandIdentityData | null>(null);
   const [loading, setLoading] = useState(true);
   // Drafts can be string (single-textarea) OR object (decomposed sub-fields).
@@ -1320,10 +1347,22 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
 
   // Interview shows DECLARED descriptors only; extracted-lean ones are produced
   // by the extraction workflow and reviewed separately.
-  const declared = data.descriptors.filter((d) => d.spec?.lean === "declared");
-  const required = data.descriptors.filter((d) => REQUIRED_KEYS.has(d.key));
+  const allDeclared = data.descriptors.filter((d) => d.spec?.lean === "declared");
+  const allRequired = data.descriptors.filter((d) => REQUIRED_KEYS.has(d.key));
+  // Bucket filter — "all" preserves legacy combined behavior; "statistical"
+  // and "creative" scope to their descriptor set. Stats below compute against
+  // the filtered set so each bucket page shows its own completion ratio.
+  const declared =
+    bucket === "all"
+      ? allDeclared
+      : allDeclared.filter((d) => descriptorBucket(d.key) === bucket);
+  const required =
+    bucket === "all"
+      ? allRequired
+      : allRequired.filter((d) => descriptorBucket(d.key) === bucket);
+  const requiredCount = required.length;
   const satisfied = required.filter(isSatisfied).length;
-  const complete = satisfied === REQUIRED_KEYS.size;
+  const complete = requiredCount > 0 && satisfied === requiredCount;
 
   // Quality gate: every required descriptor needs validationFindings with all-pass verdicts.
   // Hard-pass-only per the locked methodology — no "Keep mine" acknowledgment in v1.
@@ -1338,11 +1377,28 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
     totalWarnings += warns;
     if (warns === 0) qualityReadyCount += 1;
   }
-  const qualityPass = complete && qualityReadyCount === REQUIRED_KEYS.size;
+  const qualityPass = complete && qualityReadyCount === requiredCount;
   const extractGateOpen = complete && qualityPass;
+
+  // Statistical bucket — read-only view of the bundle JSON committed by the
+  // strategic recommendation approve action. No catalog input form, no
+  // validation, no validation groups. Per the locked Statistical-bucket-UI
+  // direction (2026-06-01): editing is forbidden, not just hidden.
+  if (bucket === "statistical") {
+    return (
+      <div className="p-4 space-y-4 pb-12">
+        <BucketTabs bucket={bucket} />
+        <StatisticalReadOnlyView descriptors={declared} />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 space-y-4 pb-12">
+      {/* Bucket tab strip — visible on every variant; "all" view shows neither
+          tab as active (signals "you're on the legacy combined view"). */}
+      <BucketTabs bucket={bucket} />
+
       {/* Completion gate */}
       <div
         className={`rounded-xl border p-4 shadow-card ${
@@ -1363,7 +1419,7 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
                 complete ? "bg-success/10 text-success" : "bg-surface-hover text-foreground"
               }`}
             >
-              Required: {satisfied}/{REQUIRED_KEYS.size}
+              Required: {satisfied}/{requiredCount}
             </span>
             <span
               className={`rounded px-2 py-0.5 text-[10px] font-medium ${
@@ -1775,6 +1831,405 @@ function BrandIdentityContent({ siteId }: { siteId: string }) {
 function fmtElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// ============================================================================
+// Statistical bucket — read-only render of bundle JSON
+// ============================================================================
+//
+// Per the locked direction (2026-06-01, see memory): no input form, no
+// validation, no validation groups, no editing. Surfaces the committed
+// strategic recommendation bundle for human + (future) LLM grading. The
+// engine's confidence pills + reasoning + coherence ARE the per-element
+// quality signal — no separate validator pass at this bucket level.
+//
+// Each descriptor's declared JSONB carries the bundle element shape
+// (per approveStrategicRecommendation). When declared is null the
+// strategic recommendation hasn't been run/approved for that element.
+
+function StatisticalReadOnlyView({
+  descriptors,
+}: {
+  descriptors: DescriptorRecord[];
+}) {
+  const byKey = new Map(descriptors.map((d) => [d.key, d]));
+  const populated = descriptors.filter((d) => d.declared !== null).length;
+  const total = STATISTICAL_DESCRIPTOR_KEYS.length;
+
+  return (
+    <>
+      {/* Status header — replaces the Creative-bucket completion gate */}
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-semibold">Statistical Branding · committed bundle</h3>
+            <p className="mt-0.5 text-[10px] text-muted">
+              Read-only view of the strategic recommendation bundle. The engine&apos;s confidence
+              + reasoning + coherence are the per-element quality signal — no validator pass
+              at this bucket level. Editing is intentionally not surfaced.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded px-2 py-0.5 text-[10px] font-medium ${
+                populated === total
+                  ? "bg-success/10 text-success"
+                  : "bg-surface-hover text-foreground"
+              }`}
+            >
+              Committed: {populated}/{total}
+            </span>
+            <Link
+              href="/ops/strategic-recommendation"
+              className="rounded border border-border px-2 py-1 text-[10px] hover:bg-surface-hover"
+            >
+              Generate / Review →
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Per-descriptor read-only cards */}
+      <div className="space-y-3">
+        {STATISTICAL_DESCRIPTOR_KEYS.map((key) => {
+          const d = byKey.get(key);
+          if (!d) return null;
+          return <StatisticalDescriptorReadOnly key={key} descriptor={d} />;
+        })}
+      </div>
+    </>
+  );
+}
+
+function StatisticalDescriptorReadOnly({
+  descriptor,
+}: {
+  descriptor: DescriptorRecord;
+}) {
+  const key = descriptor.key;
+  const declared = descriptor.declared;
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h4 className="text-sm font-medium">{descriptor.label || key}</h4>
+          <p className="mt-0.5 text-[10px] text-muted capitalize">
+            {key} · {descriptor.domain}
+          </p>
+        </div>
+        {descriptor.status && (
+          <span className="rounded bg-surface-hover px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted">
+            {descriptor.status}
+          </span>
+        )}
+      </div>
+
+      {declared === null ? (
+        <EmptyStatisticalCard />
+      ) : (
+        <StatisticalBundleElement descriptorKey={key} value={declared} />
+      )}
+    </div>
+  );
+}
+
+function EmptyStatisticalCard() {
+  return (
+    <div className="rounded border border-dashed border-border bg-background p-3 text-center">
+      <p className="text-xs text-muted">No bundle element committed yet for this descriptor.</p>
+      <p className="mt-1 text-[10px] text-muted">
+        <Link href="/ops/strategic-recommendation" className="text-accent underline">
+          Generate + approve a strategic recommendation
+        </Link>{" "}
+        to populate.
+      </p>
+    </div>
+  );
+}
+
+function StatisticalBundleElement({
+  descriptorKey,
+  value,
+}: {
+  descriptorKey: string;
+  value: unknown;
+}) {
+  // Per the approveStrategicRecommendation mapping, declared carries the
+  // bundle element shape per descriptor key. Branch by key for typed render.
+  switch (descriptorKey) {
+    case "offer":
+      return <OfferReadOnly value={value as OfferRec} />;
+    case "audience":
+      return <AudienceReadOnly value={value as AudienceRec} />;
+    case "positioning":
+      return <PositioningReadOnly value={value as PositioningRec} />;
+    case "hooks":
+      return <HooksReadOnly value={value as HookRec[]} />;
+    case "tagline":
+      return <TaglineReadOnly value={value as TaglineRec} />;
+    case "cta":
+      return <CtaReadOnly value={value as CtaRec} />;
+    default:
+      return <UnknownShapeReadOnly value={value} />;
+  }
+}
+
+function ConfidencePill({ confidence }: { confidence: string | null | undefined }) {
+  if (!confidence) return null;
+  const cls =
+    confidence === "high"
+      ? "bg-success/10 text-success"
+      : confidence === "medium"
+        ? "bg-warning/10 text-warning"
+        : "bg-muted/10 text-muted";
+  return (
+    <span
+      className={`ml-2 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${cls}`}
+    >
+      {confidence}
+    </span>
+  );
+}
+
+function ReasoningBlock({
+  reasoning,
+  coherence,
+}: {
+  reasoning?: string;
+  coherence?: string;
+}) {
+  if (!reasoning && !coherence) return null;
+  return (
+    <div className="mt-3 space-y-1 border-t border-border/40 pt-2">
+      {reasoning && (
+        <p className="text-[10px] text-muted">
+          <span className="font-semibold">Reasoning:</span> {reasoning}
+        </p>
+      )}
+      {coherence && (
+        <p className="text-[10px] text-muted">
+          <span className="font-semibold">Coherence:</span> {coherence}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OfferReadOnly({ value }: { value: OfferRec }) {
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs">{value.recommendation}</p>
+        <ConfidencePill confidence={value.confidence} />
+      </div>
+      <ReasoningBlock reasoning={value.reasoning} coherence={value.coherence} />
+    </div>
+  );
+}
+
+function AudienceReadOnly({ value }: { value: AudienceRec }) {
+  return (
+    <div className="space-y-2 text-xs">
+      <div className="flex items-start justify-between gap-2">
+        <p>
+          <span className="text-[10px] font-semibold text-muted">Primary:</span> {value.primary}
+        </p>
+        <ConfidencePill confidence={value.confidence} />
+      </div>
+      {/* Pains / triggers are substrate-library scope — populated by
+          `business_pains` / `business_triggers` pipelines, not the
+          strategic engine. See [[substrate-libraries-layer]]. */}
+      <ReasoningBlock reasoning={value.reasoning} coherence={value.coherence} />
+    </div>
+  );
+}
+
+function PositioningReadOnly({ value }: { value: PositioningRec }) {
+  const [lead, ...alternatives] = value.angles ?? [];
+  return (
+    <div>
+      {!lead && <p className="text-xs text-muted">No positioning angle in bundle.</p>}
+      {lead && (
+        <div className="rounded border border-accent/40 bg-accent/5 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <h5 className="text-xs font-semibold">
+              <span className="mr-1 text-[10px] uppercase tracking-wide text-accent">
+                Lead ·
+              </span>
+              {lead.label}
+            </h5>
+            <ConfidencePill confidence={lead.confidence} />
+          </div>
+          <div className="mt-2 space-y-1 text-xs">
+            <div>
+              <span className="text-[10px] font-semibold text-muted">Wedge:</span> {lead.wedge}
+            </div>
+            <div>
+              <span className="text-[10px] font-semibold text-muted">Contrast:</span>{" "}
+              {lead.contrast}
+            </div>
+            <div>
+              <span className="text-[10px] font-semibold text-muted">Example:</span>{" "}
+              <span className="italic">{lead.example}</span>
+            </div>
+            {lead.applies_to?.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                {lead.applies_to.map((a, i) => (
+                  <span
+                    key={i}
+                    className="rounded bg-surface px-1.5 py-0.5 text-[9px] text-muted"
+                  >
+                    {a}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {alternatives.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Alternative angles · ranked by evidence weight
+          </p>
+          <div className="grid gap-2 md:grid-cols-2">
+            {alternatives.map((a, i) => (
+              <div key={i} className="rounded border border-border bg-background p-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-semibold">{a.label}</p>
+                  <ConfidencePill confidence={a.confidence} />
+                </div>
+                <p className="mt-1 text-[10px] text-muted">{a.wedge}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <ReasoningBlock reasoning={value.reasoning} coherence={value.coherence} />
+    </div>
+  );
+}
+
+function HooksReadOnly({ value }: { value: HookRec[] }) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return <p className="text-xs text-muted">No hooks in bundle.</p>;
+  }
+  return (
+    <ul className="space-y-2">
+      {value.map((h, i) => (
+        <li key={i} className="rounded border border-border bg-background p-2">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs">{h.hook}</p>
+            <span className="shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-[9px] font-medium text-accent">
+              {h.format}
+            </span>
+          </div>
+          <p className="mt-1 text-[10px] text-muted">
+            <span className="font-semibold">Ladders to:</span> {h.ladders_to}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function TaglineReadOnly({ value }: { value: TaglineRec }) {
+  if (value.recommendation === null) {
+    return (
+      <div className="rounded border border-border bg-background p-3 opacity-70">
+        <p className="text-xs font-medium">Tagline deferred</p>
+        <p className="mt-1 text-[10px] text-muted">
+          {value.cause || "Recommendation engine returned no tagline."}
+        </p>
+        <ReasoningBlock reasoning={value.reasoning} coherence={value.coherence} />
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-base font-medium italic">&ldquo;{value.recommendation}&rdquo;</p>
+        <ConfidencePill confidence={value.confidence ?? null} />
+      </div>
+      <ReasoningBlock reasoning={value.reasoning} coherence={value.coherence} />
+    </div>
+  );
+}
+
+function CtaReadOnly({ value }: { value: CtaRec }) {
+  return (
+    <div className="space-y-1 text-xs">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p>
+            <span className="text-[10px] font-semibold text-muted">Primary:</span>{" "}
+            {value.primary}
+          </p>
+          {value.secondary && (
+            <p className="mt-1">
+              <span className="text-[10px] font-semibold text-muted">Secondary:</span>{" "}
+              {value.secondary}
+            </p>
+          )}
+        </div>
+        <ConfidencePill confidence={value.confidence} />
+      </div>
+      <ReasoningBlock reasoning={value.reasoning} coherence={value.coherence} />
+    </div>
+  );
+}
+
+function UnknownShapeReadOnly({ value }: { value: unknown }) {
+  return (
+    <div className="rounded border border-warning/30 bg-warning/5 p-2">
+      <p className="text-[10px] text-warning">
+        Unrecognized bundle shape — possibly legacy Creative-style declared data. Re-run the
+        strategic recommendation to populate this descriptor with the canonical bundle shape.
+      </p>
+      <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-[9px] text-muted">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    </div>
+  );
+}
+
+/**
+ * Tab strip rendered at the top of every brand-identity page variant.
+ * Routes to /ops/brand-identity/statistical and /ops/brand-identity/creative.
+ * The legacy /ops/brand-identity route renders with bucket="all" and shows
+ * neither tab as active (signals "you're on the combined view — pick a bucket").
+ */
+function BucketTabs({ bucket }: { bucket: Bucket | "all" }) {
+  return (
+    <div className="flex items-center gap-1 border-b border-border">
+      <Link
+        href="/ops/brand-identity/statistical"
+        className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
+          bucket === "statistical"
+            ? "border-accent text-foreground"
+            : "border-transparent text-muted hover:text-foreground"
+        }`}
+      >
+        Statistical (6) <span className="text-[9px] text-muted ml-1">recommendation-driven</span>
+      </Link>
+      <Link
+        href="/ops/brand-identity/creative"
+        className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
+          bucket === "creative"
+            ? "border-accent text-foreground"
+            : "border-transparent text-muted hover:text-foreground"
+        }`}
+      >
+        Creative (20) <span className="text-[9px] text-muted ml-1">owner-authored</span>
+      </Link>
+      {bucket === "all" && (
+        <span className="ml-auto text-[9px] uppercase tracking-wide text-muted">
+          Combined view · pick a bucket above
+        </span>
+      )}
+    </div>
+  );
 }
 
 /**

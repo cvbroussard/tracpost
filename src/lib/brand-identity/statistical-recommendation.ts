@@ -43,6 +43,22 @@ const PROMPT_VERSION = "stat-rec-v1-2026-06-01";
 
 export type Confidence = "high" | "medium" | "exploratory";
 export type DisqualificationSeverity = "advisory" | "strong";
+
+// Per the substrate-libraries layer (2026-06-02): hooks/tagline/cta are
+// DERIVED-substrate populated by their own pipelines, NOT by the strategic
+// engine. Pains/triggers are SOURCE-substrate populated by extraction +
+// validation pipelines, NOT by the strategic engine.
+//
+// The engine produces ONLY the strategic core (offer / audience profile /
+// positioning) + disqualification signal + meta. Everything else moved out
+// of the bundle in 2026-06-02 to live in the substrate library layer.
+//
+// The types below remain exported because (a) the brand-identity Statistical
+// read-only UI still renders these shapes for any legacy declared data and
+// (b) when substrate-library pipelines land, they'll consume these same
+// shapes as their output contract. See:
+//   - [[substrate-libraries-layer]] memory for the source/derived split
+//   - [[brand-identity-schema]] memory for Statistical/Creative bucket lock
 export type HookFormat = "headline" | "first-2-seconds" | "thumb-stopper" | "objection-handle";
 
 export interface OfferRec {
@@ -54,8 +70,6 @@ export interface OfferRec {
 
 export interface AudienceRec {
   primary: string;
-  pains: string[];
-  triggers: string[];
   reasoning: string;
   confidence: Confidence;
   coherence: string;
@@ -71,28 +85,41 @@ export interface PositioningAngle {
 }
 
 export interface PositioningRec {
-  /** ORDERED: angles[0] is the lead. Per locked decision #4, LLM ranks. */
+  /** ORDERED: angles[0] is the lead. LLM ranks. */
   angles: PositioningAngle[];
   reasoning: string;
   coherence: string;
 }
 
+/**
+ * @deprecated Engine no longer produces hooks. Hooks are derived-substrate
+ * populated by `business_hooks` library pipelines. Shape retained for UI
+ * rendering of legacy data and for the future hooks library output contract.
+ */
 export interface HookRec {
   hook: string;
   ladders_to: string;
   format: HookFormat;
 }
 
+/**
+ * @deprecated Engine no longer produces taglines. Tagline variants are
+ * derived-substrate populated by `business_tagline_variants` library
+ * pipelines. Shape retained for UI rendering of legacy data.
+ */
 export interface TaglineRec {
-  /** null when not producible — UI renders deferred state */
   recommendation: string | null;
   reasoning: string;
   confidence: Confidence | null;
   coherence: string;
-  /** only present when recommendation is null */
   cause?: string;
 }
 
+/**
+ * @deprecated Engine no longer produces CTAs. CTA variants are derived-
+ * substrate populated by `business_cta_variants` library pipelines. Shape
+ * retained for UI rendering of legacy data.
+ */
 export interface CtaRec {
   primary: string;
   secondary: string | null;
@@ -114,16 +141,12 @@ export interface StatisticalBundleMeta {
   subscriber_tier: string | null;
   data_sufficient_for: string[];
   data_insufficient_for: string[];
-  hooks_data_thin: boolean;
 }
 
 export interface StatisticalBundle {
   offer: OfferRec | null;
   audience: AudienceRec | null;
   positioning: PositioningRec | null;
-  hooks: HookRec[];
-  tagline: TaglineRec | null;
-  cta: CtaRec | null;
   disqualification_signal: DisqualificationSignal | null;
   meta: StatisticalBundleMeta;
 }
@@ -171,7 +194,11 @@ export interface CreativeDeclarations {
 
 const SYSTEM_PROMPT = `You are a senior brand strategist at a top-tier marketing agency. You're producing the opening strategic recommendation for a small-to-mid market business that has retained you. This is the deliverable that turns the Competitive Market Analysis into actionable brand strategy — the moment the engagement transitions from "here's what we found" to "here's where you should stand."
 
-You produce ONE coherent strategy bundle with six interlocking elements. They are not six independent recommendations — they are one strategy expressed six ways. The Positioning is the spine; Audience is who it speaks to; Offer is what's transacted; Hooks are the proven openings; Tagline is the compression; CTA is the call to action. All six must hang together.
+You produce ONE coherent strategy bundle with three interlocking strategic elements. They are not three independent recommendations — they are one strategy expressed three ways. The Positioning is the spine; Audience is who it speaks to; Offer is the recommended lead commercial motion. All three must hang together.
+
+SCOPE BOUNDARY — IMPORTANT:
+
+Executional artifacts (Hooks, Tagline, CTA) and audience substrate (Pains, Triggers) are produced by SEPARATE substrate-library pipelines, NOT by you. Do not generate them. Do not include them in your output. Even if the user message contains hints about declared voice/pains, your job is the strategic core only.
 
 PRINCIPLES YOU OPERATE BY:
 
@@ -179,21 +206,19 @@ PRINCIPLES YOU OPERATE BY:
 
 2. **Disqualify when the evidence demands it.** If the subscriber's plausible positioning would lie outside the top consumer-demand patterns visible in the CMA, set the disqualification_signal field explicitly. Do not invent a positioning to fit a brand that doesn't fit the market. (Example: "no competitor ranks for the wedge this brand would naturally claim — recommend off-ramp to human-curated marketing.") Severity "strong" hides the bundle in UI behind an opt-in disclosure; "advisory" surfaces both bundle and off-ramp side-by-side.
 
-3. **Coherence is the deliverable, not the elements.** A great Positioning paired with an Audience it doesn't serve, or a Tagline that doesn't compress the Positioning, is a failed recommendation. Each element must explain its connection to the others via its coherence field.
+3. **Coherence is the deliverable, not the elements.** A great Positioning paired with an Audience it doesn't serve, or an Offer that doesn't transact what the Positioning promises, is a failed recommendation. Each element must explain its connection to the others via its coherence field.
 
-4. **The CTA must match category conversion behavior.** Service businesses in trades convert on phone/quote; e-commerce converts on shop/cart; restaurants on reserve/order. Do not invent CTAs that violate category norms.
+4. **Voice respects existing creative declarations.** If the owner has declared tone, lexicon, pov_persona, or proof preferences, your prose in positioning angles (wedge, contrast, example) should operate in that voice. If no creative descriptors are declared, default to category-norm voice but flag the inheritance in your reasoning.
 
-5. **Hooks earn their place.** A hook is a proven OPENING — the kind of first-line you'd put in an ad headline or a video's first 2 seconds. Target 4-6 hooks. Each hook must connect to a specific Audience pain or Positioning angle present in the CMA evidence. Floor of 4: if you genuinely cannot produce 4 distinct, evidence-laddered hooks, return what you can and set meta.hooks_data_thin to true. Do not pad to hit the floor.
+5. **Positioning is multi-angle and you rank them.** Per locked architecture, the brand may have multiple legitimate strategic territories. If CMA evidence supports it, produce up to 3 angles. Each angle = (label, wedge, contrast, example, applies_to). The angles array is ORDERED — index 0 is the lead angle (highest evidence weight + confidence). Alternatives follow in descending strength. Single-angle is acceptable when evidence supports only one. Do not produce equal-weighted alternatives — if you cannot rank them, you do not have enough evidence to produce them.
 
-6. **Tagline is compression, not aspiration.** It compresses the Positioning into 3-7 words. It is NOT a description of values or a motto. If you can't produce a tagline that genuinely compresses the Positioning, set tagline.recommendation to null, tagline.confidence to null, and provide a cause field. Same null+cause pattern for any other element you cannot produce with confidence.
+6. **Audience is the strategic profile, not pain inventory.** The audience.primary field captures WHO the brand serves — demographic + geographic + psychographic + price-band — derived from CMA service areas, category mix, competitor tier, and brand basics. Do NOT include pain inventories, trigger inventories, or other substrate-library content in your audience output. Substrate libraries handle that.
 
-7. **Voice respects existing creative declarations.** If the owner has declared tone, lexicon, pov_persona, or proof preferences, your Hooks and Tagline must operate in that voice. If no creative descriptors are declared, default to category-norm voice but flag the inheritance in your reasoning.
+7. **Offer is the lead commercial motion, not the catalog.** The offer.recommendation prescribes the recommended primary intake/conversion mechanism — what the brand should LEAD WITH commercially (e.g., paid Discovery consultation, tasting menu reservation, architecture session). It is NOT a list of services (GBP categories handle that) or benefits (substrate libraries handle that). Single strategic statement.
 
-8. **Positioning is multi-angle and you rank them.** Per locked architecture, the brand may have multiple legitimate strategic territories. If CMA evidence supports it, produce up to 3 angles. Each angle = (label, wedge, contrast, example, applies_to). The angles array is ORDERED — index 0 is the lead angle (highest evidence weight + confidence). Alternatives follow in descending strength. Single-angle is acceptable when evidence supports only one. Do not produce equal-weighted alternatives — if you cannot rank them, you do not have enough evidence to produce them.
+8. **No filler.** If you cannot produce a strong recommendation for an element because the CMA is thin, return null for that element. List the gaps in meta.data_insufficient_for. Do not invent.
 
-9. **No filler.** If you can only produce strong recommendations for some elements because the CMA is thin in some area, return null for the weak elements with a cause. List the gaps in meta.data_insufficient_for. Do not invent.
-
-10. **Cite the data explicitly.** Reasoning fields should read like an agency analyst: "Among 10 ranking competitors in your local pack across 6 queries, 4 cite 'remodeling contractor' as primary type while you cite 'general contractor' — this is the category gap that suppresses your visibility on the highest-intent searches in your area."
+9. **Cite the data explicitly.** Reasoning fields should read like an agency analyst: "Among 10 ranking competitors in your local pack across 6 queries, 4 cite 'remodeling contractor' as primary type while you cite 'general contractor' — this is the category gap that suppresses your visibility on the highest-intent searches in your area."
 
 VOICE CALIBRATION:
 
@@ -201,19 +226,16 @@ The businesses ranking on the subscriber's SERPs are typically mid-to-bottom-tie
 
 OUTPUT FORMAT:
 
-Return ONLY strict JSON matching the schema below. No prose preamble, no markdown code fences. The JSON must be parseable as-is.
+Return ONLY strict JSON matching the schema below. No prose preamble, no markdown code fences. The JSON must be parseable as-is. Output ONLY the fields listed — no hooks, tagline, cta, pains, or triggers fields.
 
 {
   "offer": { "recommendation": string, "reasoning": string, "confidence": "high"|"medium"|"exploratory", "coherence": string } | null,
-  "audience": { "primary": string, "pains": string[], "triggers": string[], "reasoning": string, "confidence": "high"|"medium"|"exploratory", "coherence": string } | null,
+  "audience": { "primary": string, "reasoning": string, "confidence": "high"|"medium"|"exploratory", "coherence": string } | null,
   "positioning": {
     "angles": [{ "label": string, "wedge": string, "contrast": string, "example": string, "applies_to": string[], "confidence": "high"|"medium"|"exploratory" }],
     "reasoning": string,
     "coherence": string
   } | null,
-  "hooks": [{ "hook": string, "ladders_to": string, "format": "headline"|"first-2-seconds"|"thumb-stopper"|"objection-handle" }],
-  "tagline": { "recommendation": string|null, "reasoning": string, "confidence": "high"|"medium"|"exploratory"|null, "coherence": string, "cause"?: string } | null,
-  "cta": { "primary": string, "secondary": string|null, "reasoning": string, "confidence": "high"|"medium"|"exploratory", "coherence": string } | null,
   "disqualification_signal": null | { "severity": "advisory"|"strong", "reasoning": string, "off_ramp_recommendation": string },
   "meta": {
     "cma_snapshot_id": string,
@@ -221,8 +243,7 @@ Return ONLY strict JSON matching the schema below. No prose preamble, no markdow
     "subscriber_categories": string[],
     "subscriber_tier": string | null,
     "data_sufficient_for": string[],
-    "data_insufficient_for": string[],
-    "hooks_data_thin": boolean
+    "data_insufficient_for": string[]
   }
 }`;
 
@@ -419,9 +440,6 @@ function parseBundle(text: string, inputs: StrategicInputs): StatisticalBundle {
       offer: parsed.offer ?? null,
       audience: parsed.audience ?? null,
       positioning: parsed.positioning ?? null,
-      hooks: Array.isArray(parsed.hooks) ? parsed.hooks : [],
-      tagline: parsed.tagline ?? null,
-      cta: parsed.cta ?? null,
       disqualification_signal: parsed.disqualification_signal ?? null,
       meta: parsed.meta ?? defaultMeta(inputs),
     };
@@ -436,9 +454,6 @@ function emptyBundle(inputs: StrategicInputs, reason: string): StatisticalBundle
     offer: null,
     audience: null,
     positioning: null,
-    hooks: [],
-    tagline: null,
-    cta: null,
     disqualification_signal: null,
     meta: { ...defaultMeta(inputs), data_insufficient_for: [reason] },
   };
@@ -452,7 +467,6 @@ function defaultMeta(inputs: StrategicInputs): StatisticalBundleMeta {
     subscriber_tier: inputs.cma.subscriberTier?.slug ?? null,
     data_sufficient_for: [],
     data_insufficient_for: [],
-    hooks_data_thin: false,
   };
 }
 
@@ -714,6 +728,9 @@ export async function getLatestStrategicRecommendation(
  * Update the owner_action lifecycle field. Returns true if a row was
  * updated. Idempotent — re-setting the same action just bumps
  * owner_action_at.
+ *
+ * Use this for "rejected" — for "approved" prefer
+ * approveStrategicRecommendation() which atomically writes to declared.
  */
 export async function setStrategicRecommendationAction(
   id: string,
@@ -727,6 +744,119 @@ export async function setStrategicRecommendationAction(
     RETURNING id
   `;
   return rows.length > 0;
+}
+
+// ============================================================================
+// Approval — atomic write of bundle into brand_descriptor.declared
+// ============================================================================
+//
+// The Statistical bucket is a recommendation-driven path. Owner doesn't type
+// declared values; the engine produces them. So for these 6 descriptors,
+// the BUNDLE element IS the declared shape. The catalog input schemas
+// (designed for Creative-style owner authorship) are vestigial here.
+//
+// Mapping (per locked Statistical/Creative bucket split, 2026-06-01):
+//   bundle.offer        → brand_descriptor[key=offer].declared
+//   bundle.audience     → brand_descriptor[key=audience].declared
+//   bundle.positioning  → brand_descriptor[key=positioning].declared
+//   bundle.hooks        → brand_descriptor[key=hooks].declared
+//   bundle.tagline      → brand_descriptor[key=tagline].declared
+//   bundle.cta          → brand_descriptor[key=cta].declared
+//
+// Null bundle elements are skipped (no descriptor write). hooks is always
+// written (even empty array — "no hooks recommended" is meaningful).
+// status flips to 'extracted' because the bundle IS the finalized form
+// (no Stage 1/2 extraction needed for Statistical descriptors — the
+// engine already did the work).
+//
+// Skips setDeclared's owner-authored machinery (owner_original locks,
+// stale-finding preservation, substrate-conditional anchors) because none
+// applies to the engine-authored Statistical path.
+
+// Re-exported from the client-safe bucket module so consumers that need
+// the canonical Statistical keys can import from here OR from buckets.ts.
+// Single source of truth lives in buckets.ts (no server imports).
+export {
+  STATISTICAL_DESCRIPTOR_KEYS,
+  type StatisticalDescriptorKey,
+} from "./buckets";
+import type { StatisticalDescriptorKey } from "./buckets";
+
+export interface ApprovalResult {
+  ok: boolean;
+  descriptorsWritten: number;
+  skipped: StatisticalDescriptorKey[];
+}
+
+/**
+ * Atomically approve a strategic recommendation:
+ *   1. Write each non-null bundle element into the matching
+ *      brand_descriptor.declared row (status → 'extracted').
+ *   2. Flip the strategic_recommendations.owner_action to 'approved'.
+ *
+ * All operations in a single transaction. Idempotent — re-approving the
+ * same rec re-writes declared (no-op if bundle unchanged) and bumps
+ * owner_action_at.
+ */
+export async function approveStrategicRecommendation(
+  recId: string,
+): Promise<ApprovalResult> {
+  const [recRow] = await sql`
+    SELECT brand_identity_id, parsed_bundle
+    FROM strategic_recommendations
+    WHERE id = ${recId}
+    LIMIT 1
+  `;
+  if (!recRow) {
+    throw new Error(`Strategic recommendation ${recId} not found`);
+  }
+
+  const brandIdentityId = recRow.brand_identity_id as string;
+  const bundle = recRow.parsed_bundle as StatisticalBundle;
+
+  // Build the write set — engine bundle ONLY produces strategic core
+  // (offer / audience / positioning). Hooks / tagline / cta are now
+  // populated by substrate-library pipelines (see [[substrate-libraries-layer]])
+  // and are deliberately NOT touched by the approve action — their
+  // brand_descriptor.declared rows are left in whatever prior state.
+  const writes: Array<{ key: StatisticalDescriptorKey; value: unknown }> = [];
+  const skipped: StatisticalDescriptorKey[] = [];
+
+  if (bundle.offer) writes.push({ key: "offer", value: bundle.offer });
+  else skipped.push("offer");
+
+  if (bundle.audience) writes.push({ key: "audience", value: bundle.audience });
+  else skipped.push("audience");
+
+  if (bundle.positioning) writes.push({ key: "positioning", value: bundle.positioning });
+  else skipped.push("positioning");
+
+  // hooks / tagline / cta intentionally not written — substrate-library scope
+
+  // Compose the atomic transaction: N descriptor updates + 1 lifecycle flip
+  const queries = writes.map(({ key, value }) =>
+    sql`
+      UPDATE brand_descriptor
+      SET declared = ${JSON.stringify(value)}::jsonb,
+          status   = 'extracted'
+      WHERE brand_identity_id = ${brandIdentityId}
+        AND key = ${key}
+    `,
+  );
+  queries.push(sql`
+    UPDATE strategic_recommendations
+    SET owner_action    = 'approved',
+        owner_action_at = NOW()
+    WHERE id = ${recId}
+  `);
+
+  await sql.transaction(queries);
+
+  return {
+    ok: true,
+    descriptorsWritten: writes.length,
+    skipped,
+  };
 }
 
 // ============================================================================
@@ -885,27 +1015,20 @@ function diffStructuralFields(oldCma: AnalysisPayload, newCma: AnalysisPayload):
 }
 
 // ============================================================================
-// TODO — items deferred until this scaffold is wired
+// TODO — items deferred
 // ============================================================================
 //
-// 1. Caller route: POST /api/admin/strategic-recommendation/[businessId]/generate
-//      reads basics from businesses, calls loadStrategicInputs(),
-//      calls generateStatisticalRecommendation(), then
-//      persistStrategicRecommendation(), returns the bundle + id.
-//
-// 2. Review UX surface: /ops/strategic-recommendation/[businessId] with the
-//      card layout spec from the prompt draft .md. Reads via
-//      getLatestStrategicRecommendation(); writes via
-//      setStrategicRecommendationAction() on approve/refine/reject.
-//
-// 3. Owner approval action: atomic write of all six elements into
-//      brand_identity declared fields (offer.recommendation -> offer.declared,
-//      positioning.angles -> positioning.angles declared, etc.). Use the
-//      existing setDeclared() store API. Then setStrategicRecommendationAction(
-//      id, "approved").
-//
-// 4. Refinement drill-down: per-element re-prompt with the bundle as
+// 1. Refinement drill-down: per-element re-prompt with the bundle as
 //      context + the specific element to refine. NEW SYSTEM PROMPT —
 //      not the bundle prompt re-run. Updates parsed_bundle in place via
 //      a new updateStrategicRecommendationBundle() writer; eventually
 //      transitions owner_action to "refined" on approve.
+//
+// 2. Alternative-angle approve actions in positioning card ("Approve
+//      this instead" / "Approve in addition") — bundle-mutation
+//      operations, NOT full re-approve. Belongs with refinement work.
+//
+// 3. Holistic quality pass (Statistical × Creative cross-bucket grader)
+//      per [[brand-identity-schema]] — deferred until both buckets are
+//      committed on at least one real brand. Needs real-data rubric
+//      anchoring; abstract checklists produce abstract verifiers.

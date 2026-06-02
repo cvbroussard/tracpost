@@ -7,9 +7,6 @@ import type {
   AudienceRec,
   PositioningRec,
   PositioningAngle,
-  HookRec,
-  TaglineRec,
-  CtaRec,
   DisqualificationSignal,
   Confidence,
   OwnerAction,
@@ -193,6 +190,7 @@ export function StrategicRecommendationClient({ subscriberId }: { subscriberId: 
           staleness={staleness}
           revealDisqualified={revealDisqualified}
           onRevealDisqualified={() => setRevealDisqualified(true)}
+          onActionComplete={loadLatest}
         />
       )}
     </div>
@@ -208,11 +206,13 @@ function BundleReview({
   staleness,
   revealDisqualified,
   onRevealDisqualified,
+  onActionComplete,
 }: {
   rec: PersistedRecord;
   staleness: StalenessAssessment | null;
   revealDisqualified: boolean;
   onRevealDisqualified: () => void;
+  onActionComplete: () => void;
 }) {
   const b = rec.bundle;
   const dq = b.disqualification_signal;
@@ -265,18 +265,11 @@ function BundleReview({
           {b.offer && <OfferCard offer={b.offer} />}
           {!b.offer && <DeferredCard label="Offer" cause="Recommendation engine returned no offer." />}
 
-          {/* Hooks */}
-          <HooksCard hooks={b.hooks} dataThin={b.meta.hooks_data_thin} />
-
-          {/* Tagline */}
-          <TaglineCard tagline={b.tagline} />
-
-          {/* CTA */}
-          {b.cta && <CtaCard cta={b.cta} />}
-          {!b.cta && <DeferredCard label="CTA" cause="Recommendation engine returned no CTA." />}
+          {/* Hooks / Tagline / CTA are now substrate-library scope (2026-06-02)
+              — populated by their own pipelines, not the strategic engine. */}
 
           {/* Action footer */}
-          <ActionFooter ownerAction={rec.ownerAction} />
+          <ActionFooter rec={rec} onActionComplete={onActionComplete} />
         </>
       )}
     </div>
@@ -455,22 +448,9 @@ function AudienceCard({ audience }: { audience: AudienceRec }) {
           <span className="text-xs">{audience.primary}</span>
           <ConfidencePill confidence={audience.confidence} className="ml-2" />
         </div>
-        {audience.pains.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-muted">Pains</p>
-            <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs">
-              {audience.pains.map((p, i) => <li key={i}>{p}</li>)}
-            </ul>
-          </div>
-        )}
-        {audience.triggers.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-muted">Triggers</p>
-            <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs">
-              {audience.triggers.map((t, i) => <li key={i}>{t}</li>)}
-            </ul>
-          </div>
-        )}
+        {/* Pains / triggers are now substrate-library scope — populated by
+            `business_pains` / `business_triggers` pipelines, not the
+            strategic engine bundle. See [[substrate-libraries-layer]]. */}
       </div>
       <ReasoningBlock reasoning={audience.reasoning} coherence={audience.coherence} />
     </Section>
@@ -489,85 +469,6 @@ function OfferCard({ offer }: { offer: OfferRec }) {
   );
 }
 
-function HooksCard({ hooks, dataThin }: { hooks: HookRec[]; dataThin: boolean }) {
-  return (
-    <Section title="Hooks" subtitle={`${hooks.length} opening lines — pick favorites at use time`}>
-      {dataThin && (
-        <div className="mb-3 rounded border border-warning/30 bg-warning/5 p-2 text-[10px] text-warning">
-          Limited hook variety due to thin evidence — consider revisiting after CMA refresh.
-        </div>
-      )}
-      {hooks.length === 0 ? (
-        <p className="text-xs text-muted">No hooks produced.</p>
-      ) : (
-        <ul className="space-y-2">
-          {hooks.map((h, i) => (
-            <li key={i} className="rounded border border-border bg-background p-2">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-xs">{h.hook}</p>
-                <span className="shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-[9px] font-medium text-accent">
-                  {h.format}
-                </span>
-              </div>
-              <p className="mt-1 text-[10px] text-muted">
-                <span className="font-semibold">Ladders to:</span> {h.ladders_to}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
-  );
-}
-
-function TaglineCard({ tagline }: { tagline: TaglineRec | null }) {
-  if (!tagline) {
-    return <DeferredCard label="Tagline" cause="Recommendation engine returned no tagline." />;
-  }
-  if (tagline.recommendation === null) {
-    return (
-      <Section title="Tagline" subtitle="Compression of the positioning">
-        <div className="rounded border border-border bg-background p-3 opacity-70">
-          <p className="text-xs font-medium">Tagline deferred</p>
-          <p className="mt-1 text-[10px] text-muted">
-            {tagline.cause || "Positioning is still settling — author manually or revisit after positioning approval."}
-          </p>
-        </div>
-      </Section>
-    );
-  }
-  return (
-    <Section title="Tagline" subtitle="Compression of the positioning">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-base font-medium italic">"{tagline.recommendation}"</p>
-        {tagline.confidence && <ConfidencePill confidence={tagline.confidence} />}
-      </div>
-      <ReasoningBlock reasoning={tagline.reasoning} coherence={tagline.coherence} />
-    </Section>
-  );
-}
-
-function CtaCard({ cta }: { cta: CtaRec }) {
-  return (
-    <Section title="Call to Action" subtitle="Conversion mechanism">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs">
-            <span className="text-[10px] font-semibold text-muted">Primary:</span> {cta.primary}
-          </p>
-          {cta.secondary && (
-            <p className="mt-1 text-xs">
-              <span className="text-[10px] font-semibold text-muted">Secondary:</span> {cta.secondary}
-            </p>
-          )}
-        </div>
-        <ConfidencePill confidence={cta.confidence} />
-      </div>
-      <ReasoningBlock reasoning={cta.reasoning} coherence={cta.coherence} />
-    </Section>
-  );
-}
-
 function DeferredCard({ label, cause }: { label: string; cause: string }) {
   return (
     <Section title={label}>
@@ -579,35 +480,80 @@ function DeferredCard({ label, cause }: { label: string; cause: string }) {
   );
 }
 
-function ActionFooter({ ownerAction }: { ownerAction: OwnerAction }) {
-  const isPending = ownerAction === "pending";
+function ActionFooter({
+  rec,
+  onActionComplete,
+}: {
+  rec: PersistedRecord;
+  onActionComplete: () => void;
+}) {
+  const [submitting, setSubmitting] = useState<"approved" | "rejected" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+
+  async function performAction(action: "approved" | "rejected") {
+    setSubmitting(action);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/admin/strategic-recommendation/${rec.businessId}/action`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recId: rec.id, action }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setError(d.error || `${action} failed (${res.status})`);
+        return;
+      }
+      if (action === "approved") {
+        const skipped: string[] = Array.isArray(d.skipped) ? d.skipped : [];
+        setResult(
+          `Approved — ${d.descriptorsWritten} of 6 descriptors written to brand identity.` +
+            (skipped.length > 0 ? ` Skipped (null bundle elements): ${skipped.join(", ")}.` : ""),
+        );
+      } else {
+        setResult("Rejected — strategic recommendation marked rejected. Bundle preserved for paper trail.");
+      }
+      onActionComplete();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  const approveLabel =
+    rec.ownerAction === "approved" ? "Re-approve" : "Approve all";
+
   return (
     <div className="sticky bottom-0 rounded-xl border border-border bg-surface p-4 shadow-card">
       <div className="flex items-center justify-between gap-3">
         <div className="text-[10px] text-muted">
-          State: <span className="font-medium">{ownerAction}</span>
-          {!isPending && <span className="ml-2 text-muted">(set previously)</span>}
+          State: <span className="font-medium">{rec.ownerAction}</span>
+          {rec.ownerAction !== "pending" && rec.ownerActionAt && (
+            <span className="ml-2">on {new Date(rec.ownerActionAt).toLocaleString()}</span>
+          )}
         </div>
         <div className="flex gap-2">
           <button
-            disabled
-            title="Reject — wires to setStrategicRecommendationAction in next step"
-            className="rounded border border-border bg-background px-3 py-1.5 text-xs text-muted disabled:opacity-50"
+            onClick={() => performAction("rejected")}
+            disabled={submitting !== null}
+            className="rounded border border-border bg-background px-3 py-1.5 text-xs hover:bg-surface-hover disabled:opacity-50"
           >
-            Reject
+            {submitting === "rejected" ? "Rejecting…" : "Reject"}
           </button>
           <button
-            disabled
-            title="Approve — atomic write to brand_identity declared not yet wired"
-            className="rounded bg-success px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+            onClick={() => performAction("approved")}
+            disabled={submitting !== null}
+            className="rounded bg-success px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            Approve all
+            {submitting === "approved" ? "Approving…" : approveLabel}
           </button>
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-muted">
-        Approve/Reject actions stub-only — atomic write to brand_identity declared comes in the next TODO.
-      </p>
+      {result && <p className="mt-2 text-[10px] text-success">✓ {result}</p>}
+      {error && <p className="mt-2 text-[10px] text-danger">{error}</p>}
     </div>
   );
 }

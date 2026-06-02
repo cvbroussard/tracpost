@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";
-import { sql } from "@/lib/db";
 import {
   loadStrategicInputs,
   generateStatisticalRecommendation,
@@ -24,27 +23,27 @@ export const maxDuration = 120;
  * Prerequisites:
  *   - A completed CMA exists for the business (status='complete')
  *   - A primary brand_identity record exists for the business
- * If either is missing, returns 400 with a typed error reason.
+ *   - businesses.name is set
+ * If any is missing, returns 400 with a typed error reason.
+ *
+ * Brand basics (founder_name, founding_year, origin_context) are read
+ * canonically from the businesses table per migration 140. An optional
+ * body `override` layers on top — useful when ops wants to test with
+ * enriched values before backfilling the canonical columns.
  *
  * Body (optional):
  *   {
- *     basics?: {
+ *     override?: {
  *       ownerName?: string,
  *       foundingYear?: number,
  *       originContext?: string
  *     }
  *   }
- *   businessName is always derived from businesses.name — operator
- *   does not override. ownerName / foundingYear / originContext are
- *   accepted in the body because the businesses table does not carry
- *   them as first-class columns; UI may pass enriched values when
- *   available.
  *
  * Response:
  *   200 { id, bundle }       — bundle generated + persisted
  *   400 { error, reason }    — prerequisites missing
  *   401 { error }            — auth failure
- *   404 { error }            — business not found
  *   500 { error }            — LLM call or persistence failure
  */
 export async function POST(
@@ -57,40 +56,17 @@ export async function POST(
 
   const { siteId } = await params;
 
-  // Look up the businesses.name (required for BrandBasics.businessName).
-  // Fail fast with 404 if the business doesn't exist.
-  const [businessRow] = await sql`
-    SELECT name FROM businesses WHERE id = ${siteId} LIMIT 1
-  `;
-  if (!businessRow) {
-    return NextResponse.json({ error: "Business not found" }, { status: 404 });
-  }
-  const businessName = (businessRow.name as string | null) ?? "";
-  if (!businessName.trim()) {
-    return NextResponse.json(
-      { error: "Business has no name set — cannot generate strategic recommendation" },
-      { status: 400 },
-    );
-  }
-
-  // Parse optional body — operator can supply enriched basics
-  let bodyBasics: Partial<Pick<BrandBasics, "ownerName" | "foundingYear" | "originContext">> = {};
+  // Parse optional override — fields layer on top of canonical DB values
+  let override: Partial<BrandBasics> = {};
   try {
-    const body = (await req.json()) as { basics?: typeof bodyBasics };
-    bodyBasics = body.basics ?? {};
+    const body = (await req.json()) as { override?: Partial<BrandBasics> };
+    override = body.override ?? {};
   } catch {
-    // No body is fine — defaults apply
+    // No body is fine — engine reads canonical from DB
   }
 
-  const basics: BrandBasics = {
-    businessName,
-    ownerName: bodyBasics.ownerName ?? null,
-    foundingYear: bodyBasics.foundingYear ?? null,
-    originContext: bodyBasics.originContext ?? null,
-  };
-
-  // Load CMA + brand identity + creative declarations
-  const inputsResult = await loadStrategicInputs(siteId, basics);
+  // Engine loads brand basics + CMA + brand identity + creative declarations
+  const inputsResult = await loadStrategicInputs(siteId, override);
   if (!inputsResult.ok) {
     return NextResponse.json(
       { error: inputsResult.message, reason: inputsResult.reason },

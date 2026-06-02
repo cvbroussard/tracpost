@@ -13,6 +13,7 @@ import type {
   DisqualificationSignal,
   Confidence,
   OwnerAction,
+  StalenessAssessment,
 } from "@/lib/brand-identity/statistical-recommendation";
 
 interface PersistedRecord {
@@ -39,6 +40,7 @@ export function StrategicRecommendationClient({ subscriberId }: { subscriberId: 
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [rec, setRec] = useState<PersistedRecord | null>(null);
+  const [staleness, setStaleness] = useState<StalenessAssessment | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export function StrategicRecommendationClient({ subscriberId }: { subscriberId: 
       if (!res.ok) throw new Error(`Failed to load (${res.status})`);
       const d = await res.json();
       setRec(d.recommendation);
+      setStaleness(d.staleness ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -187,6 +190,7 @@ export function StrategicRecommendationClient({ subscriberId }: { subscriberId: 
       {rec && (
         <BundleReview
           rec={rec}
+          staleness={staleness}
           revealDisqualified={revealDisqualified}
           onRevealDisqualified={() => setRevealDisqualified(true)}
         />
@@ -201,10 +205,12 @@ export function StrategicRecommendationClient({ subscriberId }: { subscriberId: 
 
 function BundleReview({
   rec,
+  staleness,
   revealDisqualified,
   onRevealDisqualified,
 }: {
   rec: PersistedRecord;
+  staleness: StalenessAssessment | null;
   revealDisqualified: boolean;
   onRevealDisqualified: () => void;
 }) {
@@ -232,6 +238,9 @@ function BundleReview({
           </div>
         )}
       </div>
+
+      {/* Staleness banner — structural drift since rec was generated */}
+      {staleness?.stale && <StalenessBanner staleness={staleness} />}
 
       {/* Disqualification banner */}
       {dq && (
@@ -277,6 +286,38 @@ function BundleReview({
 // ============================================================================
 // Cards
 // ============================================================================
+
+function StalenessBanner({ staleness }: { staleness: StalenessAssessment }) {
+  return (
+    <div className="rounded-xl border border-warning/40 bg-warning/5 p-4 shadow-card">
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          <p className="text-xs font-semibold text-warning">
+            Structural change since this recommendation
+          </p>
+          <p className="mt-1 text-[10px] text-muted">
+            Rec generated against CMA from {new Date(staleness.recCmaGeneratedAt).toLocaleDateString()}.
+            Latest CMA ({new Date(staleness.latestCmaGeneratedAt).toLocaleDateString()}) shows the following
+            structural changes that reshape the strategic positioning:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-xs">
+            {staleness.changes.map((c, i) => (
+              <li key={i}>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  {c.field.replace("_", " ")}:
+                </span>{" "}
+                {c.description}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-muted">
+            Click <span className="font-medium">Generate new</span> above to regenerate against the latest evidence.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function DisqualificationBanner({
   signal,

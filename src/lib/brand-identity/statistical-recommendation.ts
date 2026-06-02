@@ -243,13 +243,53 @@ export interface LoadInputsError {
 
 /**
  * Loads CMA + brand identity declarations + brand basics for a site.
+ *
+ * Brand basics are read CANONICALLY from `businesses` (name +
+ * founder_name + founding_year + origin_context per migration 140).
+ * Optional `override` lets a caller supply enrichment values not yet
+ * persisted (e.g., ops fills founder_name in the request body before
+ * the canonical column gets backfilled). Override fields layer on top
+ * of DB values; the merged result is the BrandBasics passed to the LLM.
+ *
  * Returns a typed error when prerequisites are missing — caller decides
  * UX (e.g., "Run the CMA first before requesting a strategic recommendation").
  */
 export async function loadStrategicInputs(
   siteId: string,
-  basics: BrandBasics,
+  override?: Partial<BrandBasics>,
 ): Promise<LoadInputsResult | LoadInputsError> {
+  const [businessRow] = await sql`
+    SELECT name, founder_name, founding_year, origin_context
+    FROM businesses WHERE id = ${siteId} LIMIT 1
+  `;
+  if (!businessRow) {
+    return {
+      ok: false,
+      reason: "missing_basics",
+      message: `Business ${siteId} not found.`,
+    };
+  }
+
+  const canonicalName = (businessRow.name as string | null) ?? "";
+  const overrideName = override?.businessName?.trim() ?? "";
+  const businessName = overrideName || canonicalName;
+  if (!businessName.trim()) {
+    return {
+      ok: false,
+      reason: "missing_basics",
+      message: "Business has no name set — cannot generate strategic recommendation.",
+    };
+  }
+
+  const basics: BrandBasics = {
+    businessName,
+    ownerName: override?.ownerName ?? (businessRow.founder_name as string | null) ?? null,
+    foundingYear:
+      override?.foundingYear ?? (businessRow.founding_year as number | null) ?? null,
+    originContext:
+      override?.originContext ?? (businessRow.origin_context as string | null) ?? null,
+  };
+
   const cmaRow = await getLatestAnalysis(siteId);
   if (!cmaRow) {
     return {
@@ -687,6 +727,161 @@ export async function setStrategicRecommendationAction(
     RETURNING id
   `;
   return rows.length > 0;
+}
+
+// ============================================================================
+// Staleness assessment — structural diff between rec's CMA and latest CMA
+// ============================================================================
+//
+// CMA re-runs happen on an analytical cadence (weekly/monthly) for marketing
+// performance telemetry. Most re-runs leave the STRUCTURAL inputs unchanged
+// — same GBP categories, same service areas, same tier — and only the SERP
+// layer churns. Naive "cma_id differs" staleness would ping the operator
+// every cadence with no real reason.
+//
+// Instead, compare the three structural fields that actually reshape the
+// strategic recommendation:
+//   - subscriberCategories  (by gcid set + primary flag)
+//   - subscriberServiceAreas (by placeId set)
+//   - subscriberTier         (by slug equality)
+//
+// If any of those differs between the rec's source CMA and the latest CMA,
+// the rec is structurally stale and regeneration is warranted. The SERP
+// layer is allowed to churn freely without triggering anything.
+
+export type StalenessField = "categories" | "service_areas" | "tier";
+
+export interface StalenessChange {
+  field: StalenessField;
+  description: string;
+}
+
+export interface StalenessAssessment {
+  stale: boolean;
+  changes: StalenessChange[];
+  recCmaId: string;
+  recCmaGeneratedAt: string;
+  latestCmaId: string;
+  latestCmaGeneratedAt: string;
+}
+
+/**
+ * Compare the rec's source CMA against the latest CMA. Returns null when
+ * either CMA can't be found (e.g., no latest CMA exists for this business,
+ * or the rec references a CMA that's been deleted — guarded by FK RESTRICT
+ * but defensive). Returns assessment with `stale: false` when latest CMA
+ * IS the rec's CMA, or when structural fields are identical.
+ */
+export async function assessStaleness(
+  businessId: string,
+  recCmaId: string,
+): Promise<StalenessAssessment | null> {
+  const [latestRow] = await sql`
+    SELECT id, generated_at, analysis_data
+    FROM competitive_market_analyses
+    WHERE business_id = ${businessId} AND status = 'complete'
+    ORDER BY generated_at DESC
+    LIMIT 1
+  `;
+  if (!latestRow) return null;
+
+  // Fast path: latest CMA IS the rec's CMA — no diff possible
+  if (latestRow.id === recCmaId) {
+    return {
+      stale: false,
+      changes: [],
+      recCmaId,
+      recCmaGeneratedAt: latestRow.generated_at as string,
+      latestCmaId: latestRow.id as string,
+      latestCmaGeneratedAt: latestRow.generated_at as string,
+    };
+  }
+
+  const [recRow] = await sql`
+    SELECT generated_at, analysis_data
+    FROM competitive_market_analyses
+    WHERE id = ${recCmaId} LIMIT 1
+  `;
+  if (!recRow) return null;
+
+  const recCma = recRow.analysis_data as AnalysisPayload;
+  const latestCma = latestRow.analysis_data as AnalysisPayload;
+  const changes = diffStructuralFields(recCma, latestCma);
+
+  return {
+    stale: changes.length > 0,
+    changes,
+    recCmaId,
+    recCmaGeneratedAt: recRow.generated_at as string,
+    latestCmaId: latestRow.id as string,
+    latestCmaGeneratedAt: latestRow.generated_at as string,
+  };
+}
+
+function diffStructuralFields(oldCma: AnalysisPayload, newCma: AnalysisPayload): StalenessChange[] {
+  const changes: StalenessChange[] = [];
+
+  // Categories: compare by gcid set (renames in the canonical catalog do
+  // not count as a structural change). If the set is identical, compare
+  // primary flag separately — moving primary to a different category does
+  // reshape the strategic positioning.
+  const oldByGcid = new Map(oldCma.subscriberCategories.map((c) => [c.gcid, c]));
+  const newByGcid = new Map(newCma.subscriberCategories.map((c) => [c.gcid, c]));
+  const addedCats: string[] = [];
+  const removedCats: string[] = [];
+  for (const [gcid, cat] of newByGcid) {
+    if (!oldByGcid.has(gcid)) addedCats.push(cat.name);
+  }
+  for (const [gcid, cat] of oldByGcid) {
+    if (!newByGcid.has(gcid)) removedCats.push(cat.name);
+  }
+  if (addedCats.length > 0 || removedCats.length > 0) {
+    const parts: string[] = [];
+    if (addedCats.length > 0) parts.push(`added ${addedCats.map((n) => `"${n}"`).join(", ")}`);
+    if (removedCats.length > 0) parts.push(`removed ${removedCats.map((n) => `"${n}"`).join(", ")}`);
+    changes.push({ field: "categories", description: `GBP categories ${parts.join("; ")}` });
+  } else {
+    const oldPrimary = oldCma.subscriberCategories.find((c) => c.isPrimary);
+    const newPrimary = newCma.subscriberCategories.find((c) => c.isPrimary);
+    if (oldPrimary?.gcid !== newPrimary?.gcid) {
+      changes.push({
+        field: "categories",
+        description: `Primary category changed from "${oldPrimary?.name ?? "none"}" to "${newPrimary?.name ?? "none"}"`,
+      });
+    }
+  }
+
+  // Service areas: compare by placeId set
+  const oldAreasByPid = new Map(oldCma.subscriberServiceAreas.map((a) => [a.placeId, a]));
+  const newAreasByPid = new Map(newCma.subscriberServiceAreas.map((a) => [a.placeId, a]));
+  const addedAreas: string[] = [];
+  const removedAreas: string[] = [];
+  for (const [pid, area] of newAreasByPid) {
+    if (!oldAreasByPid.has(pid)) addedAreas.push(area.placeName);
+  }
+  for (const [pid, area] of oldAreasByPid) {
+    if (!newAreasByPid.has(pid)) removedAreas.push(area.placeName);
+  }
+  if (addedAreas.length > 0 || removedAreas.length > 0) {
+    const parts: string[] = [];
+    if (addedAreas.length > 0) parts.push(`added ${addedAreas.map((n) => `"${n}"`).join(", ")}`);
+    if (removedAreas.length > 0) parts.push(`removed ${removedAreas.map((n) => `"${n}"`).join(", ")}`);
+    changes.push({ field: "service_areas", description: `Service areas ${parts.join("; ")}` });
+  }
+
+  // Tier: slug equality (null-safe)
+  const oldTier = oldCma.subscriberTier?.slug ?? null;
+  const newTier = newCma.subscriberTier?.slug ?? null;
+  if (oldTier !== newTier) {
+    const oldLabel = oldCma.subscriberTier?.label ?? "not set";
+    const newLabel = newCma.subscriberTier?.label ?? "not set";
+    changes.push({
+      field: "tier",
+      description: `Commercial tier changed from "${oldLabel}" to "${newLabel}"`,
+    });
+  }
+
+  return changes;
 }
 
 // ============================================================================

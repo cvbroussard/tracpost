@@ -15,14 +15,13 @@
  * rubric — grades themselves live on the production layer, never here).
  */
 
-export type BrandDomain = "verbal" | "strategic" | "visual" | "sonic" | "motion";
+export type BrandDomain = "verbal" | "strategic" | "visual" | "sonic";
 
 export const BRAND_DOMAINS: readonly BrandDomain[] = [
   "verbal",
   "strategic",
   "visual",
   "sonic",
-  "motion",
 ] as const;
 
 /** The medium(s) a descriptor is expressed in. */
@@ -155,7 +154,7 @@ export interface DescriptorInput {
  * Subject to change as the architecture matures; treat as the working
  * sequence, not the final lock.
  */
-export type DescriptorPhase = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export type DescriptorPhase = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export const PHASE_LABELS: Record<DescriptorPhase, string> = {
   1: "Foundation",
@@ -164,8 +163,7 @@ export const PHASE_LABELS: Record<DescriptorPhase, string> = {
   4: "Strategic Application",
   5: "Voice Details",
   6: "Visual Identity",
-  7: "Motion Identity",
-  8: "Sonic Identity",
+  7: "Sonic Identity",
 };
 
 export const PHASE_DESCRIPTIONS: Record<DescriptorPhase, string> = {
@@ -175,8 +173,7 @@ export const PHASE_DESCRIPTIONS: Record<DescriptorPhase, string> = {
   4: "Tactical surfaces that consume positioning (proof, hooks, CTA, tagline).",
   5: "Supplemental voice details (lexicon, mechanical style).",
   6: "Visual brand band — aesthetic, environment, subjects, palette, logo.",
-  7: "Motion identity (pacing, transitions, camera, overall feel).",
-  8: "Sonic identity (voiceover, music, sfx, pronunciation).",
+  7: "Sonic identity (voiceover, music, sfx, pronunciation).",
 };
 
 export interface DescriptorSpec {
@@ -771,7 +768,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
-    phase: 8,
+    phase: 7,
   },
   {
     key: "music_mood",
@@ -782,7 +779,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "asset"],
     lean: "declared",
     override: "flexible",
-    phase: 8,
+    phase: 7,
   },
   {
     key: "sfx_style",
@@ -793,7 +790,7 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text"],
     lean: "declared",
     override: "flexible",
-    phase: 8,
+    phase: 7,
   },
   {
     key: "pronunciation",
@@ -804,54 +801,9 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     media: ["text", "extracted"],
     lean: "declared",
     override: "guardrail",
-    phase: 8,
+    phase: 7,
   },
 
-  // ── Motion / editorial — feeds the Director / video assembly ─────────────
-  {
-    key: "pacing",
-    domain: "motion",
-    label: "Pacing",
-    describes:
-      "Brand-level DISPOSITION for tempo — NOT shot-by-shot lengths (that's the creative brief). Answer with a posture: 'calm and considered — long holds, sparse cuts, steady energy' OR 'punchy and energetic — short shots, frequent cuts' OR 'cinematic build — slow open that gradually accelerates.' The brief translates this into specific shot lengths/counts/energy-curves per ad. Picker candidate at the disposition level. Watch the `avoid` baseline — 'premium' is a common reach here that's on the HGTV cliche list.",
-    media: ["text"],
-    lean: "declared",
-    override: "flexible",
-    phase: 7,
-  },
-  {
-    key: "transitions",
-    domain: "motion",
-    label: "Transitions",
-    describes:
-      "Brand-level DISPOSITION for how shots connect — NOT cut-by-cut decisions (that's the creative brief). Answer with a posture: 'cuts-only, minimal designed treatment' OR 'mostly smooth dissolves' OR 'transition-heavy with branded graphics.' The brief picks specific cut style per transition within this range. Vocabulary that lives at the brief layer: hard cuts, smooth dissolves, cross-fades, match cuts, whip-pans, J-cuts (audio leads next shot), L-cuts (audio trails prior). Strong picker candidate at the disposition level.",
-    media: ["text"],
-    lean: "declared",
-    override: "flexible",
-    phase: 7,
-  },
-  {
-    key: "camera_style",
-    domain: "motion",
-    label: "Camera style",
-    describes:
-      "Brand-level DISPOSITION for camera motion — NOT shot-by-shot directives (that's the creative brief). Answer with a posture/range, not specific moves: 'static-dominant with slow purposeful moves' OR 'energetic handheld with whip-pans' OR 'cinematic dolly + crane work.' The brief picks specific moves per shot within this range. Not photography setup either (lens/grading/lighting belong in `environmental_look`). Move vocabulary that lives at the brief layer: static, slow push, slow pull, slow dolly, slow rise/descend, handheld, whip-pan. Calm brands lean static + slow push/pull as a posture; punchy brands lean handheld + whip-pans. Picker candidate at the disposition level.",
-    media: ["text"],
-    lean: "declared",
-    override: "flexible",
-    phase: 7,
-  },
-  {
-    key: "overall_feel",
-    domain: "motion",
-    label: "Overall feel",
-    describes:
-      "The one-line editorial north star you'd tape to a monitor while editing. Strongest when stated as a FORMAT-APPROPRIATE reference genre: 'feels like an Architectural Digest video tour' / 'feels like a Hermès craft film' / 'feels like an Apple product reveal' / 'feels like This Old House classic.' Each reference maps to a whole stack of production attributes (pacing, camera, music, VO register) the brief can default from. Avoid format-mismatched analogues — construction documentation is long-form/instructional and doesn't translate to a 15s premium ad. Strong picker candidate (single-select reference chips). Watch the `avoid` baseline — 'high-end'/'premium'/'luxury' all live on the HGTV cliche list.",
-    media: ["text"],
-    lean: "declared",
-    override: "flexible",
-    phase: 7,
-  },
 ] as const;
 
 export type DescriptorId = `${BrandDomain}.${string}`;

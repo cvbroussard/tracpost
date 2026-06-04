@@ -33,7 +33,7 @@ import type {
 import Link from "next/link";
 
 // ── Types (mirror the JSON from /api/ops/brand-identity) ────────────────────
-type Domain = "verbal" | "strategic" | "visual" | "sonic" | "motion";
+type Domain = "verbal" | "strategic" | "visual" | "sonic";
 
 interface DescriptorSlot {
   key: string;
@@ -163,7 +163,7 @@ interface PickerAsset {
 // earlier phases being completed. See PHASE_LABELS in catalog.ts for the
 // full ordering rationale. Domain remains as informational metadata on each
 // descriptor card.
-const PHASE_ORDER: DescriptorPhase[] = [1, 2, 3, 4, 5, 6, 7, 8];
+const PHASE_ORDER: DescriptorPhase[] = [1, 2, 3, 4, 5, 6, 7];
 // Completion gate — all declared-lean descriptors required. Per the locked
 // "start with all required, learn what to relax" methodology, we set the bar
 // at maximum input first; relaxations come empirically once we measure each

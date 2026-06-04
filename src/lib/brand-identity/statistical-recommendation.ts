@@ -177,7 +177,7 @@ export interface StrategicInputs {
  * Only the creative-bucket descriptors the strategic engine respects.
  * Voice + proof primarily — these constrain Hooks and Tagline output.
  * Per [[default-to-isolation]] we deliberately exclude descriptors that
- * don't constrain strategic output (visual, sonic, motion).
+ * don't constrain strategic output (visual, sonic).
  */
 export interface CreativeDeclarations {
   tone: string | null;

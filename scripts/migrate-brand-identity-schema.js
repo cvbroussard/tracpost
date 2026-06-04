@@ -63,7 +63,7 @@ try { neonConfig.webSocketConstructor = require("ws"); } catch { /* native WS */
         created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
         CONSTRAINT brand_descriptor_domain_check
-          CHECK (domain IN ('verbal','strategic','visual','sonic','motion')),
+          CHECK (domain IN ('verbal','strategic','visual','sonic')),
         CONSTRAINT brand_descriptor_status_check
           CHECK (status IS NULL OR status IN ('declared_only','extracted','stale')),
         CONSTRAINT brand_descriptor_confidence_check

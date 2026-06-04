@@ -21,7 +21,7 @@ import type { DescriptorExtractor, ExtractionResult } from "./extract";
 const anthropic = new Anthropic();
 
 const MODEL = "claude-sonnet-4-6";
-const PROMPT_VERSION = "brand_identity_observation_v1";
+const PROMPT_VERSION = "brand_identity_observation_v2";
 const MAX_GBP_PHOTOS = 4;
 
 /** GBP categories that signal brand-deliberate creative, in priority order. */
@@ -35,43 +35,70 @@ const PRIORITY_GBP_CATEGORIES = [
 ] as const;
 
 // ── The observation payload schema ──────────────────────────────────────────
-// Mirrors the schema in [[brand-identity-research-architecture]]. Persisted
-// verbatim into business_substrate.payload. Strings are free-form prose by the
-// observation model; arrays accumulate discrete observed items.
+// Descriptor-keyed: top-level domains mirror src/lib/brand-identity/catalog.ts,
+// with each descriptor occupying its own slot. Closed-loop comparison primitive
+// (declared vs observed per descriptor) becomes mechanical. Per
+// [[brand-identity-closed-loop]] LOAD-BEARING 2026-06-04.
+//
+// `observed` carries descriptor-specific data; `evidence` carries the direct
+// quotes/visual elements supporting the observation (provenance for auditable
+// comparisons). `null` means "not observable from these sources" — sonic
+// descriptors stay null on website-only observations; `do_not_show` is
+// permanently null (guardrails aren't observable by definition).
+
+export type BrandClassVerdict = "type_a" | "type_b" | "type_c" | "type_d";
+
+interface DescriptorObservation<O> {
+  observed: O;
+  evidence: string[];
+}
 
 export interface BrandIdentityObservationPayload {
-  research_sources_consulted: string[];
-  business_identity_observed: {
-    services_offered: string[];
-    capabilities_evident: string[];
-    audience_signaled: string[];
-  };
-  visual_presentation_observed: {
-    color_palette: string[];
-    typography_choices: string[];
-    layout_language: string[];
-    photographic_treatment_style: string;
-    logo_presence_and_usage: string;
-  };
-  voice_signals_observed: {
-    tone_of_copy: string[];
-    vocabulary_patterns: string[];
-    audience_address_style: string;
-  };
-  story_signals_observed: {
-    about_narrative_summary: string;
-    philosophy_or_differentiators: string[];
-    proof_visible: string[];
-  };
-  distinctive_elements_vs_category_defaults: string[];
-  gaps_and_absences: string[];
-  qualification_assessment: {
+  meta: {
+    research_sources_consulted: string[];
+    verdict: BrandClassVerdict;
+    confidence: number;
     visual_consistency_score: string;
     distinctiveness_score: string;
     alignment_with_positioning_score: string;
-    verdict: "type_a" | "type_b" | "type_c" | "type_d";
-    confidence: number;
   };
+
+  verbal: {
+    tone:             DescriptorObservation<string[]> | null;
+    lexicon:          DescriptorObservation<{ use: string[]; avoid: string[] }> | null;
+    avoid:            DescriptorObservation<string[]> | null;
+    pov_persona:      DescriptorObservation<string> | null;
+    mechanical_style: DescriptorObservation<string[]> | null;
+    tagline:          DescriptorObservation<string> | null;
+  };
+
+  strategic: {
+    offer:       DescriptorObservation<{ services: string[]; capabilities: string[] }> | null;
+    positioning: DescriptorObservation<{ wedge: string; angles: string[]; narrative: string }> | null;
+    audience:    DescriptorObservation<string[]> | null;
+    proof:       DescriptorObservation<string[]> | null;
+    hooks:       DescriptorObservation<string[]> | null;
+    cta:         DescriptorObservation<{ action: string; style: string }> | null;
+  };
+
+  visual: {
+    aesthetic:          DescriptorObservation<{ typography: string[]; layout: string[]; overall: string }> | null;
+    environmental_look: DescriptorObservation<{ lighting: string; materials: string[]; mood: string }> | null;
+    subject_style:      DescriptorObservation<{ photographic_treatment: string; subjects_shown: string[]; framing: string }> | null;
+    palette:            DescriptorObservation<{ colors: string[]; usage: string }> | null;
+    logo:               DescriptorObservation<{ mark: string; usage: string }> | null;
+    do_not_show:        null;
+  };
+
+  sonic: {
+    voiceover_character: DescriptorObservation<string> | null;
+    music_mood:          DescriptorObservation<string> | null;
+    sfx_style:           DescriptorObservation<string> | null;
+    pronunciation:       DescriptorObservation<string> | null;
+  };
+
+  distinctive_elements_vs_category_defaults: string[];
+  gaps_and_absences: string[];
 }
 
 // ── Source assembly ─────────────────────────────────────────────────────────
@@ -190,13 +217,22 @@ DISCIPLINE:
 - Do NOT generalize from category priors; report what THIS brand shows, not what brands like this typically show.
 - Stay factual: "the website uses warm amber tones and large serif headings" rather than "the brand feels heritage-luxe".
 
-For the qualification_assessment.verdict, choose one:
+PAYLOAD STRUCTURE: The payload is descriptor-keyed under domain — each slot (e.g. verbal.tone, visual.palette) is one brand-identity descriptor. For each descriptor:
+- If the sources show enough to observe it: emit { "observed": <descriptor-specific value>, "evidence": [<direct quotes or specific visual elements that support each observation>] }
+- If the sources don't carry that signal (e.g. sonic descriptors from a website): set the slot to null. DO NOT fabricate. visual.do_not_show is ALWAYS null (guardrails are not observable from public sources by definition).
+- evidence MUST be specific, quoted, or pointable — "the footer tagline 'We do the projects other contractors turn down'" not "the copy is confident". Every observed claim needs at least one evidence item.
+
+For meta.verdict, choose one brand class:
 - type_a: well-established, market-recognized, visually distinctive, internally consistent
 - type_b: existing identity but inconsistent across surfaces OR generic-looking
 - type_c: existing identity strongly mismatched with what they appear to offer
 - type_d: insufficient public presence to observe a coherent identity
 
-confidence is your self-assessed confidence in the verdict, 0.0 to 1.0.
+meta.confidence is your self-assessed confidence in the verdict, 0.0 to 1.0.
+
+distinctive_elements_vs_category_defaults captures observations made by comparing this brand against typical/default brands in its category — what stands out, what diverges.
+
+gaps_and_absences names what couldn't be observed from these sources OR signals that are missing from the brand's public presence — both kinds of gaps belong here.
 
 OUTPUT: a single valid JSON object matching the requested schema exactly. No prose, no markdown fences, no commentary outside the JSON.`;
 }
@@ -216,40 +252,53 @@ function buildUserText(sources: AssembledObservationSources): string {
   lines.push("IMAGES PROVIDED IN THIS CALL (in order)");
   sources.images.forEach((img, i) => lines.push(`  ${i + 1}. ${img.label}`));
   lines.push("");
-  lines.push("REQUIRED OUTPUT SCHEMA");
+  lines.push("REQUIRED OUTPUT SCHEMA (descriptor-keyed — emit every slot; use null when not observable from these sources)");
   lines.push(`{
-  "research_sources_consulted": ["..."],
-  "business_identity_observed": {
-    "services_offered": ["..."],
-    "capabilities_evident": ["..."],
-    "audience_signaled": ["..."]
-  },
-  "visual_presentation_observed": {
-    "color_palette": ["hex or named color, ..."],
-    "typography_choices": ["..."],
-    "layout_language": ["..."],
-    "photographic_treatment_style": "...",
-    "logo_presence_and_usage": "..."
-  },
-  "voice_signals_observed": {
-    "tone_of_copy": ["..."],
-    "vocabulary_patterns": ["..."],
-    "audience_address_style": "..."
-  },
-  "story_signals_observed": {
-    "about_narrative_summary": "...",
-    "philosophy_or_differentiators": ["..."],
-    "proof_visible": ["..."]
-  },
-  "distinctive_elements_vs_category_defaults": ["..."],
-  "gaps_and_absences": ["..."],
-  "qualification_assessment": {
-    "visual_consistency_score": "...",
-    "distinctiveness_score": "...",
-    "alignment_with_positioning_score": "...",
+  "meta": {
+    "research_sources_consulted": ["..."],
     "verdict": "type_a|type_b|type_c|type_d",
-    "confidence": 0.0
-  }
+    "confidence": 0.0,
+    "visual_consistency_score": "X/10 — reason",
+    "distinctiveness_score": "X/10 — reason",
+    "alignment_with_positioning_score": "X/10 — reason"
+  },
+
+  "verbal": {
+    "tone":             { "observed": ["adjective", "..."], "evidence": ["direct quote", "..."] } | null,
+    "lexicon":          { "observed": { "use": ["term that recurs", "..."], "avoid": ["term notably absent or rejected", "..."] }, "evidence": ["..."] } | null,
+    "avoid":            { "observed": ["pattern the brand visibly refuses", "..."], "evidence": ["..."] } | null,
+    "pov_persona":      { "observed": "1st-singular | 1st-plural | 3rd-person + speaker identity (founder | team | brand voice | ...)", "evidence": ["..."] } | null,
+    "mechanical_style": { "observed": ["sentence-length pattern", "casing pattern", "emoji policy", "..."], "evidence": ["..."] } | null,
+    "tagline":          { "observed": "the actual tagline text if visible", "evidence": ["..."] } | null
+  },
+
+  "strategic": {
+    "offer":       { "observed": { "services": ["..."], "capabilities": ["..."] }, "evidence": ["..."] } | null,
+    "positioning": { "observed": { "wedge": "1-sentence stance", "angles": ["distinct angle", "..."], "narrative": "what story the brand tells about itself" }, "evidence": ["..."] } | null,
+    "audience":    { "observed": ["who the copy addresses", "..."], "evidence": ["..."] } | null,
+    "proof":       { "observed": ["projects shown", "certs visible", "testimonials present", "measurable results", "..."], "evidence": ["..."] } | null,
+    "hooks":       { "observed": ["opening angle / story pattern used", "..."], "evidence": ["..."] } | null,
+    "cta":         { "observed": { "action": "what the brand asks for", "style": "warm | urgent | qualifier-filtered | ..." }, "evidence": ["..."] } | null
+  },
+
+  "visual": {
+    "aesthetic":          { "observed": { "typography": ["family or character description", "..."], "layout": ["pattern", "..."], "overall": "1-sentence overall look/feel" }, "evidence": ["..."] } | null,
+    "environmental_look": { "observed": { "lighting": "warm | cool | natural | dramatic | ...", "materials": ["material/texture token", "..."], "mood": "lived-in | just-finished | mid-process | ..." }, "evidence": ["..."] } | null,
+    "subject_style":      { "observed": { "photographic_treatment": "professional | candid | documentary | ...", "subjects_shown": ["who/what appears", "..."], "framing": "posed | mid-action | environmental | ..." }, "evidence": ["..."] } | null,
+    "palette":            { "observed": { "colors": ["hex or named color", "..."], "usage": "how the colors are distributed across UI vs logo vs accents" }, "evidence": ["..."] } | null,
+    "logo":               { "observed": { "mark": "description of the logo mark", "usage": "where it appears + consistency" }, "evidence": ["..."] } | null,
+    "do_not_show":        null
+  },
+
+  "sonic": {
+    "voiceover_character": null,
+    "music_mood":          null,
+    "sfx_style":           null,
+    "pronunciation":       null
+  },
+
+  "distinctive_elements_vs_category_defaults": ["..."],
+  "gaps_and_absences": ["..."]
 }`);
   return lines.join("\n");
 }
@@ -317,7 +366,9 @@ async function callObservationModel(
 
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 4096,
+    // Descriptor-keyed v2 schema has ~25 evidence-bearing slots; output runs
+    // 5-7K tokens once populated. 4096 truncated mid-JSON on first v2 run.
+    max_tokens: 8192,
     system: buildSystemPrompt(),
     messages: [{ role: "user", content }],
   });
@@ -364,8 +415,8 @@ export const aestheticObservationExtractor: DescriptorExtractor = async ({
   const sources = await assembleObservationSources(businessId);
   const callResult = await callObservationModel(sources);
   const { payload, imagesSent } = callResult;
-  const confidence = payload.qualification_assessment?.confidence ?? null;
-  const verdict = payload.qualification_assessment?.verdict ?? null;
+  const confidence = payload.meta?.confidence ?? null;
+  const verdict = payload.meta?.verdict ?? null;
 
   const generatedAt = new Date().toISOString();
   const { id: substrateId } = await upsertSubstrate({

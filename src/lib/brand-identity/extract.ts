@@ -149,6 +149,14 @@ export interface ExtractionResult {
 export type DescriptorExtractor = (ctx: {
   spec: DescriptorSpec;
   input: AssembledInput;
+  /**
+   * The brand identity's owning business id. Required by corpus-mining
+   * extractors (extracted-lean descriptors like `aesthetic`/`lexicon` that
+   * mine sources beyond the hand-bound assets in AssembledInput — e.g. the
+   * business's website, GBP photos, media_assets library). Asset-bound
+   * extractors don't need it.
+   */
+  businessId?: string;
 }) => Promise<ExtractionResult>;
 
 /**
@@ -197,20 +205,47 @@ export interface RunExtractionResult {
 }
 
 /**
- * Run extraction across a brand's descriptors. Targets only descriptors with
- * SOMETHING to extract from (declared text or bound assets) — empty seeds are
- * skipped. Sequential so per-descriptor status flips are observable while it
- * runs. Defaults to the stub extractor.
+ * Run extraction across a brand's descriptors. Asset-bound extractors require
+ * SOMETHING to extract from (declared text or bound assets); extracted-lean
+ * corpus-mining extractors (aesthetic, lexicon, etc.) source their inputs
+ * elsewhere (website, GBP photos, the whole media_assets library) and run
+ * regardless of bound-asset count. Sequential so per-descriptor status flips
+ * are observable while it runs.
  *
- * NOTE: corpus-wide input for the extracted-lean descriptors (aesthetic, lexicon,
- * etc. — which mine the whole library, not a hand-bound asset set) is a Layer-2
- * addition to input assembly; for now those skip unless they have declared/assets.
+ * Per-descriptor extractor selection lives at the call site (the API route
+ * picks `aestheticObservationExtractor` for key='aesthetic', etc.). v1 supports
+ * a single override extractor; a per-key registry can be added when more
+ * descriptors land their Layer-2 extractors.
  */
+/**
+ * Select a per-descriptor extractor at runtime. Receives the catalog spec and
+ * returns the extractor to use. Default: `stubExtractor` for everything. The
+ * API route's `chooseExtractor` selects `aestheticObservationExtractor` for
+ * key='aesthetic' (and similar wiring will land per descriptor as their
+ * Layer-2 extractors ship).
+ */
+export type ExtractorChooser = (spec: DescriptorSpec) => DescriptorExtractor;
+
 export async function runExtraction(
   brandIdentityId: string,
-  opts: { keys?: string[]; extractor?: DescriptorExtractor } = {},
+  opts: {
+    keys?: string[];
+    /** Backward-compat single override — applied to every descriptor. */
+    extractor?: DescriptorExtractor;
+    /** Per-spec selection — preferred. Wins over `extractor` when provided. */
+    chooseExtractor?: ExtractorChooser;
+  } = {},
 ): Promise<RunExtractionResult> {
-  const extractor = opts.extractor ?? stubExtractor;
+  const choose: ExtractorChooser =
+    opts.chooseExtractor ?? (() => opts.extractor ?? stubExtractor);
+
+  const [identity] = await sql`
+    SELECT business_id FROM brand_identity WHERE id = ${brandIdentityId} LIMIT 1
+  `;
+  if (!identity) {
+    throw new Error(`brand-identity: identity ${brandIdentityId} not found`);
+  }
+  const businessId = identity.business_id as string;
 
   const rows = await sql`
     SELECT bd.key, bd.declared,
@@ -226,10 +261,16 @@ export async function runExtraction(
     const key = r.key as string;
     if (opts.keys && !opts.keys.includes(key)) continue;
 
+    const spec = getDescriptorByKey(key);
+    if (!spec) {
+      skipped.push(key);
+      continue;
+    }
     const hasInput =
       declaredHasContent(r.declared) || (r.asset_count as number) > 0;
-    const spec = getDescriptorByKey(key);
-    if (!hasInput || !spec) {
+    // Extracted-lean descriptors corpus-mine — they don't need a hand-bound
+    // seed. Asset-bound (declared-lean) descriptors do.
+    if (!hasInput && spec.lean !== "extracted") {
       skipped.push(key);
       continue;
     }
@@ -237,7 +278,8 @@ export async function runExtraction(
     try {
       await markExtracting(brandIdentityId, key);
       const input = await assembleExtractionInput(brandIdentityId, key);
-      const result = await extractor({ spec, input });
+      const extractor = choose(spec);
+      const result = await extractor({ spec, input, businessId });
       await setExtracted(brandIdentityId, key, {
         envelope: result.envelope,
         inputs: result.inputsSnapshot,

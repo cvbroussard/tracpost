@@ -2200,7 +2200,11 @@ function UnknownShapeReadOnly({ value }: { value: unknown }) {
  * The legacy /ops/brand-identity route renders with bucket="all" and shows
  * neither tab as active (signals "you're on the combined view — pick a bucket").
  */
-export function BucketTabs({ bucket }: { bucket: Bucket | "all" | "observation" }) {
+export function BucketTabs({
+  bucket,
+}: {
+  bucket: Bucket | "all" | "observation" | "readiness-findings";
+}) {
   return (
     <div className="flex items-center gap-1 border-b border-border">
       <Link
@@ -2232,6 +2236,16 @@ export function BucketTabs({ bucket }: { bucket: Bucket | "all" | "observation" 
         }`}
       >
         Public Presence <span className="text-[9px] text-muted ml-1">agency deliverable</span>
+      </Link>
+      <Link
+        href="/ops/brand-identity/readiness-findings"
+        className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
+          bucket === "readiness-findings"
+            ? "border-accent text-foreground"
+            : "border-transparent text-muted hover:text-foreground"
+        }`}
+      >
+        Readiness Findings <span className="text-[9px] text-muted ml-1">consultation deliverable</span>
       </Link>
       {bucket === "all" && (
         <span className="ml-auto text-[9px] uppercase tracking-wide text-muted">

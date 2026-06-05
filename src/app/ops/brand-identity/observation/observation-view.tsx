@@ -1,11 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BucketTabs } from "../page";
 import type {
   BrandIdentityObservationPayload,
   BrandClassVerdict,
   DescriptorObservation,
 } from "@/lib/brand-identity/aesthetic-observation-types";
+
+interface ApprovalStatus {
+  source: "owner_typed" | "observation_approved" | null;
+  approvedAt?: string | null;
+  observationSubstrateId?: string | null;
+  hasDeclared: boolean;
+}
 
 interface ObservationApiResponse {
   observation: {
@@ -21,6 +28,7 @@ interface ObservationApiResponse {
     createdAt: string;
     updatedAt: string;
   } | null;
+  approvals: Record<string, ApprovalStatus>;
 }
 
 const VERDICT_LABEL: Record<BrandClassVerdict, string> = {
@@ -71,9 +79,34 @@ function ObservationFetcher({ siteId }: { siteId: string }) {
     };
   }, [siteId]);
 
+  /** Optimistic-update approval state for a descriptor after a successful commit. */
+  const recordApproval = useCallback(
+    (descriptorKey: string, substrateId: string) => {
+      setState((s) => {
+        if (s.kind !== "loaded") return s;
+        return {
+          ...s,
+          data: {
+            ...s.data,
+            approvals: {
+              ...s.data.approvals,
+              [descriptorKey]: {
+                source: "observation_approved",
+                approvedAt: new Date().toISOString(),
+                observationSubstrateId: substrateId,
+                hasDeclared: true,
+              },
+            },
+          },
+        };
+      });
+    },
+    [],
+  );
+
   return (
     <Shell>
-      <ObservationBody state={state} />
+      <ObservationBody state={state} siteId={siteId} onApproved={recordApproval} />
     </Shell>
   );
 }
@@ -88,7 +121,19 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ObservationBody({ state }: { state: ViewState }) {
+interface ApproveHandler {
+  (descriptorKey: string, substrateId: string): void;
+}
+
+function ObservationBody({
+  state,
+  siteId,
+  onApproved,
+}: {
+  state: ViewState;
+  siteId: string;
+  onApproved: ApproveHandler;
+}) {
   if (state.kind === "error") {
     return (
       <div className="p-2">
@@ -119,7 +164,9 @@ function ObservationBody({ state }: { state: ViewState }) {
     );
   }
 
-  const { payload, generationMetadata, updatedAt } = state.data.observation;
+  const { id: substrateId, payload, generationMetadata, updatedAt } = state.data.observation;
+  const approvals = state.data.approvals;
+  const ctx: DescriptorCardContext = { siteId, substrateId, approvals, onApproved };
 
   return (
     <div className="space-y-8 max-w-5xl">
@@ -135,13 +182,20 @@ function ObservationBody({ state }: { state: ViewState }) {
           <BulletList items={payload.gaps_and_absences} />
         </Section>
       )}
-      <DomainSection title="Verbal" slots={verbalSlots(payload)} />
-      <DomainSection title="Strategic" slots={strategicSlots(payload)} />
-      <DomainSection title="Visual" slots={visualSlots(payload)} />
-      <DomainSection title="Sonic" slots={sonicSlots(payload)} />
+      <DomainSection title="Verbal" slots={verbalSlots(payload)} ctx={ctx} />
+      <DomainSection title="Strategic" slots={strategicSlots(payload)} ctx={ctx} />
+      <DomainSection title="Visual" slots={visualSlots(payload)} ctx={ctx} />
+      <DomainSection title="Sonic" slots={sonicSlots(payload)} ctx={ctx} />
       <GenerationFooter generationMetadata={generationMetadata} />
     </div>
   );
+}
+
+interface DescriptorCardContext {
+  siteId: string;
+  substrateId: string;
+  approvals: Record<string, ApprovalStatus>;
+  onApproved: ApproveHandler;
 }
 
 function Header({
@@ -245,7 +299,15 @@ const DOMAIN_NOTES: Record<string, string> = {
     "Sonic identity (voice, music, sound) is out of scope for public presence analysis — these signals populate from audio-identity analysis when CTV ads, podcasts, jingles, or voiceover samples are observed. None of those sources are part of this pipeline.",
 };
 
-function DomainSection({ title, slots }: { title: string; slots: DescriptorSlot[] }) {
+function DomainSection({
+  title,
+  slots,
+  ctx,
+}: {
+  title: string;
+  slots: DescriptorSlot[];
+  ctx: DescriptorCardContext;
+}) {
   const note = DOMAIN_NOTES[title];
   const allNull = slots.every((s) => s.observation === null);
   return (
@@ -256,7 +318,7 @@ function DomainSection({ title, slots }: { title: string; slots: DescriptorSlot[
       {allNull && note ? null : (
         <div className="space-y-3">
           {slots.map((s) => (
-            <DescriptorCard key={s.key} slot={s} />
+            <DescriptorCard key={s.key} slot={s} ctx={ctx} />
           ))}
         </div>
       )}
@@ -264,18 +326,31 @@ function DomainSection({ title, slots }: { title: string; slots: DescriptorSlot[
   );
 }
 
-function DescriptorCard({ slot }: { slot: DescriptorSlot }) {
+function DescriptorCard({
+  slot,
+  ctx,
+}: {
+  slot: DescriptorSlot;
+  ctx: DescriptorCardContext;
+}) {
   const isNull = slot.observation === null;
+  // Extract the bare descriptor key for approval API (catalog uses bare keys,
+  // not domain-prefixed). slot.key is "domain.key"; strip the prefix.
+  const bareKey = slot.key.split(".").slice(1).join(".");
+  const approval = ctx.approvals[bareKey];
   return (
     <div className="rounded border border-border bg-card p-3">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <div>
           <span className="text-xs font-medium">{slot.label}</span>
           <span className="ml-2 text-[10px] text-muted">{slot.key}</span>
         </div>
-        {isNull && (
-          <span className="text-[10px] uppercase tracking-wide text-muted">not observable</span>
-        )}
+        <ApprovalControl
+          isNull={isNull}
+          slotKey={bareKey}
+          approval={approval}
+          ctx={ctx}
+        />
       </div>
       {isNull ? (
         <p className="mt-2 text-[11px] italic text-muted leading-relaxed">
@@ -289,6 +364,94 @@ function DescriptorCard({ slot }: { slot: DescriptorSlot }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Per-descriptor approval control: shows the approve button (when actionable),
+ * the approved badge (when committed), or a non-actionable label for null /
+ * owner-typed-but-not-from-observation cases.
+ */
+function ApprovalControl({
+  isNull,
+  slotKey,
+  approval,
+  ctx,
+}: {
+  isNull: boolean;
+  slotKey: string;
+  approval?: ApprovalStatus;
+  ctx: DescriptorCardContext;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (isNull) {
+    return (
+      <span className="text-[10px] uppercase tracking-wide text-muted shrink-0">
+        not observable
+      </span>
+    );
+  }
+
+  if (approval?.source === "observation_approved") {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300 shrink-0"
+        title={approval.approvedAt ? `Approved ${new Date(approval.approvedAt).toLocaleString()}` : undefined}
+      >
+        ✓ Approved from observation
+      </span>
+    );
+  }
+
+  if (approval?.source === "owner_typed") {
+    return (
+      <span className="text-[10px] uppercase tracking-wide text-muted shrink-0" title="Owner-typed declared content exists; approving observation would overwrite it. Edit via the Creative bucket to manage owner-typed declarations.">
+        owner-typed
+      </span>
+    );
+  }
+
+  const submit = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/ops/brand-identity/observation/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId: ctx.siteId,
+          descriptorKey: slotKey,
+          observationSubstrateId: ctx.substrateId,
+        }),
+      });
+      const json = (await res.json()) as { committed: boolean; reason?: string };
+      if (!res.ok || !json.committed) {
+        setError(json.reason || `API ${res.status}`);
+        setSubmitting(false);
+        return;
+      }
+      // Optimistic: notify parent so the approval badge replaces the button.
+      ctx.onApproved(slotKey, ctx.substrateId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1 shrink-0">
+      <button
+        type="button"
+        onClick={submit}
+        disabled={submitting}
+        className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent/20 disabled:opacity-50"
+      >
+        {submitting ? "Approving…" : "Approve as canonical"}
+      </button>
+      {error && <span className="text-[10px] text-red-600 max-w-[12rem] text-right">{error}</span>}
     </div>
   );
 }

@@ -10,6 +10,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";
 import { getSubstrate } from "@/lib/substrate/store";
+import { ensureBrandIdentity } from "@/lib/brand-identity/store";
+import { getDescriptorApprovalStatuses } from "@/lib/brand-identity/observation-approve";
 import type { BrandIdentityObservationPayload } from "@/lib/brand-identity/aesthetic-observation-types";
 
 export async function GET(req: NextRequest) {
@@ -20,10 +22,14 @@ export async function GET(req: NextRequest) {
   if (!siteId) {
     return NextResponse.json({ error: "siteId required" }, { status: 400 });
   }
-  const row = await getSubstrate<BrandIdentityObservationPayload>(
-    siteId,
-    "public_presence_observation",
-  );
+
+  // Fetch substrate + per-descriptor approval state in parallel.
+  const [row, { brandIdentityId }] = await Promise.all([
+    getSubstrate<BrandIdentityObservationPayload>(siteId, "public_presence_observation"),
+    ensureBrandIdentity(siteId),
+  ]);
+  const approvals = await getDescriptorApprovalStatuses(brandIdentityId);
+
   return NextResponse.json({
     observation: row
       ? {
@@ -34,5 +40,6 @@ export async function GET(req: NextRequest) {
           updatedAt: row.updatedAt,
         }
       : null,
+    approvals,
   });
 }

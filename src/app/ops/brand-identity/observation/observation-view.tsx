@@ -6,6 +6,12 @@ import type {
   BrandClassVerdict,
   DescriptorObservation,
 } from "@/lib/brand-identity/aesthetic-observation-types";
+import type {
+  ReadinessFinding,
+  ReadinessFindingsPayload,
+  FindingAttribution,
+  FindingSeverity,
+} from "@/lib/brand-identity/readiness-findings-types";
 
 interface ApprovalStatus {
   source: "owner_typed" | "observation_approved" | null;
@@ -186,6 +192,7 @@ function ObservationBody({
       <DomainSection title="Strategic" slots={strategicSlots(payload)} ctx={ctx} />
       <DomainSection title="Visual" slots={visualSlots(payload)} ctx={ctx} />
       <DomainSection title="Sonic" slots={sonicSlots(payload)} ctx={ctx} />
+      <FindingsSection siteId={siteId} observationSubstrateId={substrateId} />
       <GenerationFooter generationMetadata={generationMetadata} />
     </div>
   );
@@ -583,4 +590,239 @@ function sonicSlots(p: BrandIdentityObservationPayload): DescriptorSlot[] {
 
 function prettyKey(k: string): string {
   return k.replace(/_/g, " ");
+}
+
+// ── Readiness findings (Tier 3) ─────────────────────────────────────────────
+
+interface FindingsApiResponse {
+  findings: ReadinessFindingsPayload | null;
+  updatedAt: string | null;
+}
+
+const SEVERITY_ORDER: FindingSeverity[] = ["blocking", "refinement", "informational"];
+
+const SEVERITY_LABEL: Record<FindingSeverity, string> = {
+  blocking: "Blocking",
+  refinement: "Refinement",
+  informational: "Informational",
+};
+
+const SEVERITY_COLORS: Record<FindingSeverity, string> = {
+  blocking: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+  refinement: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  informational: "border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300",
+};
+
+const ATTRIBUTION_LABEL: Record<FindingAttribution, string> = {
+  external: "External — owner-controlled surface",
+  inconsistency: "Inconsistency — mismatched surfaces",
+  brand_gap: "Brand gap — signal absent",
+};
+
+function FindingsSection({
+  siteId,
+  observationSubstrateId,
+}: {
+  siteId: string;
+  observationSubstrateId: string;
+}) {
+  const [findings, setFindings] = useState<ReadinessFindingsPayload | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchFindings = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/ops/brand-identity/findings?siteId=${siteId}`);
+      if (!r.ok) throw new Error(`API ${r.status}`);
+      const json = (await r.json()) as FindingsApiResponse;
+      setFindings(json.findings);
+      setUpdatedAt(json.updatedAt);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId]);
+
+  useEffect(() => {
+    void fetchFindings();
+  }, [fetchFindings]);
+
+  const generate = async () => {
+    setGenerating(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/ops/brand-identity/findings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId }),
+      });
+      const json = (await r.json()) as { persisted: boolean; reason?: string };
+      if (!r.ok || !json.persisted) {
+        setError(json.reason || `API ${r.status}`);
+        setGenerating(false);
+        return;
+      }
+      await fetchFindings();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Stale detector — if findings exist but their source_substrate_id doesn't
+  // match the current observation, the substrate has been refreshed and the
+  // findings are out of sync.
+  const stale =
+    findings !== null &&
+    findings.meta.source_substrate_id !== observationSubstrateId;
+
+  return (
+    <Section title="Readiness findings">
+      <div className="flex flex-col gap-2">
+        <p className="text-[11px] text-muted leading-relaxed">
+          Each observation above becomes a finding here, framed as an agency would in the first
+          kickoff: &ldquo;explain this&rdquo; questions for owner-controlled surfaces, consultative
+          proposals where signal is absent, transparent self-correcting notes where TracPost is
+          responsible. The intake bundle (CMA + Public Presence) is the locked architecture; v1 is
+          public-presence only.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={generate}
+            disabled={generating}
+            className="rounded border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/20 disabled:opacity-50"
+          >
+            {generating
+              ? "Generating findings… (may take up to 90s)"
+              : findings
+              ? "Regenerate findings"
+              : "Generate findings"}
+          </button>
+          {updatedAt && (
+            <span className="text-[10px] text-muted">
+              Last generated {new Date(updatedAt).toLocaleString()}
+            </span>
+          )}
+          {stale && (
+            <span className="text-[10px] text-amber-700 dark:text-amber-300">
+              ⚠ Observation has been refreshed — regenerate findings to sync
+            </span>
+          )}
+        </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+      </div>
+
+      {loading && !findings && (
+        <p className="text-xs text-muted">Loading findings…</p>
+      )}
+
+      {!loading && !findings && (
+        <p className="text-xs text-muted italic">
+          No findings have been generated yet. Click <em>Generate findings</em> above to consolidate
+          the observation into the agency-conversation deliverable.
+        </p>
+      )}
+
+      {findings && <FindingsCountSummary counts={findings.meta.counts} />}
+
+      {findings && (
+        <div className="space-y-6">
+          {SEVERITY_ORDER.map((sev) => (
+            <SeverityGroup
+              key={sev}
+              severity={sev}
+              findings={findings.findings.filter((f) => f.severity === sev)}
+            />
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function FindingsCountSummary({
+  counts,
+}: {
+  counts: ReadinessFindingsPayload["meta"]["counts"];
+}) {
+  return (
+    <div className="flex flex-wrap gap-3 text-[11px]">
+      <span className="text-muted">
+        Total: <span className="font-medium text-foreground">{counts.total}</span>
+      </span>
+      {SEVERITY_ORDER.map((sev) =>
+        counts.by_severity[sev] > 0 ? (
+          <span key={sev} className={`rounded-full border px-2 py-0.5 ${SEVERITY_COLORS[sev]}`}>
+            {SEVERITY_LABEL[sev]}: {counts.by_severity[sev]}
+          </span>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+function SeverityGroup({
+  severity,
+  findings,
+}: {
+  severity: FindingSeverity;
+  findings: ReadinessFinding[];
+}) {
+  if (findings.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      <h3 className="text-xs font-medium border-b border-border pb-1">
+        {SEVERITY_LABEL[severity]} <span className="text-muted">({findings.length})</span>
+      </h3>
+      <div className="space-y-3">
+        {findings.map((f) => (
+          <FindingCard key={f.id} finding={f} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FindingCard({ finding }: { finding: ReadinessFinding }) {
+  return (
+    <div className="rounded border border-border bg-card p-3 space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <span
+          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${SEVERITY_COLORS[finding.severity]}`}
+        >
+          {SEVERITY_LABEL[finding.severity]}
+        </span>
+        <span className="text-[10px] text-muted text-right">
+          {ATTRIBUTION_LABEL[finding.attribution]}
+          {finding.descriptor_key && (
+            <>
+              {" · "}
+              <span className="font-mono">{finding.descriptor_key}</span>
+            </>
+          )}
+        </span>
+      </div>
+      <p className="text-sm leading-relaxed text-foreground">{finding.prompt_text}</p>
+      <details className="text-[11px]">
+        <summary className="cursor-pointer text-muted hover:text-foreground">
+          Observed
+        </summary>
+        <p className="mt-1.5 text-foreground leading-relaxed">{finding.observation}</p>
+        {finding.evidence.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5 pl-3">
+            {finding.evidence.map((e, i) => (
+              <li key={i} className="text-muted">
+                <span className="text-muted/60">·</span> {e}
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
+    </div>
+  );
 }

@@ -24,7 +24,9 @@ import { sql } from "@/lib/db";
  * print_identity_observation, production_output_drift) compose alongside but
  * don't bundle with the intake pair.
  */
-export type SubstrateKind = "public_presence_observation";
+export type SubstrateKind =
+  | "public_presence_observation"
+  | "readiness_findings";
 
 export interface GenerationMetadata {
   model: string;

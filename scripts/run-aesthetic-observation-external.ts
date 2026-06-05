@@ -17,7 +17,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-sonnet-4-6";
-const PROMPT_VERSION = "brand_identity_observation_v2";
+const PROMPT_VERSION = "public_presence_observation_v2";
 
 const anthropic = new Anthropic();
 

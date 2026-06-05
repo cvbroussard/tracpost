@@ -71,7 +71,7 @@ async function resolveBusinessId(arg: string): Promise<{ id: string; name: strin
   console.log(`Elapsed: ${elapsed}s`);
   console.log(`Result: ${JSON.stringify(result, null, 2)}\n`);
 
-  const substrate = await getSubstrate(biz.id, "brand_identity_observation");
+  const substrate = await getSubstrate(biz.id, "public_presence_observation");
   if (!substrate) {
     console.log("No substrate row written.");
     return;

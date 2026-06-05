@@ -7,7 +7,7 @@
  * system) is deferred.
  *
  * First consumer: [[brand-identity-research-architecture]] Phase 2 — the aesthetic
- * observation call writes `kind='brand_identity_observation'` rows. env_look +
+ * observation call writes `kind='public_presence_observation'` rows. env_look +
  * subject_style example generators (when built) read from here. Phase 3 owner-
  * approved canonical record lands in brand_descriptor[aesthetic].declared (separate
  * lifecycle, separate store — the lock).

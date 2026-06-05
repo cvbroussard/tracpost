@@ -7,13 +7,24 @@
  * system / six consumers) is deferred. Callers reach for these helpers directly
  * until the registry lands.
  *
- * First kind: `brand_identity_observation` (Phase 2 of [[brand-identity-research-architecture]]).
+ * First kind: `public_presence_observation` (Phase 2 of [[brand-identity-research-architecture]]).
  */
 import "server-only";
 import { randomUUID } from "crypto";
 import { sql } from "@/lib/db";
 
-export type SubstrateKind = "brand_identity_observation";
+/**
+ * Substrate kinds. Naming convention: `<analysis_or_inventory>_<noun>`. The
+ * public_presence_observation kind is the output of the public presence
+ * analysis pipeline (website + GBP + signage + public social profile presence)
+ * — what TracPost found when it "reached into the wild" for a brand. Sibling
+ * to the CMA at the same temporal/source-class tier; both bundle as the
+ * agency's opening-move deliverable per [[observation-driven-readiness-audit]].
+ * Other observation pipelines (audio_identity_observation,
+ * print_identity_observation, production_output_drift) compose alongside but
+ * don't bundle with the intake pair.
+ */
+export type SubstrateKind = "public_presence_observation";
 
 export interface GenerationMetadata {
   model: string;

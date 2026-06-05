@@ -7,7 +7,7 @@
  * Downstream production calls (env_look / subject_style candidate generators,
  * eventual Phase 3 owner review) consume this substrate.
  *
- * v1 storage: business_substrate (kind=brand_identity_observation). brand_descriptor
+ * v1 storage: business_substrate (kind=public_presence_observation). brand_descriptor
  * [aesthetic].extracted holds a thin pointer so the existing status machine still
  * tracks "was observation run, when, with what model" — the rich payload lives
  * in substrate. Per the locked separate-stores principle of [[substrate-libraries-layer]].
@@ -21,7 +21,9 @@ import type { DescriptorExtractor, ExtractionResult } from "./extract";
 const anthropic = new Anthropic();
 
 const MODEL = "claude-sonnet-4-6";
-const PROMPT_VERSION = "brand_identity_observation_v2";
+// v2 prompt content; renamed to match the public_presence_observation substrate
+// kind. Bump to v3 only when the prompt content materially changes.
+const PROMPT_VERSION = "public_presence_observation_v2";
 const MAX_GBP_PHOTOS = 4;
 
 /** GBP categories that signal brand-deliberate creative, in priority order. */
@@ -35,71 +37,17 @@ const PRIORITY_GBP_CATEGORIES = [
 ] as const;
 
 // ── The observation payload schema ──────────────────────────────────────────
-// Descriptor-keyed: top-level domains mirror src/lib/brand-identity/catalog.ts,
-// with each descriptor occupying its own slot. Closed-loop comparison primitive
-// (declared vs observed per descriptor) becomes mechanical. Per
+// Type contract lives in aesthetic-observation-types.ts (client-safe, no
+// "server-only" marker) so UI consumers can import without dragging the
+// server-only marker into client bundles. Schema rationale: descriptor-keyed,
+// top-level domains mirror src/lib/brand-identity/catalog.ts. Per
 // [[brand-identity-closed-loop]] LOAD-BEARING 2026-06-04.
-//
-// `observed` carries descriptor-specific data; `evidence` carries the direct
-// quotes/visual elements supporting the observation (provenance for auditable
-// comparisons). `null` means "not observable from these sources" — sonic
-// descriptors stay null on website-only observations; `do_not_show` is
-// permanently null (guardrails aren't observable by definition).
-
-export type BrandClassVerdict = "type_a" | "type_b" | "type_c" | "type_d";
-
-interface DescriptorObservation<O> {
-  observed: O;
-  evidence: string[];
-}
-
-export interface BrandIdentityObservationPayload {
-  meta: {
-    research_sources_consulted: string[];
-    verdict: BrandClassVerdict;
-    confidence: number;
-    visual_consistency_score: string;
-    distinctiveness_score: string;
-    alignment_with_positioning_score: string;
-  };
-
-  verbal: {
-    tone:             DescriptorObservation<string[]> | null;
-    lexicon:          DescriptorObservation<{ use: string[]; avoid: string[] }> | null;
-    avoid:            DescriptorObservation<string[]> | null;
-    pov_persona:      DescriptorObservation<string> | null;
-    mechanical_style: DescriptorObservation<string[]> | null;
-    tagline:          DescriptorObservation<string> | null;
-  };
-
-  strategic: {
-    offer:       DescriptorObservation<{ services: string[]; capabilities: string[] }> | null;
-    positioning: DescriptorObservation<{ wedge: string; angles: string[]; narrative: string }> | null;
-    audience:    DescriptorObservation<string[]> | null;
-    proof:       DescriptorObservation<string[]> | null;
-    hooks:       DescriptorObservation<string[]> | null;
-    cta:         DescriptorObservation<{ action: string; style: string }> | null;
-  };
-
-  visual: {
-    aesthetic:          DescriptorObservation<{ typography: string[]; layout: string[]; overall: string }> | null;
-    environmental_look: DescriptorObservation<{ lighting: string; materials: string[]; mood: string }> | null;
-    subject_style:      DescriptorObservation<{ photographic_treatment: string; subjects_shown: string[]; framing: string }> | null;
-    palette:            DescriptorObservation<{ colors: string[]; usage: string }> | null;
-    logo:               DescriptorObservation<{ mark: string; usage: string }> | null;
-    do_not_show:        null;
-  };
-
-  sonic: {
-    voiceover_character: DescriptorObservation<string> | null;
-    music_mood:          DescriptorObservation<string> | null;
-    sfx_style:           DescriptorObservation<string> | null;
-    pronunciation:       DescriptorObservation<string> | null;
-  };
-
-  distinctive_elements_vs_category_defaults: string[];
-  gaps_and_absences: string[];
-}
+export type {
+  BrandClassVerdict,
+  BrandIdentityObservationPayload,
+  DescriptorObservation,
+} from "./aesthetic-observation-types";
+import type { BrandIdentityObservationPayload } from "./aesthetic-observation-types";
 
 // ── Source assembly ─────────────────────────────────────────────────────────
 
@@ -421,7 +369,7 @@ export const aestheticObservationExtractor: DescriptorExtractor = async ({
   const generatedAt = new Date().toISOString();
   const { id: substrateId } = await upsertSubstrate({
     businessId,
-    kind: "brand_identity_observation",
+    kind: "public_presence_observation",
     payload: payload as unknown as Record<string, unknown>,
     generationMetadata: {
       model: MODEL,
@@ -445,7 +393,7 @@ export const aestheticObservationExtractor: DescriptorExtractor = async ({
         ? `Observation written (${verdict}). See business_substrate row ${substrateId}.`
         : `Observation written. See business_substrate row ${substrateId}.`,
       value: {
-        substrate_kind: "brand_identity_observation",
+        substrate_kind: "public_presence_observation",
         substrate_id: substrateId,
         verdict,
       },

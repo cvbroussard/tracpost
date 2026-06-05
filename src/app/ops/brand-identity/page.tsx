@@ -2200,7 +2200,7 @@ function UnknownShapeReadOnly({ value }: { value: unknown }) {
  * The legacy /ops/brand-identity route renders with bucket="all" and shows
  * neither tab as active (signals "you're on the combined view — pick a bucket").
  */
-function BucketTabs({ bucket }: { bucket: Bucket | "all" }) {
+export function BucketTabs({ bucket }: { bucket: Bucket | "all" | "observation" }) {
   return (
     <div className="flex items-center gap-1 border-b border-border">
       <Link
@@ -2222,6 +2222,16 @@ function BucketTabs({ bucket }: { bucket: Bucket | "all" }) {
         }`}
       >
         Creative (20) <span className="text-[9px] text-muted ml-1">owner-authored</span>
+      </Link>
+      <Link
+        href="/ops/brand-identity/observation"
+        className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
+          bucket === "observation"
+            ? "border-accent text-foreground"
+            : "border-transparent text-muted hover:text-foreground"
+        }`}
+      >
+        Public Presence <span className="text-[9px] text-muted ml-1">agency deliverable</span>
       </Link>
       {bucket === "all" && (
         <span className="ml-auto text-[9px] uppercase tracking-wide text-muted">

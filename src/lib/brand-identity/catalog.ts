@@ -868,21 +868,42 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     domain: "visual",
     label: "Environmental look & feel",
     describes:
-      "What the FRAME looks like when an environment is shot or rendered. Declared should name VISUAL TOKENS, not project categories (categories belong in `offer`): lighting (warm/cool/natural/dramatic/practical), materials (wood species, plaster, brass, marble, slate, brick), textures (matte/satin/patinated/hand-trowel), color palette tendencies, mood (lived-in/just-finished/mid-process/quiet authority). Reference assets carry the bulk of the signal — bind 3-5 representative photos; visual language is hard to type. Watch for words on the `avoid` baseline (e.g. 'luxury') sneaking back in here.",
+      "Brand-wide DISPOSITION for the kinds of environments the brand's creative inhabits — lighting (warm/cool/natural/dramatic/practical), materials + textures, mood (lived-in / just-finished / mid-process / quiet-authority), production style (real-jobsite vs lifestyle vs controlled studio). Per [[visual-domain-decomposition]] LOCKED 2026-06-04: example-set scaffolded picker. Sonnet 4.6 multimodal observes the brand's source images + public_presence_observation substrate, produces 3 candidate environmental dispositions; owner picks one. Per-creative briefs select specific environments within the chosen disposition. NOT specific compositions or shot lists — this is the aesthetic range the brand operates inside.",
     media: ["text", "asset", "extracted"],
     lean: "declared",
     override: "flexible",
     phase: 6,
+    inputs: [
+      {
+        key: "selected_example",
+        label: "Environmental look",
+        prompt:
+          "The 3 candidates below each propose a different environmental disposition the brand could legitimately occupy. Read the caption + look at the anchor frames, then pick the one that feels canonical. If none fit, regenerate.",
+        inputType: "example_set_picker",
+        required: true,
+      },
+    ],
   },
   {
     key: "subject_style",
     domain: "visual",
     label: "Subject style",
-    describes: "How people/work appear and are framed (real crews, mid-action, un-posed).",
+    describes:
+      "Brand-wide DISPOSITION for who/what appears in the brand's creative and how they're photographed — subject identity (founder-led / crew-led / clients / professional talent / hybrid / no-people), posing posture (posed vs candid mid-action vs documentary), direction (direct-to-camera vs looking-away). Per [[visual-domain-decomposition]] LOCKED 2026-06-04: example-set scaffolded picker. Subject identity is FOLDED INTO the candidate content — each example naturally embeds an identity choice, so owner picking the example also picks the identity. Sonnet 4.6 multimodal observes the same brand sources as env_look and proposes 3 candidate subject treatments.",
     media: ["text", "extracted"],
-    lean: "extracted",
+    lean: "declared",
     override: "flexible",
     phase: 6,
+    inputs: [
+      {
+        key: "selected_example",
+        label: "Subject style",
+        prompt:
+          "The 3 candidates below each propose a different subject treatment — who appears, how they're posed, how the camera relates to them. Pick the one you recognize as canonical. If none fit, regenerate.",
+        inputType: "example_set_picker",
+        required: true,
+      },
+    ],
   },
   {
     key: "palette",

@@ -28,7 +28,9 @@ export type SubstrateKind =
   | "public_presence_observation"
   | "readiness_findings"
   | "mechanical_style_examples"
-  | "lexicon_axes";
+  | "lexicon_axes"
+  | "environmental_look_examples"
+  | "subject_style_examples";
 
 export interface GenerationMetadata {
   model: string;

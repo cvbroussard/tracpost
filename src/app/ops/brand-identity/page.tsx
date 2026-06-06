@@ -2891,26 +2891,9 @@ function ScaffoldedPickerMatrixEditor({
   );
 }
 
-interface ExampleSetSubstrateExample {
-  id: string;
-  style_label: string;
-  paragraph: string;
-}
-
-interface ExampleSetSubstratePayload {
-  examples: ExampleSetSubstrateExample[];
-  meta: {
-    inputs_hash: string;
-    generated_at: string;
-    model: string;
-    prompt_version: string;
-  };
-}
-
 /**
- * Per-descriptor map of (substrate API endpoint, declared shape). Adding a
- * new example_set_picker descriptor means adding an entry here so the editor
- * knows where to fetch + post.
+ * Per-descriptor map of (substrate API endpoint, label). Adding a new
+ * example_set_picker descriptor means adding an entry here.
  */
 const EXAMPLE_SET_PICKER_SOURCES: Record<
   string,
@@ -2921,7 +2904,101 @@ const EXAMPLE_SET_PICKER_SOURCES: Record<
     inputsAreReadyLabel:
       "Generation uses voice_source + tone.attributes + GBP categories. Fill those first for best results — though the generator runs even if they're empty.",
   },
+  environmental_look: {
+    endpoint: "/api/ops/brand-identity/env-look-examples",
+    inputsAreReadyLabel:
+      "Generation uses your brand's source images (website screenshot + logo + GBP photos) plus the public_presence_observation substrate when available. Run the Public Presence Analysis first for sharper context.",
+  },
+  subject_style: {
+    endpoint: "/api/ops/brand-identity/subject-style-examples",
+    inputsAreReadyLabel:
+      "Generation uses your brand's source images + the public_presence_observation substrate. Run the Public Presence Analysis first for sharper context.",
+  },
 };
+
+/**
+ * Normalized example shape — the editor renders all variants from this. The
+ * raw substrate (paragraph-based for text descriptors, image-anchored for
+ * visual descriptors) is converted to this on fetch.
+ */
+interface NormalizedExample {
+  id: string;
+  /** Short header label shown above the body. */
+  short_label: string;
+  /** Main body text shown to the owner. */
+  primary_text: string;
+  /**
+   * Reference image URLs for image-based variants (env_look, subject_style).
+   * Undefined for text-only variants (mechanical_style).
+   */
+  reference_images?: { url: string; label: string }[];
+}
+
+interface NormalizedExampleSubstrate {
+  examples: NormalizedExample[];
+  meta: {
+    inputs_hash: string;
+    generated_at: string;
+    model: string;
+    prompt_version: string;
+  };
+}
+
+function normalizeExampleSubstrate(raw: unknown): NormalizedExampleSubstrate | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const examples = Array.isArray(obj.examples) ? (obj.examples as unknown[]) : [];
+  const meta = obj.meta as NormalizedExampleSubstrate["meta"] | undefined;
+  if (!meta) return null;
+  const sourceImages = Array.isArray(obj.source_images)
+    ? (obj.source_images as { url: string; label: string }[])
+    : [];
+
+  const normalized: NormalizedExample[] = examples
+    .map((ex): NormalizedExample | null => {
+      if (!ex || typeof ex !== "object") return null;
+      const e = ex as Record<string, unknown>;
+      const id = typeof e.id === "string" ? e.id : null;
+      if (!id) return null;
+
+      // mechanical_style: { id, style_label, paragraph }
+      if (typeof e.paragraph === "string") {
+        return {
+          id,
+          short_label: typeof e.style_label === "string" ? e.style_label : id,
+          primary_text: e.paragraph,
+        };
+      }
+
+      // env_look / subject_style: { id, caption, reference_frame_indexes, disposition_summary }
+      if (typeof e.caption === "string" || typeof e.disposition_summary === "string") {
+        const indexes = Array.isArray(e.reference_frame_indexes)
+          ? (e.reference_frame_indexes as unknown[]).filter(
+              (n): n is number => typeof n === "number",
+            )
+          : [];
+        const refs = indexes
+          .map((i) => sourceImages[i])
+          .filter((s): s is { url: string; label: string } => Boolean(s));
+        return {
+          id,
+          short_label: typeof e.caption === "string" ? e.caption : id,
+          primary_text:
+            typeof e.disposition_summary === "string"
+              ? e.disposition_summary
+              : typeof e.caption === "string"
+                ? e.caption
+                : "",
+          reference_images: refs.length > 0 ? refs : undefined,
+        };
+      }
+
+      return null;
+    })
+    .filter((e): e is NormalizedExample => e !== null);
+
+  return { examples: normalized, meta };
+}
 
 function ExampleSetPickerEditor({
   descriptorKey,
@@ -2937,7 +3014,7 @@ function ExampleSetPickerEditor({
   onBlur: () => void;
 }) {
   const source = EXAMPLE_SET_PICKER_SOURCES[descriptorKey];
-  const [substrate, setSubstrate] = useState<ExampleSetSubstratePayload | null>(null);
+  const [substrate, setSubstrate] = useState<NormalizedExampleSubstrate | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2954,8 +3031,8 @@ function ExampleSetPickerEditor({
     try {
       const r = await fetch(`${source.endpoint}?siteId=${siteId}`);
       if (!r.ok) throw new Error(`API ${r.status}`);
-      const json = (await r.json()) as { examples: ExampleSetSubstratePayload | null };
-      setSubstrate(json.examples);
+      const json = (await r.json()) as { examples: unknown };
+      setSubstrate(normalizeExampleSubstrate(json.examples));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -2991,12 +3068,13 @@ function ExampleSetPickerEditor({
     }
   };
 
-  const pick = (ex: ExampleSetSubstrateExample) => {
+  const pick = (ex: NormalizedExample) => {
     if (!substrate) return;
     onChange({
       selected_example_id: ex.id,
-      selected_example_text: ex.paragraph,
-      selected_example_label: ex.style_label,
+      selected_example_text: ex.primary_text,
+      selected_example_label: ex.short_label,
+      selected_example_reference_images: ex.reference_images ?? null,
       generated_from_inputs_hash: substrate.meta.inputs_hash,
     });
     onBlur();
@@ -3048,7 +3126,7 @@ function ExampleSetPickerEditor({
       {!loading && !substrate && (
         <p className="text-xs italic text-muted">
           No examples generated yet. Click <em>Generate examples</em> above to scaffold the
-          picker with 3 industry-specific paragraphs.
+          picker with 3 industry-specific candidates.
         </p>
       )}
 
@@ -3056,6 +3134,7 @@ function ExampleSetPickerEditor({
         <div className="space-y-2">
           {substrate.examples.map((ex) => {
             const selected = ex.id === currentSelectedId;
+            const hasImages = ex.reference_images && ex.reference_images.length > 0;
             return (
               <button
                 key={ex.id}
@@ -3069,13 +3148,27 @@ function ExampleSetPickerEditor({
               >
                 <div className="flex items-baseline justify-between gap-3 mb-1">
                   <span className="text-[10px] uppercase tracking-wide text-muted">
-                    {ex.style_label}
+                    {ex.short_label}
                   </span>
                   {selected && (
                     <span className="text-[10px] font-medium text-foreground">✓ Selected</span>
                   )}
                 </div>
-                <p className="text-xs leading-relaxed text-foreground">{ex.paragraph}</p>
+                {hasImages && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {ex.reference_images!.map((img, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={`${img.url}-${i}`}
+                        src={cdnImage(img.url, { width: 120, height: 90 })}
+                        alt={img.label}
+                        title={img.label}
+                        className="h-14 w-auto rounded border border-border object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs leading-relaxed text-foreground">{ex.primary_text}</p>
               </button>
             );
           })}

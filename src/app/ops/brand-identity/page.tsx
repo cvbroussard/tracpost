@@ -67,7 +67,15 @@ interface DescriptorInput {
   key: string;
   label: string;
   prompt: string;
-  inputType: "prose" | "list" | "slot_composition" | "angle_collection";
+  // Kept in sync with src/lib/brand-identity/catalog.ts InputType union.
+  // single_picker + multi_picker added 2026-06-06 per [[verbal-domain-decomposition]].
+  inputType:
+    | "prose"
+    | "list"
+    | "slot_composition"
+    | "angle_collection"
+    | "single_picker"
+    | "multi_picker";
   slotCount?: number;
   qualifier?: string;
   rows?: number;
@@ -75,6 +83,12 @@ interface DescriptorInput {
   slots?: DescriptorSlot[];
   angleSchema?: AngleSection[];
   defaultAngleCount?: number;
+  /** For single_picker / multi_picker — universal option set. */
+  options?: string[];
+  /** For multi_picker — cap on selections. */
+  maxSelections?: number;
+  /** For single_picker / multi_picker — whether owner may add a custom value. */
+  allowCustom?: boolean;
 }
 
 interface DescriptorSpec {
@@ -2368,6 +2382,223 @@ function MultiPickerField({
  * downstream — the orchestrator only consumes angles whose required slots are
  * complete. This lets the owner sketch placeholders without committing.
  */
+function SinglePickerEditor({
+  input,
+  value,
+  onChange,
+  onBlur,
+}: {
+  input: DescriptorInput;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  onBlur: () => void;
+}) {
+  const options = input.options ?? [];
+  const current = typeof value === "string" ? value : "";
+  const isUniversal = options.includes(current);
+  const customDraft = !isUniversal && current.length > 0 ? current : "";
+  const [draft, setDraft] = useState(customDraft);
+
+  const pick = (opt: string) => {
+    onChange(opt);
+    onBlur();
+  };
+
+  const commitCustom = () => {
+    const trimmed = draft.trim();
+    if (trimmed.length === 0) {
+      if (!isUniversal) onChange("");
+      onBlur();
+      return;
+    }
+    onChange(trimmed);
+    onBlur();
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const selected = opt === current;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => pick(opt)}
+              className={`rounded-full border px-3 py-1 text-[11px] font-medium transition-colors ${
+                selected
+                  ? "border-accent/60 bg-accent/20 text-foreground"
+                  : "border-border bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground"
+              }`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {input.allowCustom && (
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted">Other:</span>
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitCustom}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitCustom();
+              }
+            }}
+            placeholder="Custom value"
+            className={`flex-1 max-w-xs rounded border bg-background px-2 py-1 text-xs focus:outline-none ${
+              !isUniversal && current.length > 0
+                ? "border-accent/60"
+                : "border-border focus:border-accent"
+            }`}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MultiPickerEditor({
+  input,
+  value,
+  onChange,
+  onBlur,
+}: {
+  input: DescriptorInput;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  onBlur: () => void;
+}) {
+  const options = input.options ?? [];
+  const selected: string[] = Array.isArray(value)
+    ? (value as unknown[]).filter((v): v is string => typeof v === "string")
+    : [];
+  const max = input.maxSelections;
+  const atCap = typeof max === "number" && selected.length >= max;
+  const [customDraft, setCustomDraft] = useState("");
+
+  const toggle = (opt: string) => {
+    if (selected.includes(opt)) {
+      const next = selected.filter((s) => s !== opt);
+      onChange(next);
+    } else {
+      if (atCap) return;
+      onChange([...selected, opt]);
+    }
+    onBlur();
+  };
+
+  const addCustom = () => {
+    const trimmed = customDraft.trim();
+    if (trimmed.length === 0) return;
+    if (selected.includes(trimmed)) {
+      setCustomDraft("");
+      return;
+    }
+    if (atCap) return;
+    onChange([...selected, trimmed]);
+    setCustomDraft("");
+    onBlur();
+  };
+
+  const removeCustom = (val: string) => {
+    onChange(selected.filter((s) => s !== val));
+    onBlur();
+  };
+
+  const customSelected = selected.filter((s) => !options.includes(s));
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-[10px] text-muted">
+        <span>
+          {input.qualifier ? `Pick ${input.qualifier}` : "Pick"}
+          {typeof max === "number" && ` — up to ${max}`}
+        </span>
+        <span>
+          {selected.length}
+          {typeof max === "number" && ` / ${max}`} picked
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const isSelected = selected.includes(opt);
+          const disabled = !isSelected && atCap;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => toggle(opt)}
+              disabled={disabled}
+              className={`rounded-full border px-3 py-1 text-[11px] font-medium transition-colors ${
+                isSelected
+                  ? "border-accent/60 bg-accent/20 text-foreground"
+                  : "border-border bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-muted/20"
+              }`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {input.allowCustom && (
+        <div className="space-y-1.5">
+          {customSelected.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {customSelected.map((opt) => (
+                <span
+                  key={opt}
+                  className="inline-flex items-center gap-1 rounded-full border border-accent/60 bg-accent/20 px-2.5 py-0.5 text-[11px] font-medium text-foreground"
+                >
+                  {opt}
+                  <button
+                    type="button"
+                    onClick={() => removeCustom(opt)}
+                    className="text-muted hover:text-foreground"
+                    aria-label={`Remove ${opt}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted">Add:</span>
+            <input
+              type="text"
+              value={customDraft}
+              onChange={(e) => setCustomDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addCustom();
+                }
+              }}
+              disabled={atCap}
+              placeholder={atCap ? "Cap reached" : "Custom value"}
+              className="flex-1 max-w-xs rounded border border-border bg-background px-2 py-1 text-xs focus:border-accent focus:outline-none disabled:opacity-40"
+            />
+            <button
+              type="button"
+              onClick={addCustom}
+              disabled={atCap || customDraft.trim().length === 0}
+              className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AngleCollectionEditor({
   input,
   value,
@@ -2959,6 +3190,20 @@ function DescriptorCard({
                               );
                             })}
                           </div>
+                        ) : input.inputType === "single_picker" ? (
+                          <SinglePickerEditor
+                            input={input}
+                            value={value}
+                            onChange={(next) => onChange({ ...obj, [input.key]: next })}
+                            onBlur={onBlur}
+                          />
+                        ) : input.inputType === "multi_picker" ? (
+                          <MultiPickerEditor
+                            input={input}
+                            value={value}
+                            onChange={(next) => onChange({ ...obj, [input.key]: next })}
+                            onBlur={onBlur}
+                          />
                         ) : (
                           <textarea
                             value={typeof value === "string" ? value : ""}

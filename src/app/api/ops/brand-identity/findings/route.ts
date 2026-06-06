@@ -13,9 +13,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";
 import {
   consolidateReadinessFindings,
-  getReadinessFindings,
+  getReadinessFindingsWithId,
   getReadinessFindingsUpdatedAt,
 } from "@/lib/brand-identity/readiness-findings-consolidator";
+import { getFindingResolutions } from "@/lib/brand-identity/readiness-finding-resolutions";
 
 export async function GET(req: NextRequest) {
   if (!(await isAdminRequest())) {
@@ -25,11 +26,17 @@ export async function GET(req: NextRequest) {
   if (!siteId) {
     return NextResponse.json({ error: "siteId required" }, { status: 400 });
   }
-  const [payload, updatedAt] = await Promise.all([
-    getReadinessFindings(siteId),
+  const [row, updatedAt, resolutions] = await Promise.all([
+    getReadinessFindingsWithId(siteId),
     getReadinessFindingsUpdatedAt(siteId),
+    getFindingResolutions(siteId),
   ]);
-  return NextResponse.json({ findings: payload, updatedAt });
+  return NextResponse.json({
+    findings: row?.payload ?? null,
+    findingsSubstrateId: row?.id ?? null,
+    updatedAt,
+    resolutions,
+  });
 }
 
 export async function POST(req: NextRequest) {

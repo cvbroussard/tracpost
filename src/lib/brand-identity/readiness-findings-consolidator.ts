@@ -428,6 +428,19 @@ export async function getReadinessFindings(
   return row?.payload ?? null;
 }
 
+/**
+ * Read the findings substrate WITH its row id. Resolution actions need the
+ * findings substrate id (to detect across regenerations whether a stored
+ * resolution still belongs to the current run).
+ */
+export async function getReadinessFindingsWithId(
+  businessId: string,
+): Promise<{ id: string; payload: ReadinessFindingsPayload } | null> {
+  const row = await getSubstrate<ReadinessFindingsPayload>(businessId, "readiness_findings");
+  if (!row) return null;
+  return { id: row.id, payload: row.payload };
+}
+
 /** When was the readiness_findings substrate last generated for this business? */
 export async function getReadinessFindingsUpdatedAt(businessId: string): Promise<string | null> {
   const [row] = await sql`

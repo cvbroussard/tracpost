@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BucketTabs } from "../page";
 import type {
   ReadinessFinding,
@@ -8,13 +8,25 @@ import type {
   FindingSeverity,
 } from "@/lib/brand-identity/readiness-findings-types";
 
+type ResolutionStatus = "resolved" | "waived" | "deferred";
+
+interface FindingResolutionDTO {
+  status: ResolutionStatus;
+  response: string | null;
+  resolvedAt: string;
+  updatedAt: string;
+  findingsSubstrateId: string;
+}
+
 interface ObservationProbe {
   observation: { id: string; updatedAt: string } | null;
 }
 
 interface FindingsApiResponse {
   findings: ReadinessFindingsPayload | null;
+  findingsSubstrateId: string | null;
   updatedAt: string | null;
+  resolutions: Record<string, FindingResolutionDTO>;
 }
 
 const SEVERITY_ORDER: FindingSeverity[] = ["blocking", "refinement", "informational"];
@@ -37,6 +49,18 @@ const ATTRIBUTION_LABEL: Record<FindingAttribution, string> = {
   brand_gap: "Brand gap — signal absent",
 };
 
+const RESOLUTION_LABEL: Record<ResolutionStatus, string> = {
+  resolved: "Resolved",
+  waived: "Waived",
+  deferred: "Deferred",
+};
+
+const RESOLUTION_COLORS: Record<ResolutionStatus, string> = {
+  resolved: "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  waived: "border-slate-500/40 bg-slate-500/15 text-slate-700 dark:text-slate-300",
+  deferred: "border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-300",
+};
+
 export function ReadinessFindingsView({ siteId }: { siteId: string }) {
   // Remount-keyed by siteId so internal state resets cleanly across site
   // switches; matches the ObservationView pattern.
@@ -45,12 +69,15 @@ export function ReadinessFindingsView({ siteId }: { siteId: string }) {
 
 function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
   const [findings, setFindings] = useState<ReadinessFindingsPayload | null>(null);
+  const [findingsSubstrateId, setFindingsSubstrateId] = useState<string | null>(null);
   const [findingsUpdatedAt, setFindingsUpdatedAt] = useState<string | null>(null);
+  const [resolutions, setResolutions] = useState<Record<string, FindingResolutionDTO>>({});
   const [observationId, setObservationId] = useState<string | null>(null);
   const [observationUpdatedAt, setObservationUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showOpenOnly, setShowOpenOnly] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -63,7 +90,9 @@ function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
       const findingsJson = (await findingsRes.json()) as FindingsApiResponse;
       const observationJson = (await observationRes.json()) as ObservationProbe;
       setFindings(findingsJson.findings);
+      setFindingsSubstrateId(findingsJson.findingsSubstrateId);
       setFindingsUpdatedAt(findingsJson.updatedAt);
+      setResolutions(findingsJson.resolutions ?? {});
       setObservationId(observationJson.observation?.id ?? null);
       setObservationUpdatedAt(observationJson.observation?.updatedAt ?? null);
     } catch (e) {
@@ -72,6 +101,30 @@ function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
       setLoading(false);
     }
   }, [siteId]);
+
+  // Optimistic update for one finding's resolution; saves a refresh round-trip.
+  const recordResolution = useCallback(
+    (findingId: string, resolution: FindingResolutionDTO | null) => {
+      setResolutions((prev) => {
+        const next = { ...prev };
+        if (resolution === null) delete next[findingId];
+        else next[findingId] = resolution;
+        return next;
+      });
+    },
+    [],
+  );
+
+  const resolutionCounts = useMemo(() => {
+    const c = { resolved: 0, waived: 0, deferred: 0, open: 0 };
+    if (!findings) return c;
+    for (const f of findings.findings) {
+      const r = resolutions[f.id];
+      if (!r) c.open++;
+      else c[r.status]++;
+    }
+    return c;
+  }, [findings, resolutions]);
 
   useEffect(() => {
     void refresh();
@@ -105,6 +158,7 @@ function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
     observationId !== null &&
     findings.meta.source_substrate_id !== observationId;
   const observationMissing = observationId === null;
+  const hasAnyResolutions = Object.keys(resolutions).length > 0;
 
   return (
     <Shell>
@@ -123,6 +177,7 @@ function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
             findings={findings}
             generating={generating}
             stale={stale}
+            hasAnyResolutions={hasAnyResolutions}
             onGenerate={generate}
           />
 
@@ -130,17 +185,33 @@ function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
 
           {!loading && !findings && <NoFindingsYetEmpty />}
 
-          {findings && <FindingsCountSummary counts={findings.meta.counts} />}
-
           {findings && (
+            <FindingsTopSummary
+              counts={findings.meta.counts}
+              resolutionCounts={resolutionCounts}
+              showOpenOnly={showOpenOnly}
+              onToggleOpenOnly={() => setShowOpenOnly((v) => !v)}
+            />
+          )}
+
+          {findings && findingsSubstrateId && (
             <div className="space-y-6">
-              {SEVERITY_ORDER.map((sev) => (
-                <SeverityGroup
-                  key={sev}
-                  severity={sev}
-                  findings={findings.findings.filter((f) => f.severity === sev)}
-                />
-              ))}
+              {SEVERITY_ORDER.map((sev) => {
+                const filtered = findings.findings
+                  .filter((f) => f.severity === sev)
+                  .filter((f) => !showOpenOnly || !resolutions[f.id]);
+                return (
+                  <SeverityGroup
+                    key={sev}
+                    severity={sev}
+                    findings={filtered}
+                    resolutions={resolutions}
+                    siteId={siteId}
+                    findingsSubstrateId={findingsSubstrateId}
+                    onResolved={recordResolution}
+                  />
+                );
+              })}
             </div>
           )}
         </>
@@ -195,18 +266,33 @@ function GenerateControls({
   findings,
   generating,
   stale,
+  hasAnyResolutions,
   onGenerate,
 }: {
   findings: ReadinessFindingsPayload | null;
   generating: boolean;
   stale: boolean;
+  hasAnyResolutions: boolean;
   onGenerate: () => void;
 }) {
+  const handleClick = () => {
+    if (
+      findings &&
+      hasAnyResolutions &&
+      !window.confirm(
+        "Regenerating findings will assign new finding IDs, which orphans your existing resolutions. " +
+          "Resolutions will not be visible against the new finding set. Continue?",
+      )
+    ) {
+      return;
+    }
+    onGenerate();
+  };
   return (
     <div className="flex items-center gap-3 flex-wrap">
       <button
         type="button"
-        onClick={onGenerate}
+        onClick={handleClick}
         disabled={generating}
         className="rounded border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/20 disabled:opacity-50"
       >
@@ -250,33 +336,79 @@ function NoFindingsYetEmpty() {
   );
 }
 
-function FindingsCountSummary({
+function FindingsTopSummary({
   counts,
+  resolutionCounts,
+  showOpenOnly,
+  onToggleOpenOnly,
 }: {
   counts: ReadinessFindingsPayload["meta"]["counts"];
+  resolutionCounts: { resolved: number; waived: number; deferred: number; open: number };
+  showOpenOnly: boolean;
+  onToggleOpenOnly: () => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-3 text-[11px]">
-      <span className="text-muted">
-        Total: <span className="font-medium text-foreground">{counts.total}</span>
-      </span>
-      {SEVERITY_ORDER.map((sev) =>
-        counts.by_severity[sev] > 0 ? (
-          <span key={sev} className={`rounded-full border px-2 py-0.5 ${SEVERITY_COLORS[sev]}`}>
-            {SEVERITY_LABEL[sev]}: {counts.by_severity[sev]}
+    <div className="space-y-2 border-b border-border pb-3">
+      <div className="flex flex-wrap items-center gap-3 text-[11px]">
+        <span className="text-muted">
+          Total: <span className="font-medium text-foreground">{counts.total}</span>
+        </span>
+        {SEVERITY_ORDER.map((sev) =>
+          counts.by_severity[sev] > 0 ? (
+            <span key={sev} className={`rounded-full border px-2 py-0.5 ${SEVERITY_COLORS[sev]}`}>
+              {SEVERITY_LABEL[sev]}: {counts.by_severity[sev]}
+            </span>
+          ) : null,
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-[11px]">
+        <span className="text-muted">
+          Progress:{" "}
+          <span className="font-medium text-foreground">
+            {counts.total - resolutionCounts.open} of {counts.total} addressed
           </span>
-        ) : null,
-      )}
+        </span>
+        {(["resolved", "waived", "deferred"] as const).map((s) =>
+          resolutionCounts[s] > 0 ? (
+            <span key={s} className={`rounded-full border px-2 py-0.5 ${RESOLUTION_COLORS[s]}`}>
+              {RESOLUTION_LABEL[s]}: {resolutionCounts[s]}
+            </span>
+          ) : null,
+        )}
+        <span className="ml-auto">
+          <label className="inline-flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showOpenOnly}
+              onChange={onToggleOpenOnly}
+              className="rounded"
+            />
+            <span className="text-muted">Show open only</span>
+          </label>
+        </span>
+      </div>
     </div>
   );
+}
+
+interface ResolutionHandler {
+  (findingId: string, resolution: FindingResolutionDTO | null): void;
 }
 
 function SeverityGroup({
   severity,
   findings,
+  resolutions,
+  siteId,
+  findingsSubstrateId,
+  onResolved,
 }: {
   severity: FindingSeverity;
   findings: ReadinessFinding[];
+  resolutions: Record<string, FindingResolutionDTO>;
+  siteId: string;
+  findingsSubstrateId: string;
+  onResolved: ResolutionHandler;
 }) {
   if (findings.length === 0) return null;
   return (
@@ -286,22 +418,53 @@ function SeverityGroup({
       </h3>
       <div className="space-y-3">
         {findings.map((f) => (
-          <FindingCard key={f.id} finding={f} />
+          <FindingCard
+            key={f.id}
+            finding={f}
+            resolution={resolutions[f.id] ?? null}
+            siteId={siteId}
+            findingsSubstrateId={findingsSubstrateId}
+            onResolved={onResolved}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function FindingCard({ finding }: { finding: ReadinessFinding }) {
+function FindingCard({
+  finding,
+  resolution,
+  siteId,
+  findingsSubstrateId,
+  onResolved,
+}: {
+  finding: ReadinessFinding;
+  resolution: FindingResolutionDTO | null;
+  siteId: string;
+  findingsSubstrateId: string;
+  onResolved: ResolutionHandler;
+}) {
+  const isResolved = resolution !== null;
+  const cardOpacity = isResolved ? "opacity-75" : "";
   return (
-    <div className="rounded border border-border bg-card p-3 space-y-2">
+    <div className={`rounded border border-border bg-card p-3 space-y-2 transition-opacity ${cardOpacity}`}>
       <div className="flex items-baseline justify-between gap-3">
-        <span
-          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${SEVERITY_COLORS[finding.severity]}`}
-        >
-          {SEVERITY_LABEL[finding.severity]}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${SEVERITY_COLORS[finding.severity]}`}
+          >
+            {SEVERITY_LABEL[finding.severity]}
+          </span>
+          {resolution && (
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${RESOLUTION_COLORS[resolution.status]}`}
+              title={`Set ${new Date(resolution.resolvedAt).toLocaleString()}`}
+            >
+              ✓ {RESOLUTION_LABEL[resolution.status]}
+            </span>
+          )}
+        </div>
         <span className="text-[10px] text-muted text-right">
           {ATTRIBUTION_LABEL[finding.attribution]}
           {finding.descriptor_key && (
@@ -313,6 +476,15 @@ function FindingCard({ finding }: { finding: ReadinessFinding }) {
         </span>
       </div>
       <p className="text-sm leading-relaxed text-foreground">{finding.prompt_text}</p>
+
+      <ResolutionControl
+        finding={finding}
+        resolution={resolution}
+        siteId={siteId}
+        findingsSubstrateId={findingsSubstrateId}
+        onResolved={onResolved}
+      />
+
       <details className="text-[11px]">
         <summary className="cursor-pointer text-muted hover:text-foreground">Observed</summary>
         <p className="mt-1.5 text-foreground leading-relaxed">{finding.observation}</p>
@@ -326,6 +498,146 @@ function FindingCard({ finding }: { finding: ReadinessFinding }) {
           </ul>
         )}
       </details>
+    </div>
+  );
+}
+
+function ResolutionControl({
+  finding,
+  resolution,
+  siteId,
+  findingsSubstrateId,
+  onResolved,
+}: {
+  finding: ReadinessFinding;
+  resolution: FindingResolutionDTO | null;
+  siteId: string;
+  findingsSubstrateId: string;
+  onResolved: ResolutionHandler;
+}) {
+  const [response, setResponse] = useState(resolution?.response ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (status: ResolutionStatus) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/ops/brand-identity/findings/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId,
+          findingsSubstrateId,
+          findingId: finding.id,
+          status,
+          response: response.trim() || null,
+        }),
+      });
+      const json = (await res.json()) as { resolved: boolean; error?: string };
+      if (!res.ok || !json.resolved) {
+        setError(json.error || `API ${res.status}`);
+        setSubmitting(false);
+        return;
+      }
+      const now = new Date().toISOString();
+      onResolved(finding.id, {
+        status,
+        response: response.trim() || null,
+        resolvedAt: resolution?.status !== status ? now : resolution.resolvedAt,
+        updatedAt: now,
+        findingsSubstrateId,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reopen = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/ops/brand-identity/findings/resolve`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, findingId: finding.id }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(json.error || `API ${res.status}`);
+        setSubmitting(false);
+        return;
+      }
+      onResolved(finding.id, null);
+      setResponse("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5 pt-1">
+      <textarea
+        value={response}
+        onChange={(e) => setResponse(e.target.value)}
+        placeholder="Owner response (optional) — what was behind that choice, or what you'd want to do about it"
+        rows={2}
+        className="w-full rounded border border-border bg-background px-2 py-1.5 text-[11px] text-foreground placeholder:text-muted/70 focus:outline-none focus:ring-1 focus:ring-accent/40"
+      />
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {resolution ? (
+          <button
+            type="button"
+            onClick={reopen}
+            disabled={submitting}
+            className="rounded border border-border px-2 py-0.5 text-[10px] font-medium text-muted hover:text-foreground hover:bg-muted/20 disabled:opacity-50"
+          >
+            Reopen
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => submit("resolved")}
+          disabled={submitting}
+          className={`rounded border px-2 py-0.5 text-[10px] font-medium disabled:opacity-50 ${
+            resolution?.status === "resolved"
+              ? "border-emerald-500/60 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+              : "border-emerald-500/40 bg-emerald-500/10 text-foreground hover:bg-emerald-500/20"
+          }`}
+        >
+          Mark resolved
+        </button>
+        <button
+          type="button"
+          onClick={() => submit("waived")}
+          disabled={submitting}
+          className={`rounded border px-2 py-0.5 text-[10px] font-medium disabled:opacity-50 ${
+            resolution?.status === "waived"
+              ? "border-slate-500/60 bg-slate-500/20 text-slate-700 dark:text-slate-300"
+              : "border-slate-500/40 bg-slate-500/10 text-foreground hover:bg-slate-500/20"
+          }`}
+        >
+          Waive
+        </button>
+        <button
+          type="button"
+          onClick={() => submit("deferred")}
+          disabled={submitting}
+          className={`rounded border px-2 py-0.5 text-[10px] font-medium disabled:opacity-50 ${
+            resolution?.status === "deferred"
+              ? "border-sky-500/60 bg-sky-500/20 text-sky-700 dark:text-sky-300"
+              : "border-sky-500/40 bg-sky-500/10 text-foreground hover:bg-sky-500/20"
+          }`}
+        >
+          Defer
+        </button>
+        {submitting && <span className="text-[10px] text-muted">Saving…</span>}
+        {error && <span className="text-[10px] text-red-600">{error}</span>}
+      </div>
     </div>
   );
 }

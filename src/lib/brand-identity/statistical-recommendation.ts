@@ -183,7 +183,7 @@ export interface CreativeDeclarations {
   tone: string | null;
   lexicon: string | null;
   avoid: string | null;
-  pov_persona: string | null;
+  voice_source: string | null;
   mechanical_style: string | null;
   proof: string | null;
 }
@@ -208,7 +208,7 @@ PRINCIPLES YOU OPERATE BY:
 
 3. **Coherence is the deliverable, not the elements.** A great Positioning paired with an Audience it doesn't serve, or an Offer that doesn't transact what the Positioning promises, is a failed recommendation. Each element must explain its connection to the others via its coherence field.
 
-4. **Voice respects existing creative declarations.** If the owner has declared tone, lexicon, pov_persona, or proof preferences, your prose in positioning angles (wedge, contrast, example) should operate in that voice. If no creative descriptors are declared, default to category-norm voice but flag the inheritance in your reasoning.
+4. **Voice respects existing creative declarations.** If the owner has declared tone, lexicon, voice_source, or proof preferences, your prose in positioning angles (wedge, contrast, example) should operate in that voice. If no creative descriptors are declared, default to category-norm voice but flag the inheritance in your reasoning.
 
 5. **Positioning is multi-angle and you rank them.** Per locked architecture, the brand may have multiple legitimate strategic territories. If CMA evidence supports it, produce up to 3 angles. Each angle = (label, wedge, contrast, example, applies_to). The angles array is ORDERED — index 0 is the lead angle (highest evidence weight + confidence). Alternatives follow in descending strength. Single-angle is acceptable when evidence supports only one. Do not produce equal-weighted alternatives — if you cannot rank them, you do not have enough evidence to produce them.
 
@@ -362,7 +362,7 @@ function pluckCreativeDeclarations(descriptors: DescriptorRecord[]): CreativeDec
     tone: text("tone"),
     lexicon: text("lexicon"),
     avoid: text("avoid"),
-    pov_persona: text("pov_persona"),
+    voice_source: text("voice_source"),
     mechanical_style: text("mechanical_style"),
     proof: text("proof"),
   };
@@ -529,7 +529,7 @@ export function buildSnapshot(inputs: StrategicInputs): string {
     if (cd.tone) lines.push(`  - tone: ${cd.tone}`);
     if (cd.lexicon) lines.push(`  - lexicon: ${cd.lexicon}`);
     if (cd.avoid) lines.push(`  - avoid: ${cd.avoid}`);
-    if (cd.pov_persona) lines.push(`  - pov/persona: ${cd.pov_persona}`);
+    if (cd.voice_source) lines.push(`  - voice source: ${cd.voice_source}`);
     if (cd.mechanical_style) lines.push(`  - mechanical style: ${cd.mechanical_style}`);
     if (cd.proof) lines.push(`  - proof preference: ${cd.proof}`);
   }

@@ -63,7 +63,43 @@ export type DescriptorOverride = "flexible" | "guardrail";
  *                          angles; specialty brands have one. Same data model.
  *                          Declared holds `{ angles: AngleData[] }`.
  */
-export type InputType = "prose" | "list" | "slot_composition" | "angle_collection";
+/**
+ * Sub-input type taxonomy (extended 2026-06-06 with picker primitives per
+ * [[verbal-domain-decomposition]] LOCKED 2026-06-03).
+ *
+ *  - "prose"             — multi-row textarea; declared holds a string
+ *  - "list"              — N short slots; declared holds string[]
+ *  - "slot_composition"  — N structured slots (text + picker); declared holds
+ *                          object keyed by slot.key
+ *  - "angle_collection"  — array of complete positioning angles; declared
+ *                          holds `{ angles: AngleData[] }`
+ *  - "single_picker"     — single-select picker over a static universal
+ *                          options[] list. Declared holds the picked string.
+ *                          Optional `allowCustom: true` lets owner add an
+ *                          off-list option (stored verbatim).
+ *  - "multi_picker"      — multi-select picker over options[] with optional
+ *                          `maxSelections` cap + `qualifier` (e.g. "defining",
+ *                          "main"). Declared holds string[].
+ *
+ * Locked future additions (NOT yet supported by the renderer — these arrive
+ * with their own substrate generators per
+ * [[substrate-libraries-layer]]):
+ *  - "example_set_picker"      — owner picks one of 3 LLM-synthesized examples
+ *                                 from a substrate (mechanical_style,
+ *                                 environmental_look, subject_style)
+ *  - "scaffolded_picker_matrix" — per-axis pickers over LLM-synthesized axes
+ *                                  (lexicon)
+ *  - "synthesis_review"        — owner reviews + approves system-synthesized
+ *                                 prose (tone.effect, voice_source.character)
+ *  - "bool_toggle_overrides"   — toggle + allow-list (avoid)
+ */
+export type InputType =
+  | "prose"
+  | "list"
+  | "slot_composition"
+  | "angle_collection"
+  | "single_picker"
+  | "multi_picker";
 
 /**
  * Field within an angle section. Mirrors a single question in the owner's
@@ -140,6 +176,21 @@ export interface DescriptorInput {
   angleSchema?: AngleSection[];
   /** For `angle_collection` inputs — how many empty angle cards to render by default. */
   defaultAngleCount?: number;
+  /**
+   * For `single_picker` / `multi_picker` — the universal option set. Picker
+   * labels shown to the owner verbatim. The picked string(s) are persisted as
+   * declared content. Stable; renaming an option means existing brands' picks
+   * stop matching, so prefer ADDING new options over renaming existing ones.
+   */
+  options?: string[];
+  /** For `multi_picker` — maximum number of options the owner may pick. */
+  maxSelections?: number;
+  /**
+   * For `single_picker` / `multi_picker` — when true, owner can add a custom
+   * option beyond the universal list (stored verbatim alongside picked
+   * universal options).
+   */
+  allowCustom?: boolean;
 }
 
 /**
@@ -207,11 +258,50 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     domain: "verbal",
     label: "Tone",
     describes:
-      "How the voice FEELS. Three layers: (1) emotional register (confident, warm, urgent, calm, dry); (2) attitude toward the reader (peer-to-peer vs authority-to-novice, generous vs guarded, formal vs intimate); (3) energy (high/punchy vs measured/restrained). Distinct from `lexicon` (which words you use) and `mechanical_style` (casing/emoji/rhythm) — tone is what makes a paragraph sound like YOUR brand vs anyone else's, even when the content is the same.",
+      "HOW the voice sounds — three layered inputs: ATTRIBUTES (up to 3 defining adjectives like confident, warm, direct — pick from a universal list or add your own), EXAMPLE (4 sentences of your actual brand copy that exemplifies the voice), plus a system-synthesized EFFECT (how the audience should feel — derived from attributes + voice_source + audience profile, owner reviews + approves at synthesis-review stage). Distinct from `lexicon` (which words you use) and `mechanical_style` (casing/emoji/rhythm) — tone is what makes a paragraph sound like YOUR brand vs anyone else's, even when the content is the same.",
     media: ["text", "extracted"],
     lean: "declared",
     override: "flexible",
     phase: 1,
+    inputs: [
+      {
+        key: "attributes",
+        label: "Tone attributes",
+        prompt:
+          "Pick up to 3 defining adjectives for your voice. Add your own if the universal list misses something. Qualifier: 'defining' — these are the words that distinguish your voice from any other brand in your category.",
+        inputType: "multi_picker",
+        maxSelections: 3,
+        qualifier: "defining",
+        allowCustom: true,
+        required: true,
+        // Universal 14 — per [[verbal-domain-decomposition]] LOCKED 2026-06-03.
+        options: [
+          "Calm",
+          "Energetic",
+          "Confident",
+          "Cautious",
+          "Warm",
+          "Direct",
+          "Playful",
+          "Serious",
+          "Authoritative",
+          "Collaborative",
+          "Technical",
+          "Approachable",
+          "Patient",
+          "Decisive",
+        ],
+      },
+      {
+        key: "example",
+        label: "A real piece of your brand copy",
+        prompt:
+          "Paste 4 sentences of YOUR actual brand copy (website, ad, social post, email) that exemplifies the voice. Dictation-friendly — read it aloud if it helps. Authentic owner voice is the signal; polish strips it.",
+        inputType: "prose",
+        rows: 4,
+        required: true,
+      },
+    ],
   },
   {
     key: "lexicon",
@@ -235,15 +325,34 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     phase: 1,
   },
   {
-    key: "pov_persona",
+    key: "voice_source",
     domain: "verbal",
-    label: "Point of view",
+    label: "Voice source",
     describes:
-      "Two parts: (1) WHO speaks — a single individual (the owner), a collective team voice, or an anonymous brand voice; (2) the GRAMMATICAL PERSON used — 1st-singular ('I'), 1st-plural ('we'), or 3rd-person ('B Squared has…'). Worth calling out edge cases: VO scripts often need a single speaker even when the brand is collective, and 3rd-person reads more polished in formal contexts (proposals, case studies). State the default + any exceptions.",
+      "WHO speaks for the brand. Brand-wide setting — the source from which your brand's voice consistently flows across channels. Renamed from `pov_persona` 2026-06-03 to narrow scope. POV grammatical person (1st-singular vs 1st-plural vs 3rd-person) was previously folded in here; it's now a per-asset production decision driven by content type (tutorials → 2nd-person, case studies → 3rd-person, owner storytelling → 1st-person, etc.), NOT a brand identity setting. See [[verbal-domain-decomposition]] for the rename rationale.",
     media: ["text"],
     lean: "declared",
     override: "flexible",
     phase: 1,
+    inputs: [
+      {
+        key: "source",
+        label: "Voice source",
+        prompt:
+          "Pick the source from which your brand's voice flows. This is brand-wide — not a per-asset choice. Founder = a single individual (often named). Team = collective 'we' (unnamed). Named individuals = curated personalities within a team (e.g. an agency's named advisors). Brand persona = a curated character (e.g. Geico Gecko, Mailchimp's Freddie). Operator role = functional (e.g. 'as your project manager').",
+        inputType: "single_picker",
+        required: true,
+        // Universal 5 — per [[verbal-domain-decomposition]] LOCKED 2026-06-03.
+        options: [
+          "Founder",
+          "Team",
+          "Named individuals",
+          "Brand persona",
+          "Operator role",
+        ],
+        allowCustom: true,
+      },
+    ],
   },
   {
     key: "mechanical_style",

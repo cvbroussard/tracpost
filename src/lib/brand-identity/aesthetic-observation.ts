@@ -215,7 +215,7 @@ function buildUserText(sources: AssembledObservationSources): string {
     "tone":             { "observed": ["adjective", "..."], "evidence": ["direct quote", "..."] } | null,
     "lexicon":          { "observed": { "use": ["term that recurs", "..."], "avoid": ["term notably absent or rejected", "..."] }, "evidence": ["..."] } | null,
     "avoid":            { "observed": ["pattern the brand visibly refuses", "..."], "evidence": ["..."] } | null,
-    "pov_persona":      { "observed": "1st-singular | 1st-plural | 3rd-person + speaker identity (founder | team | brand voice | ...)", "evidence": ["..."] } | null,
+    "voice_source":     { "observed": "who speaks for the brand: founder | team | named individuals | brand persona | operator role", "evidence": ["..."] } | null,
     "mechanical_style": { "observed": ["sentence-length pattern", "casing pattern", "emoji policy", "..."], "evidence": ["..."] } | null,
     "tagline":          { "observed": "the actual tagline text if visible", "evidence": ["..."] } | null
   },

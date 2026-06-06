@@ -28,7 +28,7 @@ export interface BrandIdentityObservationPayload {
     tone:             DescriptorObservation<string[]> | null;
     lexicon:          DescriptorObservation<{ use: string[]; avoid: string[] }> | null;
     avoid:            DescriptorObservation<string[]> | null;
-    pov_persona:      DescriptorObservation<string> | null;
+    voice_source:     DescriptorObservation<string> | null;
     mechanical_style: DescriptorObservation<string[]> | null;
     tagline:          DescriptorObservation<string> | null;
   };

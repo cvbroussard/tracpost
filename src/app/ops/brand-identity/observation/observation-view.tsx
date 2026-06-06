@@ -538,7 +538,7 @@ function verbalSlots(p: BrandIdentityObservationPayload): DescriptorSlot[] {
     { key: "verbal.tone",             label: "Tone",             observation: p.verbal.tone },
     { key: "verbal.lexicon",          label: "Lexicon",          observation: p.verbal.lexicon },
     { key: "verbal.avoid",            label: "Avoid",            observation: p.verbal.avoid },
-    { key: "verbal.pov_persona",      label: "Point of view",    observation: p.verbal.pov_persona },
+    { key: "verbal.voice_source",     label: "Voice source",     observation: p.verbal.voice_source },
     { key: "verbal.mechanical_style", label: "Mechanical style", observation: p.verbal.mechanical_style },
     { key: "verbal.tagline",          label: "Tagline",          observation: p.verbal.tagline },
   ];

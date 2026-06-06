@@ -92,8 +92,12 @@ export type DescriptorOverride = "flexible" | "guardrail";
  *                                 selection persists as
  *                                 { selected_example_id, selected_example_text,
  *                                   generated_from_inputs_hash } in declared.
- *  - "scaffolded_picker_matrix" — per-axis pickers over LLM-synthesized axes
- *                                  (lexicon)
+ *  - "scaffolded_picker_matrix" — per-axis pickers over an LLM-synthesized
+ *                                  matrix of N vocabulary axes (lexicon). Each
+ *                                  axis has a label + 3-4 terms; owner picks
+ *                                  per axis (or "Interchangeable" / custom).
+ *                                  Declared persists as
+ *                                  `{ vocabulary_axes: { <axis_key>: <pick> } }`.
  *  - "synthesis_review"        — owner reviews + approves system-synthesized
  *                                 prose (tone.effect, voice_source.character)
  *  - "bool_toggle_overrides"   — toggle + allow-list (avoid)
@@ -105,7 +109,8 @@ export type InputType =
   | "angle_collection"
   | "single_picker"
   | "multi_picker"
-  | "example_set_picker";
+  | "example_set_picker"
+  | "scaffolded_picker_matrix";
 
 /**
  * Field within an angle section. Mirrors a single question in the owner's
@@ -313,11 +318,22 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     key: "lexicon",
     domain: "verbal",
     label: "Lexicon",
-    describes: "Words and terms to USE — how the brand names things, its terms of art.",
+    describes:
+      "Word-level vocabulary preferences — which terms the brand uses where alternatives exist. Per [[verbal-domain-decomposition]] LOCKED 2026-06-03: the system scaffolds a matrix of 6-10 industry-specific vocabulary axes (e.g., 'who you sell to': Homeowner / Client / Customer / Property owner), each with 3-4 commonly-used terms. Owner picks per axis (or 'Interchangeable' for no preference, or a custom value). The picked terms become the brand's working vocabulary — surfaces in every downstream copy generation.",
     media: ["text", "extracted"],
-    lean: "extracted",
+    lean: "declared",
     override: "flexible",
     phase: 5,
+    inputs: [
+      {
+        key: "vocabulary_axes",
+        label: "Vocabulary axes",
+        prompt:
+          "For each axis, pick the term that's most natural to your brand. If the choices feel interchangeable for this axis, mark it as such — that's signal too. If none of the choices fits, type your own.",
+        inputType: "scaffolded_picker_matrix",
+        required: true,
+      },
+    ],
   },
   {
     key: "avoid",

@@ -68,8 +68,8 @@ interface DescriptorInput {
   label: string;
   prompt: string;
   // Kept in sync with src/lib/brand-identity/catalog.ts InputType union.
-  // single_picker + multi_picker + example_set_picker added 2026-06-06
-  // per [[verbal-domain-decomposition]].
+  // single_picker + multi_picker + example_set_picker + scaffolded_picker_matrix
+  // added 2026-06-06 per [[verbal-domain-decomposition]].
   inputType:
     | "prose"
     | "list"
@@ -77,7 +77,8 @@ interface DescriptorInput {
     | "angle_collection"
     | "single_picker"
     | "multi_picker"
-    | "example_set_picker";
+    | "example_set_picker"
+    | "scaffolded_picker_matrix";
   slotCount?: number;
   qualifier?: string;
   rows?: number;
@@ -2385,6 +2386,249 @@ function MultiPickerField({
  * downstream — the orchestrator only consumes angles whose required slots are
  * complete. This lets the owner sketch placeholders without committing.
  */
+interface LexiconAxisSubstrate {
+  axis_key: string;
+  label: string;
+  terms: string[];
+  hint?: string;
+}
+
+interface LexiconAxesSubstratePayload {
+  axes: LexiconAxisSubstrate[];
+  meta: {
+    inputs_hash: string;
+    generated_at: string;
+    model: string;
+    prompt_version: string;
+  };
+}
+
+/** Sentinel value owner picks to mean "no preference between these terms". */
+const INTERCHANGEABLE = "__interchangeable__";
+
+function ScaffoldedPickerMatrixEditor({
+  descriptorKey,
+  siteId,
+  value,
+  onChange,
+  onBlur,
+}: {
+  descriptorKey: string;
+  siteId: string;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  onBlur: () => void;
+}) {
+  // For now lexicon is the only scaffolded_picker_matrix descriptor; this
+  // map is set up so additional matrix descriptors can wire their endpoints
+  // alongside as they ship.
+  const endpoint =
+    descriptorKey === "lexicon"
+      ? "/api/ops/brand-identity/lexicon-axes"
+      : null;
+
+  const [substrate, setSubstrate] = useState<LexiconAxesSubstratePayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({});
+
+  // value IS the picks map directly — the dispatcher already unwrapped
+  // descriptor.declared[input.key] before passing it to this editor.
+  const picks: Record<string, string> =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value as Record<string, unknown>).filter(
+            (e): e is [string, string] => typeof e[1] === "string",
+          ),
+        )
+      : {};
+
+  const refresh = useCallback(async () => {
+    if (!endpoint) return;
+    try {
+      const r = await fetch(`${endpoint}?siteId=${siteId}`);
+      if (!r.ok) throw new Error(`API ${r.status}`);
+      const json = (await r.json()) as { axes: LexiconAxesSubstratePayload | null };
+      setSubstrate(json.axes);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId, endpoint]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const generate = async () => {
+    if (!endpoint) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId }),
+      });
+      const json = (await r.json()) as { persisted: boolean; reason?: string };
+      if (!r.ok || !json.persisted) {
+        setError(json.reason || `API ${r.status}`);
+        setGenerating(false);
+        return;
+      }
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const pick = (axisKey: string, term: string) => {
+    onChange({ ...picks, [axisKey]: term });
+    onBlur();
+  };
+
+  const commitCustom = (axisKey: string) => {
+    const draft = (customDrafts[axisKey] ?? "").trim();
+    if (draft.length === 0) return;
+    pick(axisKey, draft);
+    setCustomDrafts((s) => ({ ...s, [axisKey]: "" }));
+  };
+
+  if (!endpoint) {
+    return (
+      <p className="text-xs text-red-600">
+        scaffolded_picker_matrix endpoint not configured for descriptor &quot;{descriptorKey}&quot;.
+      </p>
+    );
+  }
+
+  const totalAxes = substrate?.axes.length ?? 0;
+  const filledAxes = Object.keys(picks).filter((k) => picks[k]?.length > 0).length;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={generate}
+            disabled={generating}
+            className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[11px] font-medium text-foreground hover:bg-accent/20 disabled:opacity-50"
+          >
+            {generating
+              ? "Generating…"
+              : substrate
+              ? "Regenerate axes ⚙"
+              : "Generate axes ⚙"}
+          </button>
+          {substrate && (
+            <span className="text-[10px] text-muted">
+              Generated {new Date(substrate.meta.generated_at).toLocaleString()}
+            </span>
+          )}
+        </div>
+        {substrate && (
+          <span className="text-[10px] text-muted">
+            {filledAxes} of {totalAxes} picked
+          </span>
+        )}
+        {error && <span className="text-[10px] text-red-600">{error}</span>}
+      </div>
+
+      {loading && <p className="text-xs text-muted">Loading axes…</p>}
+
+      {!loading && !substrate && (
+        <p className="text-xs italic text-muted">
+          No vocabulary axes generated yet. Click <em>Generate axes</em> above to scaffold
+          the matrix with 6-10 industry-specific axes.
+        </p>
+      )}
+
+      {substrate && (
+        <div className="space-y-3">
+          {substrate.axes.map((axis) => {
+            const currentPick = picks[axis.axis_key] ?? "";
+            const isInterchangeable = currentPick === INTERCHANGEABLE;
+            const isCustom =
+              currentPick.length > 0 &&
+              currentPick !== INTERCHANGEABLE &&
+              !axis.terms.includes(currentPick);
+            const customDraft = customDrafts[axis.axis_key] ?? (isCustom ? currentPick : "");
+            return (
+              <div
+                key={axis.axis_key}
+                className="rounded border border-border bg-card p-2.5 space-y-1.5"
+              >
+                <div>
+                  <span className="text-[11px] font-medium text-foreground">{axis.label}</span>
+                  {axis.hint && (
+                    <span className="ml-2 text-[10px] text-muted">{axis.hint}</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {axis.terms.map((term) => {
+                    const selected = currentPick === term;
+                    return (
+                      <button
+                        key={term}
+                        type="button"
+                        onClick={() => pick(axis.axis_key, term)}
+                        className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${
+                          selected
+                            ? "border-accent/60 bg-accent/20 text-foreground"
+                            : "border-border bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground"
+                        }`}
+                      >
+                        {term}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => pick(axis.axis_key, INTERCHANGEABLE)}
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] italic transition-colors ${
+                      isInterchangeable
+                        ? "border-slate-500/60 bg-slate-500/15 text-slate-700 dark:text-slate-300"
+                        : "border-border bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground"
+                    }`}
+                  >
+                    Interchangeable
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted">Custom:</span>
+                  <input
+                    type="text"
+                    value={customDraft}
+                    onChange={(e) =>
+                      setCustomDrafts((s) => ({ ...s, [axis.axis_key]: e.target.value }))
+                    }
+                    onBlur={() => commitCustom(axis.axis_key)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitCustom(axis.axis_key);
+                      }
+                    }}
+                    placeholder="Your own term"
+                    className={`flex-1 max-w-xs rounded border bg-background px-2 py-0.5 text-[11px] focus:outline-none ${
+                      isCustom ? "border-accent/60" : "border-border focus:border-accent"
+                    }`}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ExampleSetSubstrateExample {
   id: string;
   style_label: string;
@@ -3405,6 +3649,14 @@ function DescriptorCard({
                           />
                         ) : input.inputType === "example_set_picker" ? (
                           <ExampleSetPickerEditor
+                            descriptorKey={d.key}
+                            siteId={siteId}
+                            value={value}
+                            onChange={(next) => onChange({ ...obj, [input.key]: next })}
+                            onBlur={onBlur}
+                          />
+                        ) : input.inputType === "scaffolded_picker_matrix" ? (
+                          <ScaffoldedPickerMatrixEditor
                             descriptorKey={d.key}
                             siteId={siteId}
                             value={value}

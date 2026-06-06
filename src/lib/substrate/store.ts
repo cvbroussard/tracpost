@@ -27,7 +27,8 @@ import { sql } from "@/lib/db";
 export type SubstrateKind =
   | "public_presence_observation"
   | "readiness_findings"
-  | "mechanical_style_examples";
+  | "mechanical_style_examples"
+  | "lexicon_axes";
 
 export interface GenerationMetadata {
   model: string;

@@ -100,7 +100,12 @@ export type DescriptorOverride = "flexible" | "guardrail";
  *                                  `{ vocabulary_axes: { <axis_key>: <pick> } }`.
  *  - "synthesis_review"        — owner reviews + approves system-synthesized
  *                                 prose (tone.effect, voice_source.character)
- *  - "bool_toggle_overrides"   — toggle + allow-list (avoid)
+ *  - "bool_toggle_overrides"   — single toggle (default true) plus a per-term
+ *                                 allow-list, evaluated against a platform-
+ *                                 curated taxonomy. Used by `avoid` against
+ *                                 the weasel-words list. Declared persists as
+ *                                 `{ <toggle_key>: boolean,
+ *                                    <overrides_key>: string[] }`.
  */
 export type InputType =
   | "prose"
@@ -110,7 +115,8 @@ export type InputType =
   | "single_picker"
   | "multi_picker"
   | "example_set_picker"
-  | "scaffolded_picker_matrix";
+  | "scaffolded_picker_matrix"
+  | "bool_toggle_overrides";
 
 /**
  * Field within an angle section. Mirrors a single question in the owner's
@@ -340,11 +346,21 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     domain: "verbal",
     label: "Avoid",
     describes:
-      "Words, phrases, and claims to NEVER use — a guardrail a brief can't override. Don't just list words; state the REASON or pattern (e.g. 'raises false expectations,' 'cheapens craft,' 'compliance-flagged'). The reason lets extraction generalize beyond the literal list. Common families: category cliches (HGTV/realtor language), hyperbolic claims (best/perfect/guaranteed), and industry-specific compliance terms.",
+      "Words, phrases, and claims the brand never uses — a guardrail a brief can't override. Per [[verbal-domain-decomposition]] LOCKED 2026-06-03: avoid uses a SINGLE platform-curated weasel-words taxonomy (60-80 terms across 13 categories: vague qualifiers, unspecified attribution, subjective puffery, implied superiority, hyperbole, soft hedges, sloppy promise language, absolute claims, scam-adjacent promise, promotional gimmickry, manufactured urgency, pressure tactics, greenwashing). Owner controls via toggle (default ON) + per-term allow-list (terms the brand specifically WANTS to use despite being on the list, e.g. an architect-led firm may legitimately use 'luxury' in context). Platform-wide policy, NOT per-brand configurable beyond the toggle + overrides; owner contribution to the master list is a feedback channel, not a self-serve add. Companion Banned Content panel (sexually explicit, hate speech, threats of violence, content targeting minors) is non-negotiable platform TOS, displayed alongside but not editable.",
     media: ["text"],
     lean: "declared",
     override: "guardrail",
     phase: 1,
+    inputs: [
+      {
+        key: "weasel_words",
+        label: "Weasel words",
+        prompt:
+          "The toggle controls whether the platform-wide weasel-words check runs for your brand. Default ON — recommended. Use the allow-list below to permit specific terms despite their being on the list (e.g. if 'luxury' is a legitimate signal for your offering, add it here and the system will stop flagging it).",
+        inputType: "bool_toggle_overrides",
+        required: true,
+      },
+    ],
   },
   {
     key: "voice_source",

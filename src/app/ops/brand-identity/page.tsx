@@ -22,6 +22,10 @@ import {
   STATISTICAL_DESCRIPTOR_KEYS,
   type Bucket,
 } from "@/lib/brand-identity/buckets";
+import {
+  WEASEL_WORD_CATEGORIES,
+  totalWeaselWordsCount,
+} from "@/lib/brand-identity/weasel-words";
 import type {
   OfferRec,
   AudienceRec,
@@ -69,7 +73,7 @@ interface DescriptorInput {
   prompt: string;
   // Kept in sync with src/lib/brand-identity/catalog.ts InputType union.
   // single_picker + multi_picker + example_set_picker + scaffolded_picker_matrix
-  // added 2026-06-06 per [[verbal-domain-decomposition]].
+  // + bool_toggle_overrides added 2026-06-06 per [[verbal-domain-decomposition]].
   inputType:
     | "prose"
     | "list"
@@ -78,7 +82,8 @@ interface DescriptorInput {
     | "single_picker"
     | "multi_picker"
     | "example_set_picker"
-    | "scaffolded_picker_matrix";
+    | "scaffolded_picker_matrix"
+    | "bool_toggle_overrides";
   slotCount?: number;
   qualifier?: string;
   rows?: number;
@@ -2386,6 +2391,235 @@ function MultiPickerField({
  * downstream — the orchestrator only consumes angles whose required slots are
  * complete. This lets the owner sketch placeholders without committing.
  */
+function BoolToggleOverridesEditor({
+  descriptorKey,
+  value,
+  onChange,
+  onBlur,
+}: {
+  descriptorKey: string;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  onBlur: () => void;
+}) {
+  // Currently the only bool_toggle_overrides descriptor is `avoid`, which
+  // references the weasel-words taxonomy. The map below sets up the pattern
+  // for additional toggle-and-override descriptors as they ship.
+  if (descriptorKey !== "avoid") {
+    return (
+      <p className="text-xs text-red-600">
+        bool_toggle_overrides taxonomy not configured for descriptor &quot;{descriptorKey}&quot;.
+      </p>
+    );
+  }
+  return <AvoidWeaselWordsEditor value={value} onChange={onChange} onBlur={onBlur} />;
+}
+
+function AvoidWeaselWordsEditor({
+  value,
+  onChange,
+  onBlur,
+}: {
+  value: unknown;
+  onChange: (next: unknown) => void;
+  onBlur: () => void;
+}) {
+  const obj =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const applies = obj.weasel_words_applies !== false; // default true
+  const overrides: string[] = useMemo(
+    () =>
+      Array.isArray(obj.weasel_words_allow_overrides)
+        ? (obj.weasel_words_allow_overrides as unknown[]).filter(
+            (s): s is string => typeof s === "string",
+          )
+        : [],
+    [obj.weasel_words_allow_overrides],
+  );
+
+  const [customDraft, setCustomDraft] = useState("");
+  const [browseOpen, setBrowseOpen] = useState(false);
+
+  const overrideSet = useMemo(
+    () => new Set(overrides.map((o) => o.toLowerCase())),
+    [overrides],
+  );
+  const totalTerms = useMemo(() => totalWeaselWordsCount(), []);
+
+  const setApplies = (next: boolean) => {
+    onChange({ ...obj, weasel_words_applies: next });
+    onBlur();
+  };
+
+  const addOverride = (term: string) => {
+    const trimmed = term.trim();
+    if (trimmed.length === 0) return;
+    if (overrideSet.has(trimmed.toLowerCase())) return;
+    onChange({
+      ...obj,
+      weasel_words_allow_overrides: [...overrides, trimmed],
+    });
+    onBlur();
+  };
+
+  const removeOverride = (term: string) => {
+    onChange({
+      ...obj,
+      weasel_words_allow_overrides: overrides.filter((o) => o !== term),
+    });
+    onBlur();
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Toggle */}
+      <div className="flex items-center justify-between gap-3 rounded border border-border bg-card p-2.5">
+        <div>
+          <div className="text-[11px] font-medium text-foreground">
+            Apply weasel-words check
+          </div>
+          <p className="text-[10px] text-muted leading-relaxed">
+            When on, the platform-wide weasel-words list flags{" "}
+            <span className="font-medium">{totalTerms - overrides.length}</span> terms
+            in your generated copy. {overrides.length > 0 && `${overrides.length} allowed override${overrides.length === 1 ? "" : "s"} active.`}
+          </p>
+        </div>
+        <label className="inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={applies}
+            onChange={(e) => setApplies(e.target.checked)}
+            className="sr-only peer"
+          />
+          <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-muted/40 transition-colors peer-checked:bg-accent/60">
+            <span className="inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform translate-x-1 peer-checked:translate-x-4" />
+          </span>
+        </label>
+      </div>
+
+      {/* Banned Content TOS (static, non-editable) */}
+      <div className="rounded border border-red-500/30 bg-red-500/5 p-2.5">
+        <div className="text-[11px] font-medium text-red-700 dark:text-red-300 mb-1">
+          Banned Content (platform TOS — non-negotiable)
+        </div>
+        <p className="text-[10px] text-muted leading-relaxed">
+          Sexually explicit material, hate speech, threats of violence, and content
+          targeting minors are never permitted in TracPost-generated outputs. This
+          applies platform-wide and is not toggleable per brand.
+        </p>
+      </div>
+
+      {/* Allow-list overrides */}
+      {applies && (
+        <div className="rounded border border-border bg-card p-2.5 space-y-2">
+          <div>
+            <div className="text-[11px] font-medium text-foreground">Allow these terms</div>
+            <p className="text-[10px] text-muted leading-relaxed">
+              Add terms from the weasel-words list that you specifically want to use.
+              These will be excluded from the flagging for your brand only.
+            </p>
+          </div>
+          {overrides.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {overrides.map((term) => (
+                <span
+                  key={term}
+                  className="inline-flex items-center gap-1 rounded-full border border-accent/60 bg-accent/15 px-2 py-0.5 text-[11px] text-foreground"
+                >
+                  {term}
+                  <button
+                    type="button"
+                    onClick={() => removeOverride(term)}
+                    className="text-muted hover:text-foreground"
+                    aria-label={`Remove ${term}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={customDraft}
+              onChange={(e) => setCustomDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addOverride(customDraft);
+                  setCustomDraft("");
+                }
+              }}
+              placeholder="e.g. luxury"
+              className="flex-1 max-w-xs rounded border border-border bg-background px-2 py-1 text-[11px] focus:border-accent focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                addOverride(customDraft);
+                setCustomDraft("");
+              }}
+              disabled={customDraft.trim().length === 0}
+              className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Allow
+            </button>
+          </div>
+
+          {/* Browse weasel-words by category (collapsed by default) */}
+          <button
+            type="button"
+            onClick={() => setBrowseOpen((s) => !s)}
+            className="text-[10px] text-muted hover:text-foreground underline"
+          >
+            {browseOpen ? "Hide" : "Browse"} the weasel-words list ({totalTerms} terms across {WEASEL_WORD_CATEGORIES.length} categories)
+          </button>
+          {browseOpen && (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {WEASEL_WORD_CATEGORIES.map((cat) => (
+                <div key={cat.key} className="space-y-1">
+                  <div>
+                    <span className="text-[10px] font-medium text-foreground">{cat.label}</span>
+                    <span className="ml-2 text-[10px] text-muted">{cat.description}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {cat.terms.map((term) => {
+                      const isOverride = overrideSet.has(term.toLowerCase());
+                      return (
+                        <button
+                          key={term}
+                          type="button"
+                          onClick={() => (isOverride ? removeOverride(term) : addOverride(term))}
+                          className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+                            isOverride
+                              ? "border-accent/60 bg-accent/15 text-foreground"
+                              : "border-border bg-muted/15 text-muted hover:bg-muted/30 hover:text-foreground"
+                          }`}
+                          title={isOverride ? "Click to remove from allow-list" : "Click to add to allow-list"}
+                        >
+                          {term}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {cat.allowed && cat.allowed.length > 0 && (
+                    <div className="text-[9px] text-muted pl-2">
+                      Use instead: {cat.allowed.join(", ")}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface LexiconAxisSubstrate {
   axis_key: string;
   label: string;
@@ -3659,6 +3893,13 @@ function DescriptorCard({
                           <ScaffoldedPickerMatrixEditor
                             descriptorKey={d.key}
                             siteId={siteId}
+                            value={value}
+                            onChange={(next) => onChange({ ...obj, [input.key]: next })}
+                            onBlur={onBlur}
+                          />
+                        ) : input.inputType === "bool_toggle_overrides" ? (
+                          <BoolToggleOverridesEditor
+                            descriptorKey={d.key}
                             value={value}
                             onChange={(next) => onChange({ ...obj, [input.key]: next })}
                             onBlur={onBlur}

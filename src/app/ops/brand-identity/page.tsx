@@ -25,6 +25,7 @@ import {
 import {
   WEASEL_WORD_CATEGORIES,
   totalWeaselWordsCount,
+  forbiddenTermsFromWeaselWords,
 } from "@/lib/brand-identity/weasel-words";
 import type {
   OfferRec,
@@ -824,13 +825,40 @@ export function BrandIdentityContent({
     [siteId, saved],
   );
 
-  // Forbidden-term map from the avoid descriptor's currently-applied baselines.
-  // Passed to every text-capable descriptor card (except `avoid` itself) so the
-  // page can warn inline when prose contradicts the owner's own guardrail.
+  // Forbidden-term map sourced from avoid's declared content. Two sources
+  // merged: the NEW weasel-words shape (declared.weasel_words.*) and the
+  // LEGACY per-set baselines (metadata.baselinesApplied). v1 of avoid lived
+  // entirely on baselines; the decomposition (2026-06-06) moved it onto
+  // declared with the consolidated 74-term taxonomy. Both sources contribute
+  // until the legacy baselines path is retired for avoid descriptors.
   const forbiddenTerms: ForbiddenTerm[] = useMemo(() => {
     if (!data) return [];
     const avoidDesc = data.descriptors.find((d) => d.key === "avoid");
-    return forbiddenTermsFromAvoid(avoidDesc?.metadata?.baselinesApplied);
+
+    // NEW PATH — weasel_words declared shape
+    const weaselDeclared =
+      avoidDesc?.declared && typeof avoidDesc.declared === "object" && !Array.isArray(avoidDesc.declared)
+        ? ((avoidDesc.declared as Record<string, unknown>).weasel_words as
+            | { weasel_words_applies?: boolean; weasel_words_allow_overrides?: string[] }
+            | undefined)
+        : undefined;
+    const weaselTerms = forbiddenTermsFromWeaselWords(weaselDeclared ?? null);
+
+    // LEGACY PATH — metadata.baselinesApplied (only fires if any are applied;
+    // expected to drift to empty as brands migrate to the new declared shape).
+    const legacyTerms = forbiddenTermsFromAvoid(avoidDesc?.metadata?.baselinesApplied);
+
+    // Merge dedup-by-term (case-insensitive), preferring weasel-source labels
+    // since they carry the consolidated category taxonomy.
+    const merged = new Map<string, ForbiddenTerm>();
+    for (const t of weaselTerms) {
+      merged.set(t.term.toLowerCase(), t);
+    }
+    for (const t of legacyTerms) {
+      const k = t.term.toLowerCase();
+      if (!merged.has(k)) merged.set(k, t);
+    }
+    return Array.from(merged.values());
   }, [data]);
 
   const dictation = useDictation({

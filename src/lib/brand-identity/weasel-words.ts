@@ -334,3 +334,51 @@ export function totalWeaselWordsCount(): number {
   for (const c of WEASEL_WORD_CATEGORIES) n += c.terms.length;
   return n;
 }
+
+/**
+ * Forbidden-term shape used by the page-level inline-coaching detection.
+ * Mirrors baselines.ts's ForbiddenTerm so the page can pass a unified array
+ * to detectForbidden() regardless of source pipeline.
+ */
+export interface WeaselForbiddenTerm {
+  term: string;
+  baselineLabel: string;
+  allowed: string[];
+}
+
+/**
+ * Compute the forbidden-term list from the avoid descriptor's new declared
+ * shape (post-2026-06-06 weasel-words decomposition). Inverse of the legacy
+ * baselines opt-out semantics: if the toggle is OFF, no terms are flagged;
+ * if ON, all categories contribute their terms minus the per-term allow-list
+ * overrides.
+ *
+ * Mirrors the contract of forbiddenTermsFromAvoid() in baselines.ts so the
+ * page can swap or merge sources without changing detectForbidden() callers.
+ */
+export function forbiddenTermsFromWeaselWords(declared: {
+  weasel_words_applies?: boolean;
+  weasel_words_allow_overrides?: string[];
+} | null | undefined): WeaselForbiddenTerm[] {
+  if (!declared) return [];
+  // Default ON if the flag is missing (matches the toggle's default-true)
+  if (declared.weasel_words_applies === false) return [];
+  const overrides = Array.isArray(declared.weasel_words_allow_overrides)
+    ? declared.weasel_words_allow_overrides
+        .filter((s): s is string => typeof s === "string")
+        .map((s) => s.toLowerCase().trim())
+    : [];
+  const overrideSet = new Set(overrides);
+  const out: WeaselForbiddenTerm[] = [];
+  for (const cat of WEASEL_WORD_CATEGORIES) {
+    for (const term of cat.terms) {
+      if (overrideSet.has(term.toLowerCase())) continue;
+      out.push({
+        term,
+        baselineLabel: cat.label,
+        allowed: cat.allowed ?? [],
+      });
+    }
+  }
+  return out;
+}

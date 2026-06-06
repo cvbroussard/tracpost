@@ -68,14 +68,16 @@ interface DescriptorInput {
   label: string;
   prompt: string;
   // Kept in sync with src/lib/brand-identity/catalog.ts InputType union.
-  // single_picker + multi_picker added 2026-06-06 per [[verbal-domain-decomposition]].
+  // single_picker + multi_picker + example_set_picker added 2026-06-06
+  // per [[verbal-domain-decomposition]].
   inputType:
     | "prose"
     | "list"
     | "slot_composition"
     | "angle_collection"
     | "single_picker"
-    | "multi_picker";
+    | "multi_picker"
+    | "example_set_picker";
   slotCount?: number;
   qualifier?: string;
   rows?: number;
@@ -1798,6 +1800,7 @@ export function BrandIdentityContent({
                 <DescriptorCard
                   key={d.key}
                   d={d}
+                  siteId={siteId}
                   draft={drafts[d.key]}
                   isSaving={savingKey === d.key}
                   isDirty={
@@ -2382,6 +2385,200 @@ function MultiPickerField({
  * downstream — the orchestrator only consumes angles whose required slots are
  * complete. This lets the owner sketch placeholders without committing.
  */
+interface ExampleSetSubstrateExample {
+  id: string;
+  style_label: string;
+  paragraph: string;
+}
+
+interface ExampleSetSubstratePayload {
+  examples: ExampleSetSubstrateExample[];
+  meta: {
+    inputs_hash: string;
+    generated_at: string;
+    model: string;
+    prompt_version: string;
+  };
+}
+
+/**
+ * Per-descriptor map of (substrate API endpoint, declared shape). Adding a
+ * new example_set_picker descriptor means adding an entry here so the editor
+ * knows where to fetch + post.
+ */
+const EXAMPLE_SET_PICKER_SOURCES: Record<
+  string,
+  { endpoint: string; inputsAreReadyLabel?: string }
+> = {
+  mechanical_style: {
+    endpoint: "/api/ops/brand-identity/mechanical-style-examples",
+    inputsAreReadyLabel:
+      "Generation uses voice_source + tone.attributes + GBP categories. Fill those first for best results — though the generator runs even if they're empty.",
+  },
+};
+
+function ExampleSetPickerEditor({
+  descriptorKey,
+  siteId,
+  value,
+  onChange,
+  onBlur,
+}: {
+  descriptorKey: string;
+  siteId: string;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  onBlur: () => void;
+}) {
+  const source = EXAMPLE_SET_PICKER_SOURCES[descriptorKey];
+  const [substrate, setSubstrate] = useState<ExampleSetSubstratePayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const currentSelectedId =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? typeof (value as Record<string, unknown>).selected_example_id === "string"
+        ? ((value as Record<string, unknown>).selected_example_id as string)
+        : null
+      : null;
+
+  const refresh = useCallback(async () => {
+    if (!source) return;
+    try {
+      const r = await fetch(`${source.endpoint}?siteId=${siteId}`);
+      if (!r.ok) throw new Error(`API ${r.status}`);
+      const json = (await r.json()) as { examples: ExampleSetSubstratePayload | null };
+      setSubstrate(json.examples);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId, source]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const generate = async () => {
+    if (!source) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const r = await fetch(source.endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId }),
+      });
+      const json = (await r.json()) as { persisted: boolean; reason?: string };
+      if (!r.ok || !json.persisted) {
+        setError(json.reason || `API ${r.status}`);
+        setGenerating(false);
+        return;
+      }
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const pick = (ex: ExampleSetSubstrateExample) => {
+    if (!substrate) return;
+    onChange({
+      selected_example_id: ex.id,
+      selected_example_text: ex.paragraph,
+      selected_example_label: ex.style_label,
+      generated_from_inputs_hash: substrate.meta.inputs_hash,
+    });
+    onBlur();
+  };
+
+  if (!source) {
+    return (
+      <p className="text-xs text-red-600">
+        example_set_picker source not configured for descriptor &quot;{descriptorKey}&quot;.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={generate}
+              disabled={generating}
+              className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[11px] font-medium text-foreground hover:bg-accent/20 disabled:opacity-50"
+            >
+              {generating
+                ? "Generating…"
+                : substrate
+                ? "Regenerate examples ⚙"
+                : "Generate examples ⚙"}
+            </button>
+            {substrate && (
+              <span className="text-[10px] text-muted">
+                Generated{" "}
+                {new Date(substrate.meta.generated_at).toLocaleString()}
+              </span>
+            )}
+          </div>
+          {source.inputsAreReadyLabel && !substrate && (
+            <p className="text-[10px] text-muted mt-1 max-w-md leading-relaxed">
+              {source.inputsAreReadyLabel}
+            </p>
+          )}
+        </div>
+        {error && <span className="text-[10px] text-red-600">{error}</span>}
+      </div>
+
+      {loading && <p className="text-xs text-muted">Loading examples…</p>}
+
+      {!loading && !substrate && (
+        <p className="text-xs italic text-muted">
+          No examples generated yet. Click <em>Generate examples</em> above to scaffold the
+          picker with 3 industry-specific paragraphs.
+        </p>
+      )}
+
+      {substrate && (
+        <div className="space-y-2">
+          {substrate.examples.map((ex) => {
+            const selected = ex.id === currentSelectedId;
+            return (
+              <button
+                key={ex.id}
+                type="button"
+                onClick={() => pick(ex)}
+                className={`w-full text-left rounded border p-3 transition-colors ${
+                  selected
+                    ? "border-accent/60 bg-accent/10"
+                    : "border-border bg-card hover:bg-muted/20"
+                }`}
+              >
+                <div className="flex items-baseline justify-between gap-3 mb-1">
+                  <span className="text-[10px] uppercase tracking-wide text-muted">
+                    {ex.style_label}
+                  </span>
+                  {selected && (
+                    <span className="text-[10px] font-medium text-foreground">✓ Selected</span>
+                  )}
+                </div>
+                <p className="text-xs leading-relaxed text-foreground">{ex.paragraph}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SinglePickerEditor({
   input,
   value,
@@ -2837,6 +3034,7 @@ function AngleCollectionEditor({
 
 function DescriptorCard({
   d,
+  siteId,
   draft,
   isSaving,
   isDirty,
@@ -2862,6 +3060,7 @@ function DescriptorCard({
   gbpCategories,
 }: {
   d: DescriptorRecord;
+  siteId: string;
   draft: unknown; // string for single-textarea descriptors, object for decomposed
   isSaving: boolean;
   isDirty: boolean;
@@ -3200,6 +3399,14 @@ function DescriptorCard({
                         ) : input.inputType === "multi_picker" ? (
                           <MultiPickerEditor
                             input={input}
+                            value={value}
+                            onChange={(next) => onChange({ ...obj, [input.key]: next })}
+                            onBlur={onBlur}
+                          />
+                        ) : input.inputType === "example_set_picker" ? (
+                          <ExampleSetPickerEditor
+                            descriptorKey={d.key}
+                            siteId={siteId}
                             value={value}
                             onChange={(next) => onChange({ ...obj, [input.key]: next })}
                             onBlur={onBlur}

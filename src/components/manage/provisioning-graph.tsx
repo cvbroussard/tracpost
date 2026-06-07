@@ -58,7 +58,7 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "View site settings", href: "/ops/sites", icon: "→" },
   ],
   playbook: [
-    { label: "View playbook", href: "/ops/brand", icon: "→" },
+    { label: "View brand identity", href: "/ops/brand-identity", icon: "→" },
     { label: "Regenerate playbook", action: "regenerate_playbook", icon: "⟳" },
   ],
   social_accounts: [

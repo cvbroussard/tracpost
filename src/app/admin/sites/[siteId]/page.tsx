@@ -15,7 +15,7 @@ export default async function SiteControlPanel({ params }: Props) {
 
   const [site] = await sql`
     SELECT s.id, s.name, s.url, s.business_type, s.location,
-           s.brand_voice, s.brand_dna,
+           s.brand_voice,
            s.content_vibe, s.image_style, s.image_variations,
            s.image_processing_mode, s.pillar_config,
            s.autopilot_enabled, s.cadence_config, s.autopilot_config,

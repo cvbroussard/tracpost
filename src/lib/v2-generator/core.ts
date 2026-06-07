@@ -6,7 +6,7 @@ import type {
   ContentKit,
   GenerateResult,
 } from "./types";
-import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import { buildBodyPrompt, buildKitPrompt } from "./prompts";
 
 const anthropic = new Anthropic();
@@ -29,18 +29,16 @@ const MODEL = "claude-haiku-4-5-20251001";
  * Returns the v2 row id, slug, title, and asset count.
  */
 export async function generateV2Content(spec: ContentSpec): Promise<GenerateResult> {
-  // 1. Load site context (brand DNA + name + url).
+  // 1. Load site context.
   //
-  // Per 2026-05-06 decision: brand_dna is the single source of truth.
-  // brand_playbook is being retired (column drop queued as task #132).
-  // brand_dna contains:
-  //   - signals.voice / signals.customer_voice / signals.exemplars (observed)
-  //   - playbook (derived from signals — equivalent to legacy brand_playbook)
-  // We pull both: the embedded playbook for positioning + audience language,
-  // and the signals for voice fingerprint + concrete reference samples.
+  // Phase B retirement (2026-06-07): brand_descriptor catalog is canonical
+  // per [[brand-identity-layer-stack]]. Playbook is synthesized from the
+  // catalog via getBrandPlaybookFromDescriptor. The observed signals.voice
+  // fingerprint has no catalog equivalent today — Phase B gap per
+  // [[brand-dna-retirement]]; voice is empty until catalog grows the
+  // observed-voice-fingerprint substrate or pipeline.
   const [site] = await sql`
-    SELECT name, url, brand_dna,
-           identity_policy, identity_waiver_signed_at
+    SELECT name, url, identity_policy, identity_waiver_signed_at
     FROM businesses
     WHERE id = ${spec.siteId}
   `;
@@ -48,9 +46,8 @@ export async function generateV2Content(spec: ContentSpec): Promise<GenerateResu
 
   const siteName = String(site.name || "");
   const siteUrl = String(site.url || "");
-  const dna = (site.brand_dna || {}) as Record<string, unknown>;
-  const playbook = (dna.playbook as BrandPlaybook | null) || null;
-  const brandVoice = (dna.signals as Record<string, unknown> | null)?.voice as Record<string, unknown> || {};
+  const playbook = await getBrandPlaybookFromDescriptor(spec.siteId);
+  const brandVoice: Record<string, unknown> = {};
 
   // Resolve effective identity policy. 'allow_names' only applies when
   // the subscriber has signed the publisher waiver; otherwise we

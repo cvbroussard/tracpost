@@ -10,6 +10,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 
 const anthropic = new Anthropic();
 
@@ -225,8 +226,13 @@ export async function maybeGenerateArticlePrompts(projectId: string): Promise<bo
 
   // Check playbook exists
   const [site] = await sql`
-    SELECT (brand_dna->'playbook') IS NOT NULL AS has_playbook
-    FROM businesses WHERE id = ${project.business_id}
+    SELECT EXISTS(
+      SELECT 1 FROM brand_identity bi
+      JOIN brand_descriptor bd ON bd.brand_identity_id = bi.id
+      WHERE bi.business_id = ${project.business_id} AND bi.is_primary = true
+        AND bd.declared IS NOT NULL
+      LIMIT 1
+    ) AS has_playbook
   `;
   if (!site?.has_playbook) return false;
 
@@ -305,12 +311,13 @@ export interface GeneratedText {
  */
 async function loadEnrichedContext(siteId: string): Promise<string> {
   const [site] = await sql`
-    SELECT brand_dna, location FROM businesses WHERE id = ${siteId}
+    SELECT location FROM businesses WHERE id = ${siteId}
   `;
   const parts: string[] = [];
 
-  // Brand playbook (the sharpened angle, promise, positioning) — from brand_dna envelope per Phase A retirement.
-  const playbook = ((site?.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? {}) as Record<string, unknown>;
+  // Brand playbook synthesized from brand_descriptor catalog per Phase B retirement.
+  const playbookSynth = await getBrandPlaybookFromDescriptor(siteId);
+  const playbook = (playbookSynth as unknown as Record<string, unknown>) || {};
   const positioning = (playbook.brandPositioning || {}) as Record<string, unknown>;
   const angles = (positioning.selectedAngles || []) as Array<Record<string, unknown>>;
   const offerCore = (playbook.offerCore || {}) as Record<string, unknown>;

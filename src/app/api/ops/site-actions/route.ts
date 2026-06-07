@@ -55,10 +55,12 @@ export async function GET(req: NextRequest) {
       (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = ${siteId}) AS total_posts
   `;
 
-  // Phase A retirement: brand_playbooks (plural) table was never created;
-  // the original code was dead. Check brand_dna.playbook envelope instead.
+  // Phase B retirement: brand_descriptor catalog presence indicates a populated playbook.
   const [playbook] = await sql`
-    SELECT id FROM businesses WHERE id = ${siteId} AND (brand_dna->'playbook') IS NOT NULL LIMIT 1
+    SELECT 1 AS id FROM brand_identity bi
+    JOIN brand_descriptor bd ON bd.brand_identity_id = bi.id
+    WHERE bi.business_id = ${siteId} AND bi.is_primary = true AND bd.declared IS NOT NULL
+    LIMIT 1
   `.catch(() => [null]);
 
   const dirtyFields = (site.gbp_dirty_fields || []) as string[];

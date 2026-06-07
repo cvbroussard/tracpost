@@ -162,7 +162,7 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
     const transcript = (transcriptRow?.transcript as string) || "";
 
     const [siteRow] = await sql`
-      SELECT pillar_config, brand_dna FROM businesses WHERE id = ${siteId}
+      SELECT pillar_config FROM businesses WHERE id = ${siteId}
     `;
     const siteCategories = await sql`
       SELECT sgc.gcid, gc.name
@@ -178,7 +178,10 @@ export async function commitCascade(input: CommitCascadeInput): Promise<CommitCa
       ner_suggested_tags: analysis.suggested_tags,
       site_categories: siteCategories,
       pillar_config: siteRow?.pillar_config ?? [],
-      brand_dna_digest_present: Boolean(siteRow?.brand_dna),
+      // Phase B retirement: brand_dna column gone; the instrumentation
+      // hint here is preserved as false until brand_descriptor presence
+      // becomes the signal.
+      brand_dna_digest_present: false,
     };
 
     const nerOutput = {

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import type { AutopilotConfig, TriageResult, ContentPillar, PlatformFormat } from "./types";
 import { SCENE_TYPE_IDS } from "@/lib/scene-types";
 // Personas retired 2026-05-19 (full entity removal). The cascade no
@@ -254,10 +255,11 @@ async function visionTriage(
   let enrichedContext = "";
   try {
     const [siteExtra] = await sql`
-      SELECT brand_dna, location FROM businesses WHERE id = ${siteId}
+      SELECT location FROM businesses WHERE id = ${siteId}
     `;
     const parts: string[] = [];
-    const playbook = ((siteExtra?.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? {}) as Record<string, unknown>;
+    const playbookSynth = await getBrandPlaybookFromDescriptor(siteId);
+    const playbook = (playbookSynth as unknown as Record<string, unknown>) || {};
     const positioning = (playbook.brandPositioning || {}) as Record<string, unknown>;
     const angles = (positioning.selectedAngles || []) as Array<Record<string, unknown>>;
     const offerCore = (playbook.offerCore || {}) as Record<string, unknown>;

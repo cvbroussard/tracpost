@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import { getAdapter } from "@/lib/pipeline/adapters/registry";
 import { generateSuggestedReply } from "@/lib/inbox/ai-response";
 import type { FetchReviewsInput } from "@/lib/pipeline/adapters/types";
@@ -20,7 +21,7 @@ export async function syncReviews(siteId: string): Promise<number> {
 
   // Load site context once for auto-drafting
   const [site] = await sql`
-    SELECT name, brand_voice, brand_dna FROM businesses WHERE id = ${siteId}
+    SELECT name, brand_voice FROM businesses WHERE id = ${siteId}
   `;
 
   let totalAdded = 0;
@@ -104,7 +105,7 @@ export async function syncReviews(siteId: string): Promise<number> {
               reviewerName: review.reviewerName,
               siteName: site.name,
               brandVoice: site.brand_voice as Record<string, unknown> | null,
-              brandPlaybook: ((site.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null) as Record<string, unknown> | null,
+              brandPlaybook: (await getBrandPlaybookFromDescriptor(siteId)) as unknown as Record<string, unknown> | null,
             });
             await sql`
               UPDATE inbox_reviews

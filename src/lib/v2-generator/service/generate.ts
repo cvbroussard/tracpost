@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
-import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import {
   pullHook,
   getExistingTitles,
@@ -44,7 +44,7 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
     SELECT s.id, s.business_id, s.slug, s.name, s.description,
            s.hero_asset_id, s.poster_asset_id,
            s.service_areas, s.service_radius_miles,
-           businesses.name AS site_name, businesses.url AS site_url, businesses.brand_dna
+           businesses.name AS site_name, businesses.url AS site_url
     FROM services_v2 s
     JOIN businesses ON businesses.id = s.business_id
     WHERE s.id = ${spec.serviceId}
@@ -54,9 +54,10 @@ export async function generateServicePage(spec: ServiceGenerateSpec): Promise<Se
     throw new Error(`Service ${spec.serviceId} has no hero_asset_id`);
   }
 
-  const dna = (service.brand_dna || {}) as Record<string, unknown>;
-  const playbook = (dna.playbook as BrandPlaybook | null) || null;
-  const brandVoice = (dna.signals as Record<string, unknown> | null)?.voice as Record<string, unknown> || {};
+  // Phase B: playbook synthesized from brand_descriptor catalog. signals.voice
+  // gap accepted as empty until observed-voice substrate ships.
+  const playbook = await getBrandPlaybookFromDescriptor(service.business_id as string);
+  const brandVoice: Record<string, unknown> = {};
   const siteName = String(service.site_name || "");
   const siteUrl = String(service.site_url || "");
   const serviceAreas = Array.isArray(service.service_areas) ? (service.service_areas as string[]) : [];

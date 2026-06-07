@@ -7,6 +7,7 @@
  */
 import "server-only";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import { normalizePageConfig, type PageConfig } from "./page-config";
 
 export interface TenantTheme {
@@ -96,7 +97,7 @@ export async function loadTenantContext(siteSlug: string): Promise<TenantContext
   const [row] = await sql`
     SELECT s.id, s.name, s.blog_slug, s.business_type, s.location, s.url,
            s.business_phone, s.business_email, s.business_logo, s.business_favicon,
-           s.brand_dna, s.brand_assets, s.page_config, s.ga4_measurement_id, s.gsc_verification_token,
+           s.brand_assets, s.page_config, s.ga4_measurement_id, s.gsc_verification_token,
            bs.custom_domain, bs.theme
     FROM businesses s
     LEFT JOIN blog_settings bs ON bs.business_id = s.id
@@ -105,8 +106,9 @@ export async function loadTenantContext(siteSlug: string): Promise<TenantContext
 
   if (!row) return null;
 
-  // Extract tagline from the sharpened playbook's first selected angle — lives in brand_dna.playbook per Phase A retirement.
-  const playbook = (((row.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook) || {}) as Record<string, unknown>;
+  // Extract tagline from the synthesized playbook (catalog-driven per Phase B retirement).
+  const playbookSynth = await getBrandPlaybookFromDescriptor(row.id as string);
+  const playbook = (playbookSynth as unknown as Record<string, unknown>) || {};
   const positioning = (playbook.brandPositioning as Record<string, unknown>) || {};
   const angles = (positioning.selectedAngles as Array<Record<string, unknown>>) || [];
   const tagline = String(angles[0]?.tagline || "");

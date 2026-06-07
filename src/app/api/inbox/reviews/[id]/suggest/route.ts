@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthContext } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import { generateSuggestedReply } from "@/lib/inbox/ai-response";
 
 /**
@@ -20,7 +21,7 @@ export async function POST(
 
   // Load the review
   const [review] = await sql`
-    SELECT ir.*, s.name AS site_name, s.brand_voice, s.brand_dna
+    SELECT ir.*, s.name AS site_name, s.brand_voice
     FROM inbox_reviews ir
     JOIN businesses s ON s.id = ir.business_id
     WHERE ir.id = ${id} AND ir.billing_account_id = ${auth.subscriptionId}
@@ -42,7 +43,7 @@ export async function POST(
     reviewerName: review.reviewer_name,
     siteName: review.site_name,
     brandVoice: review.brand_voice,
-    brandPlaybook: (review.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null,
+    brandPlaybook: (await getBrandPlaybookFromDescriptor(review.business_id as string)) as unknown as Record<string, unknown> | null,
   });
 
   await sql`

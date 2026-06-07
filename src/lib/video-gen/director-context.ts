@@ -40,17 +40,17 @@ export async function gatherDirectorContext(
   assetId: string,
 ): Promise<DirectorContext | null> {
   const [asset] = await sql`
-    SELECT ma.storage_url, ma.ai_analysis, s.brand_dna
+    SELECT ma.storage_url, ma.ai_analysis
     FROM media_assets ma JOIN businesses s ON s.id = ma.business_id
     WHERE ma.id = ${assetId}
   `;
   if (!asset) return null;
 
-  // Brand tone lives at brand_dna.signals.voice.tone (v2 brand DNA shape).
-  const brandDna = (asset.brand_dna as Record<string, unknown> | null) || {};
-  const signals = (brandDna.signals as Record<string, unknown> | null) || {};
-  const voice = (signals.voice as Record<string, unknown> | null) || {};
-  const tone = typeof voice.tone === "string" ? (voice.tone as string) : null;
+  // Brand tone — Phase B gap per [[brand-dna-retirement]]: observed
+  // voice.tone fingerprint has no catalog equivalent yet. Will eventually
+  // come from public_presence_observation.verbal substrate or a future
+  // observed-voice pipeline.
+  const tone: string | null = null;
 
   const moveRows = await sql`
     SELECT DISTINCT render_settings->'director'->>'camera_move' AS move

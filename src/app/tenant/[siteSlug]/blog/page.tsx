@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { resolveBlogSiteBySlug, getBlogPosts, getCustomDomain, getFavicon } from "@/lib/blog";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import { generateHubSchema } from "@/lib/blog/schema";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
 import BlogAside from "@/components/blog/blog-aside";
@@ -53,7 +54,7 @@ export default async function HubPage({ params }: Props) {
   const [posts, blogSettings, siteRow, logoAsset] = await Promise.all([
     getBlogPosts(site.siteId, 20),
     sql`SELECT nav_links, theme FROM blog_settings WHERE business_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_dna, business_phone, business_email, business_logo, ga4_measurement_id, gsc_verification_token FROM businesses WHERE id = ${site.siteId}`,
+    sql`SELECT url, location, business_phone, business_email, business_logo, ga4_measurement_id, gsc_verification_token FROM businesses WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
       WHERE business_id = ${site.siteId}
@@ -89,8 +90,8 @@ export default async function HubPage({ params }: Props) {
         { label: "Blog", href: blogHubUrl(siteSlug, customDomain) },
       ];
 
-  // Playbook tagline for about text — read from brand_dna.playbook per Phase A retirement.
-  const playbook = (siteInfo.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null;
+  // Playbook tagline for about text — synthesized from brand_descriptor catalog per Phase B retirement.
+  const playbook = (await getBrandPlaybookFromDescriptor(site.siteId)) as Record<string, unknown> | null;
   const angles = (playbook?.brandPositioning as Record<string, unknown>)?.selectedAngles;
   const tagline = Array.isArray(angles) && angles[0]
     ? String((angles[0] as Record<string, unknown>).tagline || "")

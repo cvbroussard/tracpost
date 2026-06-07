@@ -9,6 +9,7 @@ import { sql } from "@/lib/db";
 import { generateBlogFromTopic } from "@/lib/pipeline/blog-generator";
 import { refreshSiteTheme } from "@/lib/blog-theme";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 
 /**
  * Seed the blog with initial content on enable.
@@ -28,12 +29,12 @@ export async function seedBlogContent(siteId: string): Promise<{
 
   // Load site data
   const [site] = await sql`
-    SELECT name, url, brand_dna, brand_voice
+    SELECT name, url, brand_voice
     FROM businesses WHERE id = ${siteId}
   `;
   if (!site) return { welcomePostId: null, queuedTopics: 0 };
 
-  const playbook = ((site.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
+  const playbook = await getBrandPlaybookFromDescriptor(siteId);
 
   // 1. Create welcome post from playbook data (no AI call)
   let welcomePostId: string | null = null;

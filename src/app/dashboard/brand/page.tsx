@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 
@@ -22,13 +23,13 @@ export default async function BrandPage() {
   if (!session.activeSiteId) redirect("/dashboard");
 
   const [site] = await sql`
-    SELECT name, brand_dna
+    SELECT name
     FROM businesses
     WHERE id = ${session.activeSiteId} AND billing_account_id = ${session.subscriptionId}
   `;
   if (!site) redirect("/dashboard");
 
-  const playbook = (site.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null;
+  const playbook = await getBrandPlaybookFromDescriptor(session.activeSiteId);
   const hasPlaybook = playbook && Object.keys(playbook).length > 0;
 
   return (

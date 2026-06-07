@@ -53,7 +53,7 @@ export default async function HubPage({ params }: Props) {
   const [posts, blogSettings, siteRow, logoAsset] = await Promise.all([
     getBlogPosts(site.siteId, 20),
     sql`SELECT nav_links, theme FROM blog_settings WHERE business_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo, ga4_measurement_id, gsc_verification_token FROM businesses WHERE id = ${site.siteId}`,
+    sql`SELECT url, location, brand_dna, business_phone, business_email, business_logo, ga4_measurement_id, gsc_verification_token FROM businesses WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
       WHERE business_id = ${site.siteId}
@@ -89,8 +89,8 @@ export default async function HubPage({ params }: Props) {
         { label: "Blog", href: blogHubUrl(siteSlug, customDomain) },
       ];
 
-  // Playbook tagline for about text
-  const playbook = siteInfo.brand_playbook as Record<string, unknown> | null;
+  // Playbook tagline for about text — read from brand_dna.playbook per Phase A retirement.
+  const playbook = (siteInfo.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null;
   const angles = (playbook?.brandPositioning as Record<string, unknown>)?.selectedAngles;
   const tagline = Array.isArray(angles) && angles[0]
     ? String((angles[0] as Record<string, unknown>).tagline || "")

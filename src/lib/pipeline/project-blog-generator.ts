@@ -269,13 +269,13 @@ export async function generateArticlePrompts(
   // The project is the subject matter; the site's business_type, content_vibe,
   // and playbook audience define the reader and the rhetorical stance.
   const [site] = await sql`
-    SELECT business_type, content_vibe, brand_playbook
+    SELECT business_type, content_vibe, brand_dna
     FROM businesses WHERE id = ${project.business_id}
   `;
 
   const businessType = (site?.business_type as string) || "business";
   const contentVibe = (site?.content_vibe as string) || "";
-  const playbook = (site?.brand_playbook || null) as Record<string, unknown> | null;
+  const playbook = ((site?.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null) as Record<string, unknown> | null;
   const currentState =
     ((playbook?.audienceResearch as Record<string, unknown>)?.transformationJourney as Record<string, unknown>)
       ?.currentState as string | undefined;

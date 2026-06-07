@@ -20,7 +20,7 @@ export async function POST(
 
   // Load the review
   const [review] = await sql`
-    SELECT ir.*, s.name AS site_name, s.brand_voice, s.brand_playbook
+    SELECT ir.*, s.name AS site_name, s.brand_voice, s.brand_dna
     FROM inbox_reviews ir
     JOIN businesses s ON s.id = ir.business_id
     WHERE ir.id = ${id} AND ir.billing_account_id = ${auth.subscriptionId}
@@ -42,7 +42,7 @@ export async function POST(
     reviewerName: review.reviewer_name,
     siteName: review.site_name,
     brandVoice: review.brand_voice,
-    brandPlaybook: review.brand_playbook,
+    brandPlaybook: (review.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null,
   });
 
   await sql`

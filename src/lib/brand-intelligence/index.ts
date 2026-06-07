@@ -1,3 +1,22 @@
+/*
+ * NOTE — Phase A retirement of brand_playbook (LOCKED 2026-06-07,
+ * see [[brand-playbook-retirement]]):
+ *
+ * This module's writes to the brand_playbook column are INTENTIONALLY LEFT
+ * BROKEN per the fail-aloud methodology. The column was tripwire-renamed to
+ * brand_playbook_legacy; any caller that exercises the wizard will get a
+ * 'column "brand_playbook" does not exist' SQL error and the failure surfaces
+ * loud.
+ *
+ * Per user direction (2026-06-07): the brand-intelligence wizard needs
+ * complete rewiring against the brand-identity catalog (the database-driven
+ * step-node methodology is preserved; the brand_playbook commit/read path is
+ * what's being replaced). The rewire happens when brand-identity catalog
+ * onboarding ships. Until then: the 5 brand_playbook writes below stay broken
+ * as a forcing function.
+ *
+ * Read sites in this file (lines ~112, ~180, ~256) are also broken.
+ */
 import { sql } from "@/lib/db";
 import { generateAudienceResearch } from "./research-generator";
 import { generateBrandAngles } from "./angles-generator";

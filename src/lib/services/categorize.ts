@@ -29,10 +29,10 @@ interface TenantSignals {
 
 async function gatherSignals(siteId: string): Promise<TenantSignals> {
   const [site] = await sql`
-    SELECT business_type, location, brand_playbook
+    SELECT business_type, location, brand_dna
     FROM businesses WHERE id = ${siteId}
   `;
-  const playbook = (site?.brand_playbook as BrandPlaybook | null) || null;
+  const playbook = (((site?.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null);
   const offerCore = playbook?.offerCore;
   const positioning = playbook?.brandPositioning;
   const tagline = positioning?.selectedAngles?.[0]?.tagline || null;

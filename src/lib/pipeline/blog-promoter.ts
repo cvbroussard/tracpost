@@ -103,7 +103,7 @@ export async function promoteBlogPost(blogPostId: string): Promise<PromotionResu
   const [post] = await sql`
     SELECT bp.id, bp.business_id, bp.title, bp.excerpt, bp.body, bp.tags,
            bp.og_image_url, bp.slug, bp.content_pillar,
-           s.name AS site_name, s.blog_slug, s.brand_playbook, s.brand_voice,
+           s.name AS site_name, s.blog_slug, s.brand_dna, s.brand_voice,
            bs.subdomain, bs.custom_domain
     FROM blog_posts bp
     JOIN businesses s ON s.id = bp.business_id
@@ -150,7 +150,7 @@ export async function promoteBlogPost(blogPostId: string): Promise<PromotionResu
   // Extract key takeaway from the article body for the caption prompt
   const keyTakeaway = await extractKeyTakeaway(post.title as string, (post.body as string) || "");
 
-  const playbook = post.brand_playbook as BrandPlaybook | null;
+  const playbook = ((post.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
   const promotionMeta: Record<string, unknown> = { posts: [] };
 
   // Map DB platform names to PLATFORM_CONFIG keys

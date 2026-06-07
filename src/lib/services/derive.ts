@@ -134,9 +134,10 @@ export async function deriveServicesForSite(
   opts: { force?: boolean } = {},
 ): Promise<{ created: number; skipped: boolean; reason?: string }> {
   const [site] = await sql`
-    SELECT business_type, brand_playbook FROM businesses WHERE id = ${siteId}
+    SELECT business_type, brand_dna FROM businesses WHERE id = ${siteId}
   `;
-  if (!site?.brand_playbook) {
+  const sitePlaybook = ((site?.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
+  if (!sitePlaybook) {
     return { created: 0, skipped: true, reason: "no playbook" };
   }
 
@@ -155,7 +156,7 @@ export async function deriveServicesForSite(
   }
 
   const services = await generateServices(
-    site.brand_playbook as BrandPlaybook,
+    sitePlaybook,
     (site.business_type as string) || null,
     anchors,
   );

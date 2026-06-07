@@ -3,6 +3,15 @@
  * No subscriber input needed — Claude researches everything independently.
  *
  * Called automatically after site creation during onboarding.
+ *
+ * NOTE — Phase A retirement of brand_playbook (LOCKED 2026-06-07,
+ * see [[brand-playbook-retirement]]):
+ *
+ * The 2 brand_playbook writes in this file (UPDATE businesses SET
+ * brand_playbook = ...) are INTENTIONALLY LEFT BROKEN per fail-aloud. Column
+ * was renamed to brand_playbook_legacy; calls will throw 'column does not
+ * exist'. Provisioning fails loud as a forcing function — rewire lands when
+ * brand-identity catalog onboarding ships.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";

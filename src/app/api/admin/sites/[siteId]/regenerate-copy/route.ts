@@ -27,17 +27,16 @@ export async function POST(
   }
 
   const [site] = await sql`
-    SELECT name, blog_slug, business_type, location, brand_playbook
+    SELECT name, blog_slug, business_type, location, brand_dna
     FROM businesses WHERE id = ${siteId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
-  if (!site.brand_playbook) {
+  const playbook = ((site.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null) as Record<string, unknown> | null;
+  if (!playbook) {
     return NextResponse.json({ error: "No brand playbook — sharpen first" }, { status: 400 });
   }
-
-  const playbook = site.brand_playbook as Record<string, unknown>;
   const positioning = (playbook.brandPositioning as Record<string, unknown>) || {};
   const angle = ((positioning.selectedAngles as Array<Record<string, unknown>>) || [])[0] || {};
   const audience = (playbook.audienceResearch as Record<string, unknown>) || {};

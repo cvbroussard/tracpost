@@ -55,8 +55,10 @@ export async function GET(req: NextRequest) {
       (SELECT COUNT(*)::int FROM blog_posts WHERE business_id = ${siteId}) AS total_posts
   `;
 
+  // Phase A retirement: brand_playbooks (plural) table was never created;
+  // the original code was dead. Check brand_dna.playbook envelope instead.
   const [playbook] = await sql`
-    SELECT id FROM brand_playbooks WHERE business_id = ${siteId} LIMIT 1
+    SELECT id FROM businesses WHERE id = ${siteId} AND (brand_dna->'playbook') IS NOT NULL LIMIT 1
   `.catch(() => [null]);
 
   const dirtyFields = (site.gbp_dirty_fields || []) as string[];

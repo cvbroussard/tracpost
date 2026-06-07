@@ -14,6 +14,14 @@
  * Generated once during playbook sharpening, stored on the site.
  * The system draws from them indefinitely to produce blog articles,
  * social posts, editorial images, and video content.
+ *
+ * NOTE — Phase A retirement of brand_playbook (LOCKED 2026-06-07,
+ * see [[brand-playbook-retirement]]):
+ *
+ * The brand_playbook SELECT on line ~44 is INTENTIONALLY LEFT BROKEN per
+ * fail-aloud. Calls will throw 'column does not exist'. The reward-prompt
+ * pipeline retires alongside Phase B [[brand-dna-retirement]] when
+ * brand_descriptor.declared replaces brand_dna.playbook as the source.
  */
 
 import Anthropic from "@anthropic-ai/sdk";

@@ -84,7 +84,7 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
     SELECT ma.id, ma.business_id, ma.storage_url, ma.context_note,
            ma.content_tags, ma.ai_analysis, ma.media_type,
            s.name AS site_name, s.url AS site_url, s.brand_voice,
-           s.brand_playbook, s.pillar_config,
+           s.brand_dna, s.pillar_config,
            bs.blog_enabled, bs.blog_title
     FROM media_assets ma
     JOIN businesses s ON ma.business_id = s.id
@@ -109,7 +109,7 @@ export async function generateBlogPost(assetId: string): Promise<string | null> 
   `;
   if (existing) return existing.id;
 
-  const playbook = asset.brand_playbook as BrandPlaybook | null;
+  const playbook = ((asset.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
   const brandVoice = (asset.brand_voice || {}) as Record<string, unknown>;
   const aiAnalysis = (asset.ai_analysis || {}) as Record<string, unknown>;
 
@@ -397,7 +397,7 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
   const [topic] = await sql`
     SELECT ct.id, ct.business_id, ct.title AS topic_title, ct.search_query,
            ct.intent, ct.pillar, ct.cluster,
-           s.name AS site_name, s.url AS site_url, s.brand_playbook
+           s.name AS site_name, s.url AS site_url, s.brand_dna
     FROM content_topics ct
     JOIN businesses s ON ct.business_id = s.id
     WHERE ct.id = ${topicId} AND ct.status = 'queued'
@@ -405,7 +405,7 @@ export async function generateBlogFromTopic(topicId: string): Promise<string | n
 
   if (!topic) return null;
 
-  const playbook = topic.brand_playbook as BrandPlaybook | null;
+  const playbook = ((topic.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
   if (!playbook) return null;
 
   // Pull a hook
@@ -1028,7 +1028,7 @@ export async function generateFromPairing(
 
   const [siteData] = await sql`
     SELECT s.id AS business_id, s.name AS site_name, s.url AS site_url,
-           s.brand_voice, s.brand_playbook, s.image_style, s.content_vibe,
+           s.brand_voice, s.brand_dna, s.image_style, s.content_vibe,
            s.video_ratio, s.inline_upload_count, s.inline_ai_count,
            bs.blog_enabled, bs.blog_title
     FROM businesses s
@@ -1043,7 +1043,7 @@ export async function generateFromPairing(
   `;
   if (existingPost) return existingPost.id;
 
-  const playbook = siteData.brand_playbook as BrandPlaybook | null;
+  const playbook = ((siteData.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
   if (!playbook) return null;
 
   // Hook from bank

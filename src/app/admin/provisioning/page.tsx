@@ -31,8 +31,8 @@ export default async function ProvisioningPage() {
       s.business_type,
       s.location,
       s.blog_slug,
-      s.brand_playbook,
-      s.brand_playbook IS NOT NULL AS has_playbook,
+      s.brand_dna,
+      (s.brand_dna->'playbook') IS NOT NULL AS has_playbook,
       s.provisioning_status,
       s.pillar_config,
       s.image_style,
@@ -76,7 +76,8 @@ export default async function ProvisioningPage() {
 
             // Generate profile kit if playbook exists
             let profileKit = null;
-            if (sub.has_playbook && sub.brand_playbook) {
+            const subPlaybook = (sub.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null;
+            if (sub.has_playbook && subPlaybook) {
               try {
                 profileKit = generateProfileKit({
                   siteName: sub.site_name as string,
@@ -84,7 +85,7 @@ export default async function ProvisioningPage() {
                   location: (sub.location as string) || "",
                   blogSlug: (sub.blog_slug as string) || "",
                   siteUrl: sub.site_url as string | null,
-                  playbook: sub.brand_playbook as unknown as BrandPlaybook,
+                  playbook: subPlaybook as unknown as BrandPlaybook,
                 });
               } catch {
                 // Kit generation failed — show without it

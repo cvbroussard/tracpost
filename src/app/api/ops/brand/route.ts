@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const [site] = await sql`
     SELECT s.id, s.name, s.url, s.business_type, s.location,
-           s.brand_playbook, s.brand_voice, s.content_vibe, s.image_style,
+           s.brand_dna, s.brand_voice, s.content_vibe, s.image_style,
            s.provisioning_status
     FROM businesses s
     WHERE s.id = ${siteId}
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
 
-  const playbook = (site.brand_playbook || {}) as Record<string, unknown>;
+  const playbook = (((site.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook) || {}) as Record<string, unknown>;
   const brandVoice = (site.brand_voice || {}) as Record<string, unknown>;
   const subscriberAngle = (brandVoice._subscriberAngle as string) || null;
 

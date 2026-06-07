@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import { revalidatePath } from "next/cache";
 import { generateWebsiteCopy } from "@/lib/tenant-site/copy-generator";
 
@@ -27,13 +28,13 @@ export async function POST(
   }
 
   const [site] = await sql`
-    SELECT name, blog_slug, business_type, location, brand_dna
+    SELECT name, blog_slug, business_type, location
     FROM businesses WHERE id = ${siteId}
   `;
   if (!site) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
-  const playbook = ((site.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null) as Record<string, unknown> | null;
+  const playbook = (await getBrandPlaybookFromDescriptor(siteId)) as unknown as Record<string, unknown> | null;
   if (!playbook) {
     return NextResponse.json({ error: "No brand playbook — sharpen first" }, { status: 400 });
   }

@@ -16,6 +16,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -134,9 +135,9 @@ export async function deriveServicesForSite(
   opts: { force?: boolean } = {},
 ): Promise<{ created: number; skipped: boolean; reason?: string }> {
   const [site] = await sql`
-    SELECT business_type, brand_dna FROM businesses WHERE id = ${siteId}
+    SELECT business_type FROM businesses WHERE id = ${siteId}
   `;
-  const sitePlaybook = ((site?.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
+  const sitePlaybook = await getBrandPlaybookFromDescriptor(siteId);
   if (!sitePlaybook) {
     return { created: 0, skipped: true, reason: "no playbook" };
   }

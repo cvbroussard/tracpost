@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 
 const anthropic = new Anthropic();
 const MODEL = "claude-haiku-4-5-20251001";
@@ -32,7 +33,16 @@ export interface RewardPrompt {
 }
 
 /**
- * Generate reward prompts for a site from its brand DNA.
+ * Generate reward prompts for a site.
+ *
+ * NOTE — Phase B retirement of brand_dna (LOCKED 2026-06-07,
+ * [[brand-dna-retirement]]):
+ *
+ * This generator's write to brand_dna.signals.reward_prompts is
+ * INTENTIONALLY LEFT BROKEN per fail-aloud — the column was tripwire-renamed
+ * to brand_dna_legacy. Reward prompts retire as a substrate kind under
+ * [[substrate-libraries-layer]] when the catalog grows that capability.
+ * Until then: calling this function throws 'column does not exist'.
  *
  * One Haiku call. Persists into sites.brand_dna.signals.reward_prompts
  * (extends the existing JSONB — no schema migration needed). Returns the
@@ -43,16 +53,15 @@ export interface RewardPrompt {
  */
 export async function generateRewardPrompts(siteId: string): Promise<RewardPrompt[]> {
   const [site] = await sql`
-    SELECT name, url, brand_dna
+    SELECT name, url
     FROM businesses
     WHERE id = ${siteId}
   `;
   if (!site) throw new Error(`Site ${siteId} not found`);
 
-  const dna = (site.brand_dna || {}) as Record<string, unknown>;
-  const playbook = (dna.playbook as BrandPlaybook | null) || null;
+  const playbook = await getBrandPlaybookFromDescriptor(siteId);
   if (!playbook) {
-    throw new Error(`Site ${siteId} has no brand_dna.playbook — generate Brand DNA first`);
+    throw new Error(`Site ${siteId} has no brand_descriptor catalog — declare brand identity first`);
   }
 
   const prompt = buildPrompt({
@@ -73,18 +82,12 @@ export async function generateRewardPrompts(siteId: string): Promise<RewardPromp
     throw new Error("LLM returned no parseable reward prompts");
   }
 
-  // Persist into dna.signals.reward_prompts (JSONB merge, additive)
-  const updatedDna = {
-    ...dna,
-    signals: {
-      ...((dna.signals as Record<string, unknown>) || {}),
-      reward_prompts: prompts,
-      reward_prompts_generated_at: new Date().toISOString(),
-    },
-  };
+  // Persist — INTENTIONALLY LEFT BROKEN (Phase B fail-aloud). brand_dna
+  // column was tripwire-renamed; this write throws 'column does not exist'.
+  // Replacement: reward_prompts substrate kind under [[substrate-libraries-layer]].
   await sql`
     UPDATE businesses
-    SET brand_dna = ${JSON.stringify(updatedDna)}::jsonb
+    SET brand_dna = ${JSON.stringify({ signals: { reward_prompts: prompts } })}::jsonb
     WHERE id = ${siteId}
   `;
 

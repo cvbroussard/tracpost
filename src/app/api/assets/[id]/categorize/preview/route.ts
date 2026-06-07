@@ -77,7 +77,7 @@ export async function POST(
         JOIN gbp_categories gc ON gc.gcid = sgc.gcid
         WHERE sgc.business_id = ${asset.business_id}
         ORDER BY sgc.is_primary DESC, gc.name`,
-    sql`SELECT pillar_config, brand_dna FROM businesses WHERE id = ${asset.business_id}`,
+    sql`SELECT pillar_config FROM businesses WHERE id = ${asset.business_id}`,
   ]);
 
   if (siteCategories.length === 0) {
@@ -88,10 +88,8 @@ export async function POST(
   }
 
   const pillarConfig = (siteRow[0]?.pillar_config || []) as PillarConfigEntry[];
-  const brandDna = siteRow[0]?.brand_dna as Record<string, unknown> | null;
-  const brandDnaDigest = brandDna
-    ? "Site brand DNA available — voice + positioning signals present"
-    : null;
+  // Phase B retirement: brand_dna column dropped; digest hint retires alongside.
+  const brandDnaDigest: string | null = null;
 
   // Resolve image URL (video poster fallback)
   let imageUrl = asset.storage_url as string;

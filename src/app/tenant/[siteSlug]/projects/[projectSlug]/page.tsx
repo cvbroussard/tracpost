@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ProjectTimeline } from "@/components/blog/project-timeline";
 import { resolveBlogSiteBySlug, getCustomDomain, getFavicon } from "@/lib/blog";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import BlogShell, { type BlogTheme, type NavLink } from "@/components/blog/blog-shell";
 import { ProjectDetailAside } from "@/components/blog/project-aside";
 import { projectsHubUrl, projectUrl, brandHubUrl, publicProjectUrl } from "@/lib/urls";
@@ -84,7 +85,7 @@ export default async function ProjectPage({ params }: Props) {
       LIMIT 1
     `,
     sql`SELECT nav_links, theme FROM blog_settings WHERE business_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_dna, business_phone, business_email, business_logo FROM businesses WHERE id = ${site.siteId}`,
+    sql`SELECT url, location, business_phone, business_email, business_logo FROM businesses WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
       WHERE business_id = ${site.siteId}
@@ -127,7 +128,7 @@ export default async function ProjectPage({ params }: Props) {
 
   const customDomain = await getCustomDomain(site.siteId);
 
-  const playbook = (siteInfo.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null;
+  const playbook = (await getBrandPlaybookFromDescriptor(site.siteId)) as Record<string, unknown> | null;
   const angles = (playbook?.brandPositioning as Record<string, unknown>)?.selectedAngles;
   const tagline = Array.isArray(angles) && angles[0]
     ? String((angles[0] as Record<string, unknown>).tagline || "")

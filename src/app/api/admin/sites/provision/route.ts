@@ -37,7 +37,12 @@ export async function POST(req: NextRequest) {
       WHERE id = ${siteId}
         AND (provisioning_status IN ('requested', 'in_progress') OR provisioning_status IS NULL)
         AND is_active = true
-      RETURNING id, name, business_type, location, url, (brand_dna->'playbook') IS NOT NULL AS has_playbook
+      RETURNING id, name, business_type, location, url, EXISTS(
+        SELECT 1 FROM brand_identity bi
+        JOIN brand_descriptor bd ON bd.brand_identity_id = bi.id
+        WHERE bi.business_id = businesses.id AND bi.is_primary = true AND bd.declared IS NOT NULL
+        LIMIT 1
+      ) AS has_playbook
     `;
     if (!site) {
       return NextResponse.json({ error: "Site not found or not in requested state" }, { status: 404 });

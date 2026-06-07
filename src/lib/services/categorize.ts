@@ -14,6 +14,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import type { CategorizationResult, GbpCategory } from "./types";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -29,10 +30,10 @@ interface TenantSignals {
 
 async function gatherSignals(siteId: string): Promise<TenantSignals> {
   const [site] = await sql`
-    SELECT business_type, location, brand_dna
+    SELECT business_type, location
     FROM businesses WHERE id = ${siteId}
   `;
-  const playbook = (((site?.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null);
+  const playbook = await getBrandPlaybookFromDescriptor(siteId);
   const offerCore = playbook?.offerCore;
   const positioning = playbook?.brandPositioning;
   const tagline = positioning?.selectedAngles?.[0]?.tagline || null;

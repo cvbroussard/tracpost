@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import {
   pullHook,
   getHookBankDepth,
@@ -75,16 +75,17 @@ export interface AssembledBlogPrompt {
  * paying for a generation.
  */
 export async function assembleBlogPrompt(spec: BlogGenerateSpec): Promise<AssembledBlogPrompt> {
-  // 1. Site context
+  // 1. Site context — playbook synthesized from brand_descriptor catalog
+  // per Phase B retirement. signals.voice has no catalog equivalent today
+  // (Phase B gap); empty until observed-voice substrate pipeline lands.
   const [site] = await sql`
-    SELECT name, url, brand_dna FROM businesses WHERE id = ${spec.siteId}
+    SELECT name, url FROM businesses WHERE id = ${spec.siteId}
   `;
   if (!site) throw new Error(`Site ${spec.siteId} not found`);
   const siteName = String(site.name || "");
   const siteUrl = String(site.url || "");
-  const dna = (site.brand_dna || {}) as Record<string, unknown>;
-  const playbook = (dna.playbook as BrandPlaybook | null) || null;
-  const brandVoice = (dna.signals as Record<string, unknown> | null)?.voice as Record<string, unknown> || {};
+  const playbook = await getBrandPlaybookFromDescriptor(spec.siteId);
+  const brandVoice: Record<string, unknown> = {};
 
   // 2. Resolve assets
   const assetIds = [spec.heroAssetId, ...(spec.bodyAssetIds || [])].filter(

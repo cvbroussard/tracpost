@@ -78,11 +78,11 @@ export async function assessBlogSite(siteId: string): Promise<BlogSiteAssessment
     .filter((id) => !usedIds.has(id))
     .slice(0, FRESH_ASSET_LIMIT);
 
-  // Reward prompts from brand_dna
-  const [siteRow] = await sql`SELECT brand_dna FROM businesses WHERE id = ${siteId}`;
-  const dna = (siteRow?.brand_dna || {}) as Record<string, unknown>;
-  const signals = (dna.signals as Record<string, unknown> | null) || {};
-  const rawPrompts = Array.isArray(signals.reward_prompts) ? signals.reward_prompts : [];
+  // Reward prompts — Phase B gap per [[brand-dna-retirement]]: brand_descriptor
+  // catalog has no equivalent for signals.reward_prompts yet. Empty until a
+  // reward_prompts substrate kind ships. v2-generator's reward-prompt strategy
+  // handles empty arrays as a no-op fallback.
+  const rawPrompts: unknown[] = [];
   const prompts = rawPrompts
     .filter((p): p is Record<string, unknown> => Boolean(p) && typeof p === "object")
     .map((p) => ({

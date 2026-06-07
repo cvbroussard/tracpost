@@ -2,6 +2,15 @@
  * POST /api/admin/brand-dna/sharpen
  * Body: { siteId, angle }
  *
+ * NOTE — Phase B retirement of brand_dna (LOCKED 2026-06-07,
+ * [[brand-dna-retirement]]):
+ *
+ * The brand_dna SELECT + UPDATE in this route are INTENTIONALLY LEFT BROKEN
+ * per fail-aloud. Column was renamed to brand_dna_legacy; the route throws
+ * 'column does not exist' on use. Sharpening retires alongside the
+ * brand-dna lib when nothing depends on this surface. The sharpen UX moves
+ * to the brand-identity catalog UI per [[brand-identity-layer-stack]].
+ *
  * Refines the cached Brand DNA around the subscriber's stated differentiator.
  * Reuses extracted signals (no Haiku re-run); regenerates only the playbook
  * with the angle prepended as highest-priority strategic input.

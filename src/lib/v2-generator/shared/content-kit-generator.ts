@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
 import type { ContentKit } from "../types";
 
@@ -28,14 +29,14 @@ export interface KitGenerateInput {
 }
 
 export async function generateContentKit(input: KitGenerateInput): Promise<ContentKit> {
-  // Pull DNA-derived brand context for voice continuity
+  // Phase B: playbook synthesized from brand_descriptor catalog.
+  // signals.voice gap accepted as empty.
   const [site] = await sql`
-    SELECT name, url, brand_dna FROM businesses WHERE id = ${input.siteId}
+    SELECT name, url FROM businesses WHERE id = ${input.siteId}
   `;
   if (!site) throw new Error(`Site ${input.siteId} not found for content_kit generation`);
-  const dna = (site.brand_dna || {}) as Record<string, unknown>;
-  const playbook = (dna.playbook as BrandPlaybook | null) || null;
-  const brandVoice = (dna.signals as Record<string, unknown> | null)?.voice as Record<string, unknown> || {};
+  const playbook = await getBrandPlaybookFromDescriptor(input.siteId);
+  const brandVoice: Record<string, unknown> = {};
 
   const prompt = buildKitPrompt({
     siteName: String(site.name || ""),

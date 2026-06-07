@@ -1,6 +1,7 @@
 import { isAdminRequest } from "@/lib/admin-session";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 
 /**
  * GET /api/ops/brand?site_id=xxx
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   const [site] = await sql`
     SELECT s.id, s.name, s.url, s.business_type, s.location,
-           s.brand_dna, s.brand_voice, s.content_vibe, s.image_style,
+           s.brand_voice, s.content_vibe, s.image_style,
            s.provisioning_status
     FROM businesses s
     WHERE s.id = ${siteId}
@@ -28,7 +29,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
 
-  const playbook = (((site.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook) || {}) as Record<string, unknown>;
+  const playbookSynth = await getBrandPlaybookFromDescriptor(siteId);
+  const playbook = (playbookSynth as unknown as Record<string, unknown>) || {};
   const brandVoice = (site.brand_voice || {}) as Record<string, unknown>;
   const subscriberAngle = (brandVoice._subscriberAngle as string) || null;
 

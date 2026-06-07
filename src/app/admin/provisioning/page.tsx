@@ -1,7 +1,7 @@
 import { sql } from "@/lib/db";
 import Link from "next/link";
 import { generateProfileKit } from "@/lib/provisioning/profile-kit";
-import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import { ProfileKitPanel } from "./profile-kit-panel";
 import { ProvisionActions } from "./provision-actions";
 import { AdminConnectButton } from "./admin-connect-button";
@@ -31,8 +31,12 @@ export default async function ProvisioningPage() {
       s.business_type,
       s.location,
       s.blog_slug,
-      s.brand_dna,
-      (s.brand_dna->'playbook') IS NOT NULL AS has_playbook,
+      EXISTS(
+        SELECT 1 FROM brand_identity bi
+        JOIN brand_descriptor bd ON bd.brand_identity_id = bi.id
+        WHERE bi.business_id = s.id AND bi.is_primary = true AND bd.declared IS NOT NULL
+        LIMIT 1
+      ) AS has_playbook,
       s.provisioning_status,
       s.pillar_config,
       s.image_style,
@@ -76,7 +80,7 @@ export default async function ProvisioningPage() {
 
             // Generate profile kit if playbook exists
             let profileKit = null;
-            const subPlaybook = (sub.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null;
+            const subPlaybook = await getBrandPlaybookFromDescriptor(sub.business_id as string);
             if (sub.has_playbook && subPlaybook) {
               try {
                 profileKit = generateProfileKit({
@@ -85,7 +89,7 @@ export default async function ProvisioningPage() {
                   location: (sub.location as string) || "",
                   blogSlug: (sub.blog_slug as string) || "",
                   siteUrl: sub.site_url as string | null,
-                  playbook: subPlaybook as unknown as BrandPlaybook,
+                  playbook: subPlaybook,
                 });
               } catch {
                 // Kit generation failed — show without it

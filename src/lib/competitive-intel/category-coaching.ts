@@ -423,7 +423,6 @@ export async function coachCategoriesForSite(siteId: string): Promise<CoachingRe
     SELECT
       s.id, s.name,
       s.gbp_profile->>'description' AS gbp_description,
-      s.brand_dna,
       ct.slug AS tier_slug,
       ct.label AS tier_label,
       (SELECT JSON_AGG(JSON_BUILD_OBJECT('gcid', gc.gcid, 'name', gc.name, 'isPrimary', sgc.is_primary))
@@ -461,7 +460,9 @@ export async function coachCategoriesForSite(siteId: string): Promise<CoachingRe
     siteName: site.name as string,
     currentCategories: (site.current_categories || []) as CoachingInputs["currentCategories"],
     gbpDescription: (site.gbp_description as string) || null,
-    brandDna: (site.brand_dna as Record<string, unknown>) || null,
+    // Phase B: brand_dna no longer exists; category-coaching gets null until
+    // it migrates to consume brand_descriptor.declared directly.
+    brandDna: null,
     analysis: payload,
     analysisId: cma.id as string,
   });

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { resolveBlogSiteBySlug, resolveBlogSite, getBlogPost, getBlogPosts, getCustomDomain, getFavicon } from "@/lib/blog";
 import { sql } from "@/lib/db";
+import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 import { generateArticleSchema } from "@/lib/blog/schema";
 import { autoLinkEntities } from "@/lib/blog/auto-linker";
 import { markdownToHtml } from "@/lib/blog/markdown";
@@ -92,7 +93,7 @@ export default async function ArticlePage({ params }: Props) {
   // Fetch shell data
   const [blogSettings, siteRow, logoAsset, allPosts] = await Promise.all([
     sql`SELECT nav_links, theme FROM blog_settings WHERE business_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_dna, business_phone, business_email, business_logo, ga4_measurement_id, gsc_verification_token FROM businesses WHERE id = ${site.siteId}`,
+    sql`SELECT url, location, business_phone, business_email, business_logo, ga4_measurement_id, gsc_verification_token FROM businesses WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
       WHERE business_id = ${site.siteId}
@@ -128,8 +129,8 @@ export default async function ArticlePage({ params }: Props) {
         { label: "Blog", href: blogHubUrl(siteSlug, customDomain) },
       ];
 
-  // Aside data — playbook lives in brand_dna.playbook per Phase A retirement.
-  const playbook = (siteInfo.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null;
+  // Aside data — playbook synthesized from brand_descriptor catalog per Phase B retirement.
+  const playbook = (await getBrandPlaybookFromDescriptor(site.siteId)) as Record<string, unknown> | null;
   const angles = (playbook?.brandPositioning as Record<string, unknown>)?.selectedAngles;
   const tagline = Array.isArray(angles) && angles[0]
     ? String((angles[0] as Record<string, unknown>).tagline || "")

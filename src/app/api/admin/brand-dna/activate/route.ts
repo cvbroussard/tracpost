@@ -6,13 +6,13 @@
  * Both brand_playbook and brand_dna remain stored — this is a pure flag flip.
  * Reversible at no cost.
  *
- * NOTE — Phase A retirement of brand_playbook (LOCKED 2026-06-07):
+ * NOTE — Phase A + Phase B retirements (LOCKED 2026-06-07):
  *
  * The parallel-storage architecture (brand_playbook + brand_dna gated by
- * active_brand_source flag) is being collapsed. Post Phase A, brand_dna is
- * the only source and active_brand_source is meaningless. This route
- * retires alongside [[brand-playbook-retirement]] cleanup steps when the
- * active_brand_source column is dropped.
+ * active_brand_source flag) is being collapsed. After both phases, neither
+ * column exists and active_brand_source is meaningless. brand_dna SELECT
+ * here is INTENTIONALLY LEFT BROKEN per fail-aloud. Route retires entirely
+ * once nothing calls it.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";

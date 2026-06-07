@@ -31,7 +31,9 @@ export type SubstrateKind =
   | "lexicon_axes"
   | "environmental_look_examples"
   | "subject_style_examples"
-  | "tagline_examples";
+  | "tagline_examples"
+  | "tone_effect_recommendation"
+  | "voice_source_character_recommendation";
 
 export interface GenerationMetadata {
   model: string;

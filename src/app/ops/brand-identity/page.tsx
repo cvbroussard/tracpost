@@ -75,6 +75,8 @@ interface DescriptorInput {
   // Kept in sync with src/lib/brand-identity/catalog.ts InputType union.
   // single_picker + multi_picker + example_set_picker + scaffolded_picker_matrix
   // + bool_toggle_overrides added 2026-06-06 per [[verbal-domain-decomposition]].
+  // synthesis_review added 2026-06-07 per [[tagline-decomposition]] follow-up
+  // — the locked-but-unbuilt primitive for tone.effect + voice_source.character.
   inputType:
     | "prose"
     | "list"
@@ -84,7 +86,8 @@ interface DescriptorInput {
     | "multi_picker"
     | "example_set_picker"
     | "scaffolded_picker_matrix"
-    | "bool_toggle_overrides";
+    | "bool_toggle_overrides"
+    | "synthesis_review";
   slotCount?: number;
   qualifier?: string;
   rows?: number;
@@ -3255,6 +3258,309 @@ function ExampleSetPickerEditor({
   );
 }
 
+/**
+ * Per-descriptor map of (substrate API endpoint, label). Adding a new
+ * synthesis_review descriptor (tone.effect, voice_source.character) means
+ * adding an entry here.
+ */
+const SYNTHESIS_REVIEW_SOURCES: Record<
+  string,
+  { endpoint: string; subjectLabel: string; inputsAreReadyLabel?: string }
+> = {
+  "tone.effect": {
+    endpoint: "/api/ops/brand-identity/tone-effect-recommendation",
+    subjectLabel: "audience effect",
+    inputsAreReadyLabel:
+      "Synthesis uses tone.attributes + tone.example + voice_source + audience profile + positioning. Confidence scales with how complete those upstream inputs are — fill them in for sharper suggestions.",
+  },
+  "voice_source.character": {
+    endpoint: "/api/ops/brand-identity/voice-source-character-recommendation",
+    subjectLabel: "character",
+    inputsAreReadyLabel:
+      "Synthesis uses voice_source.source + tone.attributes + tone.example + audience profile. Confidence scales with how complete those upstream inputs are — fill them in for sharper suggestions.",
+  },
+};
+
+interface SynthesisSuggestion {
+  id: string;
+  prose: string;
+  reasoning: string;
+  confidence: number;
+}
+
+interface SynthesisSubstrate {
+  suggestions: SynthesisSuggestion[];
+  meta: {
+    inputs_hash: string;
+    generated_at: string;
+    model: string;
+    prompt_version: string;
+  };
+}
+
+interface SynthesisDeclaredShape {
+  text?: string;
+  source_suggestion_id?: string | null;
+  reasoning?: string | null;
+  generated_from_inputs_hash?: string | null;
+}
+
+function confidenceLabel(c: number): { label: string; classes: string } {
+  if (c >= 0.8) return { label: "high confidence", classes: "text-emerald-700 dark:text-emerald-400" };
+  if (c >= 0.6) return { label: "medium confidence", classes: "text-foreground" };
+  return { label: "low confidence — check inputs", classes: "text-amber-700 dark:text-amber-400" };
+}
+
+/**
+ * synthesis_review editor: shared primitive for tone.effect + voice_source.character.
+ *
+ * Three states:
+ *   1. No substrate     → "Generate suggestions" button
+ *   2. Substrate, no    → render 3 cards; clicking "Use this" loads the prose
+ *      accepted text       into the editable textarea below
+ *   3. Accepted text    → textarea shows current declared; cards stay rendered
+ *                          with the source one marked ✓; owner can edit + Save
+ *                          or click a different card to swap
+ *
+ * Stored shape (in `value`):
+ *   { text, source_suggestion_id, reasoning, generated_from_inputs_hash }
+ *
+ * Per the locked discipline: the model PROPOSES; the owner APPROVES (or edits).
+ * The textarea ensures the final prose is owner-authored even when seeded by
+ * the model.
+ */
+function SynthesisReviewEditor({
+  descriptorInputPath,
+  siteId,
+  value,
+  onChange,
+  onBlur,
+}: {
+  descriptorInputPath: string;
+  siteId: string;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  onBlur: () => void;
+}) {
+  const source = SYNTHESIS_REVIEW_SOURCES[descriptorInputPath];
+  const [substrate, setSubstrate] = useState<SynthesisSubstrate | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const declared: SynthesisDeclaredShape =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as SynthesisDeclaredShape)
+      : {};
+  const acceptedText = typeof declared.text === "string" ? declared.text : "";
+  const acceptedSuggestionId =
+    typeof declared.source_suggestion_id === "string"
+      ? declared.source_suggestion_id
+      : null;
+
+  // Local draft so we don't onChange/onBlur the parent on every keystroke.
+  const [draft, setDraft] = useState<string>(acceptedText);
+  const [dirty, setDirty] = useState(false);
+
+  // Re-sync local draft when value changes from outside (e.g., picked a new card).
+  useEffect(() => {
+    setDraft(acceptedText);
+    setDirty(false);
+  }, [acceptedText]);
+
+  const refresh = useCallback(async () => {
+    if (!source) return;
+    try {
+      const r = await fetch(`${source.endpoint}?siteId=${siteId}`);
+      if (!r.ok) throw new Error(`API ${r.status}`);
+      const json = (await r.json()) as { suggestions: SynthesisSubstrate | null };
+      setSubstrate(json.suggestions ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId, source]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const generate = async () => {
+    if (!source) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const r = await fetch(source.endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId }),
+      });
+      const json = (await r.json()) as { persisted: boolean; reason?: string };
+      if (!r.ok || !json.persisted) {
+        setError(json.reason || `API ${r.status}`);
+        setGenerating(false);
+        return;
+      }
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const useSuggestion = (s: SynthesisSuggestion) => {
+    if (!substrate) return;
+    const next: SynthesisDeclaredShape = {
+      text: s.prose,
+      source_suggestion_id: s.id,
+      reasoning: s.reasoning,
+      generated_from_inputs_hash: substrate.meta.inputs_hash,
+    };
+    onChange(next);
+    onBlur();
+  };
+
+  const saveDraft = () => {
+    const trimmed = draft.trim();
+    if (trimmed.length === 0) {
+      // Clear declared if owner emptied the textarea.
+      onChange(null);
+      onBlur();
+      return;
+    }
+    const next: SynthesisDeclaredShape = {
+      ...declared,
+      text: trimmed,
+    };
+    onChange(next);
+    onBlur();
+    setDirty(false);
+  };
+
+  if (!source) {
+    return (
+      <p className="text-xs text-red-600">
+        synthesis_review source not configured for &quot;{descriptorInputPath}&quot;.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={generate}
+              disabled={generating}
+              className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[11px] font-medium text-foreground hover:bg-accent/20 disabled:opacity-50"
+            >
+              {generating
+                ? "Generating…"
+                : substrate
+                ? "Regenerate suggestions ⚙"
+                : "Generate suggestions ⚙"}
+            </button>
+            {substrate && (
+              <span className="text-[10px] text-muted">
+                Generated{" "}
+                {new Date(substrate.meta.generated_at).toLocaleString()}
+              </span>
+            )}
+          </div>
+          {source.inputsAreReadyLabel && !substrate && (
+            <p className="text-[10px] text-muted mt-1 max-w-md leading-relaxed">
+              {source.inputsAreReadyLabel}
+            </p>
+          )}
+        </div>
+        {error && <span className="text-[10px] text-red-600">{error}</span>}
+      </div>
+
+      {loading && <p className="text-xs text-muted">Loading suggestions…</p>}
+
+      {!loading && !substrate && !acceptedText && (
+        <p className="text-xs italic text-muted">
+          No suggestions generated yet. Click <em>Generate suggestions</em> above to scaffold
+          3 candidate &quot;{source.subjectLabel}&quot; statements.
+        </p>
+      )}
+
+      {substrate && (
+        <div className="space-y-2">
+          {substrate.suggestions.map((s) => {
+            const isSource = s.id === acceptedSuggestionId;
+            const conf = confidenceLabel(s.confidence);
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => useSuggestion(s)}
+                className={`w-full text-left rounded border p-3 transition-colors ${
+                  isSource
+                    ? "border-accent/60 bg-accent/10"
+                    : "border-border bg-card hover:bg-muted/20"
+                }`}
+              >
+                <div className="flex items-baseline justify-between gap-3 mb-1">
+                  <span className="text-[10px] uppercase tracking-wide text-muted">
+                    {s.id.replace("suggestion_", "Option ").toUpperCase()}
+                    <span className={`ml-2 normal-case ${conf.classes}`}>
+                      {conf.label} ({(s.confidence * 100).toFixed(0)}%)
+                    </span>
+                  </span>
+                  {isSource && (
+                    <span className="text-[10px] font-medium text-foreground">✓ Used</span>
+                  )}
+                </div>
+                <p className="text-xs leading-relaxed text-foreground">{s.prose}</p>
+                <p className="mt-1.5 text-[11px] italic leading-relaxed text-muted">
+                  Why: {s.reasoning}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {(substrate || acceptedText) && (
+        <div className="rounded border border-border bg-muted/20 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-wide text-muted font-medium">
+              Current {source.subjectLabel} {dirty && <span className="text-amber-700 dark:text-amber-400">— unsaved edits</span>}
+            </p>
+            <button
+              type="button"
+              onClick={saveDraft}
+              disabled={!dirty}
+              className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent/20 disabled:opacity-50 disabled:hover:bg-accent/10"
+            >
+              Save edits
+            </button>
+          </div>
+          <textarea
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setDirty(e.target.value.trim() !== acceptedText.trim());
+            }}
+            placeholder={
+              acceptedText
+                ? ""
+                : `Click a suggestion above to load it here, or type the ${source.subjectLabel} from scratch.`
+            }
+            rows={4}
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs leading-relaxed focus:border-accent focus:outline-none"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SinglePickerEditor({
   input,
   value,
@@ -4098,6 +4404,14 @@ function DescriptorCard({
                         ) : input.inputType === "bool_toggle_overrides" ? (
                           <BoolToggleOverridesEditor
                             descriptorKey={d.key}
+                            value={value}
+                            onChange={(next) => onChange({ ...obj, [input.key]: next })}
+                            onBlur={onBlur}
+                          />
+                        ) : input.inputType === "synthesis_review" ? (
+                          <SynthesisReviewEditor
+                            descriptorInputPath={`${d.key}.${input.key}`}
+                            siteId={siteId}
                             value={value}
                             onChange={(next) => onChange({ ...obj, [input.key]: next })}
                             onBlur={onBlur}

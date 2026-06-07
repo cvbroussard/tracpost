@@ -116,7 +116,8 @@ export type InputType =
   | "multi_picker"
   | "example_set_picker"
   | "scaffolded_picker_matrix"
-  | "bool_toggle_overrides";
+  | "bool_toggle_overrides"
+  | "synthesis_review";
 
 /**
  * Field within an angle section. Mirrors a single question in the owner's
@@ -318,6 +319,14 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
         rows: 4,
         required: true,
       },
+      {
+        key: "effect",
+        label: "Audience effect",
+        prompt:
+          "How should the audience FEEL after one exposure to your brand's voice? Read the 3 suggestions below — each derived from your tone attributes, voice source, audience pains, and the example you pasted. Pick the closest one, edit if needed, save. Synthesis-review pattern: model proposes, owner approves.",
+        inputType: "synthesis_review",
+        required: true,
+      },
     ],
   },
   {
@@ -389,6 +398,14 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
           "Operator role",
         ],
         allowCustom: true,
+      },
+      {
+        key: "character",
+        label: "Character",
+        prompt:
+          "WHO speaks for your brand — the personality, posture, and attitude behind the source class. Read the 3 suggestions below; each is a 2-4 sentence portrait derived from your source class + tone + audience. Pick the closest one, edit if needed, save. Synthesis-review pattern: model proposes, owner approves.",
+        inputType: "synthesis_review",
+        required: true,
       },
     ],
   },

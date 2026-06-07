@@ -1,38 +1,35 @@
 /**
- * Helper for reading the active brand source for a site.
+ * Helper for reading the brand playbook for a site.
  *
- * Currently the source of truth is sites.active_brand_source ∈ {'playbook', 'dna'}.
- * Default 'playbook' (existing behavior). When 'dna', returns sites.brand_dna.playbook.
+ * Returns brand_dna.playbook (the canonical playbook source per the 2026-05-06
+ * decision in [[brand-dna-roadmap]] and the Phase A retirement in
+ * [[brand-playbook-retirement]] LOCKED 2026-06-07). The legacy brand_playbook
+ * column has been tripwire-renamed to brand_playbook_legacy and is no longer
+ * read by any code path. The active_brand_source flag is now dead — also
+ * scheduled for drop after the watch window.
  *
- * Downstream consumers should call this instead of reading sites.brand_playbook
- * directly, so the toggle actually affects content generation.
- *
- * NOTE: Phase B sweep is intentionally deferred — most consumers still read
- * sites.brand_playbook directly during the exploratory stage. This helper
- * exists so we can swap them incrementally as confidence in DNA grows.
+ * Downstream consumers should keep calling this helper rather than reading
+ * brand_dna.playbook directly — it's the single read point for the playbook
+ * structure, which keeps Phase B ([[brand-dna-retirement]]) sweep small when
+ * brand_dna itself retires in favor of brand_descriptor.
  */
 import "server-only";
 import { sql } from "@/lib/db";
 
 export interface ActiveBrandPlaybook {
-  source: "playbook" | "dna";
+  /** Always "dna" post-Phase-A. Kept on the return shape so existing callers don't break. */
+  source: "dna";
   playbook: Record<string, unknown> | null;
 }
 
 export async function getActiveBrandPlaybook(siteId: string): Promise<ActiveBrandPlaybook> {
   const [row] = await sql`
-    SELECT brand_playbook, brand_dna, active_brand_source
+    SELECT brand_dna
     FROM businesses WHERE id = ${siteId}
   `;
-  if (!row) return { source: "playbook", playbook: null };
+  if (!row) return { source: "dna", playbook: null };
 
-  const source = (row.active_brand_source as "playbook" | "dna") || "playbook";
-  if (source === "dna") {
-    const dnaEnvelope = row.brand_dna as Record<string, unknown> | null;
-    const dnaPlaybook = dnaEnvelope?.playbook as Record<string, unknown> | null;
-    if (dnaPlaybook) return { source: "dna", playbook: dnaPlaybook };
-    // Fallback to playbook if DNA is somehow missing despite flag
-    return { source: "playbook", playbook: row.brand_playbook as Record<string, unknown> | null };
-  }
-  return { source: "playbook", playbook: row.brand_playbook as Record<string, unknown> | null };
+  const dnaEnvelope = row.brand_dna as Record<string, unknown> | null;
+  const dnaPlaybook = (dnaEnvelope?.playbook as Record<string, unknown> | null) ?? null;
+  return { source: "dna", playbook: dnaPlaybook };
 }

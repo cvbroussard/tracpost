@@ -22,13 +22,14 @@ export default async function BrandPage() {
   if (!session.activeSiteId) redirect("/dashboard");
 
   const [site] = await sql`
-    SELECT name, brand_playbook
+    SELECT name, brand_dna
     FROM businesses
     WHERE id = ${session.activeSiteId} AND billing_account_id = ${session.subscriptionId}
   `;
   if (!site) redirect("/dashboard");
 
-  const hasPlaybook = site.brand_playbook && Object.keys(site.brand_playbook as object).length > 0;
+  const playbook = (site.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null;
+  const hasPlaybook = playbook && Object.keys(playbook).length > 0;
 
   return (
     <div className="p-4">

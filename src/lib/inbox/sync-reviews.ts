@@ -20,7 +20,7 @@ export async function syncReviews(siteId: string): Promise<number> {
 
   // Load site context once for auto-drafting
   const [site] = await sql`
-    SELECT name, brand_voice, brand_playbook FROM businesses WHERE id = ${siteId}
+    SELECT name, brand_voice, brand_dna FROM businesses WHERE id = ${siteId}
   `;
 
   let totalAdded = 0;
@@ -104,7 +104,7 @@ export async function syncReviews(siteId: string): Promise<number> {
               reviewerName: review.reviewerName,
               siteName: site.name,
               brandVoice: site.brand_voice as Record<string, unknown> | null,
-              brandPlaybook: site.brand_playbook as Record<string, unknown> | null,
+              brandPlaybook: ((site.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null) as Record<string, unknown> | null,
             });
             await sql`
               UPDATE inbox_reviews

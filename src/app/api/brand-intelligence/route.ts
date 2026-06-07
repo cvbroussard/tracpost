@@ -26,6 +26,15 @@ import { autoGeneratePlaybook, refinePlaybook } from "@/lib/brand-intelligence/a
  *   start_research  — Submit onboarding input, kick off AI research
  *   select_angles   — Select brand angles, generate hooks
  *   rate_hooks      — Submit hook ratings, finalize playbook
+ *
+ * NOTE — Phase A retirement of brand_playbook (LOCKED 2026-06-07):
+ *
+ * This wizard route is INTENTIONALLY LEFT BROKEN per fail-aloud. The
+ * underlying wizard functions write to the brand_playbook column (renamed
+ * to brand_playbook_legacy), so any wizard action will throw 'column does
+ * not exist'. Per user direction: the step-node infrastructure is preserved;
+ * the brand-identity catalog provides the new declared layer; rewire lands
+ * when catalog onboarding ships.
  */
 export async function POST(req: NextRequest) {
   const authResult = await authenticateRequest(req);

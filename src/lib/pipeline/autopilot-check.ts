@@ -14,7 +14,7 @@ import { sql } from "@/lib/db";
 export async function checkAndActivateAutopilot(siteId: string): Promise<boolean> {
   const [site] = await sql`
     SELECT autopilot_enabled,
-           brand_playbook IS NOT NULL AS has_playbook,
+           (brand_dna->'playbook') IS NOT NULL AS has_playbook,
            metadata->'reward_prompts' IS NOT NULL AS has_prompts,
            jsonb_array_length(COALESCE(metadata->'reward_prompts', '[]'::jsonb)) AS prompt_count,
            metadata->>'autopilot_locked' AS autopilot_locked

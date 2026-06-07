@@ -12,6 +12,15 @@
  *
  * COST when fresh: 2 Haiku + 1 Sonnet (~$0.15)
  * COST when cached: 0
+ *
+ * NOTE — Phase A retirement of brand_playbook (LOCKED 2026-06-07):
+ *
+ * This route's entire purpose was comparing brand_playbook (baseline) vs
+ * brand_dna (v2 envelope). After Phase A retires the brand_playbook column,
+ * the comparison is meaningless — only brand_dna remains. SQL refs to
+ * brand_playbook here are INTENTIONALLY LEFT BROKEN per fail-aloud; the
+ * route retires entirely with /ops/brand UI when its UI surface is rewired
+ * for the brand-identity catalog era.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";

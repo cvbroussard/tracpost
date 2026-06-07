@@ -39,7 +39,7 @@ export default async function BrandsHubPage({ params }: Props) {
 
   const [blogSettings, siteRow, logoAsset, brands] = await Promise.all([
     sql`SELECT nav_links, theme FROM blog_settings WHERE business_id = ${site.siteId}`,
-    sql`SELECT url, location, brand_playbook, business_phone, business_email, business_logo FROM businesses WHERE id = ${site.siteId}`,
+    sql`SELECT url, location, brand_dna, business_phone, business_email, business_logo FROM businesses WHERE id = ${site.siteId}`,
     sql`
       SELECT storage_url FROM media_assets
       WHERE business_id = ${site.siteId}
@@ -82,7 +82,7 @@ export default async function BrandsHubPage({ params }: Props) {
     ? storedNavLinks
     : [...(websiteUrl ? [{ label: "Home", href: websiteUrl }] : [])];
 
-  const playbook = siteInfo.brand_playbook as Record<string, unknown> | null;
+  const playbook = (siteInfo.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null;
   const angles = (playbook?.brandPositioning as Record<string, unknown>)?.selectedAngles;
   const tagline = Array.isArray(angles) && angles[0]
     ? String((angles[0] as Record<string, unknown>).tagline || "")

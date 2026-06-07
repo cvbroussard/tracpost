@@ -254,10 +254,10 @@ async function visionTriage(
   let enrichedContext = "";
   try {
     const [siteExtra] = await sql`
-      SELECT brand_playbook, location FROM businesses WHERE id = ${siteId}
+      SELECT brand_dna, location FROM businesses WHERE id = ${siteId}
     `;
     const parts: string[] = [];
-    const playbook = (siteExtra?.brand_playbook || {}) as Record<string, unknown>;
+    const playbook = ((siteExtra?.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? {}) as Record<string, unknown>;
     const positioning = (playbook.brandPositioning || {}) as Record<string, unknown>;
     const angles = (positioning.selectedAngles || []) as Array<Record<string, unknown>>;
     const offerCore = (playbook.offerCore || {}) as Record<string, unknown>;

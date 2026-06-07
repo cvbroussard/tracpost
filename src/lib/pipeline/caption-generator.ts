@@ -96,7 +96,7 @@ export async function generateCaption({ postId }: CaptionRequest): Promise<Capti
     SELECT sp.id, sp.account_id, sp.content_pillar, sp.media_type, sp.slot_id,
            sa.platform, sa.account_name, ssl.business_id,
            s.name AS site_name, s.url AS site_url, s.brand_voice,
-           s.brand_playbook,
+           s.brand_dna,
            ma.context_note, ma.transcription, ma.ai_analysis, ma.metadata AS asset_metadata,
            ma.media_type AS asset_media_type, ma.source AS asset_source
     FROM social_posts sp
@@ -132,7 +132,7 @@ export async function generateCaption({ postId }: CaptionRequest): Promise<Capti
 
   const rules = PLATFORM_RULES[platformFormat] || PLATFORM_RULES.ig_feed;
   const brandVoice = (post.brand_voice || {}) as Record<string, unknown>;
-  const playbook = post.brand_playbook as BrandPlaybook | null;
+  const playbook = ((post.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
 
   // Pull a hook from the bank if playbook exists
   let hookText: string | undefined;
@@ -451,14 +451,14 @@ export async function composeAnchorCaption(opts: {
   const { siteId, platformFormat, anchor, hero, link } = opts;
 
   const [site] = await sql`
-    SELECT name, url, brand_voice, brand_playbook
+    SELECT name, url, brand_voice, brand_dna
     FROM businesses
     WHERE id = ${siteId}
   `;
   if (!site) throw new Error(`Site ${siteId} not found`);
 
   const rules = PLATFORM_RULES[platformFormat] || PLATFORM_RULES.ig_feed;
-  const playbook = site.brand_playbook as BrandPlaybook | null;
+  const playbook = ((site.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
   const brandVoice = (site.brand_voice || {}) as Record<string, unknown>;
 
   const prompt = buildAnchorPrompt({

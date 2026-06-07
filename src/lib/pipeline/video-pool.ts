@@ -84,7 +84,7 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
 
   // Load site config
   const [site] = await sql`
-    SELECT video_pool_config, brand_playbook, content_vibe
+    SELECT video_pool_config, brand_dna, content_vibe
     FROM businesses WHERE id = ${siteId}
   `;
   if (!site) return result;
@@ -178,7 +178,7 @@ export async function evaluateAndGenerate(siteId: string): Promise<VideoPoolResu
     const prompt = buildVideoPrompt(
       analysis,
       (candidate.context_note as string) || "",
-      (site.brand_playbook || null) as Record<string, unknown> | null,
+      ((site.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? null) as Record<string, unknown> | null,
       (site.content_vibe as string) || "",
       videoCorrections,
     );

@@ -56,7 +56,7 @@ export default async function DashboardLayout({
         WHERE ssl.business_id = ${siteId} AND sa.status = 'active'
       `,
       sql`
-        SELECT brand_playbook IS NOT NULL AS has_playbook, autopilot_enabled,
+        SELECT (brand_dna->'playbook') IS NOT NULL AS has_playbook, autopilot_enabled,
                provisioning_status, metadata, brand_voice
         FROM businesses WHERE id = ${siteId}
       `,

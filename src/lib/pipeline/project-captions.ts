@@ -225,7 +225,7 @@ export async function maybeGenerateArticlePrompts(projectId: string): Promise<bo
 
   // Check playbook exists
   const [site] = await sql`
-    SELECT brand_playbook IS NOT NULL AS has_playbook
+    SELECT (brand_dna->'playbook') IS NOT NULL AS has_playbook
     FROM businesses WHERE id = ${project.business_id}
   `;
   if (!site?.has_playbook) return false;
@@ -305,12 +305,12 @@ export interface GeneratedText {
  */
 async function loadEnrichedContext(siteId: string): Promise<string> {
   const [site] = await sql`
-    SELECT brand_playbook, location FROM businesses WHERE id = ${siteId}
+    SELECT brand_dna, location FROM businesses WHERE id = ${siteId}
   `;
   const parts: string[] = [];
 
-  // Brand playbook (the sharpened angle, promise, positioning)
-  const playbook = (site?.brand_playbook || {}) as Record<string, unknown>;
+  // Brand playbook (the sharpened angle, promise, positioning) — from brand_dna envelope per Phase A retirement.
+  const playbook = ((site?.brand_dna as { playbook?: Record<string, unknown> } | null)?.playbook ?? {}) as Record<string, unknown>;
   const positioning = (playbook.brandPositioning || {}) as Record<string, unknown>;
   const angles = (positioning.selectedAngles || []) as Array<Record<string, unknown>>;
   const offerCore = (playbook.offerCore || {}) as Record<string, unknown>;

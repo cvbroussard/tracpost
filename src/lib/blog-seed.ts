@@ -28,12 +28,12 @@ export async function seedBlogContent(siteId: string): Promise<{
 
   // Load site data
   const [site] = await sql`
-    SELECT name, url, brand_playbook, brand_voice
+    SELECT name, url, brand_dna, brand_voice
     FROM businesses WHERE id = ${siteId}
   `;
   if (!site) return { welcomePostId: null, queuedTopics: 0 };
 
-  const playbook = site.brand_playbook as BrandPlaybook | null;
+  const playbook = ((site.brand_dna as { playbook?: unknown } | null)?.playbook ?? null) as BrandPlaybook | null;
 
   // 1. Create welcome post from playbook data (no AI call)
   let welcomePostId: string | null = null;

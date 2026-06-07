@@ -2914,6 +2914,11 @@ const EXAMPLE_SET_PICKER_SOURCES: Record<
     inputsAreReadyLabel:
       "Generation uses your brand's source images + the public_presence_observation substrate. Run the Public Presence Analysis first for sharper context.",
   },
+  tagline: {
+    endpoint: "/api/ops/brand-identity/tagline-examples",
+    inputsAreReadyLabel:
+      "Generation uses positioning + tone + voice_source + audience + lexicon picks. The picker depends on POSITIONING — without it the candidates fall back to generic industry patterns. If Public Presence Analysis observed a tagline already in use, it'll be included verbatim as one of the 3 candidates.",
+  },
 };
 
 /**
@@ -2932,6 +2937,17 @@ interface NormalizedExample {
    * Undefined for text-only variants (mechanical_style).
    */
   reference_images?: { url: string; label: string }[];
+  /**
+   * Secondary line shown beneath primary_text — used by tagline rationale.
+   * Quieter typographic treatment.
+   */
+  subtext?: string;
+  /**
+   * Render kind. "tagline" emphasizes primary_text typographically (the
+   * short line IS the artifact, vs paragraph descriptors where primary_text
+   * is a longer body).
+   */
+  render_kind?: "default" | "tagline";
 }
 
 interface NormalizedExampleSubstrate {
@@ -2967,6 +2983,17 @@ function normalizeExampleSubstrate(raw: unknown): NormalizedExampleSubstrate | n
           id,
           short_label: typeof e.style_label === "string" ? e.style_label : id,
           primary_text: e.paragraph,
+        };
+      }
+
+      // tagline: { id, style_label, tagline, rationale, length_words }
+      if (typeof e.tagline === "string") {
+        return {
+          id,
+          short_label: typeof e.style_label === "string" ? e.style_label : id,
+          primary_text: e.tagline,
+          subtext: typeof e.rationale === "string" ? e.rationale : undefined,
+          render_kind: "tagline",
         };
       }
 
@@ -3019,12 +3046,34 @@ function ExampleSetPickerEditor({
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentSelectedId =
+  const valueObj =
     value && typeof value === "object" && !Array.isArray(value)
-      ? typeof (value as Record<string, unknown>).selected_example_id === "string"
-        ? ((value as Record<string, unknown>).selected_example_id as string)
-        : null
+      ? (value as Record<string, unknown>)
       : null;
+
+  const currentSelectedId =
+    valueObj && typeof valueObj.selected_example_id === "string"
+      ? (valueObj.selected_example_id as string)
+      : null;
+
+  /**
+   * Legacy declared text — populated by migrate-tagline-decomp-picker-shape.js
+   * when wrapping a pre-decomposition single-textarea string into the picker
+   * shape with selected_example_id="legacy". Surfaced as a separate banner
+   * above the picker so the owner sees their prior wording even before they
+   * click Generate. Once they generate, the substrate normally includes a
+   * "legacy" candidate card too (the generator preserves the id) — at that
+   * point the banner is redundant and we hide it.
+   */
+  const legacyDeclaredText =
+    currentSelectedId === "legacy" &&
+    typeof valueObj?.selected_example_text === "string"
+      ? (valueObj.selected_example_text as string).trim()
+      : null;
+  const substrateHasLegacyCard =
+    substrate?.examples.some((ex) => ex.id === "legacy") ?? false;
+  const showLegacyBanner =
+    legacyDeclaredText !== null && legacyDeclaredText.length > 0 && !substrateHasLegacyCard;
 
   const refresh = useCallback(async () => {
     if (!source) return;
@@ -3121,6 +3170,23 @@ function ExampleSetPickerEditor({
         {error && <span className="text-[10px] text-red-600">{error}</span>}
       </div>
 
+      {showLegacyBanner && (
+        <div className="rounded border border-amber-300/60 bg-amber-50/40 dark:bg-amber-900/10 px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-400 font-medium">
+            Your previous declaration
+          </p>
+          <p className="mt-0.5 text-xs text-foreground italic">
+            &ldquo;{legacyDeclaredText}&rdquo;
+          </p>
+          <p className="mt-1 text-[10px] leading-relaxed text-muted">
+            This is the tagline you wrote before this descriptor was decomposed. Click
+            <em> Generate examples</em> below — your prior wording will appear as one of the
+            candidates, alongside the brand&rsquo;s observed surface tagline (if any) and 3
+            fresh alternatives. You can keep it, swap to the observed line, or pick a fresh one.
+          </p>
+        </div>
+      )}
+
       {loading && <p className="text-xs text-muted">Loading examples…</p>}
 
       {!loading && !substrate && (
@@ -3168,7 +3234,18 @@ function ExampleSetPickerEditor({
                     ))}
                   </div>
                 )}
-                <p className="text-xs leading-relaxed text-foreground">{ex.primary_text}</p>
+                {ex.render_kind === "tagline" ? (
+                  <p className="text-base font-semibold leading-snug text-foreground">
+                    &ldquo;{ex.primary_text}&rdquo;
+                  </p>
+                ) : (
+                  <p className="text-xs leading-relaxed text-foreground">{ex.primary_text}</p>
+                )}
+                {ex.subtext && (
+                  <p className="mt-1.5 text-[11px] italic leading-relaxed text-muted">
+                    {ex.subtext}
+                  </p>
+                )}
               </button>
             );
           })}

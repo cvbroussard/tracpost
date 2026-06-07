@@ -418,11 +418,21 @@ export const BRAND_DESCRIPTOR_CATALOG: readonly DescriptorSpec[] = [
     domain: "verbal",
     label: "Tagline",
     describes:
-      "OPTIONAL. CREATIVE-OUTPUT descriptor: declared = THEMATIC DIRECTION + reference examples; extracted = the polished, sticky version that becomes the source of truth. Don't write a flat statement to avoid anchoring — that STRIPS signal. Instead: name the themes/imagery/virtues you'd want the tagline to carry, paste past attempts as REFERENCE (not prescriptions — say 'don't reuse these phrasings'), and add a length constraint. Strong taglines: SHORT (3-7 words), STICKY (verb with weight, rhythm, inversion, unusual word). Distinct from positioning — positioning EXPLAINS the wedge; tagline COMPRESSES it. Leave empty if you have no thematic direction at all.",
-    media: ["text"],
+      "The compressed, sticky form of the brand's positioning — 3-7 words a customer can remember after one exposure. Distinct from positioning: positioning EXPLAINS the wedge; tagline COMPRESSES it. Picker pattern locked 2026-06-07: the system generates 3 tagline candidates from positioning + tone + voice + audience + lexicon, occupying different sticky-tagline patterns (anti-establishment / diagnostic-authority / audience-anchored / craft-quiet / outcome-declarative / inversion). If Public Presence Analysis observed a tagline already in use on the brand's surfaces, that observed line is included verbatim as one of the 3 candidates labelled 'incumbent'. Owner picks one; can Request Alternative for a regeneration. Strong taglines: short, sticky (verb with weight, rhythm, inversion, unusual word). Depends on positioning being declared first — without positioning the generator falls back to industry-default patterns (Luma failure mode).",
+    media: ["text", "extracted"],
     lean: "declared",
     override: "flexible",
     phase: 4,
+    inputs: [
+      {
+        key: "selected_example",
+        label: "Tagline",
+        prompt:
+          "Read the 3 candidates below and pick the one that sounds most like the line you'd want a customer to remember. Each occupies a different sticky-tagline pattern — pick by ear (does it sound like the brand?) rather than by abstract criteria.",
+        inputType: "example_set_picker",
+        required: true,
+      },
+    ],
   },
 
   // ── Strategic — feeds angle selection, what-to-say ───────────────────────

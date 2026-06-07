@@ -30,7 +30,8 @@ export type SubstrateKind =
   | "mechanical_style_examples"
   | "lexicon_axes"
   | "environmental_look_examples"
-  | "subject_style_examples";
+  | "subject_style_examples"
+  | "tagline_examples";
 
 export interface GenerationMetadata {
   model: string;

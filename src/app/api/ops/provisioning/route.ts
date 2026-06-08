@@ -1,18 +1,61 @@
 import { isAdminRequest } from "@/lib/admin-session";
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { recomputeBrandExtractionStatus } from "@/lib/provisioning/brand-extraction-status";
 
 /**
- * GET /api/ops/provisioning?subscriber_id=xxx
+ * GET /api/ops/provisioning?subscriber_id=xxx[&site_id=yyy]
  * Returns provisioning task pipeline for a subscriber.
+ *
+ * Brand Extraction sub_task + task statuses are recomputed from
+ * catalog / substrate / CMA / readiness-resolution state on every load.
+ * Sub-task table is DERIVED — recompute is the single source of truth.
+ *
+ * Business resolution: if `site_id` is supplied, recompute targets that
+ * business directly (matches what the operator selected in the manage
+ * shell). Otherwise falls back to the subscriber's earliest-created
+ * active business. The fallback is wrong for multi-business subscriptions
+ * — callers should pass site_id whenever they have one.
  */
 export async function GET(req: NextRequest) {
   if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const subscriberId = new URL(req.url).searchParams.get("subscriber_id");
+  const url = new URL(req.url);
+  const subscriberId = url.searchParams.get("subscriber_id");
+  const explicitSiteId = url.searchParams.get("site_id");
   if (!subscriberId) return NextResponse.json({ error: "subscriber_id required" }, { status: 400 });
+
+  // Resolve which business to recompute. Prefer the explicit site_id from
+  // the manage shell; fall back to "earliest created" for callers that
+  // didn't pass one. Non-fatal if recompute fails — we still serve whatever's
+  // in the table.
+  let businessId: string | null = null;
+  if (explicitSiteId && explicitSiteId !== "all") {
+    // Validate it belongs to this subscriber
+    const [row] = await sql`
+      SELECT id FROM businesses
+      WHERE id = ${explicitSiteId} AND billing_account_id = ${subscriberId} AND is_active = true
+      LIMIT 1
+    `;
+    businessId = row ? (row.id as string) : null;
+  }
+  if (!businessId) {
+    const [siteRow] = await sql`
+      SELECT id FROM businesses
+      WHERE billing_account_id = ${subscriberId} AND is_active = true
+      ORDER BY created_at ASC LIMIT 1
+    `;
+    businessId = siteRow ? (siteRow.id as string) : null;
+  }
+  if (businessId) {
+    try {
+      await recomputeBrandExtractionStatus(businessId);
+    } catch (e) {
+      console.error("brand extraction recompute failed:", e);
+    }
+  }
 
   const tasks = await sql`
     SELECT id, task_key, title, owner, depends_on, status, milestone,
@@ -55,7 +98,7 @@ export async function GET(req: NextRequest) {
   const completedCount = enriched.filter(t => (t as Record<string, unknown>).status === "complete").length;
   const totalCount = enriched.length;
 
-  return NextResponse.json({ tasks: enriched, completedCount, totalCount });
+  return NextResponse.json({ tasks: enriched, completedCount, totalCount, businessId });
 }
 
 /**

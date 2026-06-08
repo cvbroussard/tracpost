@@ -22,11 +22,26 @@ interface ObservationProbe {
   observation: { id: string; updatedAt: string } | null;
 }
 
+/** Per-finding lifecycle from server. Mirrors lib/FindingLifecycle but
+ *  uses Record-keyed shape from the API. See [[ppa-cma-recurring-quality-gate]]. */
+interface FindingLifecycleDTO {
+  findingId: string;
+  appearedInRuns: number[];
+  firstSeenInRun: number;
+  lastSeenInRun: number;
+  clearedInLatestRun: boolean;
+  regressed: boolean;
+  resolution: FindingResolutionDTO | null;
+  resolvedButReappeared: boolean;
+}
+
 interface FindingsApiResponse {
   findings: ReadinessFindingsPayload | null;
   findingsSubstrateId: string | null;
   updatedAt: string | null;
   resolutions: Record<string, FindingResolutionDTO>;
+  lifecycle: Record<string, FindingLifecycleDTO>;
+  latestRunNumber: number | null;
 }
 
 const SEVERITY_ORDER: FindingSeverity[] = ["blocking", "refinement", "informational"];
@@ -72,6 +87,8 @@ function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
   const [findingsSubstrateId, setFindingsSubstrateId] = useState<string | null>(null);
   const [findingsUpdatedAt, setFindingsUpdatedAt] = useState<string | null>(null);
   const [resolutions, setResolutions] = useState<Record<string, FindingResolutionDTO>>({});
+  const [lifecycle, setLifecycle] = useState<Record<string, FindingLifecycleDTO>>({});
+  const [latestRunNumber, setLatestRunNumber] = useState<number | null>(null);
   const [observationId, setObservationId] = useState<string | null>(null);
   const [observationUpdatedAt, setObservationUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,6 +110,8 @@ function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
       setFindingsSubstrateId(findingsJson.findingsSubstrateId);
       setFindingsUpdatedAt(findingsJson.updatedAt);
       setResolutions(findingsJson.resolutions ?? {});
+      setLifecycle(findingsJson.lifecycle ?? {});
+      setLatestRunNumber(findingsJson.latestRunNumber ?? null);
       setObservationId(observationJson.observation?.id ?? null);
       setObservationUpdatedAt(observationJson.observation?.updatedAt ?? null);
     } catch (e) {
@@ -206,6 +225,8 @@ function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
                     severity={sev}
                     findings={filtered}
                     resolutions={resolutions}
+                    lifecycle={lifecycle}
+                    latestRunNumber={latestRunNumber}
                     siteId={siteId}
                     findingsSubstrateId={findingsSubstrateId}
                     onResolved={recordResolution}
@@ -276,12 +297,19 @@ function GenerateControls({
   onGenerate: () => void;
 }) {
   const handleClick = () => {
+    // Per [[ppa-cma-recurring-quality-gate]] step 2: finding IDs are now
+    // deterministic UUIDs (uuidv5(descriptor_key + canonical observation,
+    // brand_uuid)). Regenerating preserves the same UUIDs for the same
+    // content, so resolutions auto-carry-forward to matching findings in
+    // the new run. The old "orphans resolutions" warning was based on
+    // random UUIDs and is no longer accurate.
     if (
       findings &&
       hasAnyResolutions &&
       !window.confirm(
-        "Regenerating findings will assign new finding IDs, which orphans your existing resolutions. " +
-          "Resolutions will not be visible against the new finding set. Continue?",
+        "Regenerate findings? This creates a new run. Resolutions you've already set will carry forward " +
+          "automatically when the same finding re-appears (deterministic IDs). New findings that appear in " +
+          "this run will be unresolved. Continue?",
       )
     ) {
       return;
@@ -399,6 +427,8 @@ function SeverityGroup({
   severity,
   findings,
   resolutions,
+  lifecycle,
+  latestRunNumber,
   siteId,
   findingsSubstrateId,
   onResolved,
@@ -406,6 +436,8 @@ function SeverityGroup({
   severity: FindingSeverity;
   findings: ReadinessFinding[];
   resolutions: Record<string, FindingResolutionDTO>;
+  lifecycle: Record<string, FindingLifecycleDTO>;
+  latestRunNumber: number | null;
   siteId: string;
   findingsSubstrateId: string;
   onResolved: ResolutionHandler;
@@ -422,6 +454,8 @@ function SeverityGroup({
             key={f.id}
             finding={f}
             resolution={resolutions[f.id] ?? null}
+            lifecycle={lifecycle[f.id] ?? null}
+            latestRunNumber={latestRunNumber}
             siteId={siteId}
             findingsSubstrateId={findingsSubstrateId}
             onResolved={onResolved}
@@ -435,22 +469,48 @@ function SeverityGroup({
 function FindingCard({
   finding,
   resolution,
+  lifecycle,
+  latestRunNumber,
   siteId,
   findingsSubstrateId,
   onResolved,
 }: {
   finding: ReadinessFinding;
   resolution: FindingResolutionDTO | null;
+  lifecycle: FindingLifecycleDTO | null;
+  latestRunNumber: number | null;
   siteId: string;
   findingsSubstrateId: string;
   onResolved: ResolutionHandler;
 }) {
   const isResolved = resolution !== null;
   const cardOpacity = isResolved ? "opacity-75" : "";
+  // Lifecycle signals — surfaced per [[ppa-cma-recurring-quality-gate]]:
+  // 1. Carried forward (resolution from a prior run still applies in current)
+  // 2. Persisted across runs (finding appeared in multiple consecutive runs)
+  // 3. Regressed (finding cleared in some run, then came back)
+  // 4. Resolved-but-reappeared (operator marked resolved, diagnostic still surfaces it — highest-priority alert)
+  const showCarriedForward =
+    !!lifecycle &&
+    !!resolution &&
+    lifecycle.appearedInRuns.length > 1 &&
+    !lifecycle.resolvedButReappeared;
+  const showPersisted =
+    !!lifecycle &&
+    lifecycle.appearedInRuns.length > 1 &&
+    !resolution &&
+    !lifecycle.regressed;
+  const showRegressed = !!lifecycle?.regressed;
+  const showResolvedReappeared = !!lifecycle?.resolvedButReappeared;
+  const runBadgeText = lifecycle
+    ? lifecycle.appearedInRuns.length === 1
+      ? `Run ${lifecycle.firstSeenInRun}`
+      : `Runs ${lifecycle.firstSeenInRun}–${lifecycle.lastSeenInRun}`
+    : null;
   return (
     <div className={`rounded border border-border bg-card p-3 space-y-2 transition-opacity ${cardOpacity}`}>
       <div className="flex items-baseline justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span
             className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${SEVERITY_COLORS[finding.severity]}`}
           >
@@ -462,6 +522,43 @@ function FindingCard({
               title={`Set ${new Date(resolution.resolvedAt).toLocaleString()}`}
             >
               ✓ {RESOLUTION_LABEL[resolution.status]}
+            </span>
+          )}
+          {showResolvedReappeared && (
+            <span
+              className="inline-flex items-center rounded-full border border-red-500/60 bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-300"
+              title="Operator marked resolved, but diagnostic re-surfaces this finding"
+            >
+              ⚠ Resolved but reappeared
+            </span>
+          )}
+          {showRegressed && !showResolvedReappeared && (
+            <span
+              className="inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+              title={`Cleared at some point, then reappeared (appearances: runs ${lifecycle?.appearedInRuns.join(", ")})`}
+            >
+              ↻ Regressed
+            </span>
+          )}
+          {showCarriedForward && (
+            <span
+              className="inline-flex items-center rounded-full border border-green-500/40 bg-green-500/10 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-300"
+              title="Resolution from prior run still applies"
+            >
+              ✓ Carried forward
+            </span>
+          )}
+          {showPersisted && (
+            <span
+              className="inline-flex items-center rounded-full border border-slate-500/40 bg-slate-500/10 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300"
+              title={`Still surfacing across ${lifecycle?.appearedInRuns.length} consecutive runs`}
+            >
+              ⊙ Persistent
+            </span>
+          )}
+          {runBadgeText && (
+            <span className="text-[10px] text-muted/70 font-mono" title={`Substrate runs: ${lifecycle?.appearedInRuns.join(", ")} · latest overall: ${latestRunNumber ?? "?"}`}>
+              {runBadgeText}
             </span>
           )}
         </div>

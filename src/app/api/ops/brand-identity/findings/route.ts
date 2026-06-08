@@ -16,7 +16,10 @@ import {
   getReadinessFindingsWithId,
   getReadinessFindingsUpdatedAt,
 } from "@/lib/brand-identity/readiness-findings-consolidator";
-import { getFindingResolutions } from "@/lib/brand-identity/readiness-finding-resolutions";
+import {
+  getFindingResolutions,
+  computeFindingLifecycle,
+} from "@/lib/brand-identity/readiness-finding-resolutions";
 
 export async function GET(req: NextRequest) {
   if (!(await isAdminRequest())) {
@@ -26,16 +29,22 @@ export async function GET(req: NextRequest) {
   if (!siteId) {
     return NextResponse.json({ error: "siteId required" }, { status: 400 });
   }
-  const [row, updatedAt, resolutions] = await Promise.all([
+  const [row, updatedAt, resolutions, lifecycle] = await Promise.all([
     getReadinessFindingsWithId(siteId),
     getReadinessFindingsUpdatedAt(siteId),
     getFindingResolutions(siteId),
+    computeFindingLifecycle(siteId),
   ]);
+  // Re-key lifecycle entries by finding_id for O(1) UI lookups.
+  const lifecycleByFindingId: Record<string, typeof lifecycle.lifecycles[number]> = {};
+  for (const lc of lifecycle.lifecycles) lifecycleByFindingId[lc.findingId] = lc;
   return NextResponse.json({
     findings: row?.payload ?? null,
     findingsSubstrateId: row?.id ?? null,
     updatedAt,
     resolutions,
+    lifecycle: lifecycleByFindingId,
+    latestRunNumber: lifecycle.latestRunNumber,
   });
 }
 

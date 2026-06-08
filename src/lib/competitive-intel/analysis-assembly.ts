@@ -189,15 +189,40 @@ export interface AssemblyOptions {
  * fetching anything (idempotency + progress visibility). On success,
  * marks complete with the assembled payload. On failure, marks failed
  * with the error message — keeps the row for diagnostic visibility.
+ *
+ * Per [[ppa-cma-recurring-quality-gate]]: each run gets a run_number
+ * (computed as MAX+1 for this business) and a run_purpose (caller-specified:
+ * 'diagnostic' for the first measurement, 'verification' for a re-run after
+ * catalog/website work, 'ad_hoc' for operator-triggered exploration). The
+ * catalog snapshot timestamp captures "what state of the catalog was this
+ * measurement against" — enables the diff/improvement signal between runs.
  */
 export async function runAnalysisForSite(
   siteId: string,
-  opts: AssemblyOptions = {},
+  opts: AssemblyOptions & { runPurpose?: "diagnostic" | "verification" | "ad_hoc" } = {},
 ): Promise<AssemblyResult> {
-  // Insert a running row up front
+  const runPurpose = opts.runPurpose ?? "ad_hoc";
+
+  // Snapshot the catalog state at trigger time — most-recent updated_at
+  // across the brand's substrate rows. Null if no substrate exists yet.
+  const [catalogSnap] = await sql`
+    SELECT MAX(updated_at) AS catalog_snapshot_at
+    FROM business_substrate
+    WHERE business_id = ${siteId}
+  `.catch(() => [{ catalog_snapshot_at: null }]);
+  const catalogSnapshotAt = (catalogSnap?.catalog_snapshot_at as Date | null) ?? null;
+
+  // Insert a running row up front, computing run_number = MAX+1.
   const [row] = await sql`
-    INSERT INTO competitive_market_analyses (business_id, status)
-    VALUES (${siteId}, 'running')
+    INSERT INTO competitive_market_analyses
+      (business_id, status, run_number, run_purpose, catalog_snapshot_at)
+    VALUES (
+      ${siteId},
+      'running',
+      COALESCE((SELECT MAX(run_number) FROM competitive_market_analyses WHERE business_id = ${siteId}), 0) + 1,
+      ${runPurpose},
+      ${catalogSnapshotAt}
+    )
     RETURNING id
   `;
   const analysisId = row.id as string;

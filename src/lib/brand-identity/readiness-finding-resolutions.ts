@@ -7,10 +7,17 @@
  * external/inconsistency findings where the prompt asks "what was behind that
  * choice?"
  *
- * Resolutions are tied to (business_id, finding_id). Finding ids are
- * regenerated per consolidation run, so regenerating findings orphans
- * existing resolutions; the UI surfaces a warning before regenerating.
- * Signature-based resolution preservation is deferred to v2.
+ * Resolutions are tied to (business_id, finding_id). Per
+ * [[ppa-cma-recurring-quality-gate]] step 2, finding_ids are now DETERMINISTIC
+ * UUIDs derived from `descriptor_key + canonical(observation)`. This means
+ * carry-forward across regenerations is AUTOMATIC: when a new findings run
+ * lands and surfaces the same finding (same content) again, the deterministic
+ * UUID matches the existing resolution row — the resolution stays in effect.
+ *
+ * The `findings_substrate_id` column stores the substrate row id of the run
+ * in which the operator first resolved the finding; it doesn't get updated
+ * on subsequent regenerations. Read-side lifecycle helpers join across runs
+ * to compute "first seen / resolved in / last seen" state at query time.
  */
 import "server-only";
 import { randomUUID } from "crypto";
@@ -77,6 +84,123 @@ export async function clearFindingResolution(args: {
     WHERE business_id = ${businessId} AND finding_id = ${findingId}
   `;
   return { cleared: r.length > 0 || (r as { count?: number }).count !== undefined };
+}
+
+/**
+ * Per-finding lifecycle entry. Computed from joining substrate run history
+ * with resolutions on the deterministic finding_id. Feeds the operator-facing
+ * "did the catalog work close findings?" view per [[ppa-cma-recurring-quality-gate]].
+ */
+export interface FindingLifecycle {
+  findingId: string;
+  /** Run numbers (across all readiness_findings substrate runs) in which this
+   *  finding appeared. Ascending. Length > 1 means the finding persisted
+   *  across regenerations. A gap means it disappeared in some run and may
+   *  have come back (regression). */
+  appearedInRuns: number[];
+  /** First substrate run that surfaced this finding. */
+  firstSeenInRun: number;
+  /** Latest substrate run that surfaced this finding. If < the latest overall
+   *  run for this brand, the finding CLEARED in a more recent run (success). */
+  lastSeenInRun: number;
+  /** True if `lastSeenInRun` < the brand's latest readiness_findings run —
+   *  i.e., the finding no longer appears in the latest set. */
+  clearedInLatestRun: boolean;
+  /** True if the finding has a "gap" in its run history — appeared, disappeared,
+   *  then came back. Strong signal of regression. */
+  regressed: boolean;
+  /** Resolution row if the operator ever resolved this finding; null otherwise. */
+  resolution: FindingResolution | null;
+  /** True if a resolution exists AND the finding has reappeared after it.
+   *  Distinct from `regressed` — this is "we thought it was done, but the
+   *  diagnostic still surfaces it." Highest-priority signal for operators. */
+  resolvedButReappeared: boolean;
+}
+
+/**
+ * Compute per-finding lifecycle across all readiness_findings substrate runs
+ * for a brand. Joins substrate run payloads with resolution rows by the
+ * deterministic finding_id. Single round-trip into the DB.
+ */
+export async function computeFindingLifecycle(
+  businessId: string,
+): Promise<{ lifecycles: FindingLifecycle[]; latestRunNumber: number | null }> {
+  // 1. Fetch all readiness_findings runs (substrate rows) for this brand.
+  const runs = await sql`
+    SELECT id, run_number, payload, created_at
+    FROM business_substrate
+    WHERE business_id = ${businessId} AND kind = 'readiness_findings'
+    ORDER BY run_number ASC
+  `;
+  if (runs.length === 0) {
+    return { lifecycles: [], latestRunNumber: null };
+  }
+  const latestRunNumber = Math.max(...runs.map((r) => r.run_number as number));
+
+  // 2. For each finding_id, build its appearance history across runs.
+  const appearancesByFinding = new Map<string, number[]>();
+  for (const run of runs) {
+    const payload = run.payload as { findings?: Array<{ id: string }> };
+    const findings = payload?.findings ?? [];
+    for (const f of findings) {
+      const list = appearancesByFinding.get(f.id) ?? [];
+      list.push(run.run_number as number);
+      appearancesByFinding.set(f.id, list);
+    }
+  }
+
+  // 3. Fetch all resolutions for this brand, keyed by finding_id.
+  const resolutions = await getFindingResolutions(businessId);
+
+  // 4. Build lifecycle entries.
+  const lifecycles: FindingLifecycle[] = [];
+  for (const [findingId, runNumbers] of appearancesByFinding.entries()) {
+    const sorted = [...runNumbers].sort((a, b) => a - b);
+    const firstSeen = sorted[0];
+    const lastSeen = sorted[sorted.length - 1];
+    const clearedInLatestRun = lastSeen < latestRunNumber;
+
+    // Regression detection: any gap inside the appearance sequence implies
+    // the finding cleared at some point and came back. A monotonic sequence
+    // (1,2,3) means persistent; (1,3) means cleared in run 2 then resurfaced.
+    let regressed = false;
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] - sorted[i - 1] > 1) {
+        regressed = true;
+        break;
+      }
+    }
+
+    const resolution = resolutions[findingId] ?? null;
+    // Resolved-but-reappeared: resolution exists AND a later substrate run
+    // still surfaces this finding.
+    const resolvedButReappeared = !!resolution &&
+      lastSeen > getResolutionRunNumber(resolution, runs);
+
+    lifecycles.push({
+      findingId,
+      appearedInRuns: sorted,
+      firstSeenInRun: firstSeen,
+      lastSeenInRun: lastSeen,
+      clearedInLatestRun,
+      regressed,
+      resolution,
+      resolvedButReappeared,
+    });
+  }
+
+  return { lifecycles, latestRunNumber };
+}
+
+/** Helper: find the run_number of the substrate row a resolution was stamped
+ *  against. Falls back to firstSeen if substrate row isn't found (shouldn't
+ *  happen but defensive). */
+function getResolutionRunNumber(
+  resolution: FindingResolution,
+  runs: ReadonlyArray<Record<string, unknown>>,
+): number {
+  const match = runs.find((r) => r.id === resolution.findingsSubstrateId);
+  return (match?.run_number as number) ?? 0;
 }
 
 /**

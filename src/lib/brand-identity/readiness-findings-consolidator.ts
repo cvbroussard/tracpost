@@ -23,9 +23,32 @@
  */
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { randomUUID } from "crypto";
+import { v5 as uuidv5 } from "uuid";
 import { sql } from "@/lib/db";
 import { getSubstrate, upsertSubstrate } from "@/lib/substrate/store";
+
+/**
+ * Deterministic finding UUID — same descriptor_key + observation content
+ * produces the same UUID for a given brand. Enables stable identity across
+ * regenerations per [[ppa-cma-recurring-quality-gate]] step 2.
+ *
+ * Namespace: the brand's UUID (each brand gets its own namespace, so finding
+ * UUIDs don't collide across brands even with identical content).
+ * Name: descriptor_key + "|" + canonical(observation).
+ *
+ * Risk: if the LLM rephrases an observation slightly between runs, the hash
+ * differs and the finding looks new. Acceptable for v1; future work could
+ * add embedding-based similarity matching as a fallback layer.
+ */
+function deterministicFindingId(args: {
+  brandId: string;
+  descriptorKey: string | null;
+  observation: string;
+}): string {
+  const canonical = args.observation.trim().toLowerCase().replace(/\s+/g, " ");
+  const name = `${args.descriptorKey ?? "_null"}|${canonical}`;
+  return uuidv5(name, args.brandId);
+}
 import type {
   BrandIdentityObservationPayload,
   DescriptorObservation,
@@ -58,7 +81,8 @@ export async function consolidateReadinessFindings(args: {
   }
 
   // 1 + 2 — extract candidate findings algorithmically.
-  const candidates = extractCandidateFindings(observationRow.payload);
+  // businessId threaded through for deterministic finding UUIDs.
+  const candidates = extractCandidateFindings(observationRow.payload, businessId);
 
   // 3 — single batch LLM call to generate prompt_text per finding.
   const promptTexts = candidates.length > 0
@@ -113,6 +137,7 @@ type CandidateFinding = Omit<ReadinessFinding, "prompt_text">;
 
 function extractCandidateFindings(
   payload: BrandIdentityObservationPayload,
+  brandId: string,
 ): CandidateFinding[] {
   const out: CandidateFinding[] = [];
 
@@ -120,7 +145,7 @@ function extractCandidateFindings(
   //    mismatches get reclassified to `inconsistency`.
   for (const gap of payload.gaps_and_absences ?? []) {
     out.push({
-      id: randomUUID(),
+      id: deterministicFindingId({ brandId, descriptorKey: null, observation: gap }),
       observation: gap,
       evidence: [],  // gaps don't have positive evidence by definition
       source_pipeline: "public_presence_observation",
@@ -135,7 +160,7 @@ function extractCandidateFindings(
   //    surface them as "tell us about this" prompts but they don't gate.
   for (const distinctive of payload.distinctive_elements_vs_category_defaults ?? []) {
     out.push({
-      id: randomUUID(),
+      id: deterministicFindingId({ brandId, descriptorKey: null, observation: distinctive }),
       observation: distinctive,
       evidence: [],  // distinctives are themselves the observation summary
       source_pipeline: "public_presence_observation",
@@ -152,14 +177,15 @@ function extractCandidateFindings(
   walkDescriptors(payload, (domain, key, slot) => {
     if (slot === null) return;
     const observationText = summarizeDescriptorObservation(slot.observed);
+    const descriptorKey = `${domain}.${key}`;
     out.push({
-      id: randomUUID(),
+      id: deterministicFindingId({ brandId, descriptorKey, observation: observationText }),
       observation: observationText,
       evidence: slot.evidence ?? [],
       source_pipeline: "public_presence_observation",
       attribution: detectInconsistency(observationText) ? "inconsistency" : "external",
       severity: "refinement",
-      descriptor_key: `${domain}.${key}`,
+      descriptor_key: descriptorKey,
     });
   });
 

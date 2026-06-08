@@ -34,7 +34,16 @@ export async function POST(
 
   const { siteId } = await params;
 
-  let opts: { maxQueries?: number; topN?: number } = {};
+  let opts: {
+    maxQueries?: number;
+    topN?: number;
+    /** Per [[ppa-cma-recurring-quality-gate]]: intent of this run.
+     *  - 'diagnostic'    — first baseline measurement
+     *  - 'verification'  — post-catalog/website-work measurement
+     *  - 'ad_hoc'        — operator-triggered exploration (default)
+     */
+    runPurpose?: "diagnostic" | "verification" | "ad_hoc";
+  } = {};
   try {
     opts = (await req.json()) as typeof opts;
   } catch {

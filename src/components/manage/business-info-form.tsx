@@ -46,6 +46,7 @@ interface BusinessInfo {
   commercialTierId: string | null;
   tierSlug: string | null;
   tierLabel: string | null;
+  hostingModel: "tracpost_hosted" | "external_hosted" | null;
 }
 
 type SectionFeedback = {
@@ -72,6 +73,7 @@ export function BusinessInfoForm({
   const [businessType, setBusinessType] = useState("");
   const [location, setLocation] = useState("");
   const [tierSlug, setTierSlug] = useState("");
+  const [hostingModel, setHostingModel] = useState<string>("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
@@ -99,6 +101,7 @@ export function BusinessInfoForm({
       setBusinessType(data.business.businessType ?? "");
       setLocation(data.business.location ?? "");
       setTierSlug(data.business.tierSlug ?? "");
+      setHostingModel(data.business.hostingModel ?? "");
       setPhone(data.business.phone ?? "");
       setEmail(data.business.email ?? "");
       setLogoUrl(data.business.logoUrl ?? "");
@@ -118,6 +121,7 @@ export function BusinessInfoForm({
           location: data.business.location ?? "",
         }),
         commercial_tier: data.business.tierSlug ?? "",
+        hosting_model: data.business.hostingModel ?? "",
         contact: JSON.stringify({
           phone: data.business.phone ?? "",
           email: data.business.email ?? "",
@@ -300,6 +304,38 @@ export function BusinessInfoForm({
       {tierSlug && pickerTiers.find((t) => t.slug === tierSlug)?.description && (
         <p className="text-[10px] text-muted leading-relaxed italic -mt-1">
           {pickerTiers.find((t) => t.slug === tierSlug)?.description}
+        </p>
+      )}
+
+      <Field label="Hosting model" required>
+        <select
+          value={hostingModel}
+          onChange={(e) => {
+            const next = e.target.value;
+            setHostingModel(next);
+            if (next) autoSave("hosting_model", { hosting_model: next }, { dirtyKey: next });
+          }}
+          className="block w-full rounded border border-border bg-background px-2 py-1.5 text-xs focus:border-accent focus:outline-none"
+        >
+          <option value="">— Select hosting model —</option>
+          <option value="tracpost_hosted">TracPost-hosted — we serve the website</option>
+          <option value="external_hosted">Externally hosted — tenant infrastructure</option>
+        </select>
+      </Field>
+      {hostingModel === "tracpost_hosted" && (
+        <p className="text-[10px] text-muted leading-relaxed italic -mt-1">
+          TracPost generates and hosts the website from the brand catalog.
+          The provisioning pipeline will surface the Website (TracPost-hosted)
+          Provisioning step with custom domain + page layout + generated copy
+          sub_tasks.
+        </p>
+      )}
+      {hostingModel === "external_hosted" && (
+        <p className="text-[10px] text-muted leading-relaxed italic -mt-1">
+          Tenant hosts the website on their own infrastructure. TracPost
+          observes via Public Presence Analysis and publishes content
+          alongside. The pipeline will surface a simpler Website
+          (externally hosted) step.
         </p>
       )}
 

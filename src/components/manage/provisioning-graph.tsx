@@ -233,6 +233,26 @@ const SUB_TASK_ACTIONS: Record<string, TaskAction[]> = {
   "business_info.safeguard_identity": [
     { label: "Sign identity waiver", href: "/dashboard/business/content-safeguards", icon: "→" },
   ],
+
+  // website_tracpost_provision.* — sub_tasks deep-link to the existing
+  // /ops/website surface for now. Per [[provisioning-drawer-console]] each
+  // sub_task surface can later embed inline; today the operator controls
+  // already live as panels at /ops/website.
+  "website_tracpost_provision.custom_domain_provisioned": [
+    { label: "Provision custom domain", href: "/ops/website", icon: "→" },
+  ],
+  "website_tracpost_provision.dns_verified": [
+    { label: "Verify DNS", href: "/ops/website", icon: "→" },
+  ],
+  "website_tracpost_provision.page_layout_complete": [
+    { label: "Edit page layout", href: "/ops/website", icon: "→" },
+  ],
+  "website_tracpost_provision.generated_copy_complete": [
+    { label: "Regenerate website copy", href: "/ops/website", icon: "→" },
+  ],
+  "website_tracpost_provision.services_derived_complete": [
+    { label: "Regenerate services + categories", href: "/ops/website", icon: "→" },
+  ],
 };
 
 const TASK_ACTIONS: Record<string, TaskAction[]> = {
@@ -262,6 +282,12 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
   ],
   brand_visual: [
     { label: "Edit visual descriptors", href: "/ops/brand-identity", icon: "→" },
+  ],
+  website_tracpost_provision: [
+    { label: "Open website console", href: "/ops/website", icon: "→" },
+  ],
+  website_external_registered: [
+    { label: "Edit website URL", href: "/ops/sites", icon: "→" },
   ],
   brand_sonic: [
     { label: "Edit sonic descriptors", href: "/ops/brand-identity", icon: "→" },
@@ -1298,11 +1324,19 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
     : null;
 
   // ── Layout: group tasks by depth, render rows top-to-bottom ──
+  // Filter out tasks marked `not_applicable` per the hosting-model fork —
+  // subscribers should only see their relevant track per
+  // [[ppa-business-health-checkup]]. The recompute marks the irrelevant
+  // website task as not_applicable based on businesses.hosting_model.
+  const visibleTasks = useMemo(
+    () => tasks.filter((t) => t.status !== "not_applicable"),
+    [tasks],
+  );
   const depthRows = useMemo(() => {
-    if (tasks.length === 0) return [] as Array<[number, Task[]]>;
-    const depths = computeDepths(tasks);
+    if (visibleTasks.length === 0) return [] as Array<[number, Task[]]>;
+    const depths = computeDepths(visibleTasks);
     const byDepth = new Map<number, Task[]>();
-    for (const t of tasks) {
+    for (const t of visibleTasks) {
       const d = depths.get(t.task_key) ?? 0;
       if (!byDepth.has(d)) byDepth.set(d, []);
       byDepth.get(d)!.push(t);
@@ -1318,7 +1352,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
       });
     }
     return Array.from(byDepth.entries()).sort(([a], [b]) => a - b);
-  }, [tasks]);
+  }, [visibleTasks]);
 
   const dependenciesOf = useCallback(
     (task: Task): BlockerInfo[] => {
@@ -1411,6 +1445,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
                     "brand_sonic",
                     "integrations",
                     "business_info",
+                    "website_tracpost_provision",
                   ].includes(task.task_key);
                   return (
                     <TaskCard
@@ -1452,6 +1487,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
               "brand_sonic",
               "integrations",
               "business_info",
+              "website_tracpost_provision",
             ].includes(drawerTask.task_key) : false}
             actions={drawerTask ? TASK_ACTIONS[drawerTask.task_key] || [] : []}
             subscriberId={subscriberId}

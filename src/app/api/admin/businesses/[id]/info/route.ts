@@ -40,7 +40,7 @@ export async function GET(
            s.face_policy, s.face_waiver_signed_at, s.face_waiver_version,
            s.minor_face_policy, s.minor_face_waiver_signed_at, s.minor_face_waiver_version,
            s.identity_policy, s.identity_waiver_signed_at, s.identity_waiver_version,
-           s.commercial_tier_id,
+           s.commercial_tier_id, s.hosting_model,
            ct.slug AS tier_slug, ct.label AS tier_label
     FROM businesses s
     LEFT JOIN commercial_tiers ct ON ct.id = s.commercial_tier_id
@@ -86,6 +86,7 @@ export async function GET(
       commercialTierId: biz.commercial_tier_id,
       tierSlug: biz.tier_slug,
       tierLabel: biz.tier_label,
+      hostingModel: biz.hosting_model,
     },
     pickerTiers: tiers.map((t) => ({
       id: t.id as string,
@@ -155,6 +156,24 @@ export async function POST(
       WHERE id = ${id}
     `;
     return NextResponse.json({ success: true, section: "commercial_tier" });
+  }
+
+  if (section === "hosting_model") {
+    // Subscriber declares whether TracPost or external infra serves the
+    // website. Forks the provisioning pipeline at step 15.
+    const hostingModel = (fields.hosting_model as string | undefined)?.trim();
+    if (hostingModel !== "tracpost_hosted" && hostingModel !== "external_hosted") {
+      return NextResponse.json(
+        { error: "hosting_model must be 'tracpost_hosted' or 'external_hosted'" },
+        { status: 400 },
+      );
+    }
+    await sql`
+      UPDATE businesses
+      SET hosting_model = ${hostingModel}, updated_at = NOW()
+      WHERE id = ${id}
+    `;
+    return NextResponse.json({ success: true, section: "hosting_model" });
   }
 
   if (section === "contact") {

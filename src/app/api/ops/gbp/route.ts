@@ -21,12 +21,22 @@ export async function GET(req: NextRequest) {
     WHERE s.id = ${siteId}
   `;
 
-  // GBP connection
+  // GBP connection — read from the current per-business asset binding model
+  // (business_platform_assets → platform_assets → social_accounts). The
+  // legacy business_social_links table was the old per-business binding;
+  // since the migration to platform_assets, this endpoint was stale and
+  // reported "not connected" even when the business had a primary GBP
+  // asset assigned. Fixed 2026-06-07 to align with /ops/connections and
+  // the integrations provisioning recompute.
   const [gbpAccount] = await sql`
-    SELECT sa.id, sa.account_name, sa.status, sa.token_expires_at, sa.metadata
-    FROM social_accounts sa
-    JOIN business_social_links ssl ON ssl.social_account_id = sa.id
-    WHERE ssl.business_id = ${siteId} AND sa.platform = 'gbp'
+    SELECT sa.id, pa.asset_name AS account_name, sa.status,
+           sa.token_expires_at, sa.metadata
+    FROM business_platform_assets bpa
+    JOIN platform_assets pa ON pa.id = bpa.platform_asset_id
+    JOIN social_accounts sa ON sa.id = pa.social_account_id
+    WHERE bpa.business_id = ${siteId}
+      AND bpa.is_primary = true
+      AND pa.platform = 'gbp'
     ORDER BY sa.created_at DESC
     LIMIT 1
   `;

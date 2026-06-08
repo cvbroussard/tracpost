@@ -57,6 +57,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     });
   }
 
+  // Stripe dashboard mode detection — test-mode keys produce /test/ links.
+  const stripeMode: "live" | "test" = (process.env.STRIPE_SECRET_KEY || "").startsWith("sk_test_")
+    ? "test"
+    : "live";
+  const dashRoot = `https://dashboard.stripe.com${stripeMode === "test" ? "/test" : ""}`;
+  const dashboardUrls = {
+    customer: `${dashRoot}/customers/${customerId}`,
+    subscription: `${dashRoot}/subscriptions/${stripeSubId}`,
+  };
+
   try {
     const stripeSub = await stripe.subscriptions.retrieve(stripeSubId) as unknown as {
       status: string;
@@ -65,6 +75,49 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       cancel_at_period_end: boolean;
       items: { data: Array<{ id: string }> };
     };
+
+    // Default payment method (the one Stripe will charge on renewal).
+    let paymentMethod: {
+      brand: string;
+      last4: string;
+      expMonth: number;
+      expYear: number;
+    } | null = null;
+    try {
+      const customer = await stripe.customers.retrieve(customerId, {
+        expand: ["invoice_settings.default_payment_method"],
+      }) as unknown as {
+        deleted?: boolean;
+        invoice_settings?: {
+          default_payment_method?: {
+            card?: { brand: string; last4: string; exp_month: number; exp_year: number };
+          };
+        };
+      };
+      const card = customer?.invoice_settings?.default_payment_method?.card;
+      if (card) {
+        paymentMethod = {
+          brand: card.brand,
+          last4: card.last4,
+          expMonth: card.exp_month,
+          expYear: card.exp_year,
+        };
+      } else {
+        // Fall back to first attached card if no default set.
+        const list = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
+        const first = list.data[0];
+        if (first?.card) {
+          paymentMethod = {
+            brand: first.card.brand,
+            last4: first.card.last4,
+            expMonth: first.card.exp_month,
+            expYear: first.card.exp_year,
+          };
+        }
+      }
+    } catch (pmErr) {
+      console.error("Stripe payment method fetch error:", pmErr);
+    }
 
     // Get recent invoices
     const invoiceList = await stripe.invoices.list({
@@ -92,6 +145,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
       customerId,
       subscriptionId: stripeSubId,
+      paymentMethod,
+      stripeMode,
+      dashboardUrls,
       invoices,
       availablePlans,
     });
@@ -102,6 +158,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       plan: sub.plan,
       customerId,
       subscriptionId: stripeSubId,
+      paymentMethod: null,
+      stripeMode,
+      dashboardUrls,
       currentPeriodEnd: null,
       trialEnd: null,
       cancelAtPeriodEnd: false,

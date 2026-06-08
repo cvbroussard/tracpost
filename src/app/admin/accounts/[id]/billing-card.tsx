@@ -24,6 +24,17 @@ interface BillingData {
     tier: string;
     stripePriceId: string | null;
   }>;
+  paymentMethod?: {
+    brand: string;
+    last4: string;
+    expMonth: number;
+    expYear: number;
+  } | null;
+  stripeMode?: "live" | "test";
+  dashboardUrls?: {
+    customer: string | null;
+    subscription: string | null;
+  };
 }
 
 export function BillingCard({ subscriptionId }: { subscriptionId: string }) {
@@ -162,6 +173,53 @@ export function BillingCard({ subscriptionId }: { subscriptionId: string }) {
           </div>
         )}
       </div>
+
+      {/* Payment method (read-only — managed Stripe-side) */}
+      {billing.paymentMethod && (
+        <div className="rounded-md border border-border bg-card/50 px-2.5 py-2 text-xs">
+          <p className="text-[10px] text-muted mb-0.5">Payment method on file</p>
+          <p className="font-medium">
+            <span className="capitalize">{billing.paymentMethod.brand}</span>{" "}
+            ····{" "}{billing.paymentMethod.last4}
+            <span className="ml-2 text-[10px] text-muted font-normal">
+              exp {String(billing.paymentMethod.expMonth).padStart(2, "0")}/{String(billing.paymentMethod.expYear).slice(-2)}
+            </span>
+          </p>
+        </div>
+      )}
+
+      {/* Stripe Dashboard deep-links */}
+      {billing.dashboardUrls && (billing.dashboardUrls.customer || billing.dashboardUrls.subscription) && (
+        <div className="flex flex-wrap gap-2 text-[10px]">
+          {billing.dashboardUrls.subscription && (
+            <a
+              href={billing.dashboardUrls.subscription}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-muted hover:text-foreground hover:border-accent/40 transition-colors"
+            >
+              <span>Stripe → Subscription</span>
+              <span className="opacity-60">↗</span>
+            </a>
+          )}
+          {billing.dashboardUrls.customer && (
+            <a
+              href={billing.dashboardUrls.customer}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-muted hover:text-foreground hover:border-accent/40 transition-colors"
+            >
+              <span>Stripe → Customer</span>
+              <span className="opacity-60">↗</span>
+            </a>
+          )}
+          {billing.stripeMode === "test" && (
+            <span className="inline-flex items-center rounded bg-amber-100 dark:bg-amber-900/30 px-2 py-1 text-[10px] font-medium text-amber-800 dark:text-amber-300">
+              TEST MODE
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">

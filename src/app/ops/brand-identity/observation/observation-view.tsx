@@ -1,5 +1,15 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceDot,
+} from "recharts";
 import { BucketTabs } from "../page";
 import type {
   BrandIdentityObservationPayload,
@@ -14,20 +24,28 @@ interface ApprovalStatus {
   hasDeclared: boolean;
 }
 
-interface ObservationApiResponse {
-  observation: {
-    id: string;
-    payload: BrandIdentityObservationPayload;
-    generationMetadata: {
-      model: string;
-      prompt_version: string;
-      generated_at: string;
-      confidence?: number | null;
-      inputs?: Record<string, unknown>;
-    } | null;
-    createdAt: string;
-    updatedAt: string;
+interface ObservationRun {
+  id: string;
+  runNumber: number;
+  payload: BrandIdentityObservationPayload;
+  generationMetadata: {
+    model: string;
+    prompt_version: string;
+    generated_at: string;
+    confidence?: number | null;
+    inputs?: Record<string, unknown>;
   } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ObservationApiResponse {
+  /** All PPA runs for this brand, newest first. Per
+   *  [[ppa-cma-recurring-quality-gate]] — PPA is a recurring measurement
+   *  pass and the run history IS the deliverable. */
+  runs: ObservationRun[];
+  /** Latest run mirrored at the legacy field for backward compat. */
+  observation: ObservationRun | null;
   approvals: Record<string, ApprovalStatus>;
 }
 
@@ -58,6 +76,9 @@ export function ObservationView({ siteId }: { siteId: string }) {
 
 function ObservationFetcher({ siteId }: { siteId: string }) {
   const [state, setState] = useState<ViewState>({ kind: "loading" });
+  /** Which run is currently expanded in the grid. Defaults to the latest
+   *  on first load; user can swap by clicking a row in the run history. */
+  const [selectedRunNumber, setSelectedRunNumber] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,7 +88,12 @@ function ObservationFetcher({ siteId }: { siteId: string }) {
         return r.json() as Promise<ObservationApiResponse>;
       })
       .then((data) => {
-        if (!cancelled) setState({ kind: "loaded", data });
+        if (cancelled) return;
+        setState({ kind: "loaded", data });
+        // Auto-select latest run on first load.
+        if (data.runs.length > 0) {
+          setSelectedRunNumber(data.runs[0].runNumber);
+        }
       })
       .catch((e) => {
         if (!cancelled) {
@@ -106,7 +132,13 @@ function ObservationFetcher({ siteId }: { siteId: string }) {
 
   return (
     <Shell>
-      <ObservationBody state={state} siteId={siteId} onApproved={recordApproval} />
+      <ObservationBody
+        state={state}
+        siteId={siteId}
+        selectedRunNumber={selectedRunNumber}
+        onSelectRun={setSelectedRunNumber}
+        onApproved={recordApproval}
+      />
     </Shell>
   );
 }
@@ -128,10 +160,14 @@ interface ApproveHandler {
 function ObservationBody({
   state,
   siteId,
+  selectedRunNumber,
+  onSelectRun,
   onApproved,
 }: {
   state: ViewState;
   siteId: string;
+  selectedRunNumber: number | null;
+  onSelectRun: (runNumber: number) => void;
   onApproved: ApproveHandler;
 }) {
   if (state.kind === "error") {
@@ -152,7 +188,7 @@ function ObservationBody({
     );
   }
 
-  if (!state.data.observation) {
+  if (state.data.runs.length === 0) {
     return (
       <div className="p-2">
         <h2 className="text-sm font-medium mb-2">Brand Identity — Public Presence</h2>
@@ -164,29 +200,335 @@ function ObservationBody({
     );
   }
 
-  const { id: substrateId, payload, generationMetadata, updatedAt } = state.data.observation;
+  const runs = state.data.runs;
+  const latestRunNumber = runs[0].runNumber;
+  const selected = runs.find((r) => r.runNumber === selectedRunNumber) ?? runs[0];
+  const isLatestSelected = selected.runNumber === latestRunNumber;
   const approvals = state.data.approvals;
-  const ctx: DescriptorCardContext = { siteId, substrateId, approvals, onApproved };
+  const ctx: DescriptorCardContext = {
+    siteId,
+    substrateId: selected.id,
+    approvals,
+    onApproved,
+    // Approval controls only meaningful for the LATEST run — that's "current
+    // brand truth." Historical runs are read-only snapshots.
+    readOnly: !isLatestSelected,
+  };
 
   return (
     <div className="space-y-8 max-w-5xl">
-      <Header payload={payload} updatedAt={updatedAt} />
-      <Scores payload={payload} />
-      {payload.distinctive_elements_vs_category_defaults?.length > 0 && (
+      <PpaTrajectoryChart runs={runs} selectedRunNumber={selected.runNumber} onSelectRun={onSelectRun} />
+      <RunHistoryGrid
+        runs={runs}
+        selectedRunNumber={selected.runNumber}
+        onSelectRun={onSelectRun}
+      />
+      {!isLatestSelected && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
+          Viewing historical run #{selected.runNumber}. Approval controls are
+          disabled — only the latest run (#{latestRunNumber}) represents
+          current brand truth. Click the latest run above to approve descriptors.
+        </div>
+      )}
+      <Header payload={selected.payload} updatedAt={selected.updatedAt} runNumber={selected.runNumber} />
+      <Scores payload={selected.payload} />
+      {selected.payload.distinctive_elements_vs_category_defaults?.length > 0 && (
         <Section title="Distinctive elements vs category defaults">
-          <BulletList items={payload.distinctive_elements_vs_category_defaults} />
+          <BulletList items={selected.payload.distinctive_elements_vs_category_defaults} />
         </Section>
       )}
-      {payload.gaps_and_absences?.length > 0 && (
+      {selected.payload.gaps_and_absences?.length > 0 && (
         <Section title="Gaps & absences">
-          <BulletList items={payload.gaps_and_absences} />
+          <BulletList items={selected.payload.gaps_and_absences} />
         </Section>
       )}
-      <DomainSection title="Verbal" slots={verbalSlots(payload)} ctx={ctx} />
-      <DomainSection title="Strategic" slots={strategicSlots(payload)} ctx={ctx} />
-      <DomainSection title="Visual" slots={visualSlots(payload)} ctx={ctx} />
-      <DomainSection title="Sonic" slots={sonicSlots(payload)} ctx={ctx} />
-      <GenerationFooter generationMetadata={generationMetadata} />
+      <DomainSection title="Verbal" slots={verbalSlots(selected.payload)} ctx={ctx} />
+      <DomainSection title="Strategic" slots={strategicSlots(selected.payload)} ctx={ctx} />
+      <DomainSection title="Visual" slots={visualSlots(selected.payload)} ctx={ctx} />
+      <DomainSection title="Sonic" slots={sonicSlots(selected.payload)} ctx={ctx} />
+      <GenerationFooter generationMetadata={selected.generationMetadata} />
+    </div>
+  );
+}
+
+/**
+ * Run history grid — the timeline-of-snapshots UI surface per
+ * [[ppa-cma-recurring-quality-gate]]. Each row is a PPA run with its
+ * metadata pill; clicking a row swaps the body to that run's observation.
+ * Latest run highlighted as "current" with a green dot.
+ */
+function RunHistoryGrid({
+  runs,
+  selectedRunNumber,
+  onSelectRun,
+}: {
+  runs: ObservationRun[];
+  selectedRunNumber: number;
+  onSelectRun: (runNumber: number) => void;
+}) {
+  const latestRunNumber = runs[0].runNumber;
+  return (
+    <section className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold">Run history</h2>
+        <span className="text-[11px] text-muted">{runs.length} {runs.length === 1 ? "run" : "runs"}</span>
+      </div>
+      <div className="rounded-lg border border-border divide-y divide-border overflow-hidden">
+        {runs.map((run) => {
+          const isSelected = run.runNumber === selectedRunNumber;
+          const isLatest = run.runNumber === latestRunNumber;
+          const verdict = run.payload.meta?.verdict;
+          const confidencePct = Math.round((run.payload.meta?.confidence ?? 0) * 100);
+          return (
+            <button
+              key={run.id}
+              type="button"
+              onClick={() => onSelectRun(run.runNumber)}
+              className={`w-full px-3 py-2.5 text-left transition-colors flex items-center gap-3 ${
+                isSelected
+                  ? "bg-accent/15 border-l-2 border-l-accent"
+                  : "hover:bg-card border-l-2 border-l-transparent"
+              }`}
+            >
+              <span className="font-mono text-[11px] text-muted w-12 shrink-0">
+                #{run.runNumber}
+              </span>
+              <span className="text-xs text-foreground whitespace-nowrap shrink-0">
+                {new Date(run.generationMetadata?.generated_at ?? run.createdAt).toLocaleString()}
+              </span>
+              {verdict && (
+                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium shrink-0 ${VERDICT_COLORS[verdict]}`}>
+                  {verdict.replace("type_", "Type ").toUpperCase()}
+                </span>
+              )}
+              <span className="text-[10px] text-muted shrink-0">
+                {confidencePct}% conf
+              </span>
+              <span className="text-[10px] text-muted/70 font-mono truncate flex-1">
+                {run.generationMetadata?.model ?? "unknown model"}
+                {run.generationMetadata?.prompt_version && ` · ${run.generationMetadata.prompt_version}`}
+              </span>
+              {isLatest && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-300 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  Current
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Parse a score string like "5/10 — explanation prose" → numeric 5.
+ * Returns null if the prefix doesn't match (defensive against prompt changes).
+ */
+function parseScoreNumeric(scoreString: string | undefined | null): number | null {
+  if (!scoreString) return null;
+  const match = scoreString.match(/^(\d+)\s*\/\s*10/);
+  return match ? Number(match[1]) : null;
+}
+
+/** Short Type-A/B/C/D label, e.g. "type_a" → "A". */
+function shortVerdict(v: BrandClassVerdict | undefined): string {
+  if (!v) return "?";
+  return v.replace("type_", "").toUpperCase();
+}
+
+/**
+ * PpaTrajectoryChart — time-series view of the brand's PPA trajectory
+ * across runs. Per [[ppa-cma-recurring-quality-gate]] the diff between
+ * runs IS the deliverable; this is the at-a-glance summary surface
+ * (recurring quality gate doctrine, step 4 lifecycle UI).
+ *
+ * Three lines: visual_consistency, distinctiveness, alignment_with_positioning.
+ * Y axis 0-10 (fixed). X axis = run number ascending (oldest → newest).
+ * Below the chart: row of verdict pills, one per run, with the currently
+ * selected run highlighted. Click any pill to swap the body to that run.
+ *
+ * For a single run, the chart is suppressed in favor of a prompt to
+ * accumulate more runs — the trajectory signal needs ≥2 points.
+ */
+function PpaTrajectoryChart({
+  runs,
+  selectedRunNumber,
+  onSelectRun,
+}: {
+  runs: ObservationRun[];
+  selectedRunNumber: number;
+  onSelectRun: (runNumber: number) => void;
+}) {
+  // Chart data oldest→newest. The runs array is newest-first.
+  const data = [...runs]
+    .reverse()
+    .map((run) => ({
+      runNumber: run.runNumber,
+      visual: parseScoreNumeric(run.payload.meta?.visual_consistency_score),
+      distinctiveness: parseScoreNumeric(run.payload.meta?.distinctiveness_score),
+      alignment: parseScoreNumeric(run.payload.meta?.alignment_with_positioning_score),
+      verdict: run.payload.meta?.verdict,
+      verdictShort: shortVerdict(run.payload.meta?.verdict),
+      generatedAt: run.generationMetadata?.generated_at ?? run.createdAt,
+    }));
+
+  if (runs.length < 2) {
+    return (
+      <section className="rounded-lg border border-dashed border-border bg-card/30 px-4 py-6 text-center">
+        <h2 className="text-sm font-semibold mb-1">Trajectory</h2>
+        <p className="text-[11px] text-muted leading-relaxed max-w-md mx-auto">
+          Re-run the PPA after the brand evolves to see scores + verdict trajectory across runs.
+          Trajectory needs at least two runs for diff signal.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold">Trajectory</h2>
+        <span className="text-[11px] text-muted">
+          Scores + verdict across {runs.length} runs (oldest → newest)
+        </span>
+      </div>
+      <div className="rounded-lg border border-border bg-card p-3">
+        {/* Line chart of the 3 scores */}
+        <div className="h-56 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 10, right: 16, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" strokeOpacity={0.3} />
+              <XAxis
+                dataKey="runNumber"
+                type="number"
+                domain={[data[0].runNumber, data[data.length - 1].runNumber]}
+                ticks={data.map((d) => d.runNumber)}
+                tickFormatter={(v) => `#${v}`}
+                tick={{ fontSize: 11, fill: "currentColor" }}
+                className="text-muted"
+              />
+              <YAxis
+                domain={[0, 10]}
+                ticks={[0, 2, 4, 6, 8, 10]}
+                tick={{ fontSize: 11, fill: "currentColor" }}
+                className="text-muted"
+                width={32}
+              />
+              <Tooltip content={<TrajectoryTooltip />} />
+              <Line
+                type="monotone"
+                dataKey="visual"
+                name="Visual consistency"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+                connectNulls
+              />
+              <Line
+                type="monotone"
+                dataKey="distinctiveness"
+                name="Distinctiveness"
+                stroke="#a855f7"
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+                connectNulls
+              />
+              <Line
+                type="monotone"
+                dataKey="alignment"
+                name="Alignment with positioning"
+                stroke="#10b981"
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+                connectNulls
+              />
+              {/* Highlight the selected run with a reference dot per line */}
+              {(() => {
+                const selectedPoint = data.find((d) => d.runNumber === selectedRunNumber);
+                if (!selectedPoint) return null;
+                return (
+                  <>
+                    {selectedPoint.visual !== null && (
+                      <ReferenceDot x={selectedPoint.runNumber} y={selectedPoint.visual} r={7} fill="#3b82f6" stroke="white" strokeWidth={2} />
+                    )}
+                    {selectedPoint.distinctiveness !== null && (
+                      <ReferenceDot x={selectedPoint.runNumber} y={selectedPoint.distinctiveness} r={7} fill="#a855f7" stroke="white" strokeWidth={2} />
+                    )}
+                    {selectedPoint.alignment !== null && (
+                      <ReferenceDot x={selectedPoint.runNumber} y={selectedPoint.alignment} r={7} fill="#10b981" stroke="white" strokeWidth={2} />
+                    )}
+                  </>
+                );
+              })()}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center justify-center gap-4 pt-1 text-[10px] text-muted">
+          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: "#3b82f6" }} />Visual consistency</span>
+          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: "#a855f7" }} />Distinctiveness</span>
+          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: "#10b981" }} />Alignment</span>
+        </div>
+
+        {/* Verdict pill timeline */}
+        <div className="mt-3 pt-3 border-t border-border">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] uppercase tracking-wide text-muted shrink-0">Brand class</span>
+            {data.map((point) => {
+              const isSelected = point.runNumber === selectedRunNumber;
+              return (
+                <button
+                  key={point.runNumber}
+                  type="button"
+                  onClick={() => onSelectRun(point.runNumber)}
+                  title={`Run #${point.runNumber} · ${new Date(point.generatedAt).toLocaleString()} · ${VERDICT_LABEL[point.verdict as BrandClassVerdict] ?? "unknown"}`}
+                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-all ${
+                    point.verdict ? VERDICT_COLORS[point.verdict] : "border-slate-500/30 bg-slate-500/10 text-slate-700"
+                  } ${isSelected ? "ring-2 ring-accent ring-offset-1 ring-offset-card" : "hover:scale-105"}`}
+                >
+                  #{point.runNumber} · {point.verdictShort}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface TooltipPayloadItem {
+  name: string;
+  value: number;
+  color: string;
+}
+
+function TrajectoryTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: number;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div className="rounded border border-border bg-card px-2 py-1.5 shadow-md text-[10px]">
+      <div className="font-mono text-muted mb-0.5">Run #{label}</div>
+      {payload.map((p) => (
+        <div key={p.name} className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+          <span className="text-foreground">{p.name}</span>
+          <span className="ml-auto font-mono text-foreground">{p.value}/10</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -196,21 +538,26 @@ interface DescriptorCardContext {
   substrateId: string;
   approvals: Record<string, ApprovalStatus>;
   onApproved: ApproveHandler;
+  /** When true, approval controls render disabled (historical run view). */
+  readOnly: boolean;
 }
 
 function Header({
   payload,
   updatedAt,
+  runNumber,
 }: {
   payload: BrandIdentityObservationPayload;
   updatedAt: string;
+  runNumber: number;
 }) {
   const verdict = payload.meta.verdict;
   const confidencePct = Math.round((payload.meta.confidence ?? 0) * 100);
   return (
     <div className="space-y-3">
-      <div className="flex items-baseline gap-3">
+      <div className="flex items-baseline gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Brand Identity — Public Presence Analysis</h1>
+        <span className="font-mono text-xs text-muted">Run #{runNumber}</span>
         <span className="text-xs text-muted">updated {new Date(updatedAt).toLocaleString()}</span>
       </div>
       <div className="flex items-center gap-3">
@@ -410,6 +757,18 @@ function ApprovalControl({
     return (
       <span className="text-[10px] uppercase tracking-wide text-muted shrink-0" title="Owner-typed declared content exists; approving observation would overwrite it. Edit via the Creative bucket to manage owner-typed declarations.">
         owner-typed
+      </span>
+    );
+  }
+
+  // Historical run viewing — show context-aware affordance, not an active button.
+  if (ctx.readOnly) {
+    return (
+      <span
+        className="text-[10px] uppercase tracking-wide text-muted shrink-0"
+        title="Switch to the latest run to approve descriptors"
+      >
+        historical view
       </span>
     );
   }

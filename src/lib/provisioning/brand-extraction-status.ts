@@ -80,18 +80,12 @@ const BUSINESS_INFO_ALL_SUBS = [
   "safeguard_identity",
 ] as const;
 
-// Sub_keys for website_tracpost_provision (added in migration 145).
-// All are required for parent completion. dns_verified can only be
-// confirmed via live DNS check (the /api/blog/domain endpoint runs
-// real-time); for now it stays pending until the operator marks it
-// or we wire a stored verification flag.
-const WEBSITE_TRACPOST_SUBS = [
-  "custom_domain_provisioned",
-  "dns_verified",
-  "page_layout_complete",
-  "generated_copy_complete",
-  "services_derived_complete",
-] as const;
+// Note: the early-stage website task (website_tracpost_provision +
+// website_external_registered, both at sort 15) was retired by migration
+// 147. Replaced with a single downstream `website_provisioning` task
+// gated on brand_identity_complete. That task's drawer is a click-out
+// to /ops/website (or its successor) — no inline sub_tasks per the
+// strategic decision (LOCKED 2026-06-08, [[hosting-positioning]]).
 
 // Helpers ────────────────────────────────────────────────────────────────────
 
@@ -204,6 +198,20 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
   const connectedPlatforms = new Set<string>();
   for (const r of platformRows) connectedPlatforms.add(r.platform as string);
 
+  // brand_categorization signal — task complete iff business_gbp_categories
+  // has at least one is_primary=true row. Per the theoretical model:
+  // platform-owned, recurring measurement pass, upstream of CMA. Phase 1
+  // gate is binary; the recurring-quality-gate doctrine handles re-runs
+  // (manual via /ops/categories-coaching coaching ceremony, or auto via
+  // the legacy categorizeForSite() bridge call from onPlaybookSharpened).
+  const [catRow] = await sql`
+    SELECT COUNT(*) FILTER (WHERE is_primary = true)::int AS primary_count,
+           COUNT(*)::int AS total_count
+    FROM business_gbp_categories
+    WHERE business_id = ${businessId}
+  `.catch(() => [{ primary_count: 0, total_count: 0 }]);
+  const categorizationComplete = (catRow?.primary_count ?? 0) > 0;
+
   // business_info sub_task data — read all relevant columns in one query.
   // OG metadata lives separately in seo_content; pulled in parallel.
   // Website provisioning signals come from businesses + blog_settings.
@@ -255,31 +263,19 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     safeguard_identity: presentValue(bizData.identity_waiver_signed_at),
   };
 
-  // Website (TracPost-hosted) Provisioning sub_task signals. Only meaningful
-  // when hosting_model='tracpost_hosted'. Today's website generator is
-  // SEO-shaped only (per [[website-generator-brand-identity-overhaul]]) so
-  // these signals are "did the generator produce X for this brand,"
-  // not "did the catalog-aware regen complete." When the overhaul ships
-  // these checks tighten to canonical-state alignment.
+  // website_provisioning task — sub_task-less per the strategic decision.
+  // Completion criterion: TracPost-hosted brands need page_config +
+  // website_copy + work_content all populated (the actual generation
+  // pipeline has run). External-hosted brands: marked not_applicable
+  // below in the hosting-model fork.
   const pageConfigArray = bizData.page_config;
   const workContentObj = bizData.work_content;
-  const websiteSubStatus: Record<string, boolean> = {
-    // Complete when blog_settings.custom_domain is set (DNS pointed at edge).
-    custom_domain_provisioned: nonEmpty(blogSettings.custom_domain),
-    // dns_verified can only be confirmed by a live DNS check via
-    // /api/blog/domain. We don't store the verification result, so we
-    // leave this pending until either: (a) operator manually marks it,
-    // or (b) we add a dns_verified_at column on blog_settings.
-    dns_verified: false,
-    // page_config is a JSONB array; presence + non-empty signals layout setup.
-    page_layout_complete: Array.isArray(pageConfigArray) && pageConfigArray.length > 0,
-    // website_copy is the regenerated copy bundle; presence signals copy gen ran.
-    generated_copy_complete: nonEmpty(bizData.website_copy as unknown as string)
-      || (typeof bizData.website_copy === "object" && bizData.website_copy !== null),
-    // work_content is the services + categories JSONB.
-    services_derived_complete:
-      typeof workContentObj === "object" && workContentObj !== null && Object.keys(workContentObj as Record<string, unknown>).length > 0,
-  };
+  const tracpostHostingProvisioned =
+    nonEmpty(blogSettings.custom_domain) &&
+    Array.isArray(pageConfigArray) && pageConfigArray.length > 0 &&
+    (typeof bizData.website_copy === "object" && bizData.website_copy !== null) &&
+    typeof workContentObj === "object" && workContentObj !== null &&
+    Object.keys(workContentObj as Record<string, unknown>).length > 0;
 
   // ── Compute desired sub_task completion ──
 
@@ -334,9 +330,6 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
 
     // business_info sub_tasks (see businessInfoSubStatus above)
     ...businessInfoSubStatus,
-
-    // website_tracpost_provision sub_tasks (see websiteSubStatus above)
-    ...websiteSubStatus,
   };
 
   // ── Apply sub_task updates ──
@@ -351,7 +344,7 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
         AND task_id IN (
           SELECT id FROM provisioning_tasks
           WHERE billing_account_id = ${billingAccountId}
-            AND task_key IN ('brand_strategic', 'brand_verbal', 'brand_visual', 'brand_sonic', 'integrations', 'business_info', 'website_tracpost_provision')
+            AND task_key IN ('brand_strategic', 'brand_verbal', 'brand_visual', 'brand_sonic', 'integrations', 'business_info')
         )
         AND status IS DISTINCT FROM ${newStatus}
       RETURNING id
@@ -369,6 +362,7 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
   };
 
   const upstreamStatus: Record<string, "complete" | "in_progress" | "pending" | "not_applicable"> = {
+    brand_categorization: categorizationComplete ? "complete" : "pending",
     brand_public_presence: substrateMap.has("public_presence_observation") ? "complete" : "pending",
     brand_cma: cmaComplete ? "complete" : "pending",
     brand_triage:
@@ -384,42 +378,29 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     // complete. Optional sub_tasks (contact, branding, web_identity) show
     // progress but don't block.
     business_info: rollupDomain(BUSINESS_INFO_REQUIRED_SUBS),
-    // website_tracpost_provision: computed from 5 sub_tasks. The
+    // website_provisioning: downstream task gated on brand_identity_complete.
+    // Completion criterion is "the catalog-driven render pipeline has run"
+    // — page_config + website_copy + work_content all populated. The
     // hosting-model fork below overrides this to 'not_applicable' for
-    // externally-hosted brands.
-    website_tracpost_provision: rollupDomain(WEBSITE_TRACPOST_SUBS),
+    // externally-hosted brands per [[hosting-positioning]].
+    website_provisioning: tracpostHostingProvisioned ? "complete" : "pending",
   };
 
-  // ── Hosting-model fork (step 15) ──
+  // ── Hosting-model fork (Step 15: website_provisioning) ──
   //
-  // Per [[ppa-business-health-checkup]]: the pipeline is linear and
-  // hosting_model only forks the WEBSITE task. Brands with hosting_model
-  // declared see only their relevant track; the other gets marked
-  // 'not_applicable' so it doesn't visually clutter or block downstream.
-  // Brands without hosting_model declared yet: both tasks remain pending
-  // (blocked by business_info → hosting_model required sub_task).
+  // Per [[hosting-positioning]]: TracPost offers root-domain hosting OR
+  // a content feed (external_hosted). The website_provisioning task only
+  // applies to TracPost-hosted brands. For external-hosted brands it's
+  // marked 'not_applicable' — they don't need a TracPost-served site.
+  // Downstream tasks (search_console) that depended on the old website
+  // tasks now treat 'not_applicable' as satisfying their dependency
+  // (handled in the UI's isBlocked check).
   const hostingModel = bizData.hosting_model as string | null | undefined;
-  if (hostingModel === "tracpost_hosted") {
-    // website_external_registered does not apply to this brand.
-    upstreamStatus.website_external_registered = "not_applicable";
-    // website_tracpost_provision: computed from its sub_task rollup.
-    // For Phase 1 the sub_task completion is read from existing DB writers
-    // (page_layout, generated_copy_complete, etc. — TODO: wire these to
-    // their canonical state when the catalog-aware generator overhaul ships
-    // per [[website-generator-brand-identity-overhaul]]).
-    // Today these sub_tasks remain pending until manually marked.
-  } else if (hostingModel === "external_hosted") {
-    // website_tracpost_provision does not apply.
-    upstreamStatus.website_tracpost_provision = "not_applicable";
-    // website_external_registered: complete when Website URL is populated
-    // (per [[ppa-business-health-checkup]] the URL is the only required
-    // signal for the external track).
-    upstreamStatus.website_external_registered = nonEmpty(bizData.url)
-      ? "complete"
-      : "pending";
+  if (hostingModel === "external_hosted") {
+    upstreamStatus.website_provisioning = "not_applicable";
   }
-  // hostingModel === null → both tasks stay pending; subscriber must
-  // declare hosting_model in business_info first.
+  // hostingModel === 'tracpost_hosted' → status from tracpostHostingProvisioned above
+  // hostingModel === null              → pending; subscriber must declare hosting model first
   const allDomainsComplete =
     upstreamStatus.brand_strategic === "complete" &&
     upstreamStatus.brand_verbal === "complete" &&

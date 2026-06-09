@@ -6,6 +6,7 @@ import { getPlatformByKey, type PlatformConfig } from "@/app/dashboard/integrati
 import { BillingCard } from "@/app/admin/accounts/[id]/billing-card";
 import { AccountGovernanceSection } from "@/components/manage/account-governance-section";
 import { BusinessInfoForm } from "@/components/manage/business-info-form";
+import { GbpCategoriesDisplay } from "@/components/manage/gbp-categories-display";
 
 interface SubTask {
   sub_key: string;
@@ -234,31 +235,19 @@ const SUB_TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "Sign identity waiver", href: "/dashboard/business/content-safeguards", icon: "→" },
   ],
 
-  // website_tracpost_provision.* — sub_tasks deep-link to the existing
-  // /ops/website surface for now. Per [[provisioning-drawer-console]] each
-  // sub_task surface can later embed inline; today the operator controls
-  // already live as panels at /ops/website.
-  "website_tracpost_provision.custom_domain_provisioned": [
-    { label: "Provision custom domain", href: "/ops/website", icon: "→" },
-  ],
-  "website_tracpost_provision.dns_verified": [
-    { label: "Verify DNS", href: "/ops/website", icon: "→" },
-  ],
-  "website_tracpost_provision.page_layout_complete": [
-    { label: "Edit page layout", href: "/ops/website", icon: "→" },
-  ],
-  "website_tracpost_provision.generated_copy_complete": [
-    { label: "Regenerate website copy", href: "/ops/website", icon: "→" },
-  ],
-  "website_tracpost_provision.services_derived_complete": [
-    { label: "Regenerate services + categories", href: "/ops/website", icon: "→" },
-  ],
+  // website_provisioning has no sub_tasks per the strategic decision —
+  // the drawer is a click-out to /ops/website where the substantive
+  // provisioning work lives.
 };
 
 const TASK_ACTIONS: Record<string, TaskAction[]> = {
   checkout: [{ label: "View subscription", href: "/ops/billing", icon: "→" }],
   business_info: [{ label: "View site settings", href: "/ops/sites", icon: "→" }],
 
+  brand_categorization: [
+    { label: "Open coaching ceremony", href: "/ops/categories-coaching", icon: "→" },
+    { label: "Re-categorize from catalog", action: "recategorize_from_catalog", icon: "⟳" },
+  ],
   brand_public_presence: [
     { label: "View observation", href: "/ops/brand-identity/observation", icon: "→" },
     { label: "Re-run analysis", action: "rerun_public_presence", icon: "⟳" },
@@ -283,11 +272,8 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
   brand_visual: [
     { label: "Edit visual descriptors", href: "/ops/brand-identity", icon: "→" },
   ],
-  website_tracpost_provision: [
+  website_provisioning: [
     { label: "Open website console", href: "/ops/website", icon: "→" },
-  ],
-  website_external_registered: [
-    { label: "Edit website URL", href: "/ops/sites", icon: "→" },
   ],
   brand_sonic: [
     { label: "Edit sonic descriptors", href: "/ops/brand-identity", icon: "→" },
@@ -927,6 +913,20 @@ function TaskDetailDrawer({
               <BusinessInfoForm businessId={businessId} onSaved={onRefresh} />
             )}
 
+            {/* brand_categorization task scope — read-only display of the
+                canonical GBP category assignment with provenance. Tenant
+                never picks from the 4000-category dropdown; the drawer's
+                actions ("Open coaching ceremony" / "Re-categorize from
+                catalog") are the two write paths. */}
+            {task.task_key === "brand_categorization" && businessId && (
+              <section>
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
+                  Canonical GBP categories
+                </h3>
+                <GbpCategoriesDisplay businessId={businessId} />
+              </section>
+            )}
+
             {/* integrations task scope — coaching prompt pointing the operator
                 to the card's auto-expanded sub_task list. The per-platform
                 rich detail (coaching content + connect button + connection
@@ -1241,6 +1241,30 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
               message: "Polling timed out after 3 min. Pipeline may still complete; refresh in a minute.",
             });
           }
+        } else if (actionKey === "recategorize_from_catalog") {
+          // Pipeline A: synthesizes GBP categories from the brand catalog
+          // signals (business_type + location + offer descriptors). Fast
+          // (~30-60s, single Sonnet call). REPLACES whatever was there.
+          // For the higher-quality CMA-informed coaching ceremony, the
+          // operator clicks the "Open coaching ceremony" navigate action
+          // instead (separate UI surface at /ops/categories-coaching).
+          const res = await fetch(`/api/admin/sites/${businessId}/services/regenerate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ step: "categorize" }),
+          });
+          if (!res.ok) {
+            const msg = await res.text().catch(() => "");
+            throw new Error(msg || `HTTP ${res.status}`);
+          }
+          const data = await res.json().catch(() => ({} as { categorization?: { primary?: { name?: string }; additional_count?: number } }));
+          await refreshTasks();
+          const primary = data?.categorization?.primary?.name ?? "primary category";
+          const additionalCount = data?.categorization?.additional_count ?? 0;
+          setActionFeedback({
+            ok: true,
+            message: `✓ Categorization complete — primary: ${primary} + ${additionalCount} additional.`,
+          });
         } else {
           // Unknown action key — log for visibility; ignored otherwise.
           console.log(`Action ${actionKey} for task — no handler wired yet`);
@@ -1363,10 +1387,17 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
     },
     [tasks],
   );
+  // A dependency is "satisfied" if it's complete OR not_applicable.
+  // 'not_applicable' tasks (e.g., website_provisioning for external_hosted
+  // brands) shouldn't perpetually block downstream — they're explicitly
+  // marked as "no longer required for this brand" per the hosting-model
+  // fork doctrine ([[hosting-positioning]]).
+  const isDepSatisfied = (status: string) =>
+    status === "complete" || status === "not_applicable";
   const isBlocked = useCallback(
     (task: Task) =>
       task.status === "pending" &&
-      dependenciesOf(task).some((d) => d.status !== "complete"),
+      dependenciesOf(task).some((d) => !isDepSatisfied(d.status)),
     [dependenciesOf],
   );
 
@@ -1445,7 +1476,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
                     "brand_sonic",
                     "integrations",
                     "business_info",
-                    "website_tracpost_provision",
                   ].includes(task.task_key);
                   return (
                     <TaskCard
@@ -1487,7 +1517,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
               "brand_sonic",
               "integrations",
               "business_info",
-              "website_tracpost_provision",
             ].includes(drawerTask.task_key) : false}
             actions={drawerTask ? TASK_ACTIONS[drawerTask.task_key] || [] : []}
             subscriberId={subscriberId}

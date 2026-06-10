@@ -1,0 +1,89 @@
+/**
+ * Admin endpoint — read the owner-declared GBP profile fields for the
+ * step 14 drawer (read-only operator observability).
+ *
+ * Per the doctrine: subscriber declares everything at /dashboard/google/profile;
+ * operator observes via this drawer. No edits surfaced server-side.
+ *
+ * Source: businesses.gbp_profile JSONB. Mirrors what subscriber sees on
+ * their dashboard but rendered as a static snapshot.
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { isAdminRequest } from "@/lib/admin-session";
+import { sql } from "@/lib/db";
+
+const GBP_SOCIAL_CHANNEL_DEFAULTS: Record<string, string> = {
+  FACEBOOK: "Facebook",
+  INSTAGRAM: "Instagram",
+  YOUTUBE: "YouTube",
+  TWITTER: "X (Twitter)",
+  TIKTOK: "TikTok",
+  LINKEDIN: "LinkedIn",
+  PINTEREST: "Pinterest",
+};
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  if (!(await isAdminRequest())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { id } = await params;
+
+  const [row] = await sql`
+    SELECT gbp_profile, gbp_sync_dirty, gbp_dirty_fields
+    FROM businesses WHERE id = ${id} LIMIT 1
+  `;
+  if (!row) {
+    return NextResponse.json({ error: "Business not found" }, { status: 404 });
+  }
+
+  const profile = (row.gbp_profile as Record<string, unknown> | null) ?? {};
+  const serviceArea = (profile.serviceArea as Record<string, unknown> | undefined) ?? {};
+  const placeInfos =
+    ((serviceArea.places as Record<string, unknown> | undefined)?.placeInfos as Array<{
+      placeId?: string;
+      placeName?: string;
+    }> | undefined) ?? [];
+  const address = (profile.address as Record<string, unknown> | undefined) ?? {};
+  const regularHours = (profile.regularHours as Array<{
+    day?: string;
+    openTime?: string;
+    closeTime?: string;
+  }> | undefined) ?? [];
+  const socialProfiles = (profile.socialProfiles as Array<{
+    channel?: string;
+    uri?: string;
+  }> | undefined) ?? [];
+
+  return NextResponse.json({
+    serviceAreas: placeInfos.map((p) => ({
+      placeId: p.placeId ?? "",
+      placeName: p.placeName ?? "(unnamed)",
+    })),
+    serviceAreaCap: 20,
+    showAddress: serviceArea.businessType === "CUSTOMER_AND_BUSINESS_LOCATION",
+    address: {
+      addressLines: (address.addressLines as Array<string> | undefined) ?? [],
+      locality: (address.locality as string | null) ?? null,
+      administrativeArea: (address.administrativeArea as string | null) ?? null,
+      postalCode: (address.postalCode as string | null) ?? null,
+    },
+    hours: regularHours.map((h) => ({
+      day: h.day ?? "",
+      openTime: h.openTime ?? "",
+      closeTime: h.closeTime ?? "",
+    })),
+    description: (profile.description as string | null) ?? null,
+    socialProfiles: socialProfiles.map((p) => ({
+      channel: p.channel ?? "",
+      channelLabel: GBP_SOCIAL_CHANNEL_DEFAULTS[p.channel ?? ""] ?? (p.channel ?? "Unknown"),
+      uri: p.uri ?? "",
+    })),
+    sync: {
+      dirty: !!row.gbp_sync_dirty,
+      dirtyFields: (row.gbp_dirty_fields as Array<string> | null) ?? [],
+    },
+  });
+}

@@ -87,6 +87,24 @@ const BUSINESS_INFO_ALL_SUBS = [
 // to /ops/website (or its successor) — no inline sub_tasks per the
 // strategic decision (LOCKED 2026-06-08, [[hosting-positioning]]).
 
+// Sub_keys for gbp_location (added by migration 148). All 5 represent
+// owner-declared GBP profile fields; first 3 are required for parent
+// completion. Per [[brand-identity-input-insulation]] the description
+// and social_profile_urls sub_tasks are owner-typed display fields
+// that do NOT feed back into brand catalog.
+const GBP_REQUIRED_SUBS = [
+  "service_areas",
+  "hours",
+  "address",
+] as const;
+const GBP_ALL_SUBS = [
+  "service_areas",
+  "hours",
+  "address",
+  "description",
+  "social_profile_urls",
+] as const;
+
 // Helpers ────────────────────────────────────────────────────────────────────
 
 function isNonEmptyObject(v: unknown): v is Record<string, unknown> {
@@ -215,11 +233,13 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
   // business_info sub_task data — read all relevant columns in one query.
   // OG metadata lives separately in seo_content; pulled in parallel.
   // Website provisioning signals come from businesses + blog_settings.
+  // GBP profile signals (step 14 sub_tasks) come from businesses.gbp_profile.
   const [bizRow] = await sql`
     SELECT name, business_type, location, commercial_tier_id, hosting_model,
            business_phone, business_email,
            business_logo, business_favicon,
            url, blog_slug, page_config, work_content, website_copy,
+           gbp_profile,
            face_waiver_signed_at, minor_face_waiver_signed_at, identity_waiver_signed_at
     FROM businesses WHERE id = ${businessId} LIMIT 1
   `;
@@ -261,6 +281,44 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     safeguard_faces: presentValue(bizData.face_waiver_signed_at),
     safeguard_minors: presentValue(bizData.minor_face_waiver_signed_at),
     safeguard_identity: presentValue(bizData.identity_waiver_signed_at),
+  };
+
+  // gbp_location sub_task signals (5 sub_tasks from migration 148).
+  // All read from businesses.gbp_profile JSONB. Per the doctrine:
+  // owner-declared at /dashboard/google/profile; operator-side drawer
+  // is read-only observability. Hours sub_task is lenient (≥1 day
+  // declared with open hours signals owner engagement; days not in
+  // regularHours array are implicitly closed per GBP convention).
+  const gbpProfile = (bizData.gbp_profile as Record<string, unknown> | null) ?? {};
+  const serviceArea = (gbpProfile.serviceArea as Record<string, unknown> | undefined) ?? {};
+  const serviceAreaPlaces =
+    ((serviceArea.places as Record<string, unknown> | undefined)?.placeInfos as Array<unknown> | undefined) ?? [];
+  const gbpAddress = (gbpProfile.address as Record<string, unknown> | undefined) ?? {};
+  const addressLines = (gbpAddress.addressLines as Array<string> | undefined) ?? [];
+  const showsAddress = serviceArea.businessType === "CUSTOMER_AND_BUSINESS_LOCATION";
+  const gbpHours = (gbpProfile.regularHours as Array<unknown> | undefined) ?? [];
+  const gbpDescription = (gbpProfile.description as string | undefined) ?? "";
+  const gbpSocialProfiles = (gbpProfile.socialProfiles as Array<unknown> | undefined) ?? [];
+
+  const gbpSubStatus: Record<string, boolean> = {
+    // Required — at least one service area declared (≤20 per Google cap).
+    service_areas: serviceAreaPlaces.length >= 1,
+    // Required — owner has engaged with hours (any day declared as open).
+    // Days NOT in regularHours array are implicitly closed per GBP convention.
+    hours: gbpHours.length >= 1,
+    // Required — either service-area-only declaration OR full address present.
+    // Per the show-address toggle: when off, no address needed; when on,
+    // street + city + state + postal_code must be populated.
+    address: !showsAddress || (
+      addressLines.length > 0 &&
+      nonEmpty(gbpAddress.locality as string | undefined) &&
+      nonEmpty(gbpAddress.administrativeArea as string | undefined) &&
+      nonEmpty(gbpAddress.postalCode as string | undefined)
+    ),
+    // Optional — owner-typed description.
+    description: nonEmpty(gbpDescription),
+    // Optional — any social profile declared.
+    social_profile_urls: gbpSocialProfiles.length >= 1,
   };
 
   // website_provisioning task — sub_task-less per the strategic decision.
@@ -330,6 +388,9 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
 
     // business_info sub_tasks (see businessInfoSubStatus above)
     ...businessInfoSubStatus,
+
+    // gbp_location sub_tasks (see gbpSubStatus above)
+    ...gbpSubStatus,
   };
 
   // ── Apply sub_task updates ──
@@ -344,7 +405,7 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
         AND task_id IN (
           SELECT id FROM provisioning_tasks
           WHERE billing_account_id = ${billingAccountId}
-            AND task_key IN ('brand_strategic', 'brand_verbal', 'brand_visual', 'brand_sonic', 'integrations', 'business_info')
+            AND task_key IN ('brand_strategic', 'brand_verbal', 'brand_visual', 'brand_sonic', 'integrations', 'business_info', 'gbp_location')
         )
         AND status IS DISTINCT FROM ${newStatus}
       RETURNING id
@@ -378,6 +439,12 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     // complete. Optional sub_tasks (contact, branding, web_identity) show
     // progress but don't block.
     business_info: rollupDomain(BUSINESS_INFO_REQUIRED_SUBS),
+    // gbp_location: parent completes only when 3 required sub_tasks
+    // (service_areas, hours, address) all complete. The 2 optional
+    // sub_tasks (description, social_profile_urls) show progress but
+    // don't block. Per the doctrine: tenant-owned declarations;
+    // operator-side drawer is read-only observability.
+    gbp_location: rollupDomain(GBP_REQUIRED_SUBS),
     // website_provisioning: downstream task gated on brand_identity_complete.
     // Completion criterion is "the catalog-driven render pipeline has run"
     // — page_config + website_copy + work_content all populated. The

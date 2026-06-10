@@ -7,6 +7,7 @@ import { BillingCard } from "@/app/admin/accounts/[id]/billing-card";
 import { AccountGovernanceSection } from "@/components/manage/account-governance-section";
 import { BusinessInfoForm } from "@/components/manage/business-info-form";
 import { GbpCategoriesDisplay } from "@/components/manage/gbp-categories-display";
+import { GbpDeclarationsDisplay } from "@/components/manage/gbp-declarations-display";
 
 interface SubTask {
   sub_key: string;
@@ -286,7 +287,9 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "Manage integrations", href: "/dashboard/integrations", icon: "→" },
     { label: "Send connection invite to tenant", action: "send_invite", icon: "✉" },
   ],
-  gbp_location: [{ label: "Assign location", action: "gbp_assign", icon: "◎" }],
+  gbp_location: [
+    { label: "Open subscriber view", href: "/dashboard/google/profile", icon: "→" },
+  ],
   domain_provision: [
     { label: "Manage domain", href: "/ops/website", icon: "→" },
     { label: "Provision domain", action: "provision_domain", icon: "◎" },
@@ -927,6 +930,18 @@ function TaskDetailDrawer({
               </section>
             )}
 
+            {/* gbp_location task scope — read-only display of all owner-declared
+                GBP profile fields. Per doctrine: subscriber declares everything
+                at /dashboard/google/profile; operator observes only. */}
+            {task.task_key === "gbp_location" && businessId && (
+              <section>
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
+                  GBP profile declarations
+                </h3>
+                <GbpDeclarationsDisplay businessId={businessId} />
+              </section>
+            )}
+
             {/* integrations task scope — coaching prompt pointing the operator
                 to the card's auto-expanded sub_task list. The per-platform
                 rich detail (coaching content + connect button + connection
@@ -1476,6 +1491,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
                     "brand_sonic",
                     "integrations",
                     "business_info",
+                    "gbp_location",
                   ].includes(task.task_key);
                   return (
                     <TaskCard
@@ -1517,6 +1533,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
               "brand_sonic",
               "integrations",
               "business_info",
+              "gbp_location",
             ].includes(drawerTask.task_key) : false}
             actions={drawerTask ? TASK_ACTIONS[drawerTask.task_key] || [] : []}
             subscriberId={subscriberId}

@@ -21,6 +21,37 @@ import { useState, useEffect, useCallback } from "react";
 interface ServiceArea {
   placeId: string;
   placeName: string;
+  kind: string;
+}
+
+/** Service area granularity precedence — lower = broader, sorts first.
+ *  Mirrors the subscriber-side ordering on /dashboard/google/profile. */
+const KIND_PRECEDENCE: Record<string, number> = {
+  region: 0,
+  state: 1,
+  metro: 2,
+  county: 3,
+  city: 4,
+  zip: 5,
+  neighborhood: 6,
+};
+
+function kindBadgeClass(kind: string | undefined): string {
+  switch (kind) {
+    case "region":
+    case "state":
+      return "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30";
+    case "metro":
+    case "county":
+      return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30";
+    case "city":
+      return "bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-500/30";
+    case "zip":
+    case "neighborhood":
+      return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
+    default:
+      return "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30";
+  }
 }
 
 interface AddressShape {
@@ -125,16 +156,29 @@ export function GbpDeclarationsDisplay({ businessId }: { businessId: string }) {
         {data.serviceAreas.length === 0 ? (
           <EmptyHint text="No service areas declared yet" />
         ) : (
-          <ul className="rounded-md border border-border divide-y divide-border overflow-hidden">
-            {data.serviceAreas.map((sa) => (
-              <li key={sa.placeId || sa.placeName} className="px-3 py-1.5 text-xs">
-                <span className="text-foreground">{sa.placeName}</span>
-                {sa.placeId && (
-                  <span className="ml-2 text-[9px] text-muted/60 font-mono">{sa.placeId}</span>
-                )}
-              </li>
-            ))}
-          </ul>
+          (() => {
+            // Sort broad → narrow per granularity precedence.
+            const sorted = [...data.serviceAreas].sort((a, b) => {
+              const pa = KIND_PRECEDENCE[a.kind] ?? 4;
+              const pb = KIND_PRECEDENCE[b.kind] ?? 4;
+              return pa - pb;
+            });
+            return (
+              <ul className="rounded-md border border-border divide-y divide-border overflow-hidden">
+                {sorted.map((sa) => (
+                  <li key={sa.placeId || sa.placeName} className="px-3 py-1.5 flex items-center gap-2 text-xs">
+                    <span className="text-foreground flex-1 truncate">{sa.placeName}</span>
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${kindBadgeClass(sa.kind)}`}
+                      title={`Granularity: ${sa.kind}`}
+                    >
+                      {sa.kind}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()
         )}
       </Section>
 

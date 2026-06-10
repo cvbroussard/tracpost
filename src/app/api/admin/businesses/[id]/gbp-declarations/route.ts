@@ -46,6 +46,21 @@ export async function GET(
       placeId?: string;
       placeName?: string;
     }> | undefined) ?? [];
+
+  // Enrich with granularity (kind) from service_areas canonical table.
+  // Mirrors the subscriber-side enrichment so the drawer's read-only
+  // display can show the kind badge + sort broad→narrow.
+  const placeIdList = placeInfos.map((p) => p.placeId).filter((p): p is string => !!p);
+  const kindMap: Record<string, string> = {};
+  if (placeIdList.length > 0) {
+    const kindRows = await sql`
+      SELECT place_id, kind FROM service_areas
+      WHERE place_id = ANY(${placeIdList}::text[])
+    `;
+    for (const r of kindRows) {
+      kindMap[r.place_id as string] = (r.kind as string) || "city";
+    }
+  }
   const address = (profile.address as Record<string, unknown> | undefined) ?? {};
   const regularHours = (profile.regularHours as Array<{
     day?: string;
@@ -61,6 +76,7 @@ export async function GET(
     serviceAreas: placeInfos.map((p) => ({
       placeId: p.placeId ?? "",
       placeName: p.placeName ?? "(unnamed)",
+      kind: kindMap[p.placeId ?? ""] ?? "city",
     })),
     serviceAreaCap: 20,
     showAddress: serviceArea.businessType === "CUSTOMER_AND_BUSINESS_LOCATION",

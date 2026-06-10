@@ -113,6 +113,27 @@ export async function GET(req: NextRequest) {
   const primaryCat = tpCategories.find((c) => c.is_primary);
   const additionalCats = tpCategories.filter((c) => !c.is_primary);
 
+  // Enrich service areas with granularity (kind) from service_areas canonical
+  // table. UI uses this to show a kind badge per area + sort broad→narrow.
+  const profileSa = (profile as unknown as Record<string, unknown>).serviceArea as
+    | Record<string, unknown>
+    | undefined;
+  const placeInfos =
+    ((profileSa?.places as Record<string, unknown> | undefined)?.placeInfos as Array<{
+      placeId?: string;
+    }> | undefined) ?? [];
+  const placeIds = placeInfos.map((p) => p.placeId).filter((p): p is string => !!p);
+  const serviceAreaKinds: Record<string, string> = {};
+  if (placeIds.length > 0) {
+    const kindRows = await dbSql`
+      SELECT place_id, kind FROM service_areas
+      WHERE place_id = ANY(${placeIds}::text[])
+    `;
+    for (const r of kindRows) {
+      serviceAreaKinds[r.place_id as string] = (r.kind as string) || "city";
+    }
+  }
+
   return NextResponse.json({
     ...profile,
     logoUrl: siteAssets?.business_logo || null,
@@ -123,6 +144,7 @@ export async function GET(req: NextRequest) {
         ? additionalCats.map((c) => c.name as string)
         : profile.categories?.additional || [],
     },
+    serviceAreaKinds,
   });
 }
 

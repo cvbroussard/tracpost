@@ -48,6 +48,41 @@ interface GbpProfile {
   };
   socialProfiles?: Array<{ platform: string; url: string }>;
   synced_at?: string;
+  /** Per-place_id granularity, derived from service_areas canonical
+   *  table via Google Places API types. Drives the kind badge + sort
+   *  order in the Service Areas section. */
+  serviceAreaKinds?: Record<string, string>;
+}
+
+/** Service area granularity precedence: lower = broader (sorts first).
+ *  Used to render the area list from broad → narrow per scoping discussion. */
+const KIND_PRECEDENCE: Record<string, number> = {
+  region: 0,
+  state: 1,
+  metro: 2,
+  county: 3,
+  city: 4,
+  zip: 5,
+  neighborhood: 6,
+};
+
+/** Kind label + visual class for the badge per area row. */
+function kindBadgeClass(kind: string | undefined): string {
+  switch (kind) {
+    case "region":
+    case "state":
+      return "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30";
+    case "metro":
+    case "county":
+      return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30";
+    case "city":
+      return "bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-500/30";
+    case "zip":
+    case "neighborhood":
+      return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
+    default:
+      return "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30";
+  }
 }
 
 const DAY_ORDER = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
@@ -190,12 +225,13 @@ interface SiteCategory {
   reasoning: string | null;
 }
 
-function CategoryPicker({ siteId, onDirty }: { siteId: string; onDirty?: () => void }) {
+function CategoryPicker({ siteId }: { siteId: string; onDirty?: () => void }) {
+  // Categories are LLM-derived from the brand catalog (Pipeline A) and
+  // operator-refined via the coaching ceremony (Pipeline B). They are
+  // PLATFORM-OWNED — subscribers don't pick from Google's 4000-category
+  // taxonomy. This component is read-only: subscriber SEES the result
+  // with reasoning. To request a change, route to support.
   const [categories, setCategories] = useState<SiteCategory[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Array<{ gcid: string; name: string }>>([]);
-  const [searching, setSearching] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
 
   const loadCategories = useCallback(async () => {
     const res = await fetch(`/api/google/categories?site_id=${siteId}`);
@@ -207,133 +243,43 @@ function CategoryPicker({ siteId, onDirty }: { siteId: string; onDirty?: () => v
 
   useEffect(() => { loadCategories(); }, [loadCategories]);
 
-  async function search(query: string) {
-    setSearchQuery(query);
-    if (query.length < 2) { setSearchResults([]); return; }
-    setSearching(true);
-    const res = await fetch(`/api/google/categories?search=${encodeURIComponent(query)}`);
-    if (res.ok) {
-      const data = await res.json();
-      const existing = new Set(categories.map((c) => c.gcid));
-      setSearchResults((data.categories || []).filter((c: { gcid: string }) => !existing.has(c.gcid)));
-    }
-    setSearching(false);
-  }
-
-  async function addCategory(gcid: string) {
-    const res = await fetch("/api/google/categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site_id: siteId, action: "add", gcid }),
-    });
-    if (res.ok) {
-      setSearchQuery("");
-      setSearchResults([]);
-      loadCategories();
-      onDirty?.();
-    } else {
-      const data = await res.json();
-      setStatus(data.error || "Failed to add");
-      setTimeout(() => setStatus(null), 3000);
-    }
-  }
-
-  async function removeCategory(gcid: string) {
-    await fetch("/api/google/categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site_id: siteId, action: "remove", gcid }),
-    });
-    loadCategories();
-    onDirty?.();
-  }
-
-  async function setPrimary(gcid: string) {
-    await fetch("/api/google/categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site_id: siteId, action: "set_primary", gcid }),
-    });
-    loadCategories();
-    onDirty?.();
-  }
-
   const primary = categories.find((c) => c.is_primary);
   const additional = categories.filter((c) => !c.is_primary);
 
   return (
     <Section title="Categories">
-      {/* Current categories */}
+      <p className="text-[10px] text-muted italic mb-2">
+        Categories are derived from your brand and refined competitively by
+        TracPost. Need a change? Contact support.
+      </p>
+
       {categories.length > 0 ? (
         <div className="space-y-1">
           {primary && (
-            <div className="group/cat flex items-center justify-between border-b border-border py-1.5">
+            <div className="flex items-center justify-between border-b border-border py-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium">{primary.name}</span>
                 <span className="rounded border border-border px-1.5 py-0.5 text-[8px] font-medium text-muted">PRIMARY</span>
               </div>
-              <div className="flex items-center gap-2">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="#eab308" stroke="#eab308" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                <button onClick={() => removeCategory(primary.gcid)} className="text-gray-400 transition-colors group-hover/cat:text-muted hover:!text-danger" title="Remove">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="#eab308" stroke="#eab308" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
             </div>
           )}
           {additional.map((cat) => (
-            <div key={cat.gcid} className="group/cat flex items-center justify-between border-b border-border py-1.5 last:border-0">
+            <div key={cat.gcid} className="flex items-center justify-between border-b border-border py-1.5 last:border-0">
               <span className="text-xs">{cat.name}</span>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setPrimary(cat.gcid)} className="text-gray-400 transition-colors group-hover/cat:text-muted hover:!text-yellow-500" title="Make primary">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                  </svg>
-                </button>
-                <button onClick={() => removeCategory(cat.gcid)} className="text-gray-400 transition-colors group-hover/cat:text-muted hover:!text-danger" title="Remove">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted mb-2">No categories assigned. Search to add.</p>
+        <p className="text-xs text-muted">No categories assigned yet.</p>
       )}
 
-      {/* Search to add */}
-      <div className="mt-3 relative">
-        <input
-          value={searchQuery}
-          onChange={(e) => search(e.target.value)}
-          placeholder="Search categories..."
-          className="w-full bg-surface-hover px-3 py-1.5 text-xs rounded"
-        />
-        {searchResults.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full rounded border border-border bg-surface shadow-lg max-h-48 overflow-y-auto">
-            {searchResults.map((r) => (
-              <button
-                key={r.gcid}
-                onClick={() => addCategory(r.gcid)}
-                className="w-full px-3 py-2 text-left text-xs hover:bg-surface-hover border-b border-border last:border-0"
-              >
-                {r.name}
-              </button>
-            ))}
-          </div>
-        )}
-        {searching && <p className="mt-1 text-[9px] text-muted">Searching...</p>}
-      </div>
-
-      {/* Footer */}
-      <div className="mt-3 flex items-center justify-between">
-        <p className="text-[9px] text-muted">{categories.length}/10 categories · 1 primary + {Math.max(0, categories.length - 1)} additional</p>
-        {status && <span className="text-[9px] text-accent">{status}</span>}
+      <div className="mt-3">
+        <p className="text-[9px] text-muted">
+          {categories.length} {categories.length === 1 ? "category" : "categories"} · 1 primary + {Math.max(0, categories.length - 1)} additional
+        </p>
       </div>
     </Section>
   );
@@ -993,7 +939,7 @@ export function ProfileClient({ siteId }: { siteId: string }) {
       <div className="px-4 grid grid-cols-2 gap-4">
         {/* Left column */}
         <div className="space-y-4">
-          <CategoryPicker siteId={siteId} onDirty={() => setDirty(true)} />
+          <CategoryPicker siteId={siteId} />
 
           <Section title="Contact">
             <Field
@@ -1011,13 +957,16 @@ export function ProfileClient({ siteId }: { siteId: string }) {
             />
           </Section>
 
-          <Section title="Business Location">
+          <Section title="Service Areas">
             {(() => {
               const sa = profile.serviceArea as Record<string, unknown> | null;
               const businessType = (sa?.businessType as string) || "";
               const showsAddress = businessType === "CUSTOMER_AND_BUSINESS_LOCATION" || (!sa && addressStr);
               const places = ((sa?.places as Record<string, unknown>)?.placeInfos as Array<Record<string, string>>) || [];
               const placeNames = places.map((p) => p.placeName).filter(Boolean);
+              const SERVICE_AREA_CAP = 20;
+              const slotsRemaining = SERVICE_AREA_CAP - places.length;
+              const atCap = places.length >= SERVICE_AREA_CAP;
 
               return (
                 <>
@@ -1104,61 +1053,119 @@ export function ProfileClient({ siteId }: { siteId: string }) {
                     </div>
                   )}
 
-                  <div className="py-2">
-                    <p className="text-[10px] text-muted mb-1">Service Area</p>
-                    {places.length > 0 && (
-                      <div className="space-y-1 mb-2">
-                        {places.map((place, i) => (
-                          <div key={i} className="group/place flex items-center justify-between border-b border-border py-1 last:border-0">
-                            <span className="text-xs">{place.placeName}</span>
-                            <button
-                              onClick={() => {
-                                const updatedPlaces = places.filter((_, j) => j !== i);
-                                const newServiceArea = {
-                                  ...(profile?.serviceArea || {}),
-                                  businessType: showsAddress ? "CUSTOMER_AND_BUSINESS_LOCATION" : "CUSTOMER_LOCATION_ONLY",
-                                  places: { placeInfos: updatedPlaces },
-                                };
-                                setProfile((prev) => prev ? { ...prev, serviceArea: newServiceArea } : prev);
-                                setDirty(true);
-                                saveProfileField("serviceArea", newServiceArea);
-                              }}
-                              className="text-gray-400 transition-colors group-hover/place:text-muted hover:!text-danger"
-                              title="Remove"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
+                  <div className="py-2 space-y-2">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-[10px] text-muted">Service Areas</p>
+                      <p className="text-[10px] font-mono text-muted">
+                        {places.length} / {SERVICE_AREA_CAP}
+                      </p>
+                    </div>
+
+                    {/* Opinionated coaching message — discourages location-spam.
+                        Google caps at 20 service areas, but covering every nearby
+                        ZIP dilutes ranking for the places that actually matter. */}
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                      <p className="font-medium mb-0.5">Quality &gt; quantity</p>
+                      <p className="text-amber-800/80 dark:text-amber-300/80">
+                        Only declare places where you actually do work. Adding
+                        every nearby city dilutes your search visibility for the
+                        places that matter most. Google allows up to 20 — most
+                        businesses need 3–8.
+                      </p>
+                    </div>
+
+                    {places.length > 0 && (() => {
+                      // Sort by kind precedence (broad → narrow). Unknown
+                      // kinds default to 'city' (precedence 4) which puts
+                      // them mid-list. Original index preserved as tiebreaker
+                      // so the remove button still hits the right row.
+                      const kinds = profile.serviceAreaKinds || {};
+                      const sorted = places
+                        .map((place, originalIndex) => ({
+                          place,
+                          originalIndex,
+                          kind: kinds[place.placeId ?? ""] ?? "city",
+                        }))
+                        .sort((a, b) => {
+                          const pa = KIND_PRECEDENCE[a.kind] ?? 4;
+                          const pb = KIND_PRECEDENCE[b.kind] ?? 4;
+                          return pa - pb || a.originalIndex - b.originalIndex;
+                        });
+                      return (
+                        <div className="space-y-1">
+                          {sorted.map(({ place, originalIndex, kind }) => (
+                            <div key={originalIndex} className="group/place flex items-center justify-between border-b border-border py-1 last:border-0 gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="text-xs truncate">{place.placeName}</span>
+                                <span
+                                  className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${kindBadgeClass(kind)}`}
+                                  title={`Granularity: ${kind}`}
+                                >
+                                  {kind}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  const updatedPlaces = places.filter((_, j) => j !== originalIndex);
+                                  const newServiceArea = {
+                                    ...(profile?.serviceArea || {}),
+                                    businessType: showsAddress ? "CUSTOMER_AND_BUSINESS_LOCATION" : "CUSTOMER_LOCATION_ONLY",
+                                    places: { placeInfos: updatedPlaces },
+                                  };
+                                  setProfile((prev) => prev ? { ...prev, serviceArea: newServiceArea } : prev);
+                                  setDirty(true);
+                                  saveProfileField("serviceArea", newServiceArea);
+                                }}
+                                className="text-gray-400 shrink-0 transition-colors group-hover/place:text-muted hover:!text-danger"
+                                title="Remove"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                    {atCap ? (
+                      <div className="rounded-md border border-border bg-card/30 px-2.5 py-2 text-[11px] text-muted text-center">
+                        Service area cap reached ({SERVICE_AREA_CAP}/{SERVICE_AREA_CAP}).
+                        Remove one to add another.
                       </div>
+                    ) : (
+                      <>
+                        <ServiceAreaInput
+                          onAdd={(place) => {
+                            const updatedPlaces = [...places, place];
+                            const newServiceArea = {
+                              ...(profile?.serviceArea || {}),
+                              businessType: showsAddress ? "CUSTOMER_AND_BUSINESS_LOCATION" : "CUSTOMER_LOCATION_ONLY",
+                              regionCode: "US",
+                              places: { placeInfos: updatedPlaces },
+                            };
+                            setProfile((prev) => prev ? { ...prev, serviceArea: newServiceArea } : prev);
+                            setDirty(true);
+                            // Persist to the gbp_profile cache so the change
+                            // survives reload and lands on the dirty_fields list.
+                            saveProfileField("serviceArea", newServiceArea);
+                            // Fire-and-forget enrichment — pulls Place details
+                            // (viewport, types, kind) into service_areas_canonical
+                            // so downstream readers (orchestrator, asset matcher,
+                            // landing-page generator) have everything ready.
+                            fetch("/api/gbp-place/enrich", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ place_id: place.placeId, place_name: place.placeName }),
+                            }).catch(() => { /* non-fatal */ });
+                          }}
+                        />
+                        <p className="text-[9px] text-muted text-right">
+                          {slotsRemaining} {slotsRemaining === 1 ? "slot" : "slots"} remaining
+                        </p>
+                      </>
                     )}
-                    <ServiceAreaInput
-                      onAdd={(place) => {
-                        const updatedPlaces = [...places, place];
-                        const newServiceArea = {
-                          ...(profile?.serviceArea || {}),
-                          businessType: showsAddress ? "CUSTOMER_AND_BUSINESS_LOCATION" : "CUSTOMER_LOCATION_ONLY",
-                          regionCode: "US",
-                          places: { placeInfos: updatedPlaces },
-                        };
-                        setProfile((prev) => prev ? { ...prev, serviceArea: newServiceArea } : prev);
-                        setDirty(true);
-                        // Persist to the gbp_profile cache so the change
-                        // survives reload and lands on the dirty_fields list.
-                        saveProfileField("serviceArea", newServiceArea);
-                        // Fire-and-forget enrichment — pulls Place details
-                        // (viewport, types, kind) into service_areas_canonical
-                        // so downstream readers (orchestrator, asset matcher,
-                        // landing-page generator) have everything ready.
-                        fetch("/api/gbp-place/enrich", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ place_id: place.placeId, place_name: place.placeName }),
-                        }).catch(() => { /* non-fatal */ });
-                      }}
-                    />
                   </div>
                 </>
               );

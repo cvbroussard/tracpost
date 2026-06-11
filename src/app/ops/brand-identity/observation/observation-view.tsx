@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   ReferenceDot,
 } from "recharts";
-import { BucketTabs } from "../page";
+import { DomainTabs } from "../page";
 import type {
   BrandIdentityObservationPayload,
   BrandClassVerdict,
@@ -147,7 +147,7 @@ function ObservationFetcher({ siteId }: { siteId: string }) {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="p-4 space-y-4 pb-12">
-      <BucketTabs bucket="observation" />
+      <DomainTabs domain="observation" />
       {children}
     </div>
   );

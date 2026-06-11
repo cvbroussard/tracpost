@@ -16,12 +16,9 @@ import {
   PHASE_LABELS,
   PHASE_DESCRIPTIONS,
   type DescriptorPhase,
+  type BrandDomain,
 } from "@/lib/brand-identity/catalog";
-import {
-  descriptorBucket,
-  STATISTICAL_DESCRIPTOR_KEYS,
-  type Bucket,
-} from "@/lib/brand-identity/buckets";
+import { isStatistical } from "@/lib/brand-identity/buckets";
 import {
   WEASEL_WORD_CATEGORIES,
   totalWeaselWordsCount,
@@ -704,17 +701,22 @@ const STATUS_BADGE: Record<string, string> = {
 
 export function BrandIdentityContent({
   siteId,
-  bucket = "all",
+  domain = "all",
 }: {
   siteId: string;
   /**
-   * Filter the descriptor render loop to a single bucket. "all" preserves
-   * the legacy combined view served at /ops/brand-identity. The bucket-
-   * specific sub-routes pass "statistical" or "creative" to render only
-   * their descriptor set. Completion stats + quality gate scope to the
-   * filtered set automatically.
+   * Filter the descriptor render loop to a single brand-identity domain
+   * (strategic / verbal / visual / sonic). "all" preserves the legacy
+   * combined view served at /ops/brand-identity. The domain-specific
+   * sub-routes pass the corresponding BrandDomain value. Completion stats
+   * + quality gate scope to the filtered set automatically.
+   *
+   * Engine-generated descriptors (statistical bucket — populated by the
+   * strategic-recommendation approve action) render as a per-descriptor
+   * read-only view INSIDE their domain page, rather than as a separate
+   * bucket page. This aligns navigation 1:1 with provisioning steps 8-11.
    */
-  bucket?: Bucket | "all";
+  domain?: BrandDomain | "all";
 }) {
   const [data, setData] = useState<BrandIdentityData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1402,27 +1404,37 @@ export function BrandIdentityContent({
   // by the extraction workflow and reviewed separately.
   const allDeclared = data.descriptors.filter((d) => d.spec?.lean === "declared");
   const allRequired = data.descriptors.filter((d) => REQUIRED_KEYS.has(d.key));
-  // Bucket filter — "all" preserves legacy combined behavior; "statistical"
-  // and "creative" scope to their descriptor set. Stats below compute against
-  // the filtered set so each bucket page shows its own completion ratio.
+  // Domain filter — "all" preserves the legacy combined view;
+  // strategic / verbal / visual / sonic scope to a single brand domain.
+  // Stats below compute against the filtered set so each domain page shows
+  // its own completion ratio. Engine-generated (statistical-bucket)
+  // descriptors are included in the filter but render as read-only per
+  // [[brand-identity-bucket-to-domain-restructure]] (2026-06-11).
   const declared =
-    bucket === "all"
+    domain === "all"
       ? allDeclared
-      : allDeclared.filter((d) => descriptorBucket(d.key) === bucket);
+      : allDeclared.filter((d) => d.spec?.domain === domain);
   const required =
-    bucket === "all"
+    domain === "all"
       ? allRequired
-      : allRequired.filter((d) => descriptorBucket(d.key) === bucket);
-  const requiredCount = required.length;
-  const satisfied = required.filter(isSatisfied).length;
+      : allRequired.filter((d) => d.spec?.domain === domain);
+  // Required-count + quality gate exclude statistical-bucket descriptors —
+  // they're populated by the strategic-recommendation approve flow, not by
+  // owner-typed input + validation. Their completion signal is "bundle
+  // committed" (declared !== null), not "validation passes". Owner-curated
+  // (non-statistical) required descriptors still drive the gate.
+  const ownerCurated = required.filter((d) => !isStatistical(d.key));
+  const requiredCount = ownerCurated.length;
+  const satisfied = ownerCurated.filter(isSatisfied).length;
   const complete = requiredCount > 0 && satisfied === requiredCount;
 
-  // Quality gate: every required descriptor needs validationFindings with all-pass verdicts.
-  // Hard-pass-only per the locked methodology — no "Keep mine" acknowledgment in v1.
+  // Quality gate: every owner-curated required descriptor needs
+  // validationFindings with all-pass verdicts. Hard-pass-only per locked
+  // methodology — no "Keep mine" acknowledgment in v1.
   let totalFindings = 0;
   let totalWarnings = 0;
   let qualityReadyCount = 0;
-  for (const d of required) {
+  for (const d of ownerCurated) {
     const findings = d.metadata?.validationFindings?.findings;
     if (!findings) continue;
     totalFindings += findings.length;
@@ -1433,24 +1445,11 @@ export function BrandIdentityContent({
   const qualityPass = complete && qualityReadyCount === requiredCount;
   const extractGateOpen = complete && qualityPass;
 
-  // Statistical bucket — read-only view of the bundle JSON committed by the
-  // strategic recommendation approve action. No catalog input form, no
-  // validation, no validation groups. Per the locked Statistical-bucket-UI
-  // direction (2026-06-01): editing is forbidden, not just hidden.
-  if (bucket === "statistical") {
-    return (
-      <div className="p-4 space-y-4 pb-12">
-        <BucketTabs bucket={bucket} />
-        <StatisticalReadOnlyView descriptors={declared} />
-      </div>
-    );
-  }
-
   return (
     <div className="p-4 space-y-4 pb-12">
-      {/* Bucket tab strip — visible on every variant; "all" view shows neither
+      {/* Domain tab strip — visible on every variant; "all" view shows no
           tab as active (signals "you're on the legacy combined view"). */}
-      <BucketTabs bucket={bucket} />
+      <DomainTabs domain={domain} />
 
       {/* Completion gate */}
       <div
@@ -1833,47 +1832,58 @@ export function BrandIdentityContent({
               </p>
             </div>
             <div className="space-y-3">
-              {group.map((d) => (
-                <DescriptorCard
-                  key={d.key}
-                  d={d}
-                  siteId={siteId}
-                  draft={drafts[d.key]}
-                  isSaving={savingKey === d.key}
-                  isDirty={
-                    JSON.stringify(drafts[d.key]) !== JSON.stringify(saved[d.key])
-                  }
-                  required={REQUIRED_KEYS.has(d.key)}
-                  pickerOpen={pickerKey === d.key}
-                  assets={assets}
-                  dictationSupported={dictation.supported}
-                  dictationActive={dictatingKey === d.key}
-                  dictationState={dictation.state}
-                  dictationElapsedMs={dictation.elapsedMs}
-                  onDictate={() => toggleDictate(d.key)}
-                  onChange={(v) => setDrafts((prev) => ({ ...prev, [d.key]: v }))} // v is string OR object depending on descriptor shape
-                  onBlur={() => saveDeclared(d.key)}
-                  onOpenPicker={async () => {
-                    await ensureAssets();
-                    setPickerKey(pickerKey === d.key ? null : d.key);
-                  }}
-                  onToggleAsset={(assetId, bound) => toggleBinding(d.key, assetId, bound)}
-                  onToggleBaseline={(baselineId, optingOut) =>
-                    toggleBaseline(d.key, baselineId, optingOut)
-                  }
-                  forbiddenTerms={forbiddenTerms}
-                  validatingScopeId={
-                    validatingKey?.startsWith(`${d.key}::`)
-                      ? validatingKey.slice(`${d.key}::`.length)
-                      : null
-                  }
-                  onValidate={(scope) => runDescriptorValidation(d.key, scope)}
-                  onStabilityTest={(scope) => runStabilityTest(d.key, scope)}
-                  onReset={(scope) => runReset(d.key, scope)}
-                  onOpenFindings={(scope) => openFindings(d.key, scope)}
-                  gbpCategories={d.key === "offer" ? data.gbpCategories : undefined}
-                />
-              ))}
+              {group.map((d) =>
+                // Per-descriptor fork: statistical-bucket descriptors (engine-
+                // generated via strategic-recommendation approve flow) render
+                // read-only inside their domain page. Owner-curated descriptors
+                // render the regular editable DescriptorCard. This is what
+                // dissolves the bucket/domain navigation mismatch — tagline
+                // renders on /verbal with the engine-generated badge; proof
+                // renders on /strategic with the regular editor.
+                isStatistical(d.key) ? (
+                  <StatisticalDescriptorReadOnly key={d.key} descriptor={d} />
+                ) : (
+                  <DescriptorCard
+                    key={d.key}
+                    d={d}
+                    siteId={siteId}
+                    draft={drafts[d.key]}
+                    isSaving={savingKey === d.key}
+                    isDirty={
+                      JSON.stringify(drafts[d.key]) !== JSON.stringify(saved[d.key])
+                    }
+                    required={REQUIRED_KEYS.has(d.key)}
+                    pickerOpen={pickerKey === d.key}
+                    assets={assets}
+                    dictationSupported={dictation.supported}
+                    dictationActive={dictatingKey === d.key}
+                    dictationState={dictation.state}
+                    dictationElapsedMs={dictation.elapsedMs}
+                    onDictate={() => toggleDictate(d.key)}
+                    onChange={(v) => setDrafts((prev) => ({ ...prev, [d.key]: v }))} // v is string OR object depending on descriptor shape
+                    onBlur={() => saveDeclared(d.key)}
+                    onOpenPicker={async () => {
+                      await ensureAssets();
+                      setPickerKey(pickerKey === d.key ? null : d.key);
+                    }}
+                    onToggleAsset={(assetId, bound) => toggleBinding(d.key, assetId, bound)}
+                    onToggleBaseline={(baselineId, optingOut) =>
+                      toggleBaseline(d.key, baselineId, optingOut)
+                    }
+                    forbiddenTerms={forbiddenTerms}
+                    validatingScopeId={
+                      validatingKey?.startsWith(`${d.key}::`)
+                        ? validatingKey.slice(`${d.key}::`.length)
+                        : null
+                    }
+                    onValidate={(scope) => runDescriptorValidation(d.key, scope)}
+                    onStabilityTest={(scope) => runStabilityTest(d.key, scope)}
+                    onReset={(scope) => runReset(d.key, scope)}
+                    onOpenFindings={(scope) => openFindings(d.key, scope)}
+                    gbpCategories={d.key === "offer" ? data.gbpCategories : undefined}
+                  />
+                ),
+              )}
             </div>
           </div>
         );
@@ -1888,7 +1898,7 @@ function fmtElapsed(ms: number): string {
 }
 
 // ============================================================================
-// Statistical bucket — read-only render of bundle JSON
+// Statistical-bucket per-descriptor read-only render
 // ============================================================================
 //
 // Per the locked direction (2026-06-01, see memory): no input form, no
@@ -1897,63 +1907,14 @@ function fmtElapsed(ms: number): string {
 // engine's confidence pills + reasoning + coherence ARE the per-element
 // quality signal — no separate validator pass at this bucket level.
 //
+// 2026-06-11 restructure: the per-page wrapper (StatisticalReadOnlyView)
+// retired; statistical descriptors now render via StatisticalDescriptorReadOnly
+// directly inside the domain-page descriptor loop. See
+// [[brand-identity-bucket-to-domain-restructure]].
+//
 // Each descriptor's declared JSONB carries the bundle element shape
 // (per approveStrategicRecommendation). When declared is null the
 // strategic recommendation hasn't been run/approved for that element.
-
-function StatisticalReadOnlyView({
-  descriptors,
-}: {
-  descriptors: DescriptorRecord[];
-}) {
-  const byKey = new Map(descriptors.map((d) => [d.key, d]));
-  const populated = descriptors.filter((d) => d.declared !== null).length;
-  const total = STATISTICAL_DESCRIPTOR_KEYS.length;
-
-  return (
-    <>
-      {/* Status header — replaces the Creative-bucket completion gate */}
-      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-xs font-semibold">Statistical Branding · committed bundle</h3>
-            <p className="mt-0.5 text-[10px] text-muted">
-              Read-only view of the strategic recommendation bundle. The engine&apos;s confidence
-              + reasoning + coherence are the per-element quality signal — no validator pass
-              at this bucket level. Editing is intentionally not surfaced.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`rounded px-2 py-0.5 text-[10px] font-medium ${
-                populated === total
-                  ? "bg-success/10 text-success"
-                  : "bg-surface-hover text-foreground"
-              }`}
-            >
-              Committed: {populated}/{total}
-            </span>
-            <Link
-              href="/ops/strategic-recommendation"
-              className="rounded border border-border px-2 py-1 text-[10px] hover:bg-surface-hover"
-            >
-              Generate / Review →
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Per-descriptor read-only cards */}
-      <div className="space-y-3">
-        {STATISTICAL_DESCRIPTOR_KEYS.map((key) => {
-          const d = byKey.get(key);
-          if (!d) return null;
-          return <StatisticalDescriptorReadOnly key={key} descriptor={d} />;
-        })}
-      </div>
-    </>
-  );
-}
 
 function StatisticalDescriptorReadOnly({
   descriptor,
@@ -2250,41 +2211,46 @@ function UnknownShapeReadOnly({ value }: { value: unknown }) {
 
 /**
  * Tab strip rendered at the top of every brand-identity page variant.
- * Routes to /ops/brand-identity/statistical and /ops/brand-identity/creative.
- * The legacy /ops/brand-identity route renders with bucket="all" and shows
- * neither tab as active (signals "you're on the combined view — pick a bucket").
+ * Routes to the 4 brand-identity domain pages (one per provisioning step
+ * 8-11) plus the two observation pipelines. The legacy /ops/brand-identity
+ * route renders with domain="all" and shows no domain tab as active.
+ *
+ * Restructure 2026-06-11: replaced Statistical / Creative bucket tabs
+ * with the 4 domain tabs. Engine-generated descriptors (the Statistical
+ * bucket) render read-only inside their domain page now — see
+ * [[brand-identity-bucket-to-domain-restructure]].
  */
-export function BucketTabs({
-  bucket,
+export function DomainTabs({
+  domain,
 }: {
-  bucket: Bucket | "all" | "observation" | "readiness-findings";
+  domain: BrandDomain | "all" | "observation" | "readiness-findings";
 }) {
+  const tabs: Array<{ key: BrandDomain; href: string; label: string; count: number }> = [
+    { key: "strategic", href: "/ops/brand-identity/strategic", label: "Strategic", count: 6 },
+    { key: "verbal", href: "/ops/brand-identity/verbal", label: "Verbal", count: 6 },
+    { key: "visual", href: "/ops/brand-identity/visual", label: "Visual", count: 6 },
+    { key: "sonic", href: "/ops/brand-identity/sonic", label: "Sonic", count: 2 },
+  ];
   return (
-    <div className="flex items-center gap-1 border-b border-border">
-      <Link
-        href="/ops/brand-identity/statistical"
-        className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
-          bucket === "statistical"
-            ? "border-accent text-foreground"
-            : "border-transparent text-muted hover:text-foreground"
-        }`}
-      >
-        Statistical (6) <span className="text-[9px] text-muted ml-1">recommendation-driven</span>
-      </Link>
-      <Link
-        href="/ops/brand-identity/creative"
-        className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
-          bucket === "creative"
-            ? "border-accent text-foreground"
-            : "border-transparent text-muted hover:text-foreground"
-        }`}
-      >
-        Creative (20) <span className="text-[9px] text-muted ml-1">owner-authored</span>
-      </Link>
+    <div className="flex items-center gap-1 border-b border-border flex-wrap">
+      {tabs.map((t) => (
+        <Link
+          key={t.key}
+          href={t.href}
+          className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
+            domain === t.key
+              ? "border-accent text-foreground"
+              : "border-transparent text-muted hover:text-foreground"
+          }`}
+        >
+          {t.label} <span className="text-[9px] text-muted ml-1">({t.count})</span>
+        </Link>
+      ))}
+      <span className="mx-2 text-[10px] text-muted/50">·</span>
       <Link
         href="/ops/brand-identity/observation"
         className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
-          bucket === "observation"
+          domain === "observation"
             ? "border-accent text-foreground"
             : "border-transparent text-muted hover:text-foreground"
         }`}
@@ -2294,16 +2260,16 @@ export function BucketTabs({
       <Link
         href="/ops/brand-identity/readiness-findings"
         className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
-          bucket === "readiness-findings"
+          domain === "readiness-findings"
             ? "border-accent text-foreground"
             : "border-transparent text-muted hover:text-foreground"
         }`}
       >
         Readiness Findings <span className="text-[9px] text-muted ml-1">consultation deliverable</span>
       </Link>
-      {bucket === "all" && (
+      {domain === "all" && (
         <span className="ml-auto text-[9px] uppercase tracking-wide text-muted">
-          Combined view · pick a bucket above
+          Combined view · pick a domain above
         </span>
       )}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BucketTabs } from "../page";
+import { DomainTabs } from "../page";
 import type {
   ReadinessFinding,
   ReadinessFindingsPayload,
@@ -244,7 +244,7 @@ function ReadinessFindingsFetcher({ siteId }: { siteId: string }) {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="p-4 space-y-5 pb-12 max-w-5xl">
-      <BucketTabs bucket="readiness-findings" />
+      <DomainTabs domain="readiness-findings" />
       {children}
     </div>
   );

@@ -274,19 +274,19 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "Resolve findings", href: "/ops/brand-identity/readiness-findings", icon: "→" },
   ],
   brand_strategic: [
-    { label: "Edit strategic descriptors", href: "/ops/brand-identity", icon: "→" },
+    { label: "Edit strategic descriptors", href: "/ops/brand-identity/strategic", icon: "→" },
   ],
   brand_verbal: [
-    { label: "Edit verbal descriptors", href: "/ops/brand-identity", icon: "→" },
+    { label: "Edit verbal descriptors", href: "/ops/brand-identity/verbal", icon: "→" },
   ],
   brand_visual: [
-    { label: "Edit visual descriptors", href: "/ops/brand-identity", icon: "→" },
+    { label: "Edit visual descriptors", href: "/ops/brand-identity/visual", icon: "→" },
   ],
   website_provisioning: [
     { label: "Open website console", href: "/ops/website", icon: "→" },
   ],
   brand_sonic: [
-    { label: "Edit sonic descriptors", href: "/ops/brand-identity", icon: "→" },
+    { label: "Edit sonic descriptors", href: "/ops/brand-identity/sonic", icon: "→" },
   ],
   brand_identity_complete: [
     { label: "View brand identity", href: "/ops/brand-identity", icon: "→" },

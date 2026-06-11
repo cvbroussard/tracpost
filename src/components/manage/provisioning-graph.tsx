@@ -244,10 +244,6 @@ const SUB_TASK_ACTIONS: Record<string, TaskAction[]> = {
   "business_info.safeguard_identity": [
     { label: "Sign identity waiver", href: "/dashboard/business/content-safeguards", icon: "→" },
   ],
-
-  // website_provisioning has no sub_tasks per the strategic decision —
-  // the drawer is a click-out to /ops/website where the substantive
-  // provisioning work lives.
 };
 
 const TASK_ACTIONS: Record<string, TaskAction[]> = {
@@ -282,9 +278,6 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
   ],
   brand_visual: [
     { label: "Edit visual descriptors", href: "/ops/brand-identity/visual", icon: "→" },
-  ],
-  website_provisioning: [
-    { label: "Open website console", href: "/ops/website", icon: "→" },
   ],
   brand_sonic: [
     { label: "Edit sonic descriptors", href: "/ops/brand-identity/sonic", icon: "→" },
@@ -1583,10 +1576,9 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
     [tasks],
   );
   // A dependency is "satisfied" if it's complete OR not_applicable.
-  // 'not_applicable' tasks (e.g., website_provisioning for external_hosted
-  // brands) shouldn't perpetually block downstream — they're explicitly
-  // marked as "no longer required for this brand" per the hosting-model
-  // fork doctrine ([[hosting-positioning]]).
+  // 'not_applicable' tasks shouldn't perpetually block downstream —
+  // they're explicitly marked as "no longer required for this brand"
+  // (e.g., by a hosting-model fork or similar conditional).
   const isDepSatisfied = (status: string) =>
     status === "complete" || status === "not_applicable";
   // Compute gating state per task — ortho to operational status. See the

@@ -80,12 +80,15 @@ const BUSINESS_INFO_ALL_SUBS = [
   "safeguard_identity",
 ] as const;
 
-// Note: the early-stage website task (website_tracpost_provision +
-// website_external_registered, both at sort 15) was retired by migration
-// 147. Replaced with a single downstream `website_provisioning` task
-// gated on brand_identity_complete. That task's drawer is a click-out
-// to /ops/website (or its successor) — no inline sub_tasks per the
-// strategic decision (LOCKED 2026-06-08, [[hosting-positioning]]).
+// Note: website provisioning has been fully retired from this pipeline.
+// Migration 147 collapsed early-stage tasks (website_tracpost_provision +
+// website_external_registered) into a single downstream website_provisioning
+// gate; migration 151 then retired that gate as a phantom step per
+// [[phantom-step-rule]] (its completion criterion was just "the generator's
+// outputs exist" — a status echo, not canonical work). The website
+// generator lives at /ops/website with its own observability surface;
+// provisioning ends at brand_identity_complete (step 12) per
+// [[provisioning-scope]].
 
 // Sub_keys for gbp_location (added by migration 148). All 5 represent
 // owner-declared GBP profile fields; first 3 are required for parent
@@ -262,13 +265,15 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
 
   // business_info sub_task data — read all relevant columns in one query.
   // OG metadata lives separately in seo_content; pulled in parallel.
-  // Website provisioning signals come from businesses + blog_settings.
   // GBP profile signals (step 14 sub_tasks) come from businesses.gbp_profile.
+  // page_config / work_content / website_copy intentionally NOT read here —
+  // they're website-generator outputs, not provisioning inputs. Retired
+  // 2026-06-11 along with the website_provisioning phantom step.
   const [bizRow] = await sql`
     SELECT name, business_type, location, commercial_tier_id, hosting_model,
            business_phone, business_email,
            business_logo, business_favicon,
-           url, blog_slug, page_config, work_content, website_copy,
+           url, blog_slug,
            gbp_profile,
            face_waiver_signed_at, minor_face_waiver_signed_at, identity_waiver_signed_at
     FROM businesses WHERE id = ${businessId} LIMIT 1
@@ -351,19 +356,13 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     social_profile_urls: gbpSocialProfiles.length >= 1,
   };
 
-  // website_provisioning task — sub_task-less per the strategic decision.
-  // Completion criterion: TracPost-hosted brands need page_config +
-  // website_copy + work_content all populated (the actual generation
-  // pipeline has run). External-hosted brands: marked not_applicable
-  // below in the hosting-model fork.
-  const pageConfigArray = bizData.page_config;
-  const workContentObj = bizData.work_content;
-  const tracpostHostingProvisioned =
-    nonEmpty(blogSettings.custom_domain) &&
-    Array.isArray(pageConfigArray) && pageConfigArray.length > 0 &&
-    (typeof bizData.website_copy === "object" && bizData.website_copy !== null) &&
-    typeof workContentObj === "object" && workContentObj !== null &&
-    Object.keys(workContentObj as Record<string, unknown>).length > 0;
+  // website_provisioning retired 2026-06-11 per [[phantom-step-rule]] +
+  // [[provisioning-scope]]. Its completion criterion was just "the
+  // generator's outputs exist" (page_config + website_copy + work_content
+  // populated) — a status echo of the downstream website generator, not
+  // canonical work of its own. The generator lives at /ops/website with
+  // its own observability surface; provisioning ends at brand_identity_
+  // _complete (step 12).
 
   // ── Compute desired sub_task completion ──
 
@@ -479,29 +478,8 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     // don't block. Per the doctrine: tenant-owned declarations;
     // operator-side drawer is read-only observability.
     gbp_location: rollupDomain(GBP_REQUIRED_SUBS),
-    // website_provisioning: downstream task gated on brand_identity_complete.
-    // Completion criterion is "the catalog-driven render pipeline has run"
-    // — page_config + website_copy + work_content all populated. The
-    // hosting-model fork below overrides this to 'not_applicable' for
-    // externally-hosted brands per [[hosting-positioning]].
-    website_provisioning: tracpostHostingProvisioned ? "complete" : "pending",
   };
 
-  // ── Hosting-model fork (Step 15: website_provisioning) ──
-  //
-  // Per [[hosting-positioning]]: TracPost offers root-domain hosting OR
-  // a content feed (external_hosted). The website_provisioning task only
-  // applies to TracPost-hosted brands. For external-hosted brands it's
-  // marked 'not_applicable' — they don't need a TracPost-served site.
-  // Downstream tasks (search_console) that depended on the old website
-  // tasks now treat 'not_applicable' as satisfying their dependency
-  // (handled in the UI's isBlocked check).
-  const hostingModel = bizData.hosting_model as string | null | undefined;
-  if (hostingModel === "external_hosted") {
-    upstreamStatus.website_provisioning = "not_applicable";
-  }
-  // hostingModel === 'tracpost_hosted' → status from tracpostHostingProvisioned above
-  // hostingModel === null              → pending; subscriber must declare hosting model first
   // ── brand_identity_complete: snapshot-gated, not domain-gated ──
   //
   // Per [[phantom-step-rule]] this step does its own canonical work — sealing
@@ -548,7 +526,7 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
   // run exists, findings are stale and should be re-consolidated.
   //
   // Generalizable to: brand_findings_resolved (consumed findings substrate),
-  // website_provisioning (consumed catalog version at render), etc.
+  // any future task that records a source_substrate_id linkage, etc.
   const staleTasks: Record<string, boolean> = {};
 
   const latestPpaSubstrateId = latestSubstrateIdByKind.get("public_presence_observation");

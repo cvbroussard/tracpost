@@ -426,8 +426,12 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     brand_categorization: categorizationComplete ? "complete" : "pending",
     brand_public_presence: substrateMap.has("public_presence_observation") ? "complete" : "pending",
     brand_cma: cmaComplete ? "complete" : "pending",
-    brand_triage:
-      substrateMap.has("public_presence_observation") && cmaComplete ? "complete" : "pending",
+    // brand_triage retired 2026-06-11 per [[phantom-step-rule]] — the
+    // verdict tag lives in PPA's payload.meta.verdict and is computed
+    // there. No standalone work happened in this step; it just gated on
+    // "PPA done AND CMA done" which was already encoded in the
+    // dependency graph. brand_readiness_findings now depends directly
+    // on brand_public_presence + brand_cma.
     brand_readiness_findings: substrateMap.has("readiness_findings") ? "complete" : "pending",
     brand_findings_resolved: findingsResolved ? "complete" : "pending",
     brand_strategic: rollupDomain(STRATEGIC_SUBS),

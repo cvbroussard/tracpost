@@ -51,7 +51,8 @@ const TASK_FAMILY: Record<string, Family> = {
 
   brand_public_presence: "brand_observation",
   brand_cma: "brand_observation",
-  brand_triage: "brand_observation",
+  // brand_triage retired 2026-06-11 per [[phantom-step-rule]] —
+  // its verdict tag lives in PPA's observation, no standalone work.
   brand_readiness_findings: "brand_observation",
   brand_findings_resolved: "brand_observation",
 
@@ -257,7 +258,7 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "Run Analysis", action: "rerun_cma", icon: "⟳" },
     { label: "View CMA", href: "/ops/competitive-analysis", icon: "→" },
   ],
-  brand_triage: [{ label: "View brand identity", href: "/ops/brand-identity", icon: "→" }],
+  // brand_triage retired 2026-06-11 — see [[phantom-step-rule]]
   brand_readiness_findings: [
     { label: "View findings", href: "/ops/brand-identity/readiness-findings", icon: "→" },
   ],

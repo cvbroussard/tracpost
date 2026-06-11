@@ -11,6 +11,7 @@ import { GbpDeclarationsDisplay } from "@/components/manage/gbp-declarations-dis
 import { ReadinessFindingsSummary } from "@/components/manage/readiness-findings-summary";
 import { ReadinessResolutionSummary } from "@/components/manage/readiness-resolution-summary";
 import { BrandIdentitySnapshotSummary } from "@/components/manage/brand-identity-snapshot-summary";
+import { IntegrationsStatusSummary } from "@/components/manage/integrations-status-summary";
 
 interface SubTask {
   sub_key: string;
@@ -174,38 +175,13 @@ interface TaskAction {
  * load marks the sub_task complete.
  */
 const SUB_TASK_ACTIONS: Record<string, TaskAction[]> = {
-  // integrations.{platform} — initiates the platform's OAuth flow via the
-  // existing /api/auth/{platform} session-authed endpoint. The endpoint 302s
-  // to the platform's OAuth authorization URL; browser navigates, OAuth
-  // completes, callback fires, user returns. The recompute on next
-  // /api/ops/provisioning load marks the sub_task complete.
-  //
-  // Instagram + Facebook share a single Meta endpoint (/api/auth/instagram)
-  // because Meta OAuth covers both pages + IG accounts.
-  "integrations.instagram": [
-    { label: "Connect Instagram (Meta OAuth)", href: "/api/auth/instagram", icon: "▶" },
-  ],
-  "integrations.facebook": [
-    { label: "Connect Facebook (Meta OAuth)", href: "/api/auth/instagram", icon: "▶" },
-  ],
-  "integrations.tiktok": [
-    { label: "Connect TikTok", href: "/api/auth/tiktok", icon: "▶" },
-  ],
-  "integrations.youtube": [
-    { label: "Connect YouTube", href: "/api/auth/youtube", icon: "▶" },
-  ],
-  "integrations.pinterest": [
-    { label: "Connect Pinterest", href: "/api/auth/pinterest", icon: "▶" },
-  ],
-  "integrations.linkedin": [
-    { label: "Connect LinkedIn", href: "/api/auth/linkedin", icon: "▶" },
-  ],
-  "integrations.twitter": [
-    { label: "Connect X (Twitter)", href: "/api/auth/twitter", icon: "▶" },
-  ],
-  "integrations.gbp": [
-    { label: "Connect Google Business", href: "/api/auth/google", icon: "▶" },
-  ],
+  // integrations.{platform} — sub_task drawer shows the per-platform
+  // PlatformConfig coaching content (read-only, reference material for
+  // the operator). No connect actions here because OAuth must run in
+  // the TENANT'S session (operator-side connect buttons would start
+  // the operator's OAuth, not the tenant's). The operator's nudge
+  // affordance is the task-level "Send connection invite to tenant"
+  // action. Per the 2026-06-11 audit.
 
   // business_info.{sub_key} — for now, all sub_tasks deep-link to the
   // dashboard pages that hold the canonical edit form. Future iteration
@@ -277,10 +253,13 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "View brand identity", href: "/ops/brand-identity", icon: "→" },
   ],
 
-  integrations: [
-    { label: "Manage integrations", href: "/dashboard/integrations", icon: "→" },
-    { label: "Send connection invite to tenant", action: "send_invite", icon: "✉" },
-  ],
+  // integrations: operator is purely an observer. Per the 2026-06-11 audit:
+  // - "Manage integrations" was a tenant-context link (auth boundary breaks
+  //   from the ops surface).
+  // - "Send connection invite to tenant" was wired in TASK_ACTIONS but
+  //   never wired in handleAction. Dropped pending a real implementation.
+  // The drawer body (IntegrationsStatusSummary) is the complete observer
+  // surface; no task-level actions belong here today.
   gbp_location: [
     { label: "Open subscriber view", href: "/dashboard/google/profile", icon: "→" },
   ],
@@ -1043,6 +1022,24 @@ function TaskDetailDrawer({
               </section>
             )}
 
+            {/* integrations task scope — per-platform connection observability.
+                Replaces the on-card expand/collapse list. Card auto-completes
+                when GBP connects; the other 7 are visible but non-gating. */}
+            {task.task_key === "integrations" && (
+              <section>
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
+                  Platform connections
+                </h3>
+                <IntegrationsStatusSummary
+                  subTasks={(task.subTasks as Array<{ sub_key: string; status: string }>).map((s) => ({
+                    sub_key: s.sub_key,
+                    status: s.status,
+                  }))}
+                  onSubTaskClick={(subKey) => onSelectSubKey(subKey)}
+                />
+              </section>
+            )}
+
             {/* gbp_location task scope — read-only display of all owner-declared
                 GBP profile fields. Per doctrine: subscriber declares everything
                 at /dashboard/google/profile; operator observes only. */}
@@ -1679,7 +1676,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
                     "brand_verbal",
                     "brand_visual",
                     "brand_sonic",
-                    "integrations",
                     "business_info",
                     "gbp_location",
                   ].includes(task.task_key);
@@ -1725,7 +1721,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
               "brand_verbal",
               "brand_visual",
               "brand_sonic",
-              "integrations",
               "business_info",
               "gbp_location",
             ].includes(drawerTask.task_key) : false}

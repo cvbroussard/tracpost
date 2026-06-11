@@ -42,9 +42,17 @@ const VISUAL_SUBS = [
 ] as const;
 const SONIC_SUBS = ["composite_specimen", "pronunciation"] as const;
 
-// Platform sub_keys for the integrations task (consolidated 2026-06-07).
-// integrations.{platform} = OAuth-connected to TracPost.
-const INTEGRATION_PLATFORMS = [
+// Platform sub_keys for the integrations task. ALL_SUBS is the full list
+// for per-platform sub_task tracking (drawer shows all 8 with connection
+// status — operator observability). REQUIRED_SUBS is just GBP, which is
+// the only integration that feeds brand identity (brand_categorization via
+// business_gbp_categories). The other 7 platforms gate downstream
+// publishing/orchestration, not brand identity, so they don't gate the
+// parent task. Same REQUIRED/ALL split pattern as business_info /
+// gbp_location (LOCKED 2026-06-11 audit).
+const INTEGRATION_REQUIRED_SUBS = ["gbp"] as const;
+const INTEGRATION_ALL_SUBS = [
+  "gbp",
   "instagram",
   "facebook",
   "tiktok",
@@ -52,7 +60,6 @@ const INTEGRATION_PLATFORMS = [
   "pinterest",
   "linkedin",
   "twitter",
-  "gbp",
 ] as const;
 
 // Sub_keys for business_info — REQUIRED set (must complete for parent task
@@ -467,7 +474,7 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     brand_verbal: rollupDomain(VERBAL_SUBS),
     brand_visual: rollupDomain(VISUAL_SUBS),
     brand_sonic: rollupDomain(SONIC_SUBS),
-    integrations: rollupDomain(INTEGRATION_PLATFORMS),
+    integrations: rollupDomain(INTEGRATION_REQUIRED_SUBS),
     // business_info: parent completes only when all REQUIRED sub_tasks
     // complete. Optional sub_tasks (contact, branding, web_identity) show
     // progress but don't block.

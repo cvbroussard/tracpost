@@ -10,6 +10,7 @@ import { GbpCategoriesDisplay } from "@/components/manage/gbp-categories-display
 import { GbpDeclarationsDisplay } from "@/components/manage/gbp-declarations-display";
 import { ReadinessFindingsSummary } from "@/components/manage/readiness-findings-summary";
 import { ReadinessResolutionSummary } from "@/components/manage/readiness-resolution-summary";
+import { BrandIdentitySnapshotSummary } from "@/components/manage/brand-identity-snapshot-summary";
 
 interface SubTask {
   sub_key: string;
@@ -289,6 +290,7 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "Edit sonic descriptors", href: "/ops/brand-identity/sonic", icon: "→" },
   ],
   brand_identity_complete: [
+    { label: "Seal canonical catalog", action: "seal_brand_identity_snapshot", icon: "🔒" },
     { label: "View brand identity", href: "/ops/brand-identity", icon: "→" },
   ],
 
@@ -343,33 +345,72 @@ function computeDepths(tasks: Task[]): Map<string, number> {
   return depths;
 }
 
-function statusBar(status: string, blocked: boolean): string {
-  if (blocked) return "bg-red-500";
+/**
+ * Per-card status model has TWO orthogonal axes:
+ *
+ *   1. OPERATIONAL (DB `task.status`): pending / in_progress / complete /
+ *      blocked / not_applicable. `blocked` here is OPERATOR-FLAGGED (via the
+ *      context menu) — a genuine "this step has a problem" signal. Kept red.
+ *
+ *   2. GATING (UI-computed): ready / gated / n/a. Tells the operator whether
+ *      this task's upstream deps are met. Only meaningful when status =
+ *      pending — once the operator starts work, gating is moot.
+ *
+ * Previously the two were conflated under a single `blocked: boolean` UI
+ * flag — both "operator flagged a problem" AND "still waiting on upstream"
+ * got the same alarming red treatment. Now they're distinct: gated/ready get
+ * calm signals (gray vs accent); only operator-set blocked stays red.
+ */
+type GatingState = "ready" | "gated" | "n/a";
+interface GatingInfo {
+  state: GatingState;
+  depReady: number;
+  depTotal: number;
+}
+
+function statusBar(status: string, gating: GatingState): string {
+  if (status === "blocked") return "bg-red-500";
   if (status === "complete") return "bg-green-500";
   if (status === "in_progress") return "bg-blue-500";
+  if (gating === "ready") return "bg-accent";
   return "bg-slate-300 dark:bg-slate-600";
 }
 
-function statusLabel(status: string, blocked: boolean): string {
-  if (blocked) return "blocked";
-  return status;
+function statusLabel(status: string, gating: GatingInfo): string {
+  if (status === "pending") {
+    if (gating.state === "ready") return "▶ ready";
+    if (gating.state === "gated") return `gated · ${gating.depReady}/${gating.depTotal}`;
+  }
+  return status.replace("_", " ");
 }
 
 /**
- * Strong outer ring/overlay treatment for terminal statuses (complete, blocked).
- * Family color stays as the bg/tint; the ring + checkmark badge call attention
- * to status state. In-progress and pending keep the neutral family-only look.
+ * Strong outer ring/overlay treatment by axis:
+ *   - status=blocked → red (operator-flagged problem)
+ *   - status=complete → green
+ *   - gating=ready → subtle accent (calls attention to "actionable now")
+ *   - everything else → no ring
  */
-function statusRingClass(status: string, blocked: boolean): string {
-  if (blocked) return "ring-2 ring-red-500/70 shadow-red-200/50 dark:shadow-red-900/30";
-  if (status === "complete") return "ring-2 ring-green-500/70 shadow-green-200/50 dark:shadow-green-900/30";
+function statusRingClass(status: string, gating: GatingState): string {
+  if (status === "blocked")
+    return "ring-2 ring-red-500/70 shadow-red-200/50 dark:shadow-red-900/30";
+  if (status === "complete")
+    return "ring-2 ring-green-500/70 shadow-green-200/50 dark:shadow-green-900/30";
+  if (gating === "ready") return "ring-1 ring-accent/60";
   return "";
 }
 
-function statusOverlayClass(status: string, blocked: boolean): string {
-  if (blocked) return "bg-red-500/10 dark:bg-red-500/15";
+function statusOverlayClass(status: string): string {
+  if (status === "blocked") return "bg-red-500/10 dark:bg-red-500/15";
   if (status === "complete") return "bg-green-500/10 dark:bg-green-500/15";
   return "";
+}
+
+function statusTextColor(status: string, gating: GatingState): string {
+  if (status === "blocked") return "text-red-700 dark:text-red-400";
+  if (status === "complete") return "text-green-700 dark:text-green-400";
+  if (gating === "ready") return "text-accent";
+  return "text-muted";
 }
 
 // ── Task card component ─────────────────────────────────────────────────────
@@ -382,7 +423,7 @@ interface BlockerInfo {
 
 function TaskCard({
   task,
-  blocked,
+  gating,
   dependencies,
   expanded,
   isDomain,
@@ -392,7 +433,7 @@ function TaskCard({
   onSubTaskClick,
 }: {
   task: Task;
-  blocked: boolean;
+  gating: GatingInfo;
   /** All deps with their current status (regardless of complete/incomplete). */
   dependencies: BlockerInfo[];
   expanded: boolean;
@@ -405,11 +446,14 @@ function TaskCard({
 }) {
   const family = familyOf(task.task_key);
   const style = FAMILY_STYLE[family];
-  const bar = statusBar(task.status, blocked);
-  const sLabel = statusLabel(task.status, blocked);
+  const bar = statusBar(task.status, gating.state);
+  const sLabel = statusLabel(task.status, gating);
   const isComplete = task.status === "complete";
-  const ring = statusRingClass(task.status, blocked);
-  const overlay = statusOverlayClass(task.status, blocked);
+  const ring = statusRingClass(task.status, gating.state);
+  const overlay = statusOverlayClass(task.status);
+  const labelColor = statusTextColor(task.status, gating.state);
+  const isOperatorBlocked = task.status === "blocked";
+  const isGated = gating.state === "gated";
 
   // Hover state is scoped to the status badge only (not the whole card).
   // Mouse-over the badge or the tooltip itself keeps it visible.
@@ -418,15 +462,19 @@ function TaskCard({
   // Tooltip shows for any task that has dependencies, regardless of status.
   // Color cue inside the tooltip is per-dep (green check vs red dot).
   const showDependencyTooltip = dependencies.length > 0;
-  // Per-dep status — drives row coloring inside the tooltip.
+  // Per-dep status — drives row coloring inside the tooltip. Pending /
+  // not_applicable deps are muted (calm waiting), not red — red was the
+  // conflated treatment retired with the gating-state split.
   const depPillColor = (status: string) => {
     if (status === "complete") return "text-green-600 dark:text-green-400";
     if (status === "in_progress") return "text-blue-600 dark:text-blue-400";
-    return "text-red-600 dark:text-red-400";
+    if (status === "blocked") return "text-red-600 dark:text-red-400";
+    return "text-muted";
   };
   const depDot = (status: string) => {
     if (status === "complete") return "bg-green-500";
     if (status === "in_progress") return "bg-blue-500";
+    if (status === "blocked") return "bg-red-500";
     return "bg-slate-400 dark:bg-slate-500";
   };
 
@@ -484,7 +532,7 @@ function TaskCard({
             {style.label}
           </span>
           <span
-            className={`text-[10px] font-medium ${showDependencyTooltip ? "cursor-help" : ""} ${isComplete ? "text-green-700 dark:text-green-400" : blocked ? "text-red-700 dark:text-red-400" : "text-muted"}`}
+            className={`text-[10px] font-medium ${showDependencyTooltip ? "cursor-help" : ""} ${labelColor}`}
             onMouseEnter={() => showDependencyTooltip && setTooltipHover(true)}
             onMouseLeave={() => setTooltipHover(false)}
           >
@@ -581,9 +629,9 @@ function TaskCard({
           onMouseEnter={() => setTooltipHover(true)}
           onMouseLeave={() => setTooltipHover(false)}
         >
-          <div className={`rounded-md border-2 ${blocked ? "border-red-500 dark:border-red-500" : "border-slate-500 dark:border-slate-400"} bg-white dark:bg-slate-900 shadow-xl px-3 py-2`}>
-            <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${blocked ? "text-red-700 dark:text-red-400" : "text-muted"}`}>
-              {blocked ? "Blocked by:" : "Depends on:"}
+          <div className={`rounded-md border-2 ${isOperatorBlocked ? "border-red-500 dark:border-red-500" : "border-slate-500 dark:border-slate-400"} bg-white dark:bg-slate-900 shadow-xl px-3 py-2`}>
+            <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${isOperatorBlocked ? "text-red-700 dark:text-red-400" : "text-muted"}`}>
+              {isOperatorBlocked ? "Blocked by:" : isGated ? "Waiting on:" : "Depends on:"}
             </p>
             <ul className="space-y-0.5">
               {dependencies.map((b) => (
@@ -617,7 +665,7 @@ function TaskDetailDrawer({
   task,
   subTask,
   dependencies,
-  blocked,
+  gating,
   isDomain,
   actions,
   subscriberId,
@@ -636,7 +684,7 @@ function TaskDetailDrawer({
   /** When set, drawer renders sub_task-scoped body (rich detail). */
   subTask: SubTask | null;
   dependencies: DepRow[];
-  blocked: boolean;
+  gating: GatingInfo;
   isDomain: boolean;
   actions: TaskAction[];
   /** billing_account_id for the current subscription — used by task-specific
@@ -674,12 +722,13 @@ function TaskDetailDrawer({
   const family = task ? familyOf(task.task_key) : "infra";
   const style = FAMILY_STYLE[family];
   const isComplete = task?.status === "complete";
+  const isOperatorBlocked = task?.status === "blocked";
+  const isGated = gating.state === "gated";
+  const isReady = gating.state === "ready";
 
-  const statusTextClass = isComplete
-    ? "text-green-700 dark:text-green-400"
-    : blocked
-      ? "text-red-700 dark:text-red-400"
-      : "text-muted";
+  const statusTextClass = task
+    ? statusTextColor(task.status, gating.state)
+    : "text-muted";
 
   const depDot = (status: string) => {
     if (status === "complete") return "bg-green-500";
@@ -881,10 +930,20 @@ function TaskDetailDrawer({
               {task.milestone && (
                 <p className="mt-1 text-[11px] text-muted">→ {task.milestone}</p>
               )}
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <span className={`text-[11px] font-medium ${statusTextClass}`}>
-                  {blocked ? "blocked" : task.status.replace("_", " ")}
+                  {statusLabel(task.status, gating)}
                 </span>
+                {isReady && (
+                  <span className="text-[10px] font-medium text-accent uppercase tracking-wide">
+                    · action needed
+                  </span>
+                )}
+                {isGated && (
+                  <span className="text-[10px] text-muted">
+                    · {gating.depReady}/{gating.depTotal} deps met
+                  </span>
+                )}
                 <span className="text-[10px] text-muted">·</span>
                 <span className="text-[10px] text-muted">owner: {task.owner}</span>
                 {task.completed_at && (
@@ -917,8 +976,8 @@ function TaskDetailDrawer({
                 every task drawer, whether or not there's an inline body. */}
             {dependencies.length > 0 && (
               <section>
-                <h3 className={`text-[10px] font-semibold uppercase tracking-wide mb-2 ${blocked ? "text-red-700 dark:text-red-400" : "text-muted"}`}>
-                  {blocked ? "Blocked by" : "Depends on"}
+                <h3 className={`text-[10px] font-semibold uppercase tracking-wide mb-2 ${isOperatorBlocked ? "text-red-700 dark:text-red-400" : "text-muted"}`}>
+                  {isOperatorBlocked ? "Blocked by" : isGated ? "Waiting on" : "Depends on"}
                 </h3>
                 <ul className="space-y-1">
                   {dependencies.map((d) => (
@@ -994,6 +1053,19 @@ function TaskDetailDrawer({
                   Resolution progress
                 </h3>
                 <ReadinessResolutionSummary businessId={businessId} />
+              </section>
+            )}
+
+            {/* brand_identity_complete task scope — canonical catalog snapshot
+                provenance, completion-at-seal-time audit, stale-divergence
+                check, and history of past seals. The seal ACTION lives in
+                the action panel above (TASK_ACTIONS). */}
+            {task.task_key === "brand_identity_complete" && businessId && (
+              <section>
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
+                  Canonical catalog snapshot
+                </h3>
+                <BrandIdentitySnapshotSummary businessId={businessId} stale={task.stale} />
               </section>
             )}
 
@@ -1368,6 +1440,26 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
             ok: true,
             message: `✓ Consolidation complete — ${count} findings produced.`,
           });
+        } else if (actionKey === "seal_brand_identity_snapshot") {
+          // Step 12 canonical work: snapshot the brand_descriptor catalog
+          // into an immutable brand_identity_snapshot substrate (append
+          // pattern). Surfaces translate from the snapshot per
+          // [[brand-identity-layer-stack]]. Refuses if any of the 4 domains
+          // isn't 100% declared.
+          const res = await fetch("/api/ops/brand-identity/snapshot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ siteId: businessId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data?.persisted) {
+            throw new Error(data?.reason || `HTTP ${res.status}`);
+          }
+          await refreshTasks();
+          setActionFeedback({
+            ok: true,
+            message: `✓ Catalog sealed — snapshot #${data.runNumber} (${data.descriptorCount} descriptors).`,
+          });
         } else {
           // Unknown action key — log for visibility; ignored otherwise.
           console.log(`Action ${actionKey} for task — no handler wired yet`);
@@ -1497,12 +1589,36 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
   // fork doctrine ([[hosting-positioning]]).
   const isDepSatisfied = (status: string) =>
     status === "complete" || status === "not_applicable";
-  const isBlocked = useCallback(
-    (task: Task) =>
-      task.status === "pending" &&
-      dependenciesOf(task).some((d) => !isDepSatisfied(d.status)),
+  // Compute gating state per task — ortho to operational status. See the
+  // status-helper comment block at the top of this file for the model.
+  const gatingInfoOf = useCallback(
+    (task: Task): GatingInfo => {
+      const deps = dependenciesOf(task);
+      const depReady = deps.filter((d) => isDepSatisfied(d.status)).length;
+      const depTotal = deps.length;
+      if (task.status !== "pending") {
+        return { state: "n/a", depReady, depTotal };
+      }
+      if (depTotal === 0 || depReady === depTotal) {
+        return { state: "ready", depReady, depTotal };
+      }
+      return { state: "gated", depReady, depTotal };
+    },
     [dependenciesOf],
   );
+
+  // Aggregate gating counts across visible tasks so the header can surface
+  // "N ready · M gated" — operator's at-a-glance for "what can I act on now."
+  const gatingCounts = useMemo(() => {
+    let ready = 0;
+    let gated = 0;
+    for (const t of visibleTasks) {
+      const g = gatingInfoOf(t);
+      if (g.state === "ready") ready++;
+      else if (g.state === "gated") gated++;
+    }
+    return { ready, gated };
+  }, [visibleTasks, gatingInfoOf]);
 
   if (loading) {
     return (
@@ -1530,11 +1646,23 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
     <div className="p-4 flex flex-col space-y-4 overflow-hidden" style={{ height: "calc(100vh - 6.5rem)" }}>
       {/* Progress + legend */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card shrink-0">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <h3 className="text-sm font-medium">Provisioning Pipeline</h3>
-          <span className="text-xs text-muted">
-            {completedCount}/{totalCount} · {progressPct}%
-          </span>
+          <div className="flex items-center gap-3 text-xs">
+            {gatingCounts.ready > 0 && (
+              <span className="text-accent font-medium">
+                ▶ {gatingCounts.ready} ready
+              </span>
+            )}
+            {gatingCounts.gated > 0 && (
+              <span className="text-muted">
+                {gatingCounts.gated} gated
+              </span>
+            )}
+            <span className="text-muted">
+              {completedCount}/{totalCount} · {progressPct}%
+            </span>
+          </div>
         </div>
         <div className="h-2 rounded-full bg-surface-hover overflow-hidden mb-3">
           <div
@@ -1587,7 +1715,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
                     <TaskCard
                       key={task.task_key}
                       task={task}
-                      blocked={isBlocked(task)}
+                      gating={gatingInfoOf(task)}
                       dependencies={dependenciesOf(task)}
                       expanded={expandedDomains.has(task.task_key)}
                       isDomain={isDomain}
@@ -1615,7 +1743,11 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
             task={drawerTask}
             subTask={drawerSubTask}
             dependencies={drawerTask ? dependenciesOf(drawerTask) : []}
-            blocked={drawerTask ? isBlocked(drawerTask) : false}
+            gating={
+              drawerTask
+                ? gatingInfoOf(drawerTask)
+                : { state: "n/a", depReady: 0, depTotal: 0 }
+            }
             isDomain={drawerTask ? [
               "brand_strategic",
               "brand_verbal",

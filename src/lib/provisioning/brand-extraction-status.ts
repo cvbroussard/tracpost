@@ -192,12 +192,17 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
 
   const descriptors = brandIdentityId
     ? await sql`
-        SELECT key, declared FROM brand_descriptor
+        SELECT key, declared, updated_at FROM brand_descriptor
         WHERE brand_identity_id = ${brandIdentityId}
       `
     : [];
   const descMap = new Map<string, unknown>();
-  for (const d of descriptors) descMap.set(d.key as string, d.declared);
+  let latestDescriptorChangeAt: number = 0;
+  for (const d of descriptors) {
+    descMap.set(d.key as string, d.declared);
+    const t = d.updated_at instanceof Date ? d.updated_at.getTime() : 0;
+    if (t > latestDescriptorChangeAt) latestDescriptorChangeAt = t;
+  }
 
   // Readiness findings + resolutions
   const findingsSubstrate = substrateMap.get("readiness_findings");
@@ -497,12 +502,20 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
   }
   // hostingModel === 'tracpost_hosted' → status from tracpostHostingProvisioned above
   // hostingModel === null              → pending; subscriber must declare hosting model first
+  // ── brand_identity_complete: snapshot-gated, not domain-gated ──
+  //
+  // Per [[phantom-step-rule]] this step does its own canonical work — sealing
+  // the catalog into an immutable brand_identity_snapshot substrate that
+  // surfaces translate from ([[brand-identity-layer-stack]]). Completion =
+  // "snapshot exists". 4-domain completion is a PRECONDITION (operator can't
+  // seal until all 4 are complete), not the completion criterion itself.
   const allDomainsComplete =
     upstreamStatus.brand_strategic === "complete" &&
     upstreamStatus.brand_verbal === "complete" &&
     upstreamStatus.brand_visual === "complete" &&
     upstreamStatus.brand_sonic === "complete";
-  upstreamStatus.brand_identity_complete = allDomainsComplete ? "complete" : "pending";
+  const snapshotExists = substrateMap.has("brand_identity_snapshot");
+  upstreamStatus.brand_identity_complete = snapshotExists ? "complete" : "pending";
 
   // ── Apply task updates ──
   let taskChanges = 0;
@@ -547,6 +560,20 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     findingsSourceSubstrateId !== latestPpaSubstrateId
   ) {
     staleTasks.brand_readiness_findings = true;
+  }
+
+  // brand_identity_complete: stale if a descriptor was edited after the
+  // snapshot's sealed_at — the canonical catalog diverged from what
+  // surfaces are translating from. Operator should re-seal.
+  if (snapshotExists) {
+    const snapshotPayload = substrateMap.get("brand_identity_snapshot") as {
+      meta?: { sealed_at?: string };
+    } | null;
+    const sealedAtIso = snapshotPayload?.meta?.sealed_at ?? null;
+    const sealedAtMs = sealedAtIso ? new Date(sealedAtIso).getTime() : 0;
+    if (sealedAtMs > 0 && latestDescriptorChangeAt > sealedAtMs) {
+      staleTasks.brand_identity_complete = true;
+    }
   }
 
   return { taskChanges, subTaskChanges, staleTasks };

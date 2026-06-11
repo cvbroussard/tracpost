@@ -27,6 +27,7 @@ import { sql } from "@/lib/db";
 export type SubstrateKind =
   | "public_presence_observation"
   | "readiness_findings"
+  | "brand_identity_snapshot"
   | "mechanical_style_examples"
   | "lexicon_axes"
   | "environmental_look_examples"
@@ -72,6 +73,9 @@ export interface SubstrateRow<P = Record<string, unknown>> {
 const APPEND_KINDS: ReadonlySet<SubstrateKind> = new Set([
   "public_presence_observation",
   "readiness_findings",
+  // Each sealing of the brand identity catalog produces a NEW immutable
+  // snapshot row. History is the audit trail of canonical brand evolution.
+  "brand_identity_snapshot",
 ]);
 
 /**

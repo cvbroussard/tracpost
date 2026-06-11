@@ -100,6 +100,10 @@ export async function GET(
     sync: {
       dirty: !!row.gbp_sync_dirty,
       dirtyFields: (row.gbp_dirty_fields as Array<string> | null) ?? [],
+      // synced_at lives on the gbp_profile JSONB blob itself, written by
+      // syncProfileFromGoogle on each pull. Operator surfaces this in the
+      // drawer header to make staleness visible.
+      syncedAt: (profile.synced_at as string | null | undefined) ?? null,
     },
   });
 }

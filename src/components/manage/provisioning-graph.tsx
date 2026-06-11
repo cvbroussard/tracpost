@@ -78,7 +78,6 @@ const TASK_FAMILY: Record<string, Family> = {
   search_console: "infra",
 
   first_upload: "publishing",
-  first_content: "publishing",
 
   autopilot: "activation",
 };
@@ -303,17 +302,12 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "Send DNS email to tenant", action: "send_dns_email", icon: "✉" },
   ],
   first_upload: [{ label: "View media", href: "/ops/media", icon: "→" }],
-  first_content: [
-    { label: "View pipeline", href: "/ops/pipeline", icon: "→" },
-    { label: "Trigger generation", action: "trigger_generation", icon: "▶" },
-  ],
   autopilot: [
     { label: "Manage autopilot", href: "/ops/autopilot", icon: "→" },
     { label: "Activate autopilot", action: "activate_autopilot", icon: "▶" },
   ],
   search_console: [
-    { label: "View SEO", href: "/ops/seo", icon: "→" },
-    { label: "Verify domain", action: "verify_gsc", icon: "✓" },
+    { label: "Open SEO console", href: "/ops/seo", icon: "→" },
   ],
 };
 

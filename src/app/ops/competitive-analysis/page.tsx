@@ -4,8 +4,8 @@ import { CompetitiveAnalysisClient } from "./cma-client";
 
 export default function Page() {
   return (
-    <ManagePage title="Competitive Analysis">
-      {({ subscriberId }) => <CompetitiveAnalysisClient subscriberId={subscriberId} />}
+    <ManagePage title="Competitive Analysis" requireSite>
+      {({ siteId }) => <CompetitiveAnalysisClient siteId={siteId} />}
     </ManagePage>
   );
 }

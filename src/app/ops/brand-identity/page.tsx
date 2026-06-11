@@ -2223,50 +2223,61 @@ function UnknownShapeReadOnly({ value }: { value: unknown }) {
 export function DomainTabs({
   domain,
 }: {
-  domain: BrandDomain | "all" | "observation" | "readiness-findings";
+  domain:
+    | BrandDomain
+    | "all"
+    | "observation"
+    | "competitive-analysis"
+    | "readiness-findings";
 }) {
-  const tabs: Array<{ key: BrandDomain; href: string; label: string; count: number }> = [
+  // Tab order follows the provisioning pipeline so the strip reads like
+  // a phase narrative:
+  //   Observation phase (steps 4-6): Public Presence → CMA → Readiness Findings
+  //   Catalog phase    (steps 8-11): Strategic → Verbal → Visual → Sonic
+  // CMA links out to /ops/competitive-analysis which lives under its own
+  // top-level route. PPA + CMA bundle as siblings per
+  // [[observation-driven-readiness-audit]].
+  const domainTabs: Array<{ key: BrandDomain; href: string; label: string; count: number }> = [
     { key: "strategic", href: "/ops/brand-identity/strategic", label: "Strategic", count: 6 },
     { key: "verbal", href: "/ops/brand-identity/verbal", label: "Verbal", count: 6 },
     { key: "visual", href: "/ops/brand-identity/visual", label: "Visual", count: 6 },
     { key: "sonic", href: "/ops/brand-identity/sonic", label: "Sonic", count: 2 },
   ];
+  const tabBase = "-mb-px border-b-2 px-3 py-2 text-xs font-medium";
+  const tabActive = "border-accent text-foreground";
+  const tabIdle = "border-transparent text-muted hover:text-foreground";
   return (
     <div className="flex items-center gap-1 border-b border-border flex-wrap">
-      {tabs.map((t) => (
-        <Link
-          key={t.key}
-          href={t.href}
-          className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
-            domain === t.key
-              ? "border-accent text-foreground"
-              : "border-transparent text-muted hover:text-foreground"
-          }`}
-        >
-          {t.label} <span className="text-[9px] text-muted ml-1">({t.count})</span>
-        </Link>
-      ))}
-      <span className="mx-2 text-[10px] text-muted/50">·</span>
+      {/* ── Observation phase (intake / agency deliverables) ── */}
       <Link
         href="/ops/brand-identity/observation"
-        className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
-          domain === "observation"
-            ? "border-accent text-foreground"
-            : "border-transparent text-muted hover:text-foreground"
-        }`}
+        className={`${tabBase} ${domain === "observation" ? tabActive : tabIdle}`}
       >
         Public Presence <span className="text-[9px] text-muted ml-1">agency deliverable</span>
       </Link>
       <Link
+        href="/ops/competitive-analysis"
+        className={`${tabBase} ${domain === "competitive-analysis" ? tabActive : tabIdle}`}
+      >
+        Competitive Analysis <span className="text-[9px] text-muted ml-1">agency deliverable</span>
+      </Link>
+      <Link
         href="/ops/brand-identity/readiness-findings"
-        className={`-mb-px border-b-2 px-3 py-2 text-xs font-medium ${
-          domain === "readiness-findings"
-            ? "border-accent text-foreground"
-            : "border-transparent text-muted hover:text-foreground"
-        }`}
+        className={`${tabBase} ${domain === "readiness-findings" ? tabActive : tabIdle}`}
       >
         Readiness Findings <span className="text-[9px] text-muted ml-1">consultation deliverable</span>
       </Link>
+      <span className="mx-2 text-[10px] text-muted/50">·</span>
+      {/* ── Catalog phase (steps 8-11 brand-identity declaration) ── */}
+      {domainTabs.map((t) => (
+        <Link
+          key={t.key}
+          href={t.href}
+          className={`${tabBase} ${domain === t.key ? tabActive : tabIdle}`}
+        >
+          {t.label} <span className="text-[9px] text-muted ml-1">({t.count})</span>
+        </Link>
+      ))}
       {domain === "all" && (
         <span className="ml-auto text-[9px] uppercase tracking-wide text-muted">
           Combined view · pick a domain above

@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   ReferenceDot,
 } from "recharts";
+import { DomainTabs } from "@/app/ops/brand-identity/page";
 
 interface SubscriberMetrics {
   placeId: string | null;
@@ -93,14 +94,7 @@ const RUN_PURPOSE_COLORS: Record<AnalysisRecord["runPurpose"], string> = {
   ad_hoc: "border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300",
 };
 
-interface Site {
-  id: string;
-  name: string;
-}
-
-export function CompetitiveAnalysisClient({ subscriberId }: { subscriberId: string }) {
-  const [sites, setSites] = useState<Site[]>([]);
-  const [selectedSiteId, setSelectedSiteId] = useState<string>("");
+export function CompetitiveAnalysisClient({ siteId }: { siteId: string }) {
   const [runs, setRuns] = useState<AnalysisRecord[]>([]);
   /** Which run is currently expanded. Defaults to latest on first load. */
   const [selectedRunNumber, setSelectedRunNumber] = useState<number | null>(null);
@@ -113,23 +107,15 @@ export function CompetitiveAnalysisClient({ subscriberId }: { subscriberId: stri
   const selectedRun =
     runs.find((r) => r.runNumber === selectedRunNumber) ?? latestRun;
 
-  // Load sites for this subscriber on mount
-  useEffect(() => {
-    fetch(`/api/admin/sites?subscription_id=${subscriberId}`)
-      .then((r) => (r.ok ? r.json() : { sites: [] }))
-      .then((d: { sites: Site[] }) => {
-        setSites(d.sites || []);
-        if (d.sites?.length > 0) setSelectedSiteId(d.sites[0].id);
-      });
-  }, [subscriberId]);
-
-  // Load all CMA runs whenever selected site changes
+  // Load all CMA runs for the active site (set via ManageShell context).
+  // Per [[brand-identity-bucket-to-domain-restructure]]: site scope comes
+  // from the manage shell, not an in-page picker.
   const loadAnalysis = useCallback(async () => {
-    if (!selectedSiteId) return;
+    if (!siteId || siteId === "all") return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/competitive-analysis/${selectedSiteId}`);
+      const res = await fetch(`/api/admin/competitive-analysis/${siteId}`);
       if (!res.ok) throw new Error(`Failed to load (${res.status})`);
       const d = await res.json();
       const nextRuns: AnalysisRecord[] = d.runs ?? [];
@@ -146,7 +132,7 @@ export function CompetitiveAnalysisClient({ subscriberId }: { subscriberId: stri
     } finally {
       setLoading(false);
     }
-  }, [selectedSiteId]);
+  }, [siteId]);
 
   useEffect(() => {
     loadAnalysis();
@@ -161,10 +147,10 @@ export function CompetitiveAnalysisClient({ subscriberId }: { subscriberId: stri
   }, [latestRun, loadAnalysis]);
 
   async function triggerRun() {
-    if (!selectedSiteId) return;
+    if (!siteId || siteId === "all") return;
     setTriggering(true);
     try {
-      const res = await fetch(`/api/admin/competitive-analysis/${selectedSiteId}/run`, {
+      const res = await fetch(`/api/admin/competitive-analysis/${siteId}/run`, {
         method: "POST",
       });
       if (!res.ok && res.status !== 202) throw new Error(`Trigger failed (${res.status})`);
@@ -177,27 +163,19 @@ export function CompetitiveAnalysisClient({ subscriberId }: { subscriberId: stri
     }
   }
 
-  if (!subscriberId) {
-    return <div className="p-4 text-xs text-muted">Select a subscriber to view competitive analysis.</div>;
-  }
-
   return (
     <div className="space-y-4 p-4">
-      {/* Site picker + Trigger panel */}
+      <DomainTabs domain="competitive-analysis" />
+      {/* Trigger panel — site comes from the manage shell context;
+          ManagePage(requireSite) blocks render until a site is selected. */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1">
-            <label className="text-[10px] text-muted">Site</label>
-            <select
-              value={selectedSiteId}
-              onChange={(e) => setSelectedSiteId(e.target.value)}
-              className="mt-1 w-full max-w-md rounded border border-border bg-background px-3 py-1.5 text-xs focus:border-accent focus:outline-none"
-            >
-              {sites.length === 0 && <option>No sites</option>}
-              {sites.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            <h3 className="text-xs font-semibold">Competitive Analysis</h3>
+            <p className="mt-0.5 text-[10px] text-muted">
+              Recurring measurement of brand vs local competitors. Bundles with Public Presence
+              Analysis as the agency&apos;s opening-move deliverable.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {latestRun && (
@@ -210,7 +188,7 @@ export function CompetitiveAnalysisClient({ subscriberId }: { subscriberId: stri
             )}
             <button
               onClick={triggerRun}
-              disabled={triggering || !selectedSiteId || latestRun?.status === "running"}
+              disabled={triggering || latestRun?.status === "running"}
               className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
             >
               {triggering ? "Triggering…" : latestRun ? "Run new analysis" : "Run analysis"}

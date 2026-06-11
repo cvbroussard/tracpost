@@ -50,8 +50,7 @@ type Family =
   | "brand_sonic"
   | "brand_gate"
   | "connections"
-  | "publishing"
-  | "activation";
+  | "publishing";
 
 const TASK_FAMILY: Record<string, Family> = {
   checkout: "infra",
@@ -78,8 +77,6 @@ const TASK_FAMILY: Record<string, Family> = {
   search_console: "infra",
 
   first_upload: "publishing",
-
-  autopilot: "activation",
 };
 
 interface FamilyStyle {
@@ -147,12 +144,6 @@ const FAMILY_STYLE: Record<Family, FamilyStyle> = {
     bg: "bg-yellow-50 dark:bg-yellow-900/20",
     tag: "bg-yellow-200 text-yellow-800 dark:bg-yellow-800/40 dark:text-yellow-300",
     label: "Publishing",
-  },
-  activation: {
-    border: "border-green-400 dark:border-green-600",
-    bg: "bg-green-50 dark:bg-green-900/20",
-    tag: "bg-green-200 text-green-800 dark:bg-green-800/40 dark:text-green-300",
-    label: "Activation",
   },
 };
 
@@ -302,10 +293,6 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "Send DNS email to tenant", action: "send_dns_email", icon: "✉" },
   ],
   first_upload: [{ label: "View media", href: "/ops/media", icon: "→" }],
-  autopilot: [
-    { label: "Manage autopilot", href: "/ops/autopilot", icon: "→" },
-    { label: "Activate autopilot", action: "activate_autopilot", icon: "▶" },
-  ],
   search_console: [
     { label: "Open SEO console", href: "/ops/seo", icon: "→" },
   ],
@@ -488,10 +475,10 @@ function TaskCard({
             alignItems: "center",
             justifyContent: "center",
             fontSize: "12px",
-            fontWeight: 700,
+            fontWeight: 300,
             lineHeight: 1,
             boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-            border: "2px solid white",
+            border: "1px solid white",
           }}
           title="Upstream signal has changed since this task last ran. Open the drawer to re-trigger."
         >
@@ -1625,7 +1612,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
     "brand_gate",
     "connections",
     "publishing",
-    "activation",
   ];
 
   return (

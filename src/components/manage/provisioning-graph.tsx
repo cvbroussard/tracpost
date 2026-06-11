@@ -9,6 +9,7 @@ import { BusinessInfoForm } from "@/components/manage/business-info-form";
 import { GbpCategoriesDisplay } from "@/components/manage/gbp-categories-display";
 import { GbpDeclarationsDisplay } from "@/components/manage/gbp-declarations-display";
 import { ReadinessFindingsSummary } from "@/components/manage/readiness-findings-summary";
+import { ReadinessResolutionSummary } from "@/components/manage/readiness-resolution-summary";
 
 interface SubTask {
   sub_key: string;
@@ -456,7 +457,6 @@ function TaskCard({
             lineHeight: 1,
             boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
             border: "2px solid white",
-            cursor: "help",
           }}
           title="Upstream signal has changed since this task last ran. Open the drawer to re-trigger."
         >
@@ -690,7 +690,7 @@ function TaskDetailDrawer({
   // Empty state — no task selected
   if (!task) {
     return (
-      <div className="sticky top-4 rounded-xl border border-border bg-surface shadow-card flex items-center justify-center p-8 min-h-[200px]">
+      <div className="rounded-xl border border-border bg-surface shadow-card flex items-center justify-center p-8">
         <div className="text-center">
           <p className="text-xs text-muted leading-relaxed">
             Click any card in the pipeline to see its details, dependencies, and available actions here.
@@ -709,7 +709,7 @@ function TaskDetailDrawer({
     const isSubComplete = subTask.status === "complete";
 
     return (
-      <div className="sticky top-4 rounded-xl border border-border bg-surface shadow-card flex flex-col max-h-[calc(100vh-2rem)] overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface shadow-card flex flex-col max-h-full overflow-hidden">
         {/* Breadcrumb header */}
         <div className={`px-4 py-3 border-b ${style.border} ${style.bg}`}>
           <div className="flex items-start justify-between gap-3">
@@ -867,7 +867,7 @@ function TaskDetailDrawer({
   }
 
   return (
-    <div className="sticky top-4 rounded-xl border border-border bg-surface shadow-card flex flex-col max-h-[calc(100vh-2rem)] overflow-hidden">
+    <div className="rounded-xl border border-border bg-surface shadow-card flex flex-col max-h-full overflow-hidden">
       {(
         <>
           {/* Header */}
@@ -980,6 +980,20 @@ function TaskDetailDrawer({
                   Readiness findings consolidation
                 </h3>
                 <ReadinessFindingsSummary businessId={businessId} onRerun={onRefresh} />
+              </section>
+            )}
+
+            {/* brand_findings_resolved task scope — owner-progress lens on
+                resolution state: how many findings the tenant has addressed,
+                with severity + resolution-status breakdown. Heavy editing
+                (per-finding resolve/waive/defer) routes to the full
+                resolution view per the drawer doctrine. */}
+            {task.task_key === "brand_findings_resolved" && businessId && (
+              <section>
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
+                  Resolution progress
+                </h3>
+                <ReadinessResolutionSummary businessId={businessId} />
               </section>
             )}
 
@@ -1513,9 +1527,9 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
   ];
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 flex flex-col space-y-4 overflow-hidden" style={{ height: "calc(100vh - 6.5rem)" }}>
       {/* Progress + legend */}
-      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card shrink-0">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium">Provisioning Pipeline</h3>
           <span className="text-xs text-muted">
@@ -1543,11 +1557,13 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
         </div>
       </div>
 
-      {/* Pipeline + drawer — horizontal split. Pipeline takes the remaining
-          width; drawer is a fixed-width sidekick on the right that stays
-          stuck to the top of the main scroll container as the user scrolls. */}
-      <div className="flex gap-4 items-start">
-        <div className="flex-1 min-w-0">
+      {/* Pipeline + drawer — horizontal split. Row claims the remaining
+          flex space; LEFT column scrolls internally so the card list moves
+          independently of the drawer. RIGHT column is items-start so it
+          takes the drawer's natural height (no min-height — empty drawer
+          state stays small). */}
+      <div className="flex gap-4 items-start flex-1 min-h-0">
+        <div className="flex-1 min-w-0 h-full overflow-y-auto pr-1">
           <div className="rounded-xl border border-border bg-surface shadow-card p-6">
             <div className="space-y-4">
               {depthRows.map(([depth, tasksAtDepth]) => (

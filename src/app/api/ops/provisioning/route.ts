@@ -49,9 +49,11 @@ export async function GET(req: NextRequest) {
     `;
     businessId = siteRow ? (siteRow.id as string) : null;
   }
+  let staleTasks: Record<string, boolean> = {};
   if (businessId) {
     try {
-      await recomputeBrandExtractionStatus(businessId);
+      const result = await recomputeBrandExtractionStatus(businessId);
+      staleTasks = result.staleTasks;
     } catch (e) {
       console.error("brand extraction recompute failed:", e);
     }
@@ -82,7 +84,9 @@ export async function GET(req: NextRequest) {
     subByTask.get(tid)!.push(st);
   }
 
-  // Enrich tasks with sub-task info
+  // Enrich tasks with sub-task info + staleness flag.
+  // stale = true means the task's output is no longer current relative
+  // to its upstream — surfaces as an amber ⚠ corner badge on the card.
   const enriched = tasks.map(t => {
     const subs = subByTask.get(t.id as string) || [];
     const subTotal = subs.length;
@@ -92,8 +96,10 @@ export async function GET(req: NextRequest) {
       subTasks: subs,
       subTotal,
       subComplete,
+      stale: !!staleTasks[t.task_key as string],
     };
   });
+
 
   const completedCount = enriched.filter(t => (t as Record<string, unknown>).status === "complete").length;
   const totalCount = enriched.length;

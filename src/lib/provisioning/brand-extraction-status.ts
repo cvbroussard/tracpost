@@ -138,23 +138,48 @@ function declaredAny(declared: unknown): boolean {
 export async function recomputeBrandExtractionStatus(businessId: string): Promise<{
   taskChanges: number;
   subTaskChanges: number;
+  /** Per-task_key freshness signals. true = the task's output is stale
+   *  (its consumed upstream substrate is no longer the latest). The UI
+   *  surfaces this as an amber ⚠ corner badge on the card. Currently
+   *  computed for brand_readiness_findings only; generalizable to any
+   *  task that consumes upstream substrate (see staleTasks comment). */
+  staleTasks: Record<string, boolean>;
 }> {
   const [biz] = await sql`
     SELECT id, billing_account_id,
            (SELECT id FROM brand_identity WHERE business_id = businesses.id AND is_primary = true LIMIT 1) AS brand_identity_id
     FROM businesses WHERE id = ${businessId}
   `;
-  if (!biz) return { taskChanges: 0, subTaskChanges: 0 };
+  if (!biz) return { taskChanges: 0, subTaskChanges: 0, staleTasks: {} };
   const billingAccountId = biz.billing_account_id as string;
   const brandIdentityId = biz.brand_identity_id as string | null;
 
   // ── Read state ──
+  // Order DESC by run_number so the FIRST row per kind in iteration is the
+  // latest (Phase 1 quality gate append-pattern means PPA + findings may
+  // have multiple runs; we want the most recent per kind).
   const substrate = await sql`
-    SELECT kind, payload FROM business_substrate WHERE business_id = ${businessId}
+    SELECT id, kind, run_number, payload, generation_metadata
+    FROM business_substrate
+    WHERE business_id = ${businessId}
+    ORDER BY kind ASC, run_number DESC
   `;
   const substrateMap = new Map<string, Record<string, unknown> | null>();
+  // Track latest substrate ID + source-linkage per kind for staleness
+  // detection on tasks that consume upstream substrate (e.g.,
+  // brand_readiness_findings consumes PPA's substrate id).
+  const latestSubstrateIdByKind = new Map<string, string>();
+  const sourceLinkageByKind = new Map<string, string | null>();
   for (const r of substrate) {
-    substrateMap.set(r.kind as string, r.payload as Record<string, unknown> | null);
+    const kind = r.kind as string;
+    // Only keep the first occurrence per kind (= highest run_number due to DESC).
+    if (!substrateMap.has(kind)) {
+      substrateMap.set(kind, r.payload as Record<string, unknown> | null);
+      latestSubstrateIdByKind.set(kind, r.id as string);
+      const meta = r.generation_metadata as Record<string, unknown> | null;
+      const inputs = (meta?.inputs as Record<string, unknown> | undefined) ?? {};
+      sourceLinkageByKind.set(kind, (inputs.source_substrate_id as string | null | undefined) ?? null);
+    }
   }
 
   const [cma] = await sql`
@@ -497,5 +522,32 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     taskChanges += Array.isArray(result) ? result.length : 0;
   }
 
-  return { taskChanges, subTaskChanges };
+  // ── Staleness signals ──
+  //
+  // A task's staleness = "the consumed upstream substrate is no longer
+  // the latest." For tasks that consume substrate (find their
+  // source_substrate_id pointing back), compare to the latest substrate
+  // id for that source kind.
+  //
+  // Currently computed for brand_readiness_findings only — its
+  // consolidator stamps the consumed PPA observation id in
+  // generation_metadata.inputs.source_substrate_id. If a fresher PPA
+  // run exists, findings are stale and should be re-consolidated.
+  //
+  // Generalizable to: brand_findings_resolved (consumed findings substrate),
+  // website_provisioning (consumed catalog version at render), etc.
+  const staleTasks: Record<string, boolean> = {};
+
+  const latestPpaSubstrateId = latestSubstrateIdByKind.get("public_presence_observation");
+  const findingsSourceSubstrateId = sourceLinkageByKind.get("readiness_findings");
+  if (
+    substrateMap.has("readiness_findings") &&
+    latestPpaSubstrateId &&
+    findingsSourceSubstrateId &&
+    findingsSourceSubstrateId !== latestPpaSubstrateId
+  ) {
+    staleTasks.brand_readiness_findings = true;
+  }
+
+  return { taskChanges, subTaskChanges, staleTasks };
 }

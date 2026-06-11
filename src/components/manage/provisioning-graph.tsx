@@ -8,6 +8,7 @@ import { AccountGovernanceSection } from "@/components/manage/account-governance
 import { BusinessInfoForm } from "@/components/manage/business-info-form";
 import { GbpCategoriesDisplay } from "@/components/manage/gbp-categories-display";
 import { GbpDeclarationsDisplay } from "@/components/manage/gbp-declarations-display";
+import { ReadinessFindingsSummary } from "@/components/manage/readiness-findings-summary";
 
 interface SubTask {
   sub_key: string;
@@ -27,6 +28,11 @@ interface Task {
   subTasks: SubTask[];
   subTotal: number;
   subComplete: number;
+  /** Freshness signal. True = this task has produced an output but its
+   *  upstream has since changed, so the output is stale. Surfaces as an
+   *  amber ⚠ corner badge on the card. Currently computed for
+   *  brand_readiness_findings; generalizable to other consumer tasks. */
+  stale?: boolean;
 }
 
 // ── Family taxonomy ─────────────────────────────────────────────────────────
@@ -260,6 +266,7 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
   ],
   // brand_triage retired 2026-06-11 — see [[phantom-step-rule]]
   brand_readiness_findings: [
+    { label: "Re-run consolidation", action: "rerun_findings_consolidation", icon: "⟳" },
     { label: "View findings", href: "/ops/brand-identity/readiness-findings", icon: "→" },
   ],
   brand_findings_resolved: [
@@ -424,6 +431,38 @@ function TaskCard({
 
   return (
     <div className="group relative w-56">
+      {/* Staleness corner badge — moved to the OUTER wrapper (not the
+          inner card) because the inner card has overflow-hidden which
+          would clip a badge positioned at the corner. The outer wrapper
+          has no overflow constraint so the badge renders cleanly above
+          the card surface. */}
+      {task.stale && (
+        <div
+          style={{
+            position: "absolute",
+            top: "-6px",
+            right: "-6px",
+            zIndex: 10,
+            width: "22px",
+            height: "22px",
+            borderRadius: "9999px",
+            background: "#f59e0b",
+            color: "white",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "12px",
+            fontWeight: 700,
+            lineHeight: 1,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+            border: "2px solid white",
+            cursor: "help",
+          }}
+          title="Upstream signal has changed since this task last ran. Open the drawer to re-trigger."
+        >
+          ⚠
+        </div>
+      )}
       <div
         className={`relative w-full rounded-lg border ${style.border} ${style.bg} shadow-sm overflow-hidden ${ring}`}
         onContextMenu={onContextMenu}
@@ -931,6 +970,19 @@ function TaskDetailDrawer({
               </section>
             )}
 
+            {/* brand_readiness_findings task scope — consolidation provenance
+                + findings breakdown + stale-PPA check. The substantive work
+                (extraction + classification + voice-templating) lives in the
+                consolidator; this surface makes it legible to operators. */}
+            {task.task_key === "brand_readiness_findings" && businessId && (
+              <section>
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
+                  Readiness findings consolidation
+                </h3>
+                <ReadinessFindingsSummary businessId={businessId} onRerun={onRefresh} />
+              </section>
+            )}
+
             {/* gbp_location task scope — read-only display of all owner-declared
                 GBP profile fields. Per doctrine: subscriber declares everything
                 at /dashboard/google/profile; operator observes only. */}
@@ -1280,6 +1332,27 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
           setActionFeedback({
             ok: true,
             message: `✓ Categorization complete — primary: ${primary} + ${additionalCount} additional.`,
+          });
+        } else if (actionKey === "rerun_findings_consolidation") {
+          // Findings consolidator: walks latest PPA observation, extracts
+          // candidate findings, classifies attribution + severity, runs a
+          // single batch Sonnet call to generate voice-templated prompt_text,
+          // persists as readiness_findings substrate. Deterministic finding
+          // UUIDs ensure resolutions carry forward across runs.
+          const res = await fetch("/api/ops/brand-identity/findings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ siteId: businessId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data?.persisted) {
+            throw new Error(data?.reason || `HTTP ${res.status}`);
+          }
+          await refreshTasks();
+          const count = (data?.counts?.total as number) ?? 0;
+          setActionFeedback({
+            ok: true,
+            message: `✓ Consolidation complete — ${count} findings produced.`,
           });
         } else {
           // Unknown action key — log for visibility; ignored otherwise.

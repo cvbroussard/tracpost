@@ -220,32 +220,14 @@ export function ManageShell({
             >
               Overview
             </Link>
-            <Link
-              href={`${prefix}/engage`}
-              onClick={() => setExpandedGroup(null)}
-              className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
-                pathname.startsWith(`${prefix}/engage`) || (prefix === "" && pathname.startsWith("/engage"))
-                  ? "text-foreground font-medium bg-surface-hover"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              Engage
-            </Link>
-            <Link
-              href={`${prefix}/onboarding`}
-              onClick={() => setExpandedGroup(null)}
-              className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
-                pathname.startsWith(`${prefix}/onboarding`) || (prefix === "" && pathname.startsWith("/onboarding"))
-                  ? "text-foreground font-medium bg-surface-hover"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              Onboarding
-            </Link>
             {NAV_GROUPS.map(group => {
               const isExpanded = expandedGroup === group.label;
               const containsActive = groupContainsActive(group);
               const disabled = selectedSubscriberId === "all";
+              // Engage sits between the milestone groups (Branding ·
+              // Infrastructure · Media Production) and the legacy groups,
+              // anchored as the post-production communications surface.
+              const insertEngageAfter = group.label === "Media Production";
 
               return (
                 <div key={group.label} className={disabled ? "opacity-30 pointer-events-none" : ""}>
@@ -284,6 +266,19 @@ export function ManageShell({
                     </div>
                   )}
                   {isExpanded && <div className="my-1 border-t border-border" />}
+                  {insertEngageAfter && (
+                    <Link
+                      href={`${prefix}/engage`}
+                      onClick={() => setExpandedGroup(null)}
+                      className={`block rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
+                        pathname.startsWith(`${prefix}/engage`) || (prefix === "" && pathname.startsWith("/engage"))
+                          ? "text-foreground font-medium bg-surface-hover"
+                          : "text-muted hover:text-foreground"
+                      }`}
+                    >
+                      Engage
+                    </Link>
+                  )}
                 </div>
               );
             })}

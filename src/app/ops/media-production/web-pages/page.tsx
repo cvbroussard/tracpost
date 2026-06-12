@@ -19,8 +19,7 @@ export default function MediaProductionWebPagesPage() {
         </ul>
         <div className="text-[10px] uppercase tracking-wide text-muted mt-3 mb-2">Ports from</div>
         <p className="text-xs text-muted">
-          /ops/prompt-inspector, /ops/blog, and the &ldquo;Write Editorial
-          Article&rdquo; action in /ops/site-actions.
+          /ops/prompt-inspector and /ops/blog.
         </p>
       </div>
     </div>

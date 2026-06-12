@@ -221,17 +221,6 @@ export function ManageShell({
               Overview
             </Link>
             <Link
-              href={`${prefix}/site-actions`}
-              onClick={() => setExpandedGroup(null)}
-              className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
-                pathname.startsWith(`${prefix}/site-actions`) || (prefix === "" && pathname.startsWith("/site-actions"))
-                  ? "text-foreground font-medium bg-surface-hover"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              Site Actions
-            </Link>
-            <Link
               href={`${prefix}/engage`}
               onClick={() => setExpandedGroup(null)}
               className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${

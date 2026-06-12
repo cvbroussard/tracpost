@@ -31,48 +31,69 @@ interface NavGroup {
   items: NavItem[];
 }
 
+// Three-milestone architecture (LOCKED 2026-06-12): Branding ·
+// Infrastructure · Media Production. Each group leads with its pipeline
+// view and follows with the detail work surfaces. Legacy groups (Site
+// Settings / Monitor / Billing) kept below for a transition period
+// while detail surfaces continue migrating into their canonical
+// milestone group.
 const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "Branding",
+    items: [
+      { label: "Branding Pipeline", path: "/branding" },
+      { label: "Brand Identity", path: "/brand-identity" },
+      { label: "Public Presence Analysis", path: "/brand-identity/observation" },
+      { label: "Competitive Analysis", path: "/competitive-analysis" },
+      { label: "Brand Categorization", path: "/categories-coaching" },
+      { label: "Readiness Findings", path: "/brand-identity/readiness-findings" },
+      { label: "Strategic Recommendation", path: "/strategic-recommendation" },
+    ],
+  },
+  {
+    label: "Infrastructure",
+    items: [
+      { label: "Infrastructure Pipeline", path: "/infrastructure" },
+      { label: "Subscription", path: "/billing" },
+      { label: "Invoices", path: "/invoices" },
+      { label: "Connections", path: "/connections" },
+      { label: "GBP", path: "/gbp" },
+      { label: "Website", path: "/website" },
+      { label: "Domain", path: "/domain" },
+      { label: "SEO / Search Console", path: "/seo" },
+    ],
+  },
   {
     label: "Media Production",
     items: [
-      { label: "Analysis", path: "/media-production/analysis" },
+      { label: "Media Production Pipeline", path: "/media-production" },
+      { label: "Media Library", path: "/media" },
+      { label: "Media Generation", path: "/media-gen" },
       { label: "Motion Gen", path: "/motion-gen" },
       { label: "Prompt Lab", path: "/motion-gen/prompt-lab" },
-      { label: "Web Pages", path: "/media-production/web-pages" },
+      { label: "Analysis", path: "/media-production/analysis" },
       { label: "Standard Posts", path: "/media-production/standard-posts" },
       { label: "Video", path: "/media-production/video" },
-      { label: "Components", path: "/components" },
+      { label: "Web Pages", path: "/media-production/web-pages" },
+      { label: "Review Advisor", path: "/review-advisor" },
     ],
   },
+  // ── Legacy / uncategorized (transition state) ──
   {
     label: "Site Settings",
     items: [
       { label: "Brand Playbook", path: "/brand" },
-      { label: "Brand Identity", path: "/brand-identity" },
       { label: "Copy Generation", path: "/copy-gen" },
-      { label: "Media Generation", path: "/media-gen" },
-      { label: "Blog", path: "/blog-config" },
+      { label: "Blog Config", path: "/blog-config" },
+      { label: "Social Config", path: "/social-config" },
       { label: "Prompt Inspector", path: "/prompt-inspector" },
-      { label: "Social", path: "/social-config" },
-      { label: "Connections", path: "/connections" },
-      { label: "GBP", path: "/gbp" },
-      { label: "Website", path: "/website" },
     ],
   },
   {
     label: "Monitor",
     items: [
       { label: "Blog", path: "/blog" },
-      { label: "SEO", path: "/seo" },
       { label: "Analytics", path: "/analytics" },
-      { label: "Review Advisor", path: "/review-advisor" },
-    ],
-  },
-  {
-    label: "Billing",
-    items: [
-      { label: "Subscription", path: "/billing" },
-      { label: "Invoices", path: "/invoices" },
     ],
   },
 ];
@@ -198,19 +219,6 @@ export function ManageShell({
               }`}
             >
               Overview
-            </Link>
-            <Link
-              href={`${prefix}/branding`}
-              onClick={() => setExpandedGroup(null)}
-              className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
-                pathname.startsWith(`${prefix}/branding`)
-                || pathname.startsWith(`${prefix}/provisioning`)
-                || (prefix === "" && (pathname.startsWith("/branding") || pathname.startsWith("/provisioning")))
-                  ? "text-foreground font-medium bg-surface-hover"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              Branding Pipeline
             </Link>
             <Link
               href={`${prefix}/site-actions`}

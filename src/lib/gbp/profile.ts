@@ -222,6 +222,23 @@ function parseLocationResponse(data: Record<string, unknown>): GbpProfile {
 }
 
 /**
+ * Sync scope for syncProfileFromGoogle. Per the 2026-06-11 step 14 audit:
+ * GBP profile data has two ownership halves —
+ *   - Categories: OPERATOR-owned (write authority via category coaching)
+ *   - Display fields (title, description, hours, address, phone, website,
+ *     socialProfiles, serviceArea, openingDate): TENANT-owned
+ *
+ *   "initial"   = first-time seed for both halves. Used right after OAuth
+ *                 link, when there's no local cache yet.
+ *   "operator"  = run the categories logic only. Skip the profile JSONB
+ *                 update entirely. Operator-side pull from step 14 drawer.
+ *   "tenant"    = update the display-field JSONB (re-sync semantics: safe
+ *                 merge — metadata + completeness + synced_at). Skip the
+ *                 categories logic. Tenant-side pull from /dashboard/google/profile.
+ */
+export type SyncScope = "initial" | "operator" | "tenant";
+
+/**
  * Pull profile from Google API and store in local DB.
  *
  * Initial sync (no cached profile): full write — Google is source of truth.
@@ -229,8 +246,14 @@ function parseLocationResponse(data: Record<string, unknown>): GbpProfile {
  * metadata fields (placeId, mapsUri, reviewUri, verification status).
  * Never overwrites operator-editable fields (title, description, phone,
  * website, hours, address, categories, opening date).
+ *
+ * Scope param (added 2026-06-11) gates which halves of the local cache
+ * get touched per the role-based ownership model — see SyncScope.
  */
-export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile | null> {
+export async function syncProfileFromGoogle(
+  siteId: string,
+  scope: SyncScope = "initial",
+): Promise<GbpProfile | null> {
   const creds = await getGbpCredentials(siteId);
   if (!creds) return null;
 
@@ -261,41 +284,50 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
     } catch { /* skip */ }
   }
 
-  // Check if this is initial sync or re-sync
+  // Check if this is initial sync or re-sync (always read existing so we
+  // can decide; the actual write is gated by scope below).
   const [existingSite] = await sql`SELECT gbp_profile FROM businesses WHERE id = ${siteId}`;
   const existing = (existingSite?.gbp_profile || {}) as Record<string, unknown>;
   const isInitialSync = !existing.title;
 
-  if (isInitialSync) {
-    // Initial sync — full write, Google is source of truth.
-    // Reset dirty state too: by definition there are no local-side edits
-    // pending push when we just pulled fresh from Google.
-    await sql`
-      UPDATE businesses
-      SET gbp_profile = ${JSON.stringify(result)}::jsonb,
-          gbp_sync_dirty = false,
-          gbp_dirty_fields = '{}'
-      WHERE id = ${siteId}
-    `;
-  } else {
-    // Re-sync — only update read-only metadata fields
-    const safeUpdate = {
-      ...existing,
-      metadata: result.metadata,
-      completeness: result.completeness,
-      synced_at: result.synced_at,
-      // Backfill socialProfiles from Google if local cache doesn't have
-      // it yet (legacy cache from before this field existed). Once set,
-      // local is canonical and subscriber edits survive re-sync.
-      socialProfiles: existing.socialProfiles !== undefined
-        ? existing.socialProfiles
-        : result.socialProfiles,
-    };
-    await sql`
-      UPDATE businesses SET gbp_profile = ${JSON.stringify(safeUpdate)}::jsonb WHERE id = ${siteId}
-    `;
+  // Display-field JSONB write — only runs for "initial" and "tenant" scopes.
+  // Operator scope skips this entirely (operator's pull touches categories
+  // only).
+  if (scope === "initial" || scope === "tenant") {
+    if (isInitialSync) {
+      // Initial sync — full write, Google is source of truth.
+      // Reset dirty state too: by definition there are no local-side edits
+      // pending push when we just pulled fresh from Google.
+      await sql`
+        UPDATE businesses
+        SET gbp_profile = ${JSON.stringify(result)}::jsonb,
+            gbp_sync_dirty = false,
+            gbp_dirty_fields = '{}'
+        WHERE id = ${siteId}
+      `;
+    } else {
+      // Re-sync — only update read-only metadata fields
+      const safeUpdate = {
+        ...existing,
+        metadata: result.metadata,
+        completeness: result.completeness,
+        synced_at: result.synced_at,
+        // Backfill socialProfiles from Google if local cache doesn't have
+        // it yet (legacy cache from before this field existed). Once set,
+        // local is canonical and subscriber edits survive re-sync.
+        socialProfiles: existing.socialProfiles !== undefined
+          ? existing.socialProfiles
+          : result.socialProfiles,
+      };
+      await sql`
+        UPDATE businesses SET gbp_profile = ${JSON.stringify(safeUpdate)}::jsonb WHERE id = ${siteId}
+      `;
+    }
   }
 
+  // Categories sync — only for "initial" and "operator" scopes. Tenant
+  // scope skips this; categories are operator-owned per the role split.
+  if (scope === "initial" || scope === "operator") {
   // Categories sync: TracPost is canonical (per #225 strategic posture).
   // Google is the destination, not the source — we PUSH the coached
   // category set to Google and don't let inbound syncs overwrite it.
@@ -372,6 +404,7 @@ export async function syncProfileFromGoogle(siteId: string): Promise<GbpProfile 
       }
     }
   }
+  }  // end scope === initial | operator
 
   // Defensive enrichment sweep: any place_id appearing in the pulled GBP
   // data that we don't already have enriched in service_areas_canonical
@@ -734,6 +767,22 @@ export async function pushCategoriesToGoogle(siteId: string): Promise<{ success:
     console.error("GBP category push failed:", err.slice(0, 200));
     return { success: false, error: `Push failed (${res.status})` };
   }
+
+  // Record synced_at on the gbp_profile JSONB so the operator drawer's
+  // "Last synced" timestamp reflects the moment categories went live on
+  // Google. Single TMZ semantic per the 2026-06-11 UX direction — every
+  // successful push (categories OR display fields) updates this same
+  // timestamp. Uses jsonb_set so we don't disturb other JSONB keys
+  // (tenant's display fields).
+  await sql`
+    UPDATE businesses
+    SET gbp_profile = jsonb_set(
+      COALESCE(gbp_profile, '{}'::jsonb),
+      '{synced_at}',
+      to_jsonb(NOW()::text)
+    )
+    WHERE id = ${siteId}
+  `;
 
   return { success: true };
 }

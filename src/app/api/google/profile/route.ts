@@ -166,10 +166,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result, { status: result.success ? 200 : 500 });
   }
 
-  // Manual refresh from Google (kept for admin use)
+  // Manual refresh from Google — tenant-scoped pull. Per the 2026-06-11
+  // role-split audit: tenant owns display fields; categories are operator-
+  // owned and skipped here.
   if (action === "sync") {
     const { syncProfileFromGoogle } = await import("@/lib/gbp/profile");
-    const profile = await syncProfileFromGoogle(site_id);
+    const profile = await syncProfileFromGoogle(site_id, "tenant");
     return profile
       ? NextResponse.json(profile)
       : NextResponse.json({ error: "Sync failed" }, { status: 500 });

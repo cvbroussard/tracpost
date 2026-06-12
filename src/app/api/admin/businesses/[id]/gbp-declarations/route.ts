@@ -12,14 +12,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";
 import { sql } from "@/lib/db";
 
+// Platform → human-readable label. Keys match the lowercase platform names
+// stored in gbp_profile.socialProfiles[].platform (per the SOCIAL_PLATFORMS
+// constant in src/lib/gbp/profile.ts). Tenant UI and operator UI now read
+// the same shape per the 2026-06-11 audit fix.
 const GBP_SOCIAL_CHANNEL_DEFAULTS: Record<string, string> = {
-  FACEBOOK: "Facebook",
-  INSTAGRAM: "Instagram",
-  YOUTUBE: "YouTube",
-  TWITTER: "X (Twitter)",
-  TIKTOK: "TikTok",
-  LINKEDIN: "LinkedIn",
-  PINTEREST: "Pinterest",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  youtube: "YouTube",
+  twitter: "X (Twitter)",
+  tiktok: "TikTok",
+  linkedin: "LinkedIn",
+  pinterest: "Pinterest",
+  whatsapp: "WhatsApp",
 };
 
 export async function GET(
@@ -67,9 +72,14 @@ export async function GET(
     openTime?: string;
     closeTime?: string;
   }> | undefined) ?? [];
+  // socialProfiles shape per src/lib/gbp/profile.ts GbpProfile interface +
+  // parseAttributesResponse writer: { platform: string, url: string }.
+  // Previously this route read { channel, uri } which never resolved →
+  // operator's read of social profiles was always empty even when the
+  // tenant had declared them. Fixed 2026-06-11.
   const socialProfiles = (profile.socialProfiles as Array<{
-    channel?: string;
-    uri?: string;
+    platform?: string;
+    url?: string;
   }> | undefined) ?? [];
 
   return NextResponse.json({
@@ -93,9 +103,9 @@ export async function GET(
     })),
     description: (profile.description as string | null) ?? null,
     socialProfiles: socialProfiles.map((p) => ({
-      channel: p.channel ?? "",
-      channelLabel: GBP_SOCIAL_CHANNEL_DEFAULTS[p.channel ?? ""] ?? (p.channel ?? "Unknown"),
-      uri: p.uri ?? "",
+      channel: p.platform ?? "",
+      channelLabel: GBP_SOCIAL_CHANNEL_DEFAULTS[p.platform ?? ""] ?? (p.platform ?? "Unknown"),
+      uri: p.url ?? "",
     })),
     sync: {
       dirty: !!row.gbp_sync_dirty,

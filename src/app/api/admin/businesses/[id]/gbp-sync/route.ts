@@ -29,7 +29,9 @@ export async function POST(
 
   try {
     const { syncProfileFromGoogle } = await import("@/lib/gbp/profile");
-    const profile = await syncProfileFromGoogle(id);
+    // Operator-scoped pull: only touch the categories half of the cache.
+    // Display fields are tenant-owned per the 2026-06-11 role-split audit.
+    const profile = await syncProfileFromGoogle(id, "operator");
     if (!profile) {
       return NextResponse.json({ error: "Sync returned no profile" }, { status: 500 });
     }

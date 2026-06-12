@@ -217,8 +217,11 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
   business_info: [{ label: "View site settings", href: "/ops/sites", icon: "→" }],
 
   brand_categorization: [
+    // Coaching ceremony is the heavy editing surface for categorization;
+    // the inline "Re-categorize from catalog" + "Pull/Push from Google"
+    // actions have moved to step 14 (gbp_location), which is the
+    // operator's category-management hub per the 2026-06-11 audit.
     { label: "Open coaching ceremony", href: "/ops/categories-coaching", icon: "→" },
-    { label: "Re-categorize from catalog", action: "recategorize_from_catalog", icon: "⟳" },
   ],
   brand_public_presence: [
     { label: "View observation", href: "/ops/brand-identity/observation", icon: "→" },
@@ -260,17 +263,14 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
   //   never wired in handleAction. Dropped pending a real implementation.
   // The drawer body (IntegrationsStatusSummary) is the complete observer
   // surface; no task-level actions belong here today.
-  gbp_location: [
-    { label: "Open subscriber view", href: "/dashboard/google/profile", icon: "→" },
-  ],
-  domain_provision: [
-    { label: "Manage domain", href: "/ops/website", icon: "→" },
-    { label: "Provision domain", action: "provision_domain", icon: "◎" },
-  ],
-  dns_config: [
-    { label: "Manage domain", href: "/ops/website", icon: "→" },
-    { label: "Send DNS email to tenant", action: "send_dns_email", icon: "✉" },
-  ],
+  // gbp_location: no TASK_ACTIONS at task level. The category round-trip
+  // (Pull / Generate / Push) lives INLINE below the Categories section
+  // inside GbpDeclarationsDisplay per the 2026-06-11 UX pass. Display
+  // fields are tenant-owned and rendered read-only below.
+
+  // domain_provision + dns_config TASK_ACTIONS retired 2026-06-11 — the
+  // underlying provisioning_tasks rows for those keys were already retired
+  // by an earlier migration; the action entries were orphan dead code.
   first_upload: [{ label: "View media", href: "/ops/media", icon: "→" }],
   search_console: [
     { label: "Open SEO console", href: "/ops/seo", icon: "→" },
@@ -711,7 +711,7 @@ function TaskDetailDrawer({
     const isSubComplete = subTask.status === "complete";
 
     return (
-      <div className="rounded-xl border border-border bg-surface shadow-card flex flex-col max-h-full overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface shadow-card flex flex-col h-full overflow-hidden">
         {/* Breadcrumb header */}
         <div className={`px-4 py-3 border-b ${style.border} ${style.bg}`}>
           <div className="flex items-start justify-between gap-3">
@@ -869,7 +869,7 @@ function TaskDetailDrawer({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface shadow-card flex flex-col max-h-full overflow-hidden">
+    <div className="rounded-xl border border-border bg-surface shadow-card flex flex-col h-full overflow-hidden">
       {(
         <>
           {/* Header */}
@@ -1366,30 +1366,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
               message: "Polling timed out after 3 min. Pipeline may still complete; refresh in a minute.",
             });
           }
-        } else if (actionKey === "recategorize_from_catalog") {
-          // Pipeline A: synthesizes GBP categories from the brand catalog
-          // signals (business_type + location + offer descriptors). Fast
-          // (~30-60s, single Sonnet call). REPLACES whatever was there.
-          // For the higher-quality CMA-informed coaching ceremony, the
-          // operator clicks the "Open coaching ceremony" navigate action
-          // instead (separate UI surface at /ops/categories-coaching).
-          const res = await fetch(`/api/admin/sites/${businessId}/services/regenerate`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ step: "categorize" }),
-          });
-          if (!res.ok) {
-            const msg = await res.text().catch(() => "");
-            throw new Error(msg || `HTTP ${res.status}`);
-          }
-          const data = await res.json().catch(() => ({} as { categorization?: { primary?: { name?: string }; additional_count?: number } }));
-          await refreshTasks();
-          const primary = data?.categorization?.primary?.name ?? "primary category";
-          const additionalCount = data?.categorization?.additional_count ?? 0;
-          setActionFeedback({
-            ok: true,
-            message: `✓ Categorization complete — primary: ${primary} + ${additionalCount} additional.`,
-          });
         } else if (actionKey === "rerun_findings_consolidation") {
           // Findings consolidator: walks latest PPA observation, extracts
           // candidate findings, classifies attribution + severity, runs a
@@ -1654,11 +1630,11 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
         </div>
       </div>
 
-      {/* Pipeline + drawer — horizontal split. Row claims the remaining
-          flex space; LEFT column scrolls internally so the card list moves
-          independently of the drawer. RIGHT column is items-start so it
-          takes the drawer's natural height (no min-height — empty drawer
-          state stays small). */}
+      {/* Pipeline + drawer — horizontal split. Row claims remaining flex
+          space; items-start so columns align top. Each column gets explicit
+          h-full to claim row height — cards column scrolls internally, drawer
+          column hosts the drawer whose own max-h-full + internal flex-1
+          overflow-y-auto body handles drawer scroll. */}
       <div className="flex gap-4 items-start flex-1 min-h-0">
         <div className="flex-1 min-w-0 h-full overflow-y-auto pr-1">
           <div className="rounded-xl border border-border bg-surface shadow-card p-6">
@@ -1677,7 +1653,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
                     "brand_visual",
                     "brand_sonic",
                     "business_info",
-                    "gbp_location",
                   ].includes(task.task_key);
                   return (
                     <TaskCard
@@ -1706,7 +1681,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
 
         {/* Drawer column — sticky right-aside that stays in view as pipeline scrolls.
             Width locked at 400px regardless of selected/empty state. */}
-        <div className="shrink-0 grow-0" style={{ width: 400, minWidth: 400, maxWidth: 400 }}>
+        <div className="shrink-0 grow-0 h-full" style={{ width: 400, minWidth: 400, maxWidth: 400 }}>
           <TaskDetailDrawer
             task={drawerTask}
             subTask={drawerSubTask}
@@ -1722,7 +1697,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
               "brand_visual",
               "brand_sonic",
               "business_info",
-              "gbp_location",
             ].includes(drawerTask.task_key) : false}
             actions={drawerTask ? TASK_ACTIONS[drawerTask.task_key] || [] : []}
             subscriberId={subscriberId}

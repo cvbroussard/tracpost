@@ -112,8 +112,6 @@ export function GbpDeclarationsDisplay({ businessId }: { businessId: string }) {
   const [data, setData] = useState<GbpDeclarationsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pulling, setPulling] = useState(false);
-  const [pullError, setPullError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -133,29 +131,6 @@ export function GbpDeclarationsDisplay({ businessId }: { businessId: string }) {
     void refresh();
   }, [refresh]);
 
-  // Pull fresh from Google — operator-driven action. Confirms truth when
-  // the cache might be stale (subscriber edited Google's UI directly,
-  // background sync hasn't run, etc.). Same shape as the PPA/CMA re-run
-  // patterns: explicit action, network call, refresh local state.
-  const pullFromGoogle = useCallback(async () => {
-    setPulling(true);
-    setPullError(null);
-    try {
-      const r = await fetch(`/api/admin/businesses/${businessId}/gbp-sync`, {
-        method: "POST",
-      });
-      if (!r.ok) {
-        const msg = await r.text().catch(() => "");
-        throw new Error(msg || `HTTP ${r.status}`);
-      }
-      await refresh();
-    } catch (e) {
-      setPullError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setPulling(false);
-    }
-  }, [businessId, refresh]);
-
   if (loading) {
     return <p className="text-[11px] text-muted italic">Loading GBP declarations…</p>;
   }
@@ -166,9 +141,9 @@ export function GbpDeclarationsDisplay({ businessId }: { businessId: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Header — last synced + pull-fresh action.
-          Operator confirms truth (the TracPost cache vs what's live on
-          Google) per the pull-to-refresh doctrine. */}
+      {/* Header — last synced timestamp only. Per the 2026-06-11 role-split
+          audit: the operator doesn't pull display fields (those are
+          tenant-owned). Categories pull/push live in TASK_ACTIONS above. */}
       <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-card/40 px-3 py-2">
         <div className="text-[10px] text-muted">
           <span>Source: <span className="font-medium text-foreground">TracPost cache</span></span>
@@ -182,44 +157,18 @@ export function GbpDeclarationsDisplay({ businessId }: { businessId: string }) {
             <span className="ml-1 text-muted/70">(never synced)</span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={pullFromGoogle}
-          disabled={pulling}
-          className="inline-flex items-center gap-1 rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent/20 disabled:opacity-50 transition-colors shrink-0"
-        >
-          {pulling ? "Pulling…" : "↻ Pull from Google"}
-        </button>
       </div>
-      {pullError && (
-        <p className="text-[10px] text-red-600 dark:text-red-400">{pullError}</p>
-      )}
 
-      {/* Sync ribbon when local changes are queued */}
-      {data.sync.dirty && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px]">
-          <span className="font-medium text-amber-800 dark:text-amber-300">Local changes queued for push:</span>{" "}
-          <span className="text-amber-800/80 dark:text-amber-300/80">
-            {data.sync.dirtyFields.length > 0 ? data.sync.dirtyFields.join(", ") : "unknown fields"}
-          </span>
-        </div>
-      )}
-
-      <p className="text-[10px] text-muted italic">
-        Read-only — subscriber declares at /dashboard/google/profile. Operator
-        observes only.
-      </p>
-
-      {/* Categories — platform-managed, mirrored from step 3 for the
-          complete GBP profile view per [[hosting-positioning]] / the
-          drawer doctrine. Categories ARE part of the GBP profile push;
-          mirroring them here gives the operator a one-stop view while
-          the management surface stays at step 3 (brand_categorization). */}
+      {/* Categories — operator-owned per the 2026-06-11 role-split audit.
+          Pull / Generate / Push action buttons live inline below the
+          category list. The heavy coaching ceremony lives at step 3
+          (brand_categorization → /ops/categories-coaching). */}
       <Section
         title="Categories"
-        subtitle="Platform-managed · Step 3"
+        subtitle="Operator-managed"
       >
         <GbpCategoriesDisplay businessId={businessId} />
+        <CategoryActions businessId={businessId} />
       </Section>
 
       {/* 1. Service Areas */}
@@ -366,6 +315,100 @@ function EmptyHint({ text }: { text: string }) {
   return (
     <div className="rounded-md border border-dashed border-border bg-card/30 px-3 py-2 text-[11px] text-muted italic text-center">
       {text}
+    </div>
+  );
+}
+
+/**
+ * Operator's category round-trip actions — Pull / Generate / Push.
+ * Inline immediately below the category list per the 2026-06-11 UX pass.
+ * Mirrors the dispatcher logic previously housed in provisioning-graph's
+ * TASK_ACTIONS for gbp_location (now retired from there).
+ */
+function CategoryActions({ businessId }: { businessId: string }) {
+  const [running, setRunning] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const run = async (
+    actionKey: "pull" | "generate" | "push",
+    runner: () => Promise<{ ok: boolean; message: string }>,
+  ) => {
+    setRunning(actionKey);
+    setFeedback(null);
+    try {
+      const result = await runner();
+      setFeedback(result);
+    } catch (e) {
+      setFeedback({ ok: false, message: `Failed: ${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  const pull = () =>
+    run("pull", async () => {
+      const r = await fetch(`/api/admin/businesses/${businessId}/gbp-sync`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.error || `HTTP ${r.status}`);
+      return { ok: true, message: "✓ Categories pulled from Google." };
+    });
+
+  const generate = () =>
+    run("generate", async () => {
+      const r = await fetch(`/api/admin/sites/${businessId}/services/regenerate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step: "categorize" }),
+      });
+      if (!r.ok) {
+        const m = await r.text().catch(() => "");
+        throw new Error(m || `HTTP ${r.status}`);
+      }
+      const d = await r.json().catch(() => ({} as { categorization?: { primary?: { name?: string }; additional_count?: number } }));
+      const primary = d?.categorization?.primary?.name ?? "primary category";
+      const additionalCount = d?.categorization?.additional_count ?? 0;
+      return { ok: true, message: `✓ Staged — primary: ${primary} + ${additionalCount} additional.` };
+    });
+
+  const push = () =>
+    run("push", async () => {
+      const r = await fetch(`/api/admin/businesses/${businessId}/gbp-categories-push`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d?.success) throw new Error(d?.error || `HTTP ${r.status}`);
+      return { ok: true, message: "✓ Categories pushed to Google." };
+    });
+
+  const btn = (key: "pull" | "generate" | "push", icon: string, label: string, handler: () => void) => {
+    const isRunning = running === key;
+    return (
+      <button
+        type="button"
+        onClick={handler}
+        disabled={running !== null}
+        className="inline-flex items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-[11px] font-medium hover:bg-card/70 disabled:opacity-50 transition-colors"
+      >
+        <span className="text-[10px] w-4 text-center">{icon}</span>
+        <span>{isRunning ? "Running…" : label}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {btn("pull", "↻", "Pull from Google", pull)}
+        {btn("generate", "▶", "Generate staged", generate)}
+        {btn("push", "🚀", "Push to Google", push)}
+      </div>
+      {feedback && (
+        <p
+          className={`text-[10px] ${
+            feedback.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+          }`}
+        >
+          {feedback.message}
+        </p>
+      )}
     </div>
   );
 }

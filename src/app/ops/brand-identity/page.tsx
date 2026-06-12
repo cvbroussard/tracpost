@@ -2237,45 +2237,45 @@ export function DomainTabs({
   // CMA links out to /ops/competitive-analysis which lives under its own
   // top-level route. PPA + CMA bundle as siblings per
   // [[observation-driven-readiness-audit]].
-  const domainTabs: Array<{ key: BrandDomain; href: string; label: string; count: number }> = [
-    { key: "strategic", href: "/ops/brand-identity/strategic", label: "Strategic", count: 6 },
-    { key: "verbal", href: "/ops/brand-identity/verbal", label: "Verbal", count: 6 },
-    { key: "visual", href: "/ops/brand-identity/visual", label: "Visual", count: 6 },
-    { key: "sonic", href: "/ops/brand-identity/sonic", label: "Sonic", count: 2 },
+  const domainTabs: Array<{ key: BrandDomain; href: string; label: string }> = [
+    { key: "strategic", href: "/ops/brand-identity/strategic", label: "Strategic" },
+    { key: "verbal", href: "/ops/brand-identity/verbal", label: "Verbal" },
+    { key: "visual", href: "/ops/brand-identity/visual", label: "Visual" },
+    { key: "sonic", href: "/ops/brand-identity/sonic", label: "Sonic" },
   ];
   const tabBase = "-mb-px border-b-2 px-3 py-2 text-xs font-medium";
   const tabActive = "border-accent text-foreground";
   const tabIdle = "border-transparent text-muted hover:text-foreground";
   return (
     <div className="flex items-center gap-1 border-b border-border flex-wrap">
-      {/* ── Observation phase (intake / agency deliverables) ── */}
+      {/* ── Observation phase (steps 3, 4, 6) ── */}
       <Link
         href="/ops/brand-identity/observation"
         className={`${tabBase} ${domain === "observation" ? tabActive : tabIdle}`}
       >
-        Public Presence <span className="text-[9px] text-muted ml-1">agency deliverable</span>
+        Public Presence
       </Link>
       <Link
         href="/ops/competitive-analysis"
         className={`${tabBase} ${domain === "competitive-analysis" ? tabActive : tabIdle}`}
       >
-        Competitive Analysis <span className="text-[9px] text-muted ml-1">agency deliverable</span>
+        Competitive Analysis
       </Link>
       <Link
         href="/ops/brand-identity/readiness-findings"
         className={`${tabBase} ${domain === "readiness-findings" ? tabActive : tabIdle}`}
       >
-        Readiness Findings <span className="text-[9px] text-muted ml-1">consultation deliverable</span>
+        Readiness Findings
       </Link>
       <span className="mx-2 text-[10px] text-muted/50">·</span>
-      {/* ── Catalog phase (steps 8-11 brand-identity declaration) ── */}
+      {/* ── Catalog phase (steps 8-11) ── */}
       {domainTabs.map((t) => (
         <Link
           key={t.key}
           href={t.href}
           className={`${tabBase} ${domain === t.key ? tabActive : tabIdle}`}
         >
-          {t.label} <span className="text-[9px] text-muted ml-1">({t.count})</span>
+          {t.label}
         </Link>
       ))}
       {domain === "all" && (

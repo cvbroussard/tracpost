@@ -17,10 +17,6 @@ export default function MediaProductionWebPagesPage() {
           <li><span className="font-medium">Service-area pages</span></li>
           <li><span className="font-medium">Review</span> <span className="text-muted">— finished web-page QC</span></li>
         </ul>
-        <div className="text-[10px] uppercase tracking-wide text-muted mt-3 mb-2">Ports from</div>
-        <p className="text-xs text-muted">
-          /ops/prompt-inspector and /ops/blog.
-        </p>
       </div>
     </div>
   );

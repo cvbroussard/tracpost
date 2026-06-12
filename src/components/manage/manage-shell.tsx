@@ -79,23 +79,6 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   // ── Legacy / uncategorized (transition state) ──
-  {
-    label: "Site Settings",
-    items: [
-      { label: "Brand Playbook", path: "/brand" },
-      { label: "Copy Generation", path: "/copy-gen" },
-      { label: "Blog Config", path: "/blog-config" },
-      { label: "Social Config", path: "/social-config" },
-      { label: "Prompt Inspector", path: "/prompt-inspector" },
-    ],
-  },
-  {
-    label: "Monitor",
-    items: [
-      { label: "Blog", path: "/blog" },
-      { label: "Analytics", path: "/analytics" },
-    ],
-  },
 ];
 
 export function ManageShell({

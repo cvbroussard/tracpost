@@ -139,7 +139,7 @@ function GbpContent({ siteId }: { siteId: string }) {
               {data.connected && !data.location && (
                 <ActionBtn label="Assign Location" variant="primary"
                   loading={acting === "assign"}
-                  onClick={() => { window.location.href = "/ops/provisioning"; }}
+                  onClick={() => { window.location.href = "/ops/branding"; }}
                 />
               )}
               {data.connected && !tokenOk && (

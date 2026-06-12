@@ -200,15 +200,17 @@ export function ManageShell({
               Overview
             </Link>
             <Link
-              href={`${prefix}/provisioning`}
+              href={`${prefix}/branding`}
               onClick={() => setExpandedGroup(null)}
               className={`rounded px-2.5 py-[7px] text-[13px] transition-colors mb-1 ${
-                pathname.startsWith(`${prefix}/provisioning`) || (prefix === "" && pathname.startsWith("/provisioning"))
+                pathname.startsWith(`${prefix}/branding`)
+                || pathname.startsWith(`${prefix}/provisioning`)
+                || (prefix === "" && (pathname.startsWith("/branding") || pathname.startsWith("/provisioning")))
                   ? "text-foreground font-medium bg-surface-hover"
                   : "text-muted hover:text-foreground"
               }`}
             >
-              Provision Pipeline
+              Branding Pipeline
             </Link>
             <Link
               href={`${prefix}/site-actions`}

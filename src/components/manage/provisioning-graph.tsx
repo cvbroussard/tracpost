@@ -3,8 +3,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getPlatformByKey, type PlatformConfig } from "@/app/dashboard/integrations/platform-config";
-import { BillingCard } from "@/app/admin/accounts/[id]/billing-card";
-import { AccountGovernanceSection } from "@/components/manage/account-governance-section";
 import { BusinessInfoForm } from "@/components/manage/business-info-form";
 import { GbpCategoriesDisplay } from "@/components/manage/gbp-categories-display";
 import { GbpDeclarationsDisplay } from "@/components/manage/gbp-declarations-display";
@@ -50,11 +48,9 @@ type Family =
   | "brand_visual"
   | "brand_sonic"
   | "brand_gate"
-  | "connections"
-  | "publishing";
+  | "connections";
 
 const TASK_FAMILY: Record<string, Family> = {
-  checkout: "infra",
   business_info: "infra",
 
   brand_public_presence: "brand_observation",
@@ -72,12 +68,6 @@ const TASK_FAMILY: Record<string, Family> = {
 
   integrations: "connections",
   gbp_location: "connections",
-
-  domain_provision: "infra",
-  dns_config: "infra",
-  search_console: "infra",
-
-  first_upload: "publishing",
 };
 
 interface FamilyStyle {
@@ -139,12 +129,6 @@ const FAMILY_STYLE: Record<Family, FamilyStyle> = {
     bg: "bg-orange-50 dark:bg-orange-900/20",
     tag: "bg-orange-200 text-orange-800 dark:bg-orange-800/40 dark:text-orange-300",
     label: "Connections",
-  },
-  publishing: {
-    border: "border-yellow-300 dark:border-yellow-700",
-    bg: "bg-yellow-50 dark:bg-yellow-900/20",
-    tag: "bg-yellow-200 text-yellow-800 dark:bg-yellow-800/40 dark:text-yellow-300",
-    label: "Publishing",
   },
 };
 
@@ -213,7 +197,6 @@ const SUB_TASK_ACTIONS: Record<string, TaskAction[]> = {
 };
 
 const TASK_ACTIONS: Record<string, TaskAction[]> = {
-  checkout: [{ label: "View subscription", href: "/ops/billing", icon: "→" }],
   business_info: [{ label: "View site settings", href: "/ops/sites", icon: "→" }],
 
   brand_categorization: [
@@ -271,10 +254,9 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
   // domain_provision + dns_config TASK_ACTIONS retired 2026-06-11 — the
   // underlying provisioning_tasks rows for those keys were already retired
   // by an earlier migration; the action entries were orphan dead code.
-  first_upload: [{ label: "View media", href: "/ops/media", icon: "→" }],
-  search_console: [
-    { label: "Open SEO console", href: "/ops/seo", icon: "→" },
-  ],
+  // first_upload + search_console TASK_ACTIONS retired 2026-06-12 — both
+  // retired from the branding pipeline as Helper / Infrastructure scope.
+  // Observability lives at /ops/media and /ops/seo respectively.
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -640,9 +622,10 @@ function TaskDetailDrawer({
   gating: GatingInfo;
   isDomain: boolean;
   actions: TaskAction[];
-  /** billing_account_id for the current subscription — used by task-specific
-   *  inline renderers that need to query subscription-scoped data (e.g.,
-   *  the BillingCard for checkout). */
+  /** billing_account_id for the current subscription — threaded through
+   *  for any task-specific inline renderers that need subscription-scoped
+   *  data. (BillingCard / AccountGovernanceSection moved to /ops/billing
+   *  with the checkout retirement 2026-06-12.) */
   subscriberId: string;
   /** business_id (siteId) for the active business — used by per-business
    *  inline editors (BusinessInfoForm for business_info, etc.). */
@@ -946,24 +929,9 @@ function TaskDetailDrawer({
 
             {/* Task-specific inline body — per the doctrine's inline_picker /
                 view_detail action kinds, certain tasks render rich inline
-                content directly in the drawer instead of clicking out. */}
-            {task.task_key === "checkout" && (
-              <>
-                <section>
-                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
-                    Subscription
-                  </h3>
-                  <BillingCard subscriptionId={subscriberId} />
-                </section>
-                <section>
-                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
-                    Account governance
-                  </h3>
-                  <AccountGovernanceSection subscriptionId={subscriberId} />
-                </section>
-              </>
-            )}
-
+                content directly in the drawer instead of clicking out.
+                checkout body retired 2026-06-12 — moved to /ops/billing
+                as part of the Infrastructure milestone scope. */}
             {task.task_key === "business_info" && businessId && (
               <BusinessInfoForm businessId={businessId} onSaved={onRefresh} />
             )}
@@ -1584,7 +1552,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
     "brand_sonic",
     "brand_gate",
     "connections",
-    "publishing",
   ];
 
   return (
@@ -1592,7 +1559,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
       {/* Progress + legend */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card shrink-0">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <h3 className="text-sm font-medium">Provisioning Pipeline</h3>
+          <h3 className="text-sm font-medium">Branding Pipeline</h3>
           <div className="flex items-center gap-3 text-xs">
             {gatingCounts.ready > 0 && (
               <span className="text-accent font-medium">

@@ -1,12 +1,9 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { ManagePage } from "@/components/manage/manage-page";
-import { ProvisioningGraph } from "@/components/manage/provisioning-graph";
-
+// Renamed 2026-06-12 per the three-milestone architecture: this surface is
+// the "Branding" milestone's pipeline view. The "provisioning" name was a
+// historical artifact from before Helper + Media Production milestones
+// were separated. Redirect kept so cached bookmarks survive.
 export default function Page() {
-  return (
-    <ManagePage title="Provisioning">
-      {({ subscriberId, siteId }) => <ProvisioningGraph subscriberId={subscriberId} siteId={siteId} />}
-    </ManagePage>
-  );
+  redirect("/ops/branding");
 }

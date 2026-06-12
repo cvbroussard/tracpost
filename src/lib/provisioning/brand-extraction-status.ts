@@ -281,7 +281,7 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
            business_phone, business_email,
            business_logo, business_favicon,
            url, blog_slug,
-           gbp_profile, gsc_property,
+           gbp_profile,
            face_waiver_signed_at, minor_face_waiver_signed_at, identity_waiver_signed_at
     FROM businesses WHERE id = ${businessId} LIMIT 1
   `;
@@ -485,14 +485,9 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     // don't block. Per the doctrine: tenant-owned declarations;
     // operator-side drawer is read-only observability.
     gbp_location: rollupDomain(GBP_REQUIRED_SUBS),
-    // search_console: terminal agency-deliverable leaf per the 2026-06-11
-    // audit. Owner-driven verification with platform coaching at /ops/seo.
-    // Completes when businesses.gsc_property is populated (set by the
-    // verification flow on /ops/seo). No deps — verifiable any time in
-    // either hosting scenario; the same code path serves tracpost-hosted
-    // and externally-hosted brands.
-    search_console: nonEmpty(bizData.gsc_property) ? "complete" : "pending",
   };
+  // search_console retired from branding pipeline 2026-06-12 — moved to
+  // /ops/seo as part of the Infrastructure milestone scope.
 
   // ── brand_identity_complete: snapshot-gated, not domain-gated ──
   //

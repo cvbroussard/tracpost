@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getPlatformByKey, type PlatformConfig } from "@/app/dashboard/integrations/platform-config";
-import { BusinessInfoForm } from "@/components/manage/business-info-form";
+import { BusinessInfoDisplay } from "@/components/manage/business-info-display";
+import { CommercialTierDisplay } from "@/components/manage/commercial-tier-display";
 import { GbpCategoriesDisplay } from "@/components/manage/gbp-categories-display";
+import { GbpCategoryActions } from "@/components/manage/gbp-category-actions";
 import { GbpDeclarationsDisplay } from "@/components/manage/gbp-declarations-display";
 import { ReadinessFindingsSummary } from "@/components/manage/readiness-findings-summary";
 import { ReadinessResolutionSummary } from "@/components/manage/readiness-resolution-summary";
 import { BrandIdentitySnapshotSummary } from "@/components/manage/brand-identity-snapshot-summary";
-import { IntegrationsStatusSummary } from "@/components/manage/integrations-status-summary";
 
 interface SubTask {
   sub_key: string;
@@ -36,105 +38,13 @@ interface Task {
   stale?: boolean;
 }
 
-// ── Family taxonomy ─────────────────────────────────────────────────────────
-// Each task_key maps to a family for color-coding. Families chunk the pipeline
-// into visually-distinct phases.
-
-type Family =
-  | "infra"
-  | "brand_observation"
-  | "brand_strategic"
-  | "brand_verbal"
-  | "brand_visual"
-  | "brand_sonic"
-  | "brand_gate"
-  | "connections";
-
-const TASK_FAMILY: Record<string, Family> = {
-  business_info: "infra",
-
-  brand_public_presence: "brand_observation",
-  brand_cma: "brand_observation",
-  // brand_triage retired 2026-06-11 per [[phantom-step-rule]] —
-  // its verdict tag lives in PPA's observation, no standalone work.
-  brand_readiness_findings: "brand_observation",
-  brand_findings_resolved: "brand_observation",
-
-  brand_strategic: "brand_strategic",
-  brand_verbal: "brand_verbal",
-  brand_visual: "brand_visual",
-  brand_sonic: "brand_sonic",
-  brand_identity_complete: "brand_gate",
-
-  integrations: "connections",
-  gbp_location: "connections",
-};
-
-interface FamilyStyle {
-  /** Tailwind classes for the card border + accent left bar */
-  border: string;
-  /** Tailwind classes for the card background */
-  bg: string;
-  /** Tailwind classes for the family tag label */
-  tag: string;
-  /** Human-readable family label (shown on first-of-family card) */
-  label: string;
-}
-
-const FAMILY_STYLE: Record<Family, FamilyStyle> = {
-  infra: {
-    border: "border-slate-300 dark:border-slate-700",
-    bg: "bg-slate-50 dark:bg-slate-900/30",
-    tag: "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-    label: "Setup",
-  },
-  brand_observation: {
-    border: "border-amber-300 dark:border-amber-700",
-    bg: "bg-amber-50 dark:bg-amber-900/20",
-    tag: "bg-amber-200 text-amber-800 dark:bg-amber-800/40 dark:text-amber-300",
-    label: "Brand observation",
-  },
-  brand_strategic: {
-    border: "border-emerald-300 dark:border-emerald-700",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
-    tag: "bg-emerald-200 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300",
-    label: "Strategic",
-  },
-  brand_verbal: {
-    border: "border-blue-300 dark:border-blue-700",
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    tag: "bg-blue-200 text-blue-800 dark:bg-blue-800/40 dark:text-blue-300",
-    label: "Verbal",
-  },
-  brand_visual: {
-    border: "border-violet-300 dark:border-violet-700",
-    bg: "bg-violet-50 dark:bg-violet-900/20",
-    tag: "bg-violet-200 text-violet-800 dark:bg-violet-800/40 dark:text-violet-300",
-    label: "Visual",
-  },
-  brand_sonic: {
-    border: "border-teal-300 dark:border-teal-700",
-    bg: "bg-teal-50 dark:bg-teal-900/20",
-    tag: "bg-teal-200 text-teal-800 dark:bg-teal-800/40 dark:text-teal-300",
-    label: "Sonic",
-  },
-  brand_gate: {
-    border: "border-slate-500 dark:border-slate-400",
-    bg: "bg-slate-100 dark:bg-slate-800/40",
-    tag: "bg-slate-700 text-slate-100 dark:bg-slate-300 dark:text-slate-900",
-    label: "Brand identity ready",
-  },
-  connections: {
-    border: "border-orange-300 dark:border-orange-700",
-    bg: "bg-orange-50 dark:bg-orange-900/20",
-    tag: "bg-orange-200 text-orange-800 dark:bg-orange-800/40 dark:text-orange-300",
-    label: "Connections",
-  },
-};
-
-function familyOf(taskKey: string): Family {
-  return TASK_FAMILY[taskKey] ?? "infra";
-}
+// Family/grouping taxonomy retired 2026-06-13. Color-coded family chunks
+// (Setup / Brand observation / Strategic / Verbal / Visual / Sonic /
+// Brand identity ready / Connections) added visual noise without
+// architectural value once the pipeline structure was understood through
+// the cards themselves. Cards now use neutral border + background; the
+// per-card status color (gating + completion ring/bar) is the only
+// color signal that matters.
 
 // ── Task actions (right-click context menu) ─────────────────────────────────
 
@@ -200,10 +110,10 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
   business_info: [{ label: "View site settings", href: "/ops/sites", icon: "→" }],
 
   brand_categorization: [
-    // Coaching ceremony is the heavy editing surface for categorization;
-    // the inline "Re-categorize from catalog" + "Pull/Push from Google"
-    // actions have moved to step 14 (gbp_location), which is the
-    // operator's category-management hub per the 2026-06-11 audit.
+    // Categories are platform-authored per the 2026-06-13 platform-vs-
+    // owner authorship separation. Heavy coaching ceremony lives at
+    // /ops/categories-coaching; inline Pull / Generate / Push actions
+    // render directly in the drawer body via <GbpCategoryActions />.
     { label: "Open coaching ceremony", href: "/ops/categories-coaching", icon: "→" },
   ],
   brand_public_presence: [
@@ -239,13 +149,11 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
     { label: "View brand identity", href: "/ops/brand-identity", icon: "→" },
   ],
 
-  // integrations: operator is purely an observer. Per the 2026-06-11 audit:
-  // - "Manage integrations" was a tenant-context link (auth boundary breaks
-  //   from the ops surface).
-  // - "Send connection invite to tenant" was wired in TASK_ACTIONS but
-  //   never wired in handleAction. Dropped pending a real implementation.
-  // The drawer body (IntegrationsStatusSummary) is the complete observer
-  // surface; no task-level actions belong here today.
+  // integrations (renamed "GBP integration" 2026-06-13): step scoped to
+  // the single GBP integration. Per-platform OAuth + health for the other
+  // 7 platforms lives on /ops/connections (Infrastructure milestone).
+  // No TASK_ACTIONS on this step — the parent status row conveys
+  // "GBP connected: yes/no"; deeper view is reachable via the nav.
   // gbp_location: no TASK_ACTIONS at task level. The category round-trip
   // (Pull / Generate / Push) lives INLINE below the Categories section
   // inside GbpDeclarationsDisplay per the 2026-06-11 UX pass. Display
@@ -362,6 +270,7 @@ function TaskCard({
   dependencies,
   expanded,
   isDomain,
+  selected,
   onClick,
   onContextMenu,
   onToggleExpand,
@@ -373,14 +282,14 @@ function TaskCard({
   dependencies: BlockerInfo[];
   expanded: boolean;
   isDomain: boolean;
+  /** True iff this card's drawer is currently open. */
+  selected: boolean;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onToggleExpand: () => void;
   /** Click a sub_task row in the expanded list → open drawer scoped to it. */
   onSubTaskClick: (subKey: string) => void;
 }) {
-  const family = familyOf(task.task_key);
-  const style = FAMILY_STYLE[family];
   const bar = statusBar(task.status, gating.state);
   const sLabel = statusLabel(task.status, gating);
   const isComplete = task.status === "complete";
@@ -447,7 +356,9 @@ function TaskCard({
         </div>
       )}
       <div
-        className={`relative w-full rounded-lg border ${style.border} ${style.bg} shadow-sm overflow-hidden ${ring}`}
+        className={`relative w-full rounded-[2px] border ${
+          selected ? "border-accent" : "border-slate-400 dark:border-slate-600"
+        } bg-surface shadow-sm overflow-hidden ${ring}`}
         onContextMenu={onContextMenu}
       >
       {/* Status accent bar (left edge) — bumped width for prominence */}
@@ -461,11 +372,7 @@ function TaskCard({
         onClick={onClick}
         className="relative z-[1] block w-full text-left px-3 py-2.5 pl-4 hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-colors"
       >
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${style.tag}`}>
-            {task.step_label && <span className="opacity-70">{task.step_label}</span>}
-            {style.label}
-          </span>
+        <div className="flex items-start justify-end gap-2 mb-1">
           <span
             className={`text-[10px] font-medium ${showDependencyTooltip ? "cursor-help" : ""} ${labelColor}`}
             onMouseEnter={() => showDependencyTooltip && setTooltipHover(true)}
@@ -586,8 +493,8 @@ function TaskCard({
 
 // ── TaskDetailDrawer ────────────────────────────────────────────────────────
 // Phase 1 of the drawer infrastructure per [[provisioning-drawer-design]] (TBD).
-// Right-aside slide-in panel. Opens on card click; shows family + status +
-// dependencies + sub-tasks + actions. Per-family content renderers come in
+// Right-aside slide-in panel. Opens on card click; shows status +
+// dependencies + sub-tasks + actions. Per-task content renderers come in
 // Phase 2; this generic shape works for all tasks.
 
 interface DepRow {
@@ -628,7 +535,7 @@ function TaskDetailDrawer({
    *  with the checkout retirement 2026-06-12.) */
   subscriberId: string;
   /** business_id (siteId) for the active business — used by per-business
-   *  inline editors (BusinessInfoForm for business_info, etc.). */
+   *  inline editors (BusinessInfoDisplay for business_info, etc.). */
   businessId: string | null;
   /** Refetch the parent provisioning data after an inline edit so the
    *  pipeline status updates without page reload. */
@@ -646,6 +553,19 @@ function TaskDetailDrawer({
   onAction: (action: string) => void;
   onStatusChange: (status: string) => void;
 }) {
+  // brand_cma gate — commercial tier declaration. undefined = unknown
+  // (picker hasn't reported yet), null = explicitly absent, string = declared.
+  // Drawer surfaces this back to the action button below to disable
+  // "Run Analysis" until the tier is set. See Cat 1 Home Rule in
+  // [[gbp-field-categorization]].
+  const [cmaTierSlug, setCmaTierSlug] = useState<string | null | undefined>(undefined);
+
+  // Reset gate state when switching tasks so a previous task's tier value
+  // doesn't bleed into another card's drawer.
+  useEffect(() => {
+    setCmaTierSlug(undefined);
+  }, [task?.task_key]);
+
   // Esc to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -655,8 +575,6 @@ function TaskDetailDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [task, onClose]);
 
-  const family = task ? familyOf(task.task_key) : "infra";
-  const style = FAMILY_STYLE[family];
   const isComplete = task?.status === "complete";
   const isOperatorBlocked = task?.status === "blocked";
   const isGated = gating.state === "gated";
@@ -696,7 +614,7 @@ function TaskDetailDrawer({
     return (
       <div className="rounded-xl border border-border bg-surface shadow-card flex flex-col h-full overflow-hidden">
         {/* Breadcrumb header */}
-        <div className={`px-4 py-3 border-b ${style.border} ${style.bg}`}>
+        <div className="px-4 py-3 border-b border-border bg-surface-hover">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <button
@@ -856,12 +774,8 @@ function TaskDetailDrawer({
       {(
         <>
           {/* Header */}
-          <div className={`px-4 py-3 border-b ${style.border} ${style.bg} flex items-start justify-between gap-3`}>
+          <div className="px-4 py-3 border-b border-border bg-surface-hover flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${style.tag} mb-1.5`}>
-                {task.step_label && <span className="opacity-70">{task.step_label}</span>}
-                {style.label}
-              </span>
               <h2 className="text-sm font-semibold text-foreground leading-tight">{task.title}</h2>
               {task.milestone && (
                 <p className="mt-1 text-[11px] text-muted">→ {task.milestone}</p>
@@ -933,20 +847,36 @@ function TaskDetailDrawer({
                 checkout body retired 2026-06-12 — moved to /ops/billing
                 as part of the Infrastructure milestone scope. */}
             {task.task_key === "business_info" && businessId && (
-              <BusinessInfoForm businessId={businessId} onSaved={onRefresh} />
+              <BusinessInfoDisplay businessId={businessId} />
+            )}
+
+            {/* brand_cma drawer body — read-only display of the owner's
+                declared commercial tier. Per the role-split + Cat 1 Home
+                Rule: commercial_tier is owner-canonical, observed here,
+                edited on the tenant surface. Display emits the slug back
+                to drawer scope so rerun_cma can gate on declaration. */}
+            {task.task_key === "brand_cma" && businessId && (
+              <CommercialTierDisplay
+                businessId={businessId}
+                onTierChange={setCmaTierSlug}
+              />
             )}
 
             {/* brand_categorization task scope — read-only display of the
-                canonical GBP category assignment with provenance. Tenant
-                never picks from the 4000-category dropdown; the drawer's
-                actions ("Open coaching ceremony" / "Re-categorize from
-                catalog") are the two write paths. */}
+                canonical GBP categories + inline platform-author actions
+                (Pull / Generate / Push). Per the 2026-06-13 platform-vs-
+                owner authorship separation: categories are PLATFORM-
+                authored so their write actions live here, not on step 14
+                (which now scopes to owner-authored Service Areas). The
+                heavy coaching ceremony remains accessible via the
+                "Open coaching ceremony" task action. */}
             {task.task_key === "brand_categorization" && businessId && (
               <section>
                 <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
                   Canonical GBP categories
                 </h3>
                 <GbpCategoriesDisplay businessId={businessId} />
+                <GbpCategoryActions businessId={businessId} />
               </section>
             )}
 
@@ -990,31 +920,54 @@ function TaskDetailDrawer({
               </section>
             )}
 
-            {/* integrations task scope — per-platform connection observability.
-                Replaces the on-card expand/collapse list. Card auto-completes
-                when GBP connects; the other 7 are visible but non-gating. */}
+            {/* integrations task body — single-concern step renders GBP
+                integration status inline; per-platform view for the 7
+                social platforms lives on /ops/connections (Infrastructure). */}
             {task.task_key === "integrations" && (
               <section>
                 <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
-                  Platform connections
+                  GBP integration
                 </h3>
-                <IntegrationsStatusSummary
-                  subTasks={(task.subTasks as Array<{ sub_key: string; status: string }>).map((s) => ({
-                    sub_key: s.sub_key,
-                    status: s.status,
-                  }))}
-                  onSubTaskClick={(subKey) => onSelectSubKey(subKey)}
-                />
+                <div className="rounded-md border border-border bg-card/30 px-3 py-2 flex items-center gap-2">
+                  <span
+                    className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${
+                      task.status === "complete"
+                        ? "bg-green-500"
+                        : "bg-slate-400 dark:bg-slate-500"
+                    }`}
+                  />
+                  <span className="flex-1 text-xs text-foreground">Google Business OAuth</span>
+                  <span
+                    className={`text-[10px] font-mono shrink-0 ${
+                      task.status === "complete"
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : "text-muted"
+                    }`}
+                  >
+                    {task.status === "complete" ? "connected" : "not connected"}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted/80 mt-2 leading-snug">
+                  Other platform integrations (Instagram, Facebook, TikTok, etc.)
+                  live on{" "}
+                  <Link href="/ops/connections" className="text-accent hover:underline">
+                    /ops/connections
+                  </Link>{" "}
+                  in Infrastructure.
+                </p>
               </section>
             )}
 
-            {/* gbp_location task scope — read-only display of all owner-declared
-                GBP profile fields. Per doctrine: subscriber declares everything
-                at /dashboard/google/profile; operator observes only. */}
+            {/* gbp_location task scope — Service Areas (Google locations).
+                Owner-authored Cat 1 brand identity input per the 2026-06-13
+                platform-vs-owner authorship separation. Categories (also
+                Cat 1 but PLATFORM-authored) live on the brand_categorization
+                drawer above. Cat 2 GBP fields (hours, address, etc.) live
+                on the Infrastructure GBP card. */}
             {task.task_key === "gbp_location" && businessId && (
               <section>
                 <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">
-                  GBP profile declarations
+                  Service Areas (owner-declared)
                 </h3>
                 <GbpDeclarationsDisplay businessId={businessId} />
               </section>
@@ -1035,7 +988,7 @@ function TaskDetailDrawer({
 
             {/* Sub-tasks — rendered for tasks that don't have an inline body
                 covering the sub_task status. Skipped for:
-                - business_info (BusinessInfoForm IS the sub_task editor)
+                - business_info (BusinessInfoDisplay covers the Cat 1 surface)
                 - integrations (the card's auto-expanded list + per-platform
                   sub_task drawer scope IS the sub_task surface; rendering
                   the list here would duplicate the card affordance) */}
@@ -1115,11 +1068,21 @@ function TaskDetailDrawer({
                   {actions.map((a, i) => {
                     const isRunning = a.action !== undefined && a.action === runningAction;
                     const isDisabled = runningAction !== null && !isRunning;
+                    // Cat 1 Home Rule gate: rerun_cma requires commercial tier
+                    // declared. cmaTierSlug starts undefined (picker still
+                    // loading) — don't gate prematurely; gate only on explicit
+                    // null (loaded + empty).
+                    const tierGated =
+                      task.task_key === "brand_cma" &&
+                      a.action === "rerun_cma" &&
+                      cmaTierSlug === null;
+                    const blocked = isRunning || isDisabled || tierGated;
                     return (
                       <button
                         key={i}
                         type="button"
-                        disabled={isRunning || isDisabled}
+                        disabled={blocked}
+                        title={tierGated ? "Declare commercial tier above to enable." : undefined}
                         onClick={() => {
                           if (a.href) onNavigate(a.href);
                           else if (a.action) onAction(a.action);
@@ -1127,7 +1090,7 @@ function TaskDetailDrawer({
                         className={`w-full text-left rounded border border-border bg-card px-3 py-2 text-xs transition-colors flex items-center gap-2 ${
                           isRunning
                             ? "border-blue-400 bg-blue-50 dark:bg-blue-900/30 cursor-wait"
-                            : isDisabled
+                            : blocked
                               ? "opacity-50 cursor-not-allowed"
                               : "hover:bg-surface-hover hover:border-accent/40"
                         }`}
@@ -1140,7 +1103,9 @@ function TaskDetailDrawer({
                           )}
                         </span>
                         <span className="flex-1 font-medium">{isRunning ? "Running…" : a.label}</span>
-                        <span className="text-[10px] text-muted shrink-0">{a.href ? "→" : "▶"}</span>
+                        <span className="text-[10px] text-muted shrink-0">
+                          {tierGated ? "gated" : a.href ? "→" : "▶"}
+                        </span>
                       </button>
                     );
                   })}
@@ -1543,16 +1508,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
   }
 
   const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-  const families: Family[] = [
-    "infra",
-    "brand_observation",
-    "brand_strategic",
-    "brand_verbal",
-    "brand_visual",
-    "brand_sonic",
-    "brand_gate",
-    "connections",
-  ];
 
   return (
     <div className="p-4 flex flex-col space-y-4 overflow-hidden" style={{ height: "calc(100vh - 6.5rem)" }}>
@@ -1576,24 +1531,11 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
             </span>
           </div>
         </div>
-        <div className="h-2 rounded-full bg-surface-hover overflow-hidden mb-3">
+        <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
           <div
             className="h-full rounded-full bg-success transition-all duration-500"
             style={{ width: `${progressPct}%` }}
           />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {families.map((f) => {
-            const s = FAMILY_STYLE[f];
-            return (
-              <span
-                key={f}
-                className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${s.tag}`}
-              >
-                {s.label}
-              </span>
-            );
-          })}
         </div>
       </div>
 
@@ -1619,7 +1561,6 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
                     "brand_verbal",
                     "brand_visual",
                     "brand_sonic",
-                    "business_info",
                   ].includes(task.task_key);
                   return (
                     <TaskCard
@@ -1629,6 +1570,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
                       dependencies={dependenciesOf(task)}
                       expanded={expandedDomains.has(task.task_key)}
                       isDomain={isDomain}
+                      selected={drawerTaskKey === task.task_key}
                       onClick={() => onTaskClick(task)}
                       onContextMenu={(e) => {
                         e.preventDefault();
@@ -1699,7 +1641,7 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
                 style={{ left: contextMenu.x, top: contextMenu.y }}
               >
                 <div className="px-3 py-1.5 border-b border-border">
-                  <p className="text-[10px] font-medium">{task.step_label}. {task.title}</p>
+                  <p className="text-[10px] font-medium">{task.title}</p>
                   {task.milestone && <p className="text-[9px] text-muted">→ {task.milestone}</p>}
                 </div>
                 {actions.length === 0 && (

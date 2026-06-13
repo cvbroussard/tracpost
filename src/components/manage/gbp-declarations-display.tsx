@@ -1,23 +1,21 @@
 /**
- * Read-only display of the GBP fields relevant to BRAND IDENTITY for the
- * Branding pipeline drawer (step 14: gbp_location).
+ * Read-only display of GBP service areas — the owner-authored brand
+ * identity input (geographic scope of the brand) — for the Branding
+ * pipeline drawer at step 14 ("Service Areas (Google locations)").
  *
- * Per the 2026-06-13 GBP-field-categorization doctrine — Branding pipeline
- * tracks only Category 1 fields (those that shape brand identity). Hours,
- * address, description (Cat 2) moved to the Infrastructure GBP card.
- * Social Profile URLs (Cat 3) are not surfaced to the operator at all.
+ * Per the 2026-06-13 platform-vs-owner authorship separation:
+ *   - Categories (PLATFORM-authored) → step 3 brand_categorization drawer
+ *   - Service Areas (OWNER-authored) → this drawer (step 14)
  *
- * Sections rendered:
- *   1. Categories (operator-managed, Cat 1, with inline Pull/Generate/Push)
- *   2. Service Areas (Cat 1)
+ * Both are Cat 1 (brand identity) per the field-categorization doctrine
+ * but they have different authors and lifecycles.
  *
- * Tenant continues to manage all GBP fields (Cat 1 + Cat 2 + Cat 3) at
+ * Tenant continues to manage everything (Cat 1 + Cat 2 + Cat 3) at
  * /dashboard/google/profile.
  */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { GbpCategoriesDisplay } from "@/components/manage/gbp-categories-display";
 
 interface ServiceArea {
   placeId: string;
@@ -116,19 +114,12 @@ export function GbpDeclarationsDisplay({ businessId }: { businessId: string }) {
         </div>
       </div>
 
-      {/* Categories — operator-owned per the 2026-06-11 role-split audit.
-          Pull / Generate / Push action buttons live inline below the
-          category list. The heavy coaching ceremony lives at step 3
-          (brand_categorization → /ops/categories-coaching). */}
-      <Section
-        title="Categories"
-        subtitle="Operator-managed"
-      >
-        <GbpCategoriesDisplay businessId={businessId} />
-        <CategoryActions businessId={businessId} />
-      </Section>
+      {/* Categories moved to step 3 (brand_categorization) drawer per the
+          2026-06-13 platform-vs-owner authorship separation:
+            - Categories = platform-authored = step 3
+            - Service Areas = owner-authored = step 14 (this drawer) */}
 
-      {/* 1. Service Areas */}
+      {/* Service Areas */}
       <Section title="Service Areas" subtitle={`${data.serviceAreas.length} / ${data.serviceAreaCap}`}>
         {data.serviceAreas.length === 0 ? (
           <EmptyHint text="No service areas declared yet" />
@@ -197,96 +188,6 @@ function EmptyHint({ text }: { text: string }) {
   );
 }
 
-/**
- * Operator's category round-trip actions — Pull / Generate / Push.
- * Inline immediately below the category list per the 2026-06-11 UX pass.
- * Mirrors the dispatcher logic previously housed in provisioning-graph's
- * TASK_ACTIONS for gbp_location (now retired from there).
- */
-function CategoryActions({ businessId }: { businessId: string }) {
-  const [running, setRunning] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
-
-  const run = async (
-    actionKey: "pull" | "generate" | "push",
-    runner: () => Promise<{ ok: boolean; message: string }>,
-  ) => {
-    setRunning(actionKey);
-    setFeedback(null);
-    try {
-      const result = await runner();
-      setFeedback(result);
-    } catch (e) {
-      setFeedback({ ok: false, message: `Failed: ${e instanceof Error ? e.message : String(e)}` });
-    } finally {
-      setRunning(null);
-    }
-  };
-
-  const pull = () =>
-    run("pull", async () => {
-      const r = await fetch(`/api/admin/businesses/${businessId}/gbp-sync`, { method: "POST" });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d?.error || `HTTP ${r.status}`);
-      return { ok: true, message: "✓ Categories pulled from Google." };
-    });
-
-  const generate = () =>
-    run("generate", async () => {
-      const r = await fetch(`/api/admin/sites/${businessId}/services/regenerate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ step: "categorize" }),
-      });
-      if (!r.ok) {
-        const m = await r.text().catch(() => "");
-        throw new Error(m || `HTTP ${r.status}`);
-      }
-      const d = await r.json().catch(() => ({} as { categorization?: { primary?: { name?: string }; additional_count?: number } }));
-      const primary = d?.categorization?.primary?.name ?? "primary category";
-      const additionalCount = d?.categorization?.additional_count ?? 0;
-      return { ok: true, message: `✓ Staged — primary: ${primary} + ${additionalCount} additional.` };
-    });
-
-  const push = () =>
-    run("push", async () => {
-      const r = await fetch(`/api/admin/businesses/${businessId}/gbp-categories-push`, { method: "POST" });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d?.success) throw new Error(d?.error || `HTTP ${r.status}`);
-      return { ok: true, message: "✓ Categories pushed to Google." };
-    });
-
-  const btn = (key: "pull" | "generate" | "push", icon: string, label: string, handler: () => void) => {
-    const isRunning = running === key;
-    return (
-      <button
-        type="button"
-        onClick={handler}
-        disabled={running !== null}
-        className="inline-flex items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-[11px] font-medium hover:bg-card/70 disabled:opacity-50 transition-colors"
-      >
-        <span className="text-[10px] w-4 text-center">{icon}</span>
-        <span>{isRunning ? "Running…" : label}</span>
-      </button>
-    );
-  };
-
-  return (
-    <div className="mt-2 space-y-1.5">
-      <div className="flex flex-wrap gap-1.5">
-        {btn("pull", "↻", "Pull from Google", pull)}
-        {btn("generate", "▶", "Generate staged", generate)}
-        {btn("push", "🚀", "Push to Google", push)}
-      </div>
-      {feedback && (
-        <p
-          className={`text-[10px] ${
-            feedback.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-          }`}
-        >
-          {feedback.message}
-        </p>
-      )}
-    </div>
-  );
-}
+// CategoryActions moved to its own component (gbp-category-actions.tsx)
+// and now lives on the brand_categorization (step 3) drawer per the
+// platform-vs-owner authorship separation.

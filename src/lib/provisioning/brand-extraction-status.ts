@@ -42,25 +42,12 @@ const VISUAL_SUBS = [
 ] as const;
 const SONIC_SUBS = ["composite_specimen", "pronunciation"] as const;
 
-// Platform sub_keys for the integrations task. ALL_SUBS is the full list
-// for per-platform sub_task tracking (drawer shows all 8 with connection
-// status — operator observability). REQUIRED_SUBS is just GBP, which is
-// the only integration that feeds brand identity (brand_categorization via
-// business_gbp_categories). The other 7 platforms gate downstream
-// publishing/orchestration, not brand identity, so they don't gate the
-// parent task. Same REQUIRED/ALL split pattern as business_info /
-// gbp_location (LOCKED 2026-06-11 audit).
-const INTEGRATION_REQUIRED_SUBS = ["gbp"] as const;
-const INTEGRATION_ALL_SUBS = [
-  "gbp",
-  "instagram",
-  "facebook",
-  "tiktok",
-  "youtube",
-  "pinterest",
-  "linkedin",
-  "twitter",
-] as const;
+// Step 13 ("GBP integration") tracks the GBP OAuth connection directly —
+// no sub_tasks. The card represents the GBP integration; clicking it
+// opens the drawer which renders the status inline. The recompute
+// reads connectedPlatforms.has("gbp") directly to set parent status.
+// (Migration 160 dropped the last gbp sub_task row; sub_task indirection
+// was overkill for a single-concern step.)
 
 // Sub_keys for business_info — REQUIRED set (must complete for parent task
 // to flip to complete). Optional sub_keys also exist (contact, branding,
@@ -106,8 +93,12 @@ const BUSINESS_INFO_ALL_SUBS = [
 // social_profile_urls dropped from operator UI entirely (Cat 3).
 // Categories themselves are tracked separately via the brand_categorization
 // task (step 3) — they're Cat 1 but have their own dedicated step.
-const GBP_REQUIRED_SUBS = ["service_areas"] as const;
-const GBP_ALL_SUBS = ["service_areas"] as const;
+// gbp_location ("GBP Service Areas") tracks the service-area declaration
+// directly — no sub_tasks. The card represents the service area status;
+// clicking it opens the drawer which renders the per-place list inline.
+// (Migration 164 dropped the service_areas sub_task row; sub_task
+// indirection was overkill for a single-concern step. Same pattern as
+// migration 160 / integrations.)
 
 // Helpers ────────────────────────────────────────────────────────────────────
 
@@ -330,14 +321,10 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
   const serviceAreaPlaces =
     ((serviceArea.places as Record<string, unknown> | undefined)?.placeInfos as Array<unknown> | undefined) ?? [];
 
-  // gbp_location sub_task — Cat 1 (brand identity) only per the 2026-06-13
-  // doctrine. Hours, address, description, social_profile_urls retired
-  // from this step (migration 157); they belong on the Infrastructure GBP
-  // card (Cat 2) or are disregarded entirely (Cat 3).
-  const gbpSubStatus: Record<string, boolean> = {
-    // At least one service area declared (≤20 per Google cap).
-    service_areas: serviceAreaPlaces.length >= 1,
-  };
+  // gbp_location ("GBP Service Areas") has no sub_tasks per the 2026-06-13
+  // simplification (migration 164). Status computed directly below from
+  // serviceAreaPlaces.length.
+  const hasServiceAreas = serviceAreaPlaces.length >= 1;
 
   // website_provisioning retired 2026-06-11 per [[phantom-step-rule]] +
   // [[provisioning-scope]]. Its completion criterion was just "the
@@ -388,21 +375,13 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     composite_specimen: declaredAny(descMap.get("composite_specimen")),
     pronunciation: declaredAny(descMap.get("pronunciation")),
 
-    // Integrations — OAuth-connected platforms per the integrations task.
-    instagram: connectedPlatforms.has("instagram"),
-    facebook: connectedPlatforms.has("facebook"),
-    tiktok: connectedPlatforms.has("tiktok"),
-    youtube: connectedPlatforms.has("youtube"),
-    pinterest: connectedPlatforms.has("pinterest"),
-    linkedin: connectedPlatforms.has("linkedin"),
-    twitter: connectedPlatforms.has("twitter"),
-    gbp: connectedPlatforms.has("gbp"),
+    // Step 13 (integrations) has no sub_tasks per the 2026-06-13 audit —
+    // the parent status reads connectedPlatforms.has("gbp") directly.
 
     // business_info sub_tasks (see businessInfoSubStatus above)
     ...businessInfoSubStatus,
 
-    // gbp_location sub_tasks (see gbpSubStatus above)
-    ...gbpSubStatus,
+    // gbp_location has no sub_tasks (migration 164); parent status set below.
   };
 
   // ── Apply sub_task updates ──
@@ -417,7 +396,7 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
         AND task_id IN (
           SELECT id FROM provisioning_tasks
           WHERE billing_account_id = ${billingAccountId}
-            AND task_key IN ('brand_strategic', 'brand_verbal', 'brand_visual', 'brand_sonic', 'integrations', 'business_info', 'gbp_location')
+            AND task_key IN ('brand_strategic', 'brand_verbal', 'brand_visual', 'brand_sonic', 'business_info')
         )
         AND status IS DISTINCT FROM ${newStatus}
       RETURNING id
@@ -450,17 +429,14 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
     brand_verbal: rollupDomain(VERBAL_SUBS),
     brand_visual: rollupDomain(VISUAL_SUBS),
     brand_sonic: rollupDomain(SONIC_SUBS),
-    integrations: rollupDomain(INTEGRATION_REQUIRED_SUBS),
+    // integrations ("GBP integration") — direct read; no sub_task indirection.
+    integrations: connectedPlatforms.has("gbp") ? "complete" : "pending",
     // business_info: parent completes only when all REQUIRED sub_tasks
     // complete. Optional sub_tasks (contact, branding, web_identity) show
     // progress but don't block.
     business_info: rollupDomain(BUSINESS_INFO_REQUIRED_SUBS),
-    // gbp_location: parent completes only when 3 required sub_tasks
-    // (service_areas, hours, address) all complete. The 2 optional
-    // sub_tasks (description, social_profile_urls) show progress but
-    // don't block. Per the doctrine: tenant-owned declarations;
-    // operator-side drawer is read-only observability.
-    gbp_location: rollupDomain(GBP_REQUIRED_SUBS),
+    // gbp_location ("GBP Service Areas") — direct read; no sub_task indirection.
+    gbp_location: hasServiceAreas ? "complete" : "pending",
   };
   // search_console retired from branding pipeline 2026-06-12 — moved to
   // /ops/seo as part of the Infrastructure milestone scope.

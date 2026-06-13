@@ -3,7 +3,7 @@
 import { ManagePage } from "@/components/manage/manage-page";
 import { AssetLibraryMonitor } from "@/components/manage/asset-library-monitor";
 
-export default function MediaProductionAnalysisPage() {
+export default function StudioAnalysisPage() {
   return (
     <ManagePage title="Analysis" requireSite>
       {({ siteId }) => <AssetLibraryMonitor key={siteId} siteId={siteId} />}

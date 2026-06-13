@@ -17,7 +17,7 @@ interface AnalyzeResultsPanelProps {
 
 /**
  * The auto-tag inspector — the Analyze-results display. Shared by the
- * subscriber asset modal and the manager-side Media Production › Analysis
+ * subscriber asset modal and the manager-side Studio › Analysis
  * modal. Reads the useAssetAnalysis return and renders Story Angle / Scene
  * Composition / per-group applied + suggested-new pills. Panel renders even
  * when zero matches surfaced so the operator can tell the system ran.

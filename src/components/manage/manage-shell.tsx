@@ -32,7 +32,7 @@ interface NavGroup {
 }
 
 // Three-milestone architecture (LOCKED 2026-06-12): Branding ·
-// Infrastructure · Media Production. Each group leads with its pipeline
+// Infrastructure · Studio. Each group leads with its pipeline
 // view and follows with the detail work surfaces. Legacy groups (Site
 // Settings / Monitor / Billing) kept below for a transition period
 // while detail surfaces continue migrating into their canonical
@@ -55,26 +55,23 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Infrastructure Pipeline", path: "/infrastructure" },
       { label: "Subscription", path: "/billing" },
-      { label: "Invoices", path: "/invoices" },
       { label: "Connections", path: "/connections" },
       { label: "GBP", path: "/gbp" },
       { label: "Website", path: "/website" },
-      { label: "Domain", path: "/domain" },
       { label: "SEO / Search Console", path: "/seo" },
     ],
   },
   {
-    label: "Media Production",
+    label: "Studio",
     items: [
-      { label: "Media Production Pipeline", path: "/media-production" },
       { label: "Media Library", path: "/media" },
       { label: "Media Generation", path: "/media-gen" },
       { label: "Motion Gen", path: "/motion-gen" },
       { label: "Prompt Lab", path: "/motion-gen/prompt-lab" },
-      { label: "Analysis", path: "/media-production/analysis" },
-      { label: "Standard Posts", path: "/media-production/standard-posts" },
-      { label: "Video", path: "/media-production/video" },
-      { label: "Web Pages", path: "/media-production/web-pages" },
+      { label: "Analysis", path: "/studio/analysis" },
+      { label: "Standard Posts", path: "/studio/standard-posts" },
+      { label: "Video", path: "/studio/video" },
+      { label: "Web Pages", path: "/studio/web-pages" },
       { label: "Review Advisor", path: "/review-advisor" },
     ],
   },
@@ -208,9 +205,9 @@ export function ManageShell({
               const containsActive = groupContainsActive(group);
               const disabled = selectedSubscriberId === "all";
               // Engage sits between the milestone groups (Branding ·
-              // Infrastructure · Media Production) and the legacy groups,
-              // anchored as the post-production communications surface.
-              const insertEngageAfter = group.label === "Media Production";
+              // Infrastructure · Studio) and the legacy groups, anchored
+              // as the post-production communications surface.
+              const insertEngageAfter = group.label === "Studio";
 
               return (
                 <div key={group.label} className={disabled ? "opacity-30 pointer-events-none" : ""}>

@@ -1,9 +1,9 @@
-/** Media Production › Video — Phase-1 nav scaffold placeholder (temporary; replaced as functionality ports in). */
-export default function MediaProductionVideoPage() {
+/** Studio › Video — Phase-1 nav scaffold placeholder (temporary; replaced as functionality ports in). */
+export default function StudioVideoPage() {
   return (
     <div className="p-6 max-w-2xl space-y-4">
       <div>
-        <h1 className="text-base font-semibold">Media Production · Video</h1>
+        <h1 className="text-base font-semibold">Studio · Video</h1>
         <p className="text-xs text-muted mt-1">
           Phase-1 nav scaffold. Functionality porting from existing routes is
           pending — the old routes stay live until each port lands.

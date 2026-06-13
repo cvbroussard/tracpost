@@ -101,7 +101,7 @@ export interface UseAssetAnalysisParams {
 /**
  * The asset analysis core — tag working-state, the cascade, and the
  * auto-tag inspector — lifted out of AssetEditModal so it can be reused
- * by the manager-side Media Production › Analysis surface.
+ * by the manager-side Studio › Analysis surface.
  *
  * Briefing (recording / transcription) stays in AssetEditModal; this hook
  * is everything from analysis onward. The transcript is an INPUT — callers

@@ -1,9 +1,9 @@
-/** Media Production › Standard Posts — Phase-1 nav scaffold placeholder (temporary; replaced as functionality ports in). */
-export default function MediaProductionStandardPostsPage() {
+/** Studio › Standard Posts — Phase-1 nav scaffold placeholder (temporary; replaced as functionality ports in). */
+export default function StudioStandardPostsPage() {
   return (
     <div className="p-6 max-w-2xl space-y-4">
       <div>
-        <h1 className="text-base font-semibold">Media Production · Standard Posts</h1>
+        <h1 className="text-base font-semibold">Studio · Standard Posts</h1>
         <p className="text-xs text-muted mt-1">
           Phase-1 nav scaffold. Sparse by design — crop + caption is bulletproof
           background work, so this branch has little to forge.

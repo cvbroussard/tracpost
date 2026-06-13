@@ -36,7 +36,7 @@ interface AnalysisContext {
 }
 
 /**
- * Manager-side Media Production › Analysis modal. Opened from the asset-
+ * Manager-side Studio › Analysis modal. Opened from the asset-
  * library grid; the operator runs the full multimodal cascade
  * (AssetCategoriesSection) on an asset and commits it. Briefing
  * (recording) is subscriber-only — this modal shows the transcript

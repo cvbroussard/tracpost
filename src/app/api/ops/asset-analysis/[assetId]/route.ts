@@ -5,7 +5,7 @@ import { sql } from "@/lib/db";
 /**
  * GET /api/ops/asset-analysis/[assetId]
  *
- * Aggregator for the manager-side Media Production › Analysis modal. One
+ * Aggregator for the manager-side Studio › Analysis modal. One
  * round trip returns everything useAssetAnalysis + AnalyzeResultsPanel need
  * for a single asset: the per-site catalogs, pillar config + labels, the
  * asset's current tags, the latest transcript, and the owning subscription

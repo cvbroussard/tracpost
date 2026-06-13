@@ -28,10 +28,11 @@ export interface InfraSubTask {
 }
 
 export interface InfraCard {
-  key: "subscription" | "connections" | "gbp" | "website" | "search_console";
+  key: "subscription" | "connections" | "gbp" | "website";
   title: string;
-  /** Detail surface for the operator to click through to. */
-  href: string;
+  /** Detail surface for the operator to click through to. null = no
+   *  click-out (drawer body carries the full picture; no dedicated page). */
+  href: string | null;
   /** "complete" iff every required sub_task is complete (n/a counts as complete). */
   status: "complete" | "incomplete";
   /** Per-card counts shown in the card header. */
@@ -84,7 +85,7 @@ function rollup(subTasks: InfraSubTask[]): { complete: number; total: number; st
 function buildCard(
   key: InfraCard["key"],
   title: string,
-  href: string,
+  href: string | null,
   subTasks: InfraSubTask[],
 ): InfraCard {
   const r = rollup(subTasks);
@@ -232,7 +233,7 @@ export async function computeInfrastructureStatus(args: {
   const hostingModel = siteRow?.hosting_model as string | null | undefined;
   let websiteCard: InfraCard;
   if (hostingModel === "external_hosted") {
-    websiteCard = buildCard("website", "Website", "/ops/website", [
+    websiteCard = buildCard("website", "Website", null, [
       {
         key: "hosting_model_external",
         label: "External hosting — content feed only",
@@ -248,7 +249,7 @@ export async function computeInfrastructureStatus(args: {
     const workContentPopulated =
       workContentObj !== null && workContentObj !== undefined && Object.keys(workContentObj).length > 0;
     const hostingDeclared = nonEmpty(hostingModel);
-    websiteCard = buildCard("website", "Website", "/ops/website", [
+    websiteCard = buildCard("website", "Website", null, [
       {
         key: "hosting_model_declared",
         label: "Hosting model declared",
@@ -279,26 +280,13 @@ export async function computeInfrastructureStatus(args: {
     ]);
   }
 
-  // ── Search Console card ──
-  const [seoRow] = await sql`
-    SELECT gsc_property FROM businesses WHERE id = ${businessId} LIMIT 1
-  `;
-  const gscVerified = nonEmpty(seoRow?.gsc_property);
-  const searchConsoleCard = buildCard(
-    "search_console",
-    "Search Console",
-    "/ops/seo",
-    [
-      {
-        key: "gsc_verified",
-        label: "Property verified",
-        status: gscVerified ? "complete" : "pending",
-        detail: gscVerified ? (seoRow?.gsc_property as string) : undefined,
-      },
-    ],
-  );
+  // Search Console card retired 2026-06-13 — GSC verification requires a
+  // live website (Google fetches the meta tag from the rendered page), so
+  // it can never satisfy a preparatory readiness check. SEO concerns moved
+  // to Studio per [[three-milestones-architecture]] (operational ongoing
+  // observation, not set-up-once infrastructure).
 
-  const cards = [subscriptionCard, connectionsCard, gbpCard, websiteCard, searchConsoleCard];
+  const cards = [subscriptionCard, connectionsCard, gbpCard, websiteCard];
   const totals = cards.reduce(
     (acc, c) => ({ complete: acc.complete + c.completeCount, total: acc.total + c.totalCount }),
     { complete: 0, total: 0 },

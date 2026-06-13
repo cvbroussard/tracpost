@@ -14,40 +14,14 @@ export async function GET(req: NextRequest) {
   const siteId = new URL(req.url).searchParams.get("site_id");
   if (!siteId) return NextResponse.json({ error: "site_id required" }, { status: 400 });
 
+  // 2026-06-13: connection / account / location / searchConsole branches
+  // retired alongside the operator-side Connection Health card. Page is
+  // pure observation of profile + sync drift; those fields had no consumer.
   const [site] = await sql`
-    SELECT s.gbp_profile, s.gbp_sync_dirty, s.gbp_dirty_fields,
-           s.gsc_property, s.gsc_verification_token
+    SELECT s.gbp_profile, s.gbp_sync_dirty, s.gbp_dirty_fields
     FROM businesses s
     WHERE s.id = ${siteId}
   `;
-
-  // GBP connection — read from the current per-business asset binding model
-  // (business_platform_assets → platform_assets → social_accounts). The
-  // legacy business_social_links table was the old per-business binding;
-  // since the migration to platform_assets, this endpoint was stale and
-  // reported "not connected" even when the business had a primary GBP
-  // asset assigned. Fixed 2026-06-07 to align with /ops/connections and
-  // the integrations provisioning recompute.
-  const [gbpAccount] = await sql`
-    SELECT sa.id, pa.asset_name AS account_name, sa.status,
-           sa.token_expires_at, sa.metadata
-    FROM business_platform_assets bpa
-    JOIN platform_assets pa ON pa.id = bpa.platform_asset_id
-    JOIN social_accounts sa ON sa.id = pa.social_account_id
-    WHERE bpa.business_id = ${siteId}
-      AND bpa.is_primary = true
-      AND pa.platform = 'gbp'
-    ORDER BY sa.created_at DESC
-    LIMIT 1
-  `;
-
-  // GBP location
-  const [gbpLocation] = await sql`
-    SELECT external_id, gbp_account_id, gbp_location_id, sync_status, sync_data
-    FROM gbp_profiles
-    WHERE business_id = ${siteId}
-    LIMIT 1
-  `.catch(() => [null]);
 
   // Photo sync stats
   const [photoStats] = await sql`
@@ -67,22 +41,10 @@ export async function GET(req: NextRequest) {
   `.catch(() => [{ total: 0, pending_replies: 0 }]);
 
   const profile = (site?.gbp_profile || {}) as Record<string, unknown>;
-  const meta = (gbpAccount?.metadata || {}) as Record<string, unknown>;
 
   return NextResponse.json({
-    connected: !!gbpAccount,
-    account: gbpAccount ? {
-      name: gbpAccount.account_name,
-      status: gbpAccount.status,
-      tokenExpires: gbpAccount.token_expires_at,
-    } : null,
-    location: gbpLocation ? {
-      locationId: gbpLocation.gbp_location_id,
-      syncStatus: gbpLocation.sync_status,
-      syncData: gbpLocation.sync_data,
-    } : null,
     profile: {
-      title: profile.title || meta.location_name || null,
+      title: profile.title || null,
       phone: profile.phoneNumber || null,
       website: profile.websiteUri || null,
       address: profile.address || null,
@@ -93,11 +55,6 @@ export async function GET(req: NextRequest) {
     sync: {
       dirty: site?.gbp_sync_dirty || false,
       dirtyFields: site?.gbp_dirty_fields || [],
-    },
-    searchConsole: {
-      property: site?.gsc_property || null,
-      verified: !!site?.gsc_property,
-      tokenSet: !!site?.gsc_verification_token,
     },
     photos: {
       synced: photoStats?.total_synced || 0,

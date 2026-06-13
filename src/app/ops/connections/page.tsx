@@ -100,47 +100,9 @@ function ConnectionsContent({ siteId, subscriberId }: { siteId: string; subscrib
     return undefined;
   }
 
-  async function assignAsset(platformAssetId: string, platform: string) {
-    setSaving(platform);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/admin/platform-assets/assign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ site_id: siteId, platform_asset_id: platformAssetId, is_primary: true }),
-      });
-      const d = await res.json();
-      if (d.success) {
-        setMessage(`Assigned ${platform}`);
-        load();
-      } else {
-        setMessage(d.error || "Failed");
-      }
-    } catch {
-      setMessage("Request failed");
-    }
-    setSaving(null);
-  }
-
-  async function unassignAsset(platformAssetId: string, platform: string) {
-    setSaving(platform);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/admin/platform-assets/assign", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ site_id: siteId, platform_asset_id: platformAssetId }),
-      });
-      const d = await res.json();
-      if (d.success) {
-        setMessage(`Unassigned ${platform}`);
-        load();
-      }
-    } catch {
-      setMessage("Request failed");
-    }
-    setSaving(null);
-  }
+  // Asset assignment is tenant authority — performed inside the studio's
+  // OAuth connector flow. Operator-side picker + unassign retired
+  // 2026-06-13 to honor the role-split (operator observes; tenant writes).
 
   if (loading) {
     return (
@@ -177,7 +139,8 @@ function ConnectionsContent({ siteId, subscriberId }: { siteId: string; subscrib
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted flex-1 pr-4">
           Each row shows a platform connection and which asset is assigned to this site.
-          OAuth connections are managed in the tenant studio. Assignments are operator-controlled here.
+          OAuth connections and asset assignment are managed by the tenant in the studio;
+          this page is observation only.
         </p>
         <button
           onClick={runHealthCheck}
@@ -196,7 +159,6 @@ function ConnectionsContent({ siteId, subscriberId }: { siteId: string; subscrib
               <th className="px-4 py-2 font-medium text-muted">Status</th>
               <th className="px-4 py-2 font-medium text-muted">Assigned Asset</th>
               <th className="px-4 py-2 font-medium text-muted">Health</th>
-              <th className="px-4 py-2 font-medium text-muted text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -220,30 +182,10 @@ function ConnectionsContent({ siteId, subscriberId }: { siteId: string; subscrib
                       <span className="text-muted text-[11px]">Connect from Studio first</span>
                     ) : assets.length === 0 ? (
                       <span className="text-warning text-[11px]">Connected (legacy) — reconnect to migrate</span>
+                    ) : primary ? (
+                      <span className="text-xs">{primary.asset_name}</span>
                     ) : (
-                      <select
-                        value={primary?.id || ""}
-                        onChange={(e) => {
-                          if (e.target.value) assignAsset(e.target.value, platform);
-                        }}
-                        disabled={saving === platform}
-                        className="rounded border border-border bg-background px-2 py-1 text-xs min-w-[200px]"
-                      >
-                        <option value="">— Pending assignment —</option>
-                        {assets.map(asset => {
-                          const otherSites = asset.assignments
-                            .filter(a => a.business_id !== siteId && a.is_primary)
-                            .map(a => a.site_name);
-                          const label = otherSites.length > 0
-                            ? `${asset.asset_name}  [→ ${otherSites.join(", ")}]`
-                            : asset.asset_name;
-                          return (
-                            <option key={asset.id} value={asset.id}>
-                              {label}
-                            </option>
-                          );
-                        })}
-                      </select>
+                      <span className="text-muted text-[11px]">Pending tenant assignment</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -258,28 +200,12 @@ function ConnectionsContent({ siteId, subscriberId }: { siteId: string; subscrib
                       <span className="text-[10px] text-muted">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    {primary && (
-                      <button
-                        onClick={() => unassignAsset(primary.id, platform)}
-                        disabled={saving === platform}
-                        className="text-[11px] text-muted hover:text-danger disabled:opacity-50"
-                      >
-                        Unassign
-                      </button>
-                    )}
-                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-
-      <p className="text-[10px] text-muted">
-        Tip: brackets next to an asset name show which other sites currently use it.
-        You can assign the same asset to multiple sites if intended.
-      </p>
     </div>
   );
 }

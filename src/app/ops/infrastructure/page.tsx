@@ -211,15 +211,17 @@ function CardDrawer({ card, onClose }: { card: InfraCard | null; onClose: () => 
         )}
       </div>
 
-      {/* Footer: click-out */}
-      <div className="border-t border-border px-4 py-3">
-        <Link
-          href={card.href}
-          className="block w-full rounded border border-accent/40 bg-accent/10 px-3 py-1.5 text-center text-[11px] font-medium text-foreground hover:bg-accent/20 transition-colors"
-        >
-          Open {card.title} →
-        </Link>
-      </div>
+      {/* Footer: click-out (suppressed when card has no detail page) */}
+      {card.href && (
+        <div className="border-t border-border px-4 py-3">
+          <Link
+            href={card.href}
+            className="block w-full rounded border border-accent/40 bg-accent/10 px-3 py-1.5 text-center text-[11px] font-medium text-foreground hover:bg-accent/20 transition-colors"
+          >
+            Open {card.title} →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

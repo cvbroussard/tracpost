@@ -57,8 +57,6 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Subscription", path: "/billing" },
       { label: "Integrations", path: "/connections" },
       { label: "GBP", path: "/gbp" },
-      { label: "Website", path: "/website" },
-      { label: "SEO / Search Console", path: "/seo" },
     ],
   },
   {
@@ -72,6 +70,15 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Standard Posts", path: "/studio/standard-posts" },
       { label: "Video", path: "/studio/video" },
       { label: "Web Pages", path: "/studio/web-pages" },
+      // /ops/website parked in Studio 2026-06-13 — legacy triggers
+      // (Save Work Content / Regenerate Copy / Derive Services) retained
+      // here until ported into the orchestrator-side website generator
+      // per [[website-generator-brand-identity-overhaul]].
+      { label: "Website", path: "/website" },
+      // /ops/seo moved to Studio 2026-06-13 — GSC verification + Lighthouse
+      // scoring require a live site, so they're operational/post-launch,
+      // not preparatory infrastructure.
+      { label: "SEO / Search Console", path: "/seo" },
       { label: "Review Advisor", path: "/review-advisor" },
     ],
   },

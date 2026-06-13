@@ -152,51 +152,60 @@ export async function computeInfrastructureStatus(args: {
     })),
   );
 
-  // ── Google Business Profile card ──
-  // Sub-tasks: OAuth (gbp in connections), categories declared (with primary),
-  // profile fields populated (title + address.lines + hours).
-  const gbpOauthConnected = connectedPlatforms.has("gbp");
-  const [catRow] = await sql`
-    SELECT COUNT(*) FILTER (WHERE is_primary = true)::int AS primary_count,
-           COUNT(*)::int AS total_count
-    FROM business_gbp_categories WHERE business_id = ${businessId}
-  `.catch(() => [{ primary_count: 0, total_count: 0 }]);
-  const categoriesPrimarySet = (catRow?.primary_count as number) > 0;
-  const categoriesAdditionalCount = Math.max(
-    0,
-    (catRow?.total_count as number) - (catRow?.primary_count as number),
-  );
-
+  // ── Google Business Profile card — Category 2 fields only ──
+  //
+  // Per the 2026-06-13 GBP-field-categorization doctrine: this card tracks
+  // the Cat 2 best-practice fields (description, phone, website, address,
+  // hours) — the ones TracPost has an opinion on as agency. Cat 1 (title,
+  // categories, service areas) lives in Branding pipeline; Cat 3 (social
+  // profile URLs, opening date, metadata, etc.) is not surfaced to the
+  // operator at all.
+  //
+  // Photos + reviews are also Cat 2 commitments but deferred — wiring TBD.
   const [biz] = await sql`
     SELECT gbp_profile FROM businesses WHERE id = ${businessId} LIMIT 1
   `;
   const gbpProfile = (biz?.gbp_profile as Record<string, unknown> | null) ?? {};
-  const profileTitle = nonEmpty(gbpProfile.title);
+
+  const profileDescription = nonEmpty(gbpProfile.description);
+  const profilePhone = nonEmpty(gbpProfile.phoneNumber);
+  const profileWebsite = nonEmpty(gbpProfile.websiteUri);
   const profileAddress = (() => {
     const addr = gbpProfile.address as Record<string, unknown> | undefined;
     const lines = (addr?.addressLines as string[] | undefined) ?? [];
     return lines.some((l) => nonEmpty(l));
   })();
   const profileHours = Array.isArray(gbpProfile.regularHours) && (gbpProfile.regularHours as unknown[]).length > 0;
-  const profileFieldsComplete = profileTitle && profileAddress && profileHours;
 
   const gbpCard = buildCard("gbp", "Google Business Profile", "/ops/gbp", [
     {
-      key: "oauth_connected",
-      label: "OAuth connected",
-      status: gbpOauthConnected ? "complete" : "pending",
+      key: "description",
+      label: "Description",
+      status: profileDescription ? "complete" : "pending",
     },
     {
-      key: "primary_category",
-      label: "Primary category",
-      status: categoriesPrimarySet ? "complete" : "pending",
-      detail: categoriesAdditionalCount > 0 ? `+${categoriesAdditionalCount} additional` : undefined,
+      key: "phone",
+      label: "Phone number",
+      status: profilePhone ? "complete" : "pending",
+      detail: profilePhone ? (gbpProfile.phoneNumber as string) : undefined,
     },
     {
-      key: "profile_fields",
-      label: "Profile fields (title · address · hours)",
-      status: profileFieldsComplete ? "complete" : "pending",
+      key: "website",
+      label: "Website URL",
+      status: profileWebsite ? "complete" : "pending",
+      detail: profileWebsite ? (gbpProfile.websiteUri as string) : undefined,
     },
+    {
+      key: "address",
+      label: "Address",
+      status: profileAddress ? "complete" : "pending",
+    },
+    {
+      key: "hours",
+      label: "Hours (regular schedule)",
+      status: profileHours ? "complete" : "pending",
+    },
+    // Photos + reviews deferred — Cat 2 future wiring.
   ]);
 
   // ── Website card ──

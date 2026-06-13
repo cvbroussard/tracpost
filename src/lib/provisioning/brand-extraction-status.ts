@@ -97,23 +97,17 @@ const BUSINESS_INFO_ALL_SUBS = [
 // provisioning ends at brand_identity_complete (step 12) per
 // [[provisioning-scope]].
 
-// Sub_keys for gbp_location (added by migration 148). All 5 represent
-// owner-declared GBP profile fields; first 3 are required for parent
-// completion. Per [[brand-identity-input-insulation]] the description
-// and social_profile_urls sub_tasks are owner-typed display fields
-// that do NOT feed back into brand catalog.
-const GBP_REQUIRED_SUBS = [
-  "service_areas",
-  "hours",
-  "address",
-] as const;
-const GBP_ALL_SUBS = [
-  "service_areas",
-  "hours",
-  "address",
-  "description",
-  "social_profile_urls",
-] as const;
+// gbp_location reshape per the 2026-06-13 GBP-field-categorization
+// doctrine: Branding pipeline tracks ONLY Category 1 fields (those that
+// shape brand identity). Service areas is the sole survivor — geographic
+// scope of the brand feeds CMA + positioning. Hours / address /
+// description / social_profile_urls retired (migration 157); hours +
+// address + description now live on the Infrastructure GBP card (Cat 2);
+// social_profile_urls dropped from operator UI entirely (Cat 3).
+// Categories themselves are tracked separately via the brand_categorization
+// task (step 3) — they're Cat 1 but have their own dedicated step.
+const GBP_REQUIRED_SUBS = ["service_areas"] as const;
+const GBP_ALL_SUBS = ["service_areas"] as const;
 
 // Helpers ────────────────────────────────────────────────────────────────────
 
@@ -335,32 +329,14 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
   const serviceArea = (gbpProfile.serviceArea as Record<string, unknown> | undefined) ?? {};
   const serviceAreaPlaces =
     ((serviceArea.places as Record<string, unknown> | undefined)?.placeInfos as Array<unknown> | undefined) ?? [];
-  const gbpAddress = (gbpProfile.address as Record<string, unknown> | undefined) ?? {};
-  const addressLines = (gbpAddress.addressLines as Array<string> | undefined) ?? [];
-  const showsAddress = serviceArea.businessType === "CUSTOMER_AND_BUSINESS_LOCATION";
-  const gbpHours = (gbpProfile.regularHours as Array<unknown> | undefined) ?? [];
-  const gbpDescription = (gbpProfile.description as string | undefined) ?? "";
-  const gbpSocialProfiles = (gbpProfile.socialProfiles as Array<unknown> | undefined) ?? [];
 
+  // gbp_location sub_task — Cat 1 (brand identity) only per the 2026-06-13
+  // doctrine. Hours, address, description, social_profile_urls retired
+  // from this step (migration 157); they belong on the Infrastructure GBP
+  // card (Cat 2) or are disregarded entirely (Cat 3).
   const gbpSubStatus: Record<string, boolean> = {
-    // Required — at least one service area declared (≤20 per Google cap).
+    // At least one service area declared (≤20 per Google cap).
     service_areas: serviceAreaPlaces.length >= 1,
-    // Required — owner has engaged with hours (any day declared as open).
-    // Days NOT in regularHours array are implicitly closed per GBP convention.
-    hours: gbpHours.length >= 1,
-    // Required — either service-area-only declaration OR full address present.
-    // Per the show-address toggle: when off, no address needed; when on,
-    // street + city + state + postal_code must be populated.
-    address: !showsAddress || (
-      addressLines.length > 0 &&
-      nonEmpty(gbpAddress.locality as string | undefined) &&
-      nonEmpty(gbpAddress.administrativeArea as string | undefined) &&
-      nonEmpty(gbpAddress.postalCode as string | undefined)
-    ),
-    // Optional — owner-typed description.
-    description: nonEmpty(gbpDescription),
-    // Optional — any social profile declared.
-    social_profile_urls: gbpSocialProfiles.length >= 1,
   };
 
   // website_provisioning retired 2026-06-11 per [[phantom-step-rule]] +

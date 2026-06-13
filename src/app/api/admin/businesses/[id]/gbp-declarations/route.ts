@@ -1,31 +1,16 @@
 /**
- * Admin endpoint — read the owner-declared GBP profile fields for the
- * step 14 drawer (read-only operator observability).
+ * Admin endpoint — read the Cat 1 (brand identity) GBP fields for the
+ * Branding pipeline step 14 drawer.
  *
- * Per the doctrine: subscriber declares everything at /dashboard/google/profile;
- * operator observes via this drawer. No edits surfaced server-side.
- *
- * Source: businesses.gbp_profile JSONB. Mirrors what subscriber sees on
- * their dashboard but rendered as a static snapshot.
+ * Per the 2026-06-13 GBP-field-categorization doctrine: Branding tracks
+ * only Category 1 fields (those that shape brand identity). Hours,
+ * address, description (Cat 2) live on the Infrastructure GBP card with
+ * their own endpoint; socialProfiles (Cat 3) not surfaced to operator.
+ * Tenant continues to see everything at /dashboard/google/profile.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";
 import { sql } from "@/lib/db";
-
-// Platform → human-readable label. Keys match the lowercase platform names
-// stored in gbp_profile.socialProfiles[].platform (per the SOCIAL_PLATFORMS
-// constant in src/lib/gbp/profile.ts). Tenant UI and operator UI now read
-// the same shape per the 2026-06-11 audit fix.
-const GBP_SOCIAL_CHANNEL_DEFAULTS: Record<string, string> = {
-  facebook: "Facebook",
-  instagram: "Instagram",
-  youtube: "YouTube",
-  twitter: "X (Twitter)",
-  tiktok: "TikTok",
-  linkedin: "LinkedIn",
-  pinterest: "Pinterest",
-  whatsapp: "WhatsApp",
-};
 
 export async function GET(
   _req: NextRequest,
@@ -66,22 +51,11 @@ export async function GET(
       kindMap[r.place_id as string] = (r.kind as string) || "city";
     }
   }
-  const address = (profile.address as Record<string, unknown> | undefined) ?? {};
-  const regularHours = (profile.regularHours as Array<{
-    day?: string;
-    openTime?: string;
-    closeTime?: string;
-  }> | undefined) ?? [];
-  // socialProfiles shape per src/lib/gbp/profile.ts GbpProfile interface +
-  // parseAttributesResponse writer: { platform: string, url: string }.
-  // Previously this route read { channel, uri } which never resolved →
-  // operator's read of social profiles was always empty even when the
-  // tenant had declared them. Fixed 2026-06-11.
-  const socialProfiles = (profile.socialProfiles as Array<{
-    platform?: string;
-    url?: string;
-  }> | undefined) ?? [];
-
+  // Cat 1 fields only per the 2026-06-13 GBP-field-categorization doctrine.
+  // Cat 2 fields (hours, address, description) consumed by the Infrastructure
+  // GBP card (separate endpoint); Cat 3 (socialProfiles) not surfaced to the
+  // operator at all. Tenant continues to see all categories at
+  // /dashboard/google/profile.
   return NextResponse.json({
     serviceAreas: placeInfos.map((p) => ({
       placeId: p.placeId ?? "",
@@ -89,30 +63,9 @@ export async function GET(
       kind: kindMap[p.placeId ?? ""] ?? "city",
     })),
     serviceAreaCap: 20,
-    showAddress: serviceArea.businessType === "CUSTOMER_AND_BUSINESS_LOCATION",
-    address: {
-      addressLines: (address.addressLines as Array<string> | undefined) ?? [],
-      locality: (address.locality as string | null) ?? null,
-      administrativeArea: (address.administrativeArea as string | null) ?? null,
-      postalCode: (address.postalCode as string | null) ?? null,
-    },
-    hours: regularHours.map((h) => ({
-      day: h.day ?? "",
-      openTime: h.openTime ?? "",
-      closeTime: h.closeTime ?? "",
-    })),
-    description: (profile.description as string | null) ?? null,
-    socialProfiles: socialProfiles.map((p) => ({
-      channel: p.platform ?? "",
-      channelLabel: GBP_SOCIAL_CHANNEL_DEFAULTS[p.platform ?? ""] ?? (p.platform ?? "Unknown"),
-      uri: p.url ?? "",
-    })),
     sync: {
       dirty: !!row.gbp_sync_dirty,
       dirtyFields: (row.gbp_dirty_fields as Array<string> | null) ?? [],
-      // synced_at lives on the gbp_profile JSONB blob itself, written by
-      // syncProfileFromGoogle on each pull. Operator surfaces this in the
-      // drawer header to make staleness visible.
       syncedAt: (profile.synced_at as string | null | undefined) ?? null,
     },
   });

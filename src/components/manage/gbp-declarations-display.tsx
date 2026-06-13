@@ -1,18 +1,18 @@
 /**
- * Read-only display of the owner-declared GBP profile fields for the
- * provisioning drawer's gbp_location scope (step 14).
+ * Read-only display of the GBP fields relevant to BRAND IDENTITY for the
+ * Branding pipeline drawer (step 14: gbp_location).
  *
- * Per doctrine: operator OBSERVES; subscriber DECLARES at
- * /dashboard/google/profile. No edits in the operator drawer.
+ * Per the 2026-06-13 GBP-field-categorization doctrine — Branding pipeline
+ * tracks only Category 1 fields (those that shape brand identity). Hours,
+ * address, description (Cat 2) moved to the Infrastructure GBP card.
+ * Social Profile URLs (Cat 3) are not surfaced to the operator at all.
  *
- * Renders 5 sections matching the 5 sub_tasks:
- *   1. Service Areas (up to 20)
- *   2. Hours (per-day)
- *   3. Address (with show-on-Google toggle state)
- *   4. Description (owner-typed, 750 char limit)
- *   5. Social Profile URLs (GBP display links)
+ * Sections rendered:
+ *   1. Categories (operator-managed, Cat 1, with inline Pull/Generate/Push)
+ *   2. Service Areas (Cat 1)
  *
- * Sync state ribbon at top if local changes are queued for push.
+ * Tenant continues to manage all GBP fields (Cat 1 + Cat 2 + Cat 3) at
+ * /dashboard/google/profile.
  */
 "use client";
 
@@ -55,58 +55,15 @@ function kindBadgeClass(kind: string | undefined): string {
   }
 }
 
-interface AddressShape {
-  addressLines: string[];
-  locality: string | null;
-  administrativeArea: string | null;
-  postalCode: string | null;
-}
-
-interface HourEntry {
-  day: string;
-  openTime: string;
-  closeTime: string;
-}
-
-interface SocialProfile {
-  channel: string;
-  channelLabel: string;
-  uri: string;
-}
-
 interface GbpDeclarationsResponse {
   serviceAreas: ServiceArea[];
   serviceAreaCap: number;
-  showAddress: boolean;
-  address: AddressShape;
-  hours: HourEntry[];
-  description: string | null;
-  socialProfiles: SocialProfile[];
   sync: {
     dirty: boolean;
     dirtyFields: string[];
     syncedAt: string | null;
   };
 }
-
-const DAY_ORDER = [
-  "MONDAY",
-  "TUESDAY",
-  "WEDNESDAY",
-  "THURSDAY",
-  "FRIDAY",
-  "SATURDAY",
-  "SUNDAY",
-] as const;
-const DAY_SHORT: Record<string, string> = {
-  MONDAY: "Mon",
-  TUESDAY: "Tue",
-  WEDNESDAY: "Wed",
-  THURSDAY: "Thu",
-  FRIDAY: "Fri",
-  SATURDAY: "Sat",
-  SUNDAY: "Sun",
-};
 
 export function GbpDeclarationsDisplay({ businessId }: { businessId: string }) {
   const [data, setData] = useState<GbpDeclarationsResponse | null>(null);
@@ -202,91 +159,12 @@ export function GbpDeclarationsDisplay({ businessId }: { businessId: string }) {
         )}
       </Section>
 
-      {/* 2. Hours */}
-      <Section title="Hours">
-        <ul className="rounded-md border border-border divide-y divide-border overflow-hidden">
-          {DAY_ORDER.map((day) => {
-            const slot = data.hours.find((h) => h.day === day);
-            const closed = !slot;
-            return (
-              <li
-                key={day}
-                className="px-3 py-1.5 flex items-center justify-between text-xs"
-              >
-                <span className="font-medium w-10 text-muted">{DAY_SHORT[day]}</span>
-                {closed ? (
-                  <span className="text-[10px] text-muted">Closed</span>
-                ) : (
-                  <span className="font-mono text-foreground">
-                    {slot.openTime} — {slot.closeTime}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </Section>
-
-      {/* 3. Address */}
-      <Section title="Address" subtitle={data.showAddress ? "Shown on Google" : "Hidden (service area only)"}>
-        {data.showAddress ? (
-          <div className="rounded-md border border-border bg-card/30 px-3 py-2 text-xs space-y-0.5">
-            {data.address.addressLines.length > 0 ? (
-              data.address.addressLines.map((line, i) => (
-                <p key={i} className="text-foreground">{line}</p>
-              ))
-            ) : (
-              <EmptyHint text="No street address on file" />
-            )}
-            {(data.address.locality || data.address.administrativeArea || data.address.postalCode) && (
-              <p className="text-foreground">
-                {[data.address.locality, data.address.administrativeArea, data.address.postalCode]
-                  .filter(Boolean)
-                  .join(", ")}
-              </p>
-            )}
-          </div>
-        ) : (
-          <p className="rounded-md border border-dashed border-border bg-card/30 px-3 py-2 text-[11px] text-muted italic">
-            Service-area-only declaration — no street address publicly displayed.
-          </p>
-        )}
-      </Section>
-
-      {/* 4. Description */}
-      <Section title="Description" subtitle="Optional · owner-typed">
-        {data.description ? (
-          <div className="rounded-md border border-border bg-card/30 px-3 py-2 text-xs text-foreground leading-relaxed whitespace-pre-wrap">
-            {data.description}
-          </div>
-        ) : (
-          <EmptyHint text="No description declared" />
-        )}
-      </Section>
-
-      {/* 5. Social Profile URLs */}
-      <Section title="Social Profile URLs" subtitle="Optional · GBP display links">
-        {data.socialProfiles.length === 0 ? (
-          <EmptyHint text="No social profile URLs declared" />
-        ) : (
-          <ul className="rounded-md border border-border divide-y divide-border overflow-hidden">
-            {data.socialProfiles.map((s, i) => (
-              <li key={i} className="px-3 py-1.5 flex items-center justify-between text-xs">
-                <span className="text-foreground">{s.channelLabel}</span>
-                <a
-                  href={s.uri}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] text-muted hover:text-foreground font-mono truncate ml-2 max-w-[14rem]"
-                  title={s.uri}
-                >
-                  {s.uri} ↗
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      {/* Hours / Address / Description / Social Profile URLs sections
+          retired 2026-06-13. Cat 2 fields (hours, address, description)
+          surface on the Infrastructure GBP card; Cat 3 (social profile
+          URLs) are not surfaced to the operator at all per the
+          "don't pollute the operator with irrelevant data" doctrine.
+          Tenant continues to manage all of these at /dashboard/google/profile. */}
     </div>
   );
 }

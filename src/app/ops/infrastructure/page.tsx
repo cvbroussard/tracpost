@@ -78,7 +78,9 @@ function InfrastructurePipeline({
         </div>
       </div>
 
-      {/* Two-column layout: cards left, drawer right */}
+      {/* Two-column layout — mirrors the Branding pipeline's working
+          pattern: items-start + explicit h-full on each column so the
+          drawer footer stays pinned at the bottom of the column. */}
       <div className="flex gap-4 items-start flex-1 min-h-0">
         {/* Card grid (scrollable) */}
         <div className="flex-1 min-w-0 h-full overflow-y-auto pr-1">
@@ -96,9 +98,12 @@ function InfrastructurePipeline({
           </div>
         </div>
 
-        {/* Drawer column */}
+        {/* Drawer column — no h-full on the wrapper. The drawer inside
+            sizes to its content; the body's flex-1 + overflow-y-auto
+            still allows the sub_task list to scroll internally if it
+            grows tall enough to exceed the column's available space. */}
         <div
-          className="shrink-0 grow-0 h-full"
+          className="shrink-0 grow-0"
           style={{ width: 400, minWidth: 400, maxWidth: 400 }}
         >
           <CardDrawer card={drawerCard} onClose={() => setDrawerKey(null)} />
@@ -144,14 +149,11 @@ function CardTile({
             {card.completeCount}/{card.totalCount}
           </span>
         </div>
-        {/* Sub-task progress bar */}
         {card.totalCount > 0 && (
           <div className="h-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
             <div
               className={`h-full ${isComplete ? "bg-green-500" : "bg-blue-500"} transition-all`}
-              style={{
-                width: `${(card.completeCount / card.totalCount) * 100}%`,
-              }}
+              style={{ width: `${(card.completeCount / card.totalCount) * 100}%` }}
             />
           </div>
         )}
@@ -163,7 +165,7 @@ function CardTile({
 function CardDrawer({ card, onClose }: { card: InfraCard | null; onClose: () => void }) {
   if (!card) {
     return (
-      <div className="rounded-xl border border-border bg-surface shadow-card flex items-center justify-center p-8">
+      <div className="rounded-xl border border-border bg-surface shadow-card flex items-center justify-center p-8 h-full">
         <p className="text-center text-xs text-muted leading-relaxed">
           Click any card to inspect its sub-tasks and jump to the working surface.
         </p>

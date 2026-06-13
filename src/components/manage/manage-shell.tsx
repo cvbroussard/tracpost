@@ -55,7 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Infrastructure Pipeline", path: "/infrastructure" },
       { label: "Subscription", path: "/billing" },
-      { label: "Connections", path: "/connections" },
+      { label: "Integrations", path: "/connections" },
       { label: "GBP", path: "/gbp" },
       { label: "Website", path: "/website" },
       { label: "SEO / Search Console", path: "/seo" },

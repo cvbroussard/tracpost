@@ -143,7 +143,7 @@ export async function computeInfrastructureStatus(args: {
   const connectedPlatforms = new Set<string>(platformRows.map((r) => r.platform as string));
   const connectionsCard = buildCard(
     "connections",
-    "Connections",
+    "Integrations",
     "/ops/connections",
     ALL_PLATFORMS.map((p) => ({
       key: p,
@@ -175,6 +175,11 @@ export async function computeInfrastructureStatus(args: {
     const lines = (addr?.addressLines as string[] | undefined) ?? [];
     return lines.some((l) => nonEmpty(l));
   })();
+  // Service-area-only businesses (most trades) deliberately omit a physical
+  // address in GBP. When serviceArea is present, address is NOT required —
+  // marking it n/a rather than pending avoids a false-positive on readiness.
+  const isServiceAreaBusiness =
+    gbpProfile.serviceArea !== null && gbpProfile.serviceArea !== undefined;
   const profileHours = Array.isArray(gbpProfile.regularHours) && (gbpProfile.regularHours as unknown[]).length > 0;
 
   const gbpCard = buildCard("gbp", "Google Business Profile", "/ops/gbp", [
@@ -198,7 +203,11 @@ export async function computeInfrastructureStatus(args: {
     {
       key: "address",
       label: "Address",
-      status: profileAddress ? "complete" : "pending",
+      status: profileAddress
+        ? "complete"
+        : isServiceAreaBusiness
+          ? "not_applicable"
+          : "pending",
     },
     {
       key: "hours",

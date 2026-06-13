@@ -357,7 +357,7 @@ function TaskCard({
       )}
       <div
         className={`relative w-full rounded-[2px] border ${
-          selected ? "border-accent" : "border-slate-400 dark:border-slate-600"
+          selected ? "border-accent" : "border-slate-300 dark:border-slate-700"
         } bg-surface shadow-sm overflow-hidden ${ring}`}
         onContextMenu={onContextMenu}
       >

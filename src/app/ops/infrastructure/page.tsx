@@ -123,18 +123,19 @@ function CardTile({
   onClick: () => void;
 }) {
   const isComplete = card.status === "complete";
-  const ringClass = isComplete
+  const borderClass = selected
+    ? "border-accent"
+    : "border-slate-300 dark:border-slate-700";
+  const completeRing = isComplete
     ? "ring-2 ring-green-500/70 shadow-green-200/50 dark:shadow-green-900/30"
-    : selected
-      ? "ring-2 ring-accent/60"
-      : "";
+    : "";
   const barClass = isComplete ? "bg-green-500" : "bg-slate-300 dark:bg-slate-600";
   const overlayClass = isComplete ? "bg-green-500/10 dark:bg-green-500/15" : "";
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative w-full text-left rounded-lg border border-border bg-surface shadow-sm overflow-hidden transition-shadow ${ringClass} hover:shadow-md`}
+      className={`relative w-full text-left rounded-[2px] border ${borderClass} bg-surface shadow-sm overflow-hidden transition-shadow ${completeRing} hover:shadow-md`}
     >
       <div className={`absolute inset-y-0 left-0 w-1.5 ${barClass}`} />
       {overlayClass && <div className={`pointer-events-none absolute inset-0 ${overlayClass}`} />}
@@ -203,7 +204,11 @@ function CardDrawer({ card, onClose }: { card: InfraCard | null; onClose: () => 
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        <SubTaskList subTasks={card.subTasks} />
+        {card.key === "gbp" ? (
+          <GbpReadinessGlance card={card} />
+        ) : (
+          <SubTaskList subTasks={card.subTasks} />
+        )}
       </div>
 
       {/* Footer: click-out */}
@@ -215,6 +220,40 @@ function CardDrawer({ card, onClose }: { card: InfraCard | null; onClose: () => 
           Open {card.title} →
         </Link>
       </div>
+    </div>
+  );
+}
+
+function GbpReadinessGlance({ card }: { card: InfraCard }) {
+  const pending = card.subTasks.filter((s) => s.status !== "complete" && s.status !== "not_applicable");
+  const isComplete = card.status === "complete";
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted leading-relaxed">
+        Owner-declared profile fields. The Infrastructure drawer reports
+        readiness only — field-level review lives on the GBP detail page.
+      </p>
+      {isComplete ? (
+        <div className="rounded border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/40 px-3 py-2">
+          <div className="text-xs font-medium text-green-800 dark:text-green-300">
+            All tracked fields declared.
+          </div>
+        </div>
+      ) : (
+        <div className="rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 space-y-1">
+          <div className="text-xs font-medium text-amber-800 dark:text-amber-300">
+            {pending.length} field{pending.length === 1 ? "" : "s"} awaiting owner
+          </div>
+          <ul className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed list-disc pl-4">
+            {pending.map((p) => (
+              <li key={p.key}>{p.label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="text-[10px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200 dark:border-slate-700">
+        If a declared field looks malformed or off-brand, coach the owner — operator does not edit.
+      </p>
     </div>
   );
 }

@@ -106,7 +106,12 @@ function InfrastructurePipeline({
           className="shrink-0 grow-0"
           style={{ width: 400, minWidth: 400, maxWidth: 400 }}
         >
-          <CardDrawer card={drawerCard} onClose={() => setDrawerKey(null)} />
+          <CardDrawer
+            card={drawerCard}
+            businessId={data.businessId}
+            onClose={() => setDrawerKey(null)}
+            onRefresh={load}
+          />
         </div>
       </div>
     </div>
@@ -163,7 +168,17 @@ function CardTile({
   );
 }
 
-function CardDrawer({ card, onClose }: { card: InfraCard | null; onClose: () => void }) {
+function CardDrawer({
+  card,
+  businessId,
+  onClose,
+  onRefresh,
+}: {
+  card: InfraCard | null;
+  businessId: string;
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
   if (!card) {
     return (
       <div className="rounded-xl border border-border bg-surface shadow-card flex items-center justify-center p-8 h-full">
@@ -206,6 +221,12 @@ function CardDrawer({ card, onClose }: { card: InfraCard | null; onClose: () => 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {card.key === "gbp" ? (
           <GbpReadinessGlance card={card} />
+        ) : card.key === "website" ? (
+          <WebsiteCardBody
+            card={card}
+            businessId={businessId}
+            onRefresh={onRefresh}
+          />
         ) : (
           <SubTaskList subTasks={card.subTasks} />
         )}
@@ -256,6 +277,80 @@ function GbpReadinessGlance({ card }: { card: InfraCard }) {
       <p className="text-[10px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200 dark:border-slate-700">
         If a declared field looks malformed or off-brand, coach the owner — operator does not edit.
       </p>
+    </div>
+  );
+}
+
+function WebsiteCardBody({
+  card,
+  businessId,
+  onRefresh,
+}: {
+  card: InfraCard;
+  businessId: string;
+  onRefresh: () => void;
+}) {
+  const [capturing, setCapturing] = useState(false);
+  const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function runCapture() {
+    setCapturing(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`/api/admin/businesses/${businessId}/website-screenshot`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setFeedback({
+          ok: true,
+          message: `Captured in ${Math.round((data.durationMs ?? 0) / 100) / 10}s · ${Math.round((data.bytesSize ?? 0) / 1024)} KB`,
+        });
+        onRefresh();
+      } else {
+        setFeedback({
+          ok: false,
+          message: `${data.error ?? "error"}: ${data.message ?? "capture failed"}`,
+        });
+      }
+    } catch (e) {
+      setFeedback({ ok: false, message: e instanceof Error ? e.message : "request failed" });
+    } finally {
+      setCapturing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <SubTaskList subTasks={card.subTasks} />
+      <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+        <h4 className="text-[10px] font-medium uppercase tracking-wide text-muted">
+          Capture
+        </h4>
+        <button
+          type="button"
+          onClick={runCapture}
+          disabled={capturing}
+          className="w-full rounded border border-accent/40 bg-accent/10 px-3 py-1.5 text-[11px] font-medium hover:bg-accent/20 disabled:opacity-50 disabled:cursor-wait transition-colors"
+        >
+          {capturing ? "Capturing… (~10-30s)" : "Capture website screenshot"}
+        </button>
+        <p className="text-[10px] text-muted leading-relaxed">
+          Renders the brand&apos;s homepage in headless Chrome and stores the result
+          as the PPA visual input.
+        </p>
+        {feedback && (
+          <p
+            className={`text-[10px] ${
+              feedback.ok
+                ? "text-green-700 dark:text-green-400"
+                : "text-rose-600 dark:text-rose-400"
+            }`}
+          >
+            {feedback.message}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

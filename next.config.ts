@@ -37,9 +37,13 @@ const nextConfig: NextConfig = {
     // Chromium's brotli-compressed bin/*.br files are loaded at runtime
     // via fs.createReadStream. Without this explicit include the launch
     // fails: "input directory does not exist. Please provide the location
-    // of the brotli files." Scoped to the screenshot route specifically so
-    // chromium doesn't get bundled into every other API function.
-    "/api/admin/businesses/[id]/website-screenshot": [
+    // of the brotli files." Scoped to the screenshot route specifically.
+    // NOTE: the dynamic [id] segment is matched as a wildcard `*` here —
+    // using literal "[id]" in the key causes glob to interpret it as a
+    // character class (matching only chars 'i' or 'd'), which never
+    // matches the literal "[id]" in the build-time route path. The `*`
+    // single-segment wildcard correctly matches the dynamic segment.
+    "/api/admin/businesses/*/website-screenshot": [
       "./node_modules/@sparticuz/chromium/bin/**/*",
     ],
   },

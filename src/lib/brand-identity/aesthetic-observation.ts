@@ -69,6 +69,25 @@ interface AssembledObservationSources {
   /** Ordered, deduped image array fed to the multimodal call. */
   images: ObservationImage[];
   gbpCategories: { name: string; isPrimary: boolean }[];
+  /** Structured GBP profile content surfaced as text in the prompt. Null when
+   *  the business has no GBP connected or the profile is empty. Lets the LLM
+   *  observe cross-surface consistency (description-vs-homepage framing, NAP,
+   *  hours, service areas, etc.) without needing additional image captures. */
+  gbpProfile: GbpProfileSummary | null;
+}
+
+interface GbpProfileSummary {
+  description: string | null;
+  phoneNumber: string | null;
+  websiteUri: string | null;
+  addressLines: string[];
+  locality: string | null;
+  administrativeArea: string | null;
+  regularHours: Array<{ day: string; openTime?: string; closeTime?: string }>;
+  serviceAreaPlaces: string[];
+  reviewCount: number | null;
+  averageRating: number | null;
+  openingDate: string | null;
 }
 
 /** PPA's screenshot freshness window. Beyond this, JIT-recapture before
@@ -83,7 +102,8 @@ async function assembleObservationSources(
     SELECT id, name, url,
            business_website_screenshot, business_website_screenshot_at,
            business_logo, business_favicon,
-           gbp_cover_asset_id, gbp_logo_asset_id
+           gbp_cover_asset_id, gbp_logo_asset_id,
+           gbp_profile
     FROM businesses
     WHERE id = ${businessId}
     LIMIT 1
@@ -185,7 +205,79 @@ async function assembleObservationSources(
     isPrimary: Boolean(r.is_primary),
   }));
 
-  return { business, websiteUrl, images, gbpCategories };
+  const gbpProfile = summarizeGbpProfile(
+    biz.gbp_profile as Record<string, unknown> | null | undefined,
+  );
+
+  return { business, websiteUrl, images, gbpCategories, gbpProfile };
+}
+
+/** Reduce the raw GBP JSONB to the fields PPA cares about. Returns null when
+ *  the profile is missing or has zero meaningful content. */
+function summarizeGbpProfile(
+  raw: Record<string, unknown> | null | undefined,
+): GbpProfileSummary | null {
+  if (!raw || Object.keys(raw).length === 0) return null;
+
+  const nonEmptyStr = (v: unknown): string | null =>
+    typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+
+  const addr = (raw.address as Record<string, unknown> | undefined) ?? {};
+  const addressLines = ((addr.addressLines as string[] | undefined) ?? []).filter(
+    (l) => typeof l === "string" && l.trim().length > 0,
+  );
+
+  const hours = ((raw.regularHours as Array<Record<string, unknown>> | undefined) ?? [])
+    .map((h) => ({
+      day: String(h.day ?? h.dayOfWeek ?? "").toLowerCase(),
+      openTime: nonEmptyStr(h.openTime) ?? undefined,
+      closeTime: nonEmptyStr(h.closeTime) ?? undefined,
+    }))
+    .filter((h) => h.day);
+
+  const places = (((raw.serviceArea as Record<string, unknown> | undefined)?.places as Record<string, unknown> | undefined)
+    ?.placeInfos as Array<Record<string, unknown>> | undefined) ?? [];
+  const serviceAreaPlaces = places
+    .map((p) => nonEmptyStr(p.placeName))
+    .filter((p): p is string => p !== null);
+
+  const reviewCount =
+    typeof raw.reviewCount === "number"
+      ? raw.reviewCount
+      : typeof raw.userRatingCount === "number"
+        ? raw.userRatingCount
+        : null;
+  const averageRating =
+    typeof raw.averageRating === "number"
+      ? raw.averageRating
+      : typeof raw.rating === "number"
+        ? raw.rating
+        : null;
+
+  const summary: GbpProfileSummary = {
+    description: nonEmptyStr(raw.description),
+    phoneNumber: nonEmptyStr(raw.phoneNumber),
+    websiteUri: nonEmptyStr(raw.websiteUri),
+    addressLines,
+    locality: nonEmptyStr(addr.locality),
+    administrativeArea: nonEmptyStr(addr.administrativeArea),
+    regularHours: hours,
+    serviceAreaPlaces,
+    reviewCount,
+    averageRating,
+    openingDate: nonEmptyStr(raw.openingDate),
+  };
+
+  // If literally nothing meaningful is set, treat as no profile.
+  const hasAny =
+    summary.description ||
+    summary.phoneNumber ||
+    summary.addressLines.length > 0 ||
+    summary.regularHours.length > 0 ||
+    summary.serviceAreaPlaces.length > 0 ||
+    summary.reviewCount !== null ||
+    summary.averageRating !== null;
+  return hasAny ? summary : null;
 }
 
 // ── The observation prompt ──────────────────────────────────────────────────
@@ -249,6 +341,44 @@ function buildUserText(sources: AssembledObservationSources): string {
     }
   }
   lines.push("");
+
+  // GBP PROFILE TEXT — the owner-published fields visible on Google Maps.
+  // Relayed via our DB so the LLM has cross-surface observability (description
+  // vs homepage framing, NAP consistency, hours, service area scope) without
+  // requiring a separate GBP screenshot capture.
+  if (sources.gbpProfile) {
+    const p = sources.gbpProfile;
+    lines.push("GBP PROFILE (owner-published, publicly visible on Google Maps)");
+    if (p.description) lines.push(`- Description: ${p.description}`);
+    if (p.phoneNumber) lines.push(`- Phone: ${p.phoneNumber}`);
+    if (p.websiteUri) lines.push(`- Website (per GBP): ${p.websiteUri}`);
+    if (p.addressLines.length || p.locality || p.administrativeArea) {
+      const addressParts = [
+        p.addressLines.join(", "),
+        p.locality,
+        p.administrativeArea,
+      ].filter((v) => v && v.length > 0);
+      lines.push(`- Address: ${addressParts.join(", ")}`);
+    }
+    if (p.regularHours.length) {
+      lines.push("- Hours:");
+      for (const h of p.regularHours) {
+        const time = h.openTime && h.closeTime ? `${h.openTime}–${h.closeTime}` : "closed";
+        lines.push(`    · ${h.day}: ${time}`);
+      }
+    }
+    if (p.serviceAreaPlaces.length) {
+      lines.push(`- Service areas: ${p.serviceAreaPlaces.join(", ")}`);
+    }
+    if (p.reviewCount !== null || p.averageRating !== null) {
+      const ratingText = p.averageRating !== null ? `${p.averageRating.toFixed(1)} avg` : "no avg";
+      const countText = p.reviewCount !== null ? `${p.reviewCount} reviews` : "no count";
+      lines.push(`- Reviews: ${countText} (${ratingText})`);
+    }
+    if (p.openingDate) lines.push(`- Opening date: ${p.openingDate}`);
+    lines.push("");
+  }
+
   lines.push("IMAGES PROVIDED IN THIS CALL (in order)");
   sources.images.forEach((img, i) => lines.push(`  ${i + 1}. ${img.label}`));
   lines.push("");

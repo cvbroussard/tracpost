@@ -10,7 +10,7 @@ export default async function MyAccountPage() {
   if (!session) redirect("/login");
 
   const [subscriber] = await sql`
-    SELECT id, name, email, phone, role,
+    SELECT id, name, email, phone,
            password_hash IS NOT NULL AS has_password,
            session_token_hash IS NOT NULL AS has_device
     FROM users

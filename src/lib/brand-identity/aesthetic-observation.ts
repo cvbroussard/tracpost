@@ -165,6 +165,23 @@ DISCIPLINE:
 - Do NOT generalize from category priors; report what THIS brand shows, not what brands like this typically show.
 - Stay factual: "the website uses warm amber tones and large serif headings" rather than "the brand feels heritage-luxe".
 
+TRACPOST AGENCY SCOPE — observe for METRICS, not aesthetic judgment:
+The agency's value-add is in measurable brand-identity signals (cross-surface consistency, catalog feeding, content-generation inputs). It is NOT in subjective visual-design judgment. Visual asset choices (logo design, color palette curation, typography selection) are owner authority; the LLM is not in a position to opine on their design quality.
+
+OBSERVE for these purposes:
+- Cross-surface CONSISTENCY signals (does the declared palette appear in actual UI? does NAP match across surfaces? does the homepage framing match GBP categories?)
+- CATALOG-feeding observation (what tone, voice, palette, lexicon, positioning does this brand use? — these feed brand_descriptor declarations)
+- Content-generation INPUTS (what voice should new posts match? what palette should website pages use?)
+
+DO NOT OBSERVE for these purposes:
+- Aesthetic judgment of design assets standing alone ("logo looks distinctive in your category," "color choice is unusual," "square format is striking")
+- Distinctiveness-for-its-own-sake findings that don't feed a downstream pipeline
+- Recommendations about creative direction or visual redesign
+
+A useful test for any observation: does it feed a downstream pipeline (palette → CSS vars, tone → copy gen) or measure a cross-surface metric (NAP, palette consistency, GBP-vs-homepage alignment)? If neither — skip it.
+
+When observing visual assets (logo, favicon, photography): emit FACTUAL attributes (color, format, scale, mark style) into visual.* descriptors for downstream consistency use. Do NOT emit standalone aesthetic-judgment findings about whether those choices are good, distinctive, or category-appropriate.
+
 PAYLOAD STRUCTURE: The payload is descriptor-keyed under domain — each slot (e.g. verbal.tone, visual.palette) is one brand-identity descriptor. For each descriptor:
 - If the sources show enough to observe it: emit { "observed": <descriptor-specific value>, "evidence": [<direct quotes or specific visual elements that support each observation>] }
 - If the sources don't carry that signal (e.g. sonic descriptors from a website): set the slot to null. DO NOT fabricate. visual.do_not_show is ALWAYS null (guardrails are not observable from public sources by definition).
@@ -178,9 +195,9 @@ For meta.verdict, choose one brand class:
 
 meta.confidence is your self-assessed confidence in the verdict, 0.0 to 1.0.
 
-distinctive_elements_vs_category_defaults captures observations made by comparing this brand against typical/default brands in its category — what stands out, what diverges.
+distinctive_elements_vs_category_defaults captures observations of category-divergence ONLY when the divergence has a downstream metric or content-generation use (e.g., a tone divergence that should anchor future copy gen; a positioning divergence that informs CMA classification). Pure aesthetic distinctiveness without downstream use does NOT belong here.
 
-gaps_and_absences names what couldn't be observed from these sources OR signals that are missing from the brand's public presence — both kinds of gaps belong here.
+gaps_and_absences names what couldn't be observed from these sources OR signals that are missing from the brand's public presence that have a downstream consequence (a missing tone signal blocks copy-gen; a missing palette blocks website-gen). Pure observational gaps without consequence ("no video content was visible") may be noted but lower the bar for inclusion — prefer omitting over speculating.
 
 OUTPUT: a single valid JSON object matching the requested schema exactly. No prose, no markdown fences, no commentary outside the JSON.`;
 }

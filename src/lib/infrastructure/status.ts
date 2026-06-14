@@ -221,9 +221,12 @@ export async function computeInfrastructureStatus(args: {
   // ── Website card ──
   // Hosting-fork applies. external_hosted → entire card collapses to a
   // single "external_hosted" sub_task marked complete (not applicable to
-  // TracPost-side provisioning).
+  // TracPost-side provisioning). Logo + favicon are Cat 2 brand assets
+  // re-homed here 2026-06-14 per Cat 1 Home Rule (Website is the
+  // generator-consumer that hard-blocks without them).
   const [siteRow] = await sql`
     SELECT s.hosting_model, s.page_config, s.work_content,
+           s.business_logo, s.business_favicon,
            (s.website_copy IS NOT NULL) AS has_website_copy,
            bs.custom_domain
     FROM businesses s
@@ -231,6 +234,8 @@ export async function computeInfrastructureStatus(args: {
     WHERE s.id = ${businessId} LIMIT 1
   `;
   const hostingModel = siteRow?.hosting_model as string | null | undefined;
+  const hasLogo = nonEmpty(siteRow?.business_logo);
+  const hasFavicon = nonEmpty(siteRow?.business_favicon);
   let websiteCard: InfraCard;
   if (hostingModel === "external_hosted") {
     websiteCard = buildCard("website", "Website", null, [
@@ -238,6 +243,16 @@ export async function computeInfrastructureStatus(args: {
         key: "hosting_model_external",
         label: "External hosting — content feed only",
         status: "complete",
+      },
+      {
+        key: "brand_logo",
+        label: "Brand logo",
+        status: hasLogo ? "complete" : "pending",
+      },
+      {
+        key: "brand_favicon",
+        label: "Brand favicon",
+        status: hasFavicon ? "complete" : "pending",
       },
     ]);
   } else {
@@ -261,6 +276,16 @@ export async function computeInfrastructureStatus(args: {
         label: "Custom domain",
         status: customDomainSet ? "complete" : "pending",
         detail: customDomainSet ? (siteRow?.custom_domain as string) : undefined,
+      },
+      {
+        key: "brand_logo",
+        label: "Brand logo",
+        status: hasLogo ? "complete" : "pending",
+      },
+      {
+        key: "brand_favicon",
+        label: "Brand favicon",
+        status: hasFavicon ? "complete" : "pending",
       },
       {
         key: "page_config",

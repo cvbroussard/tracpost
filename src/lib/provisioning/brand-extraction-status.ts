@@ -49,30 +49,19 @@ const SONIC_SUBS = ["composite_specimen", "pronunciation"] as const;
 // (Migration 160 dropped the last gbp sub_task row; sub_task indirection
 // was overkill for a single-concern step.)
 
-// Sub_keys for business_info — REQUIRED set (must complete for parent task
-// to flip to complete). Optional sub_keys also exist (contact, branding,
-// web_identity) but don't gate the parent.
+// Sub_keys for business_info — 4 flat field-level sub_tasks per the
+// 2026-06-14 reshape (migration 165). Cat 1 load-bearing baseline only:
+// name, business_type, location, url. Cat 2 fields have been re-homed
+// to their consumer cards per Home Rule [[gbp-field-categorization]];
+// the previous 9-sub_task model collapsed to 4 flat ones so the drawer
+// and the card badge reflect the same surface (X/4 completion).
 const BUSINESS_INFO_REQUIRED_SUBS = [
-  "basics",
-  "commercial_tier",
-  "hosting_model",
-  "safeguard_faces",
-  "safeguard_minors",
-  "safeguard_identity",
+  "name",
+  "business_type",
+  "location",
+  "url",
 ] as const;
-
-// Full list (required + optional) — used for sub_task UPDATE scope.
-const BUSINESS_INFO_ALL_SUBS = [
-  "basics",
-  "commercial_tier",
-  "hosting_model",
-  "contact",
-  "branding",
-  "web_identity",
-  "safeguard_faces",
-  "safeguard_minors",
-  "safeguard_identity",
-] as const;
+const BUSINESS_INFO_ALL_SUBS = BUSINESS_INFO_REQUIRED_SUBS;
 
 // Note: website provisioning has been fully retired from this pipeline.
 // Migration 147 collapsed early-stage tasks (website_tracpost_provision +
@@ -261,53 +250,24 @@ export async function recomputeBrandExtractionStatus(businessId: string): Promis
   // page_config / work_content / website_copy intentionally NOT read here —
   // they're website-generator outputs, not provisioning inputs. Retired
   // 2026-06-11 along with the website_provisioning phantom step.
+  // business_info reads name/type/location/url for the 4 flat sub_tasks
+  // (migration 165). gbp_profile is read for gbp_location compute below.
+  // Cat 2 fields (commercial_tier, hosting_model, contact, branding,
+  // safeguards) are no longer read here — they live on consumer cards.
   const [bizRow] = await sql`
-    SELECT name, business_type, location, commercial_tier_id, hosting_model,
-           business_phone, business_email,
-           business_logo, business_favicon,
-           url, blog_slug,
-           gbp_profile,
-           face_waiver_signed_at, minor_face_waiver_signed_at, identity_waiver_signed_at
+    SELECT name, business_type, location, url, gbp_profile
     FROM businesses WHERE id = ${businessId} LIMIT 1
   `;
-  const [seoRow] = await sql`
-    SELECT og_title, og_description
-    FROM seo_content WHERE business_id = ${businessId} LIMIT 1
-  `.catch(() => [null]);
-  const [blogSettingsRow] = await sql`
-    SELECT custom_domain, subdomain
-    FROM blog_settings WHERE business_id = ${businessId} LIMIT 1
-  `.catch(() => [null]);
 
   const nonEmpty = (v: unknown) => typeof v === "string" && v.trim().length > 0;
-  const presentValue = (v: unknown) => v !== null && v !== undefined;
 
   const bizData = bizRow ?? {};
-  const seo = seoRow ?? {};
-  const blogSettings = blogSettingsRow ?? {};
 
   const businessInfoSubStatus: Record<string, boolean> = {
-    // Required — basics: all three must be present
-    basics:
-      nonEmpty(bizData.name) &&
-      nonEmpty(bizData.business_type) &&
-      nonEmpty(bizData.location),
-    // Required — commercial tier picked
-    commercial_tier: presentValue(bizData.commercial_tier_id),
-    // Required — hosting model declared. Forks the pipeline at step 15
-    // between Website (TracPost-hosted) Provisioning and Website
-    // (externally hosted) Registered per [[ppa-business-health-checkup]].
-    hosting_model: presentValue(bizData.hosting_model),
-    // Optional — at least one contact channel
-    contact: nonEmpty(bizData.business_phone) || nonEmpty(bizData.business_email),
-    // Optional — at least logo (favicon is auto-derivable from logo)
-    branding: nonEmpty(bizData.business_logo),
-    // Optional — URL + at least one OG field
-    web_identity: nonEmpty(bizData.url) && (nonEmpty(seo.og_title) || nonEmpty(seo.og_description)),
-    // Required — content safeguard waivers signed
-    safeguard_faces: presentValue(bizData.face_waiver_signed_at),
-    safeguard_minors: presentValue(bizData.minor_face_waiver_signed_at),
-    safeguard_identity: presentValue(bizData.identity_waiver_signed_at),
+    name: nonEmpty(bizData.name),
+    business_type: nonEmpty(bizData.business_type),
+    location: nonEmpty(bizData.location),
+    url: nonEmpty(bizData.url),
   };
 
   // gbp_location sub_task signals (5 sub_tasks from migration 148).

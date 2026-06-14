@@ -121,7 +121,7 @@ export async function computeInfrastructureStatus(args: {
   `;
   const planSet = nonEmpty(account?.plan);
   const planActive = Boolean(account?.is_active);
-  const subscriptionCard = buildCard("subscription", "Subscription", "/ops/billing", [
+  const subscriptionCard = buildCard("subscription", "Subscription", "/billing", [
     {
       key: "plan_selected",
       label: "Plan selected",
@@ -148,7 +148,7 @@ export async function computeInfrastructureStatus(args: {
   const connectionsCard = buildCard(
     "connections",
     "Integrations",
-    "/ops/connections",
+    "/connections",
     ALL_PLATFORMS.map((p) => ({
       key: p,
       label: PLATFORM_LABEL[p] || p,
@@ -186,7 +186,7 @@ export async function computeInfrastructureStatus(args: {
     gbpProfile.serviceArea !== null && gbpProfile.serviceArea !== undefined;
   const profileHours = Array.isArray(gbpProfile.regularHours) && (gbpProfile.regularHours as unknown[]).length > 0;
 
-  const gbpCard = buildCard("gbp", "Google Business Profile", "/ops/gbp", [
+  const gbpCard = buildCard("gbp", "Google Business Profile", "/gbp", [
     {
       key: "description",
       label: "Description",

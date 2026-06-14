@@ -345,7 +345,7 @@ function ObservationMissingEmpty() {
       <p className="text-xs text-muted leading-relaxed">
         No public presence observation has been generated for this site yet. Generate the
         observation first from the{" "}
-        <a href="/ops/brand-identity/observation" className="underline">
+        <a href="/brand-identity/observation" className="underline">
           Public Presence
         </a>{" "}
         tab — readiness findings consolidate FROM the observation, so the observation has to

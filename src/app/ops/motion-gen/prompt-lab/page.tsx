@@ -187,7 +187,7 @@ function PromptLabContent({ siteId }: { siteId: string }) {
   return (
     <div className="p-4 space-y-4">
       <div className="text-[10px] text-muted">
-        <Link href="/ops/motion-gen" className="text-accent hover:underline">
+        <Link href="/motion-gen" className="text-accent hover:underline">
           ← Motion Gen
         </Link>
       </div>

@@ -5,5 +5,5 @@ import { redirect } from "next/navigation";
 // historical artifact from before Helper + Media Production milestones
 // were separated. Redirect kept so cached bookmarks survive.
 export default function Page() {
-  redirect("/ops/branding");
+  redirect("/branding");
 }

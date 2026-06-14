@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
       severity: "info",
       title: `Provision: ${p.name}`,
       detail: String(p.subscriber_name),
-      href: "/ops/onboarding",
+      href: "/onboarding",
       timestamp: String(p.timestamp),
     });
   }
@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
       severity: "warning",
       title: "GBP location pending",
       detail: (meta.initiating_site_name as string) || String(g.account_name),
-      href: "/ops/gbp-assignment",
+      href: "/gbp-assignment",
       timestamp: String(g.timestamp),
     });
   }
@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
       severity: isExpired ? "danger" : daysLeft <= 2 ? "danger" : "warning",
       title: `${c.platform} ${isExpired ? "expired" : `expires in ${daysLeft}d`}`,
       detail: `${c.account_name} · ${c.subscriber_name}`,
-      href: "/ops/connections",
+      href: "/connections",
       timestamp: String(c.timestamp),
     });
   }
@@ -180,7 +180,7 @@ export async function GET(req: NextRequest) {
       severity: (p.performance as number) < 50 ? "danger" : "warning",
       title: `PageSpeed ${p.performance}`,
       detail: `${p.site_name} · ${String(p.url).replace(/https?:\/\/[^/]+/, "")}`,
-      href: "/ops/pagespeed",
+      href: "/pagespeed",
       timestamp: String(p.timestamp),
     });
   }
@@ -198,7 +198,7 @@ export async function GET(req: NextRequest) {
       severity: (n.severity as string) || "info",
       title: String(n.title),
       detail: String(n.body).slice(0, 80),
-      href: "/ops/pipeline",
+      href: "/pipeline",
       timestamp: String(n.timestamp),
     });
   }
@@ -213,7 +213,7 @@ export async function GET(req: NextRequest) {
       severity: "warning",
       title: `Negative ${e.event_type} on ${e.platform}`,
       detail: `${person}${snippet ? ` · "${snippet}"` : ""} · ${e.subscriber_name}`,
-      href: "/ops/engage",
+      href: "/engage",
       timestamp: String(e.timestamp),
     });
   }

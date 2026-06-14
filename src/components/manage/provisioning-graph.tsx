@@ -107,46 +107,46 @@ const SUB_TASK_ACTIONS: Record<string, TaskAction[]> = {
 };
 
 const TASK_ACTIONS: Record<string, TaskAction[]> = {
-  business_info: [{ label: "View site settings", href: "/ops/sites", icon: "→" }],
+  business_info: [{ label: "View site settings", href: "/sites", icon: "→" }],
 
   brand_categorization: [
     // Categories are platform-authored per the 2026-06-13 platform-vs-
     // owner authorship separation. Heavy coaching ceremony lives at
     // /ops/categories-coaching; inline Pull / Generate / Push actions
     // render directly in the drawer body via <GbpCategoryActions />.
-    { label: "Open coaching ceremony", href: "/ops/categories-coaching", icon: "→" },
+    { label: "Open coaching ceremony", href: "/categories-coaching", icon: "→" },
   ],
   brand_public_presence: [
-    { label: "View observation", href: "/ops/brand-identity/observation", icon: "→" },
+    { label: "View observation", href: "/brand-identity/observation", icon: "→" },
     { label: "Re-run analysis", action: "rerun_public_presence", icon: "⟳" },
   ],
   brand_cma: [
     { label: "Run Analysis", action: "rerun_cma", icon: "⟳" },
-    { label: "View CMA", href: "/ops/competitive-analysis", icon: "→" },
+    { label: "View CMA", href: "/competitive-analysis", icon: "→" },
   ],
   // brand_triage retired 2026-06-11 — see [[phantom-step-rule]]
   brand_readiness_findings: [
     { label: "Re-run consolidation", action: "rerun_findings_consolidation", icon: "⟳" },
-    { label: "View findings", href: "/ops/brand-identity/readiness-findings", icon: "→" },
+    { label: "View findings", href: "/brand-identity/readiness-findings", icon: "→" },
   ],
   brand_findings_resolved: [
-    { label: "Resolve findings", href: "/ops/brand-identity/readiness-findings", icon: "→" },
+    { label: "Resolve findings", href: "/brand-identity/readiness-findings", icon: "→" },
   ],
   brand_strategic: [
-    { label: "Edit strategic descriptors", href: "/ops/brand-identity/strategic", icon: "→" },
+    { label: "Edit strategic descriptors", href: "/brand-identity/strategic", icon: "→" },
   ],
   brand_verbal: [
-    { label: "Edit verbal descriptors", href: "/ops/brand-identity/verbal", icon: "→" },
+    { label: "Edit verbal descriptors", href: "/brand-identity/verbal", icon: "→" },
   ],
   brand_visual: [
-    { label: "Edit visual descriptors", href: "/ops/brand-identity/visual", icon: "→" },
+    { label: "Edit visual descriptors", href: "/brand-identity/visual", icon: "→" },
   ],
   brand_sonic: [
-    { label: "Edit sonic descriptors", href: "/ops/brand-identity/sonic", icon: "→" },
+    { label: "Edit sonic descriptors", href: "/brand-identity/sonic", icon: "→" },
   ],
   brand_identity_complete: [
     { label: "Seal canonical catalog", action: "seal_brand_identity_snapshot", icon: "🔒" },
-    { label: "View brand identity", href: "/ops/brand-identity", icon: "→" },
+    { label: "View brand identity", href: "/brand-identity", icon: "→" },
   ],
 
   // integrations (renamed "GBP integration" 2026-06-13): step scoped to
@@ -950,7 +950,7 @@ function TaskDetailDrawer({
                 <p className="text-[10px] text-muted/80 mt-2 leading-snug">
                   Other platform integrations (Instagram, Facebook, TikTok, etc.)
                   live on{" "}
-                  <Link href="/ops/connections" className="text-accent hover:underline">
+                  <Link href="/connections" className="text-accent hover:underline">
                     /ops/connections
                   </Link>{" "}
                   in Infrastructure.

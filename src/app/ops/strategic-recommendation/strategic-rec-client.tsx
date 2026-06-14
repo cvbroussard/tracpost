@@ -147,13 +147,13 @@ export function StrategicRecommendationClient({ subscriberId }: { subscriberId: 
             {errorReason === "no_cma" && (
               <p className="mt-1 text-muted">
                 → Run a Competitive Market Analysis first from{" "}
-                <a href="/ops/competitive-analysis" className="underline">/ops/competitive-analysis</a>.
+                <a href="/competitive-analysis" className="underline">/competitive-analysis</a>.
               </p>
             )}
             {errorReason === "no_brand_identity" && (
               <p className="mt-1 text-muted">
                 → Create a brand identity record first from{" "}
-                <a href="/ops/brand-identity" className="underline">/ops/brand-identity</a>.
+                <a href="/brand-identity" className="underline">/brand-identity</a>.
               </p>
             )}
           </div>

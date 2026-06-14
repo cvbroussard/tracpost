@@ -5,5 +5,5 @@ import { redirect } from "next/navigation";
 // their domain (strategic / verbal / visual / sonic). Strategic is the
 // natural landing for the legacy /creative URL.
 export default function Page() {
-  redirect("/ops/brand-identity/strategic");
+  redirect("/brand-identity/strategic");
 }

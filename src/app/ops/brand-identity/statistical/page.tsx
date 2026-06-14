@@ -5,5 +5,5 @@ import { redirect } from "next/navigation";
 // their respective domain pages — most of them on /strategic, plus
 // `tagline` on /verbal. Strategic is the natural landing.
 export default function Page() {
-  redirect("/ops/brand-identity/strategic");
+  redirect("/brand-identity/strategic");
 }

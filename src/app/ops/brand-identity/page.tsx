@@ -1954,7 +1954,7 @@ function EmptyStatisticalCard() {
     <div className="rounded border border-dashed border-border bg-background p-3 text-center">
       <p className="text-xs text-muted">No bundle element committed yet for this descriptor.</p>
       <p className="mt-1 text-[10px] text-muted">
-        <Link href="/ops/strategic-recommendation" className="text-accent underline">
+        <Link href="/strategic-recommendation" className="text-accent underline">
           Generate + approve a strategic recommendation
         </Link>{" "}
         to populate.
@@ -2238,10 +2238,10 @@ export function DomainTabs({
   // top-level route. PPA + CMA bundle as siblings per
   // [[observation-driven-readiness-audit]].
   const domainTabs: Array<{ key: BrandDomain; href: string; label: string }> = [
-    { key: "strategic", href: "/ops/brand-identity/strategic", label: "Strategic" },
-    { key: "verbal", href: "/ops/brand-identity/verbal", label: "Verbal" },
-    { key: "visual", href: "/ops/brand-identity/visual", label: "Visual" },
-    { key: "sonic", href: "/ops/brand-identity/sonic", label: "Sonic" },
+    { key: "strategic", href: "/brand-identity/strategic", label: "Strategic" },
+    { key: "verbal", href: "/brand-identity/verbal", label: "Verbal" },
+    { key: "visual", href: "/brand-identity/visual", label: "Visual" },
+    { key: "sonic", href: "/brand-identity/sonic", label: "Sonic" },
   ];
   const tabBase = "-mb-px border-b-2 px-3 py-2 text-xs font-medium";
   const tabActive = "border-accent text-foreground";
@@ -2250,19 +2250,19 @@ export function DomainTabs({
     <div className="flex items-center gap-1 border-b border-border flex-wrap">
       {/* ── Observation phase (steps 3, 4, 6) ── */}
       <Link
-        href="/ops/brand-identity/observation"
+        href="/brand-identity/observation"
         className={`${tabBase} ${domain === "observation" ? tabActive : tabIdle}`}
       >
         Public Presence
       </Link>
       <Link
-        href="/ops/competitive-analysis"
+        href="/competitive-analysis"
         className={`${tabBase} ${domain === "competitive-analysis" ? tabActive : tabIdle}`}
       >
         Competitive Analysis
       </Link>
       <Link
-        href="/ops/brand-identity/readiness-findings"
+        href="/brand-identity/readiness-findings"
         className={`${tabBase} ${domain === "readiness-findings" ? tabActive : tabIdle}`}
       >
         Readiness Findings

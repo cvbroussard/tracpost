@@ -320,6 +320,7 @@ function WebsiteCardBody({
     }
   }
 
+  const screenshotAt = card.meta?.screenshotAt as string | null | undefined;
   return (
     <div className="space-y-3">
       <SubTaskList subTasks={card.subTasks} />
@@ -327,17 +328,23 @@ function WebsiteCardBody({
         <h4 className="text-[10px] font-medium uppercase tracking-wide text-muted">
           Capture
         </h4>
+        <div className="flex items-baseline justify-between gap-2 text-[10px]">
+          <span className="text-muted">Last captured</span>
+          <span className={screenshotAt ? "text-foreground" : "text-slate-400 italic"}>
+            {screenshotAt ? formatRelativeTime(screenshotAt) : "never"}
+          </span>
+        </div>
         <button
           type="button"
           onClick={runCapture}
           disabled={capturing}
           className="w-full rounded border border-accent/40 bg-accent/10 px-3 py-1.5 text-[11px] font-medium hover:bg-accent/20 disabled:opacity-50 disabled:cursor-wait transition-colors"
         >
-          {capturing ? "Capturing… (~10-30s)" : "Capture website screenshot"}
+          {capturing ? "Capturing… (~10-30s)" : screenshotAt ? "Re-capture screenshot" : "Capture website screenshot"}
         </button>
         <p className="text-[10px] text-muted leading-relaxed">
           Renders the brand&apos;s homepage in headless Chrome and stores the result
-          as the PPA visual input.
+          as the PPA visual input. PPA auto-captures if older than 30 days.
         </p>
         {feedback && (
           <p
@@ -353,6 +360,20 @@ function WebsiteCardBody({
       </div>
     </div>
   );
+}
+
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "unknown";
+  const diffMs = Date.now() - then;
+  const min = Math.round(diffMs / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const days = Math.round(hr / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
 function SubTaskList({ subTasks }: { subTasks: InfraSubTask[] }) {

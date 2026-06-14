@@ -39,6 +39,9 @@ export interface InfraCard {
   completeCount: number;
   totalCount: number;
   subTasks: InfraSubTask[];
+  /** Card-specific metadata. Currently used by the Website card to expose
+   *  business_website_screenshot_at for the operator "Last captured" line. */
+  meta?: Record<string, unknown>;
 }
 
 export interface InfrastructureStatus {
@@ -227,6 +230,7 @@ export async function computeInfrastructureStatus(args: {
   const [siteRow] = await sql`
     SELECT s.hosting_model, s.page_config, s.work_content,
            s.business_logo, s.business_favicon,
+           s.business_website_screenshot, s.business_website_screenshot_at,
            (s.website_copy IS NOT NULL) AS has_website_copy,
            bs.custom_domain
     FROM businesses s
@@ -236,6 +240,12 @@ export async function computeInfrastructureStatus(args: {
   const hostingModel = siteRow?.hosting_model as string | null | undefined;
   const hasLogo = nonEmpty(siteRow?.business_logo);
   const hasFavicon = nonEmpty(siteRow?.business_favicon);
+  const websiteCardMeta = {
+    screenshotUrl: (siteRow?.business_website_screenshot as string | null) ?? null,
+    screenshotAt: siteRow?.business_website_screenshot_at
+      ? new Date(siteRow.business_website_screenshot_at as Date | string).toISOString()
+      : null,
+  };
   let websiteCard: InfraCard;
   if (hostingModel === "external_hosted") {
     websiteCard = buildCard("website", "Website", null, [
@@ -304,6 +314,7 @@ export async function computeInfrastructureStatus(args: {
       },
     ]);
   }
+  websiteCard.meta = websiteCardMeta;
 
   // Search Console card retired 2026-06-13 — GSC verification requires a
   // live website (Google fetches the meta tag from the rendered page), so

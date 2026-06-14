@@ -55,7 +55,8 @@ export async function captureBusinessWebsiteScreenshot(
 
   await sql`
     UPDATE businesses
-    SET business_website_screenshot = ${persisted.url}
+    SET business_website_screenshot = ${persisted.url},
+        business_website_screenshot_at = NOW()
     WHERE id = ${businessId}
   `;
 

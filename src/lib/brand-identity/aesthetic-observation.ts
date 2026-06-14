@@ -71,12 +71,18 @@ interface AssembledObservationSources {
   gbpCategories: { name: string; isPrimary: boolean }[];
 }
 
+/** PPA's screenshot freshness window. Beyond this, JIT-recapture before
+ *  observing so PPA #1 vs PPA #2 diffs reflect actual site changes, not
+ *  capture staleness. Aligned with the recurring-quality-gate doctrine. */
+const SCREENSHOT_FRESHNESS_MS = 30 * 24 * 60 * 60 * 1000;
+
 async function assembleObservationSources(
   businessId: string,
 ): Promise<AssembledObservationSources> {
   const [biz] = await sql`
     SELECT id, name, url,
-           business_website_screenshot, business_logo, business_favicon,
+           business_website_screenshot, business_website_screenshot_at,
+           business_logo, business_favicon,
            gbp_cover_asset_id, gbp_logo_asset_id
     FROM businesses
     WHERE id = ${businessId}
@@ -92,6 +98,35 @@ async function assembleObservationSources(
   const websiteUrl = business.url
     ? business.url.startsWith("http") ? business.url : `https://${business.url}`
     : null;
+
+  // JIT screenshot capture — if the stored screenshot is missing or older
+  // than the freshness window, capture-then-observe so PPA always reads
+  // the current site. Graceful degrade: on capture failure, proceed with
+  // whatever images we already have; if none, the downstream throw at
+  // image-assembly time reports the actual gap.
+  // Dynamic import keeps puppeteer-core + @sparticuz/chromium out of the
+  // import graph for any route that doesn't trigger PPA observation.
+  let screenshotUrl = biz.business_website_screenshot as string | null;
+  const screenshotAt = biz.business_website_screenshot_at as Date | string | null;
+  const isStale =
+    !screenshotAt ||
+    Date.now() - new Date(screenshotAt as string | Date).getTime() > SCREENSHOT_FRESHNESS_MS;
+  if (websiteUrl && isStale) {
+    try {
+      const { captureBusinessWebsiteScreenshot } = await import("@/lib/capture/website-screenshot");
+      const captured = await captureBusinessWebsiteScreenshot(businessId);
+      screenshotUrl = captured.url;
+      console.log(
+        `[ppa] JIT-captured screenshot for ${businessId} in ${captured.durationMs}ms ` +
+          `(${Math.round(captured.bytesSize / 1024)}KB)`,
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `[ppa] JIT capture failed for ${businessId}; proceeding with prior images: ${msg}`,
+      );
+    }
+  }
 
   // Resolve GBP cover / logo asset URLs from media_assets, if linked.
   const assetIds = [biz.gbp_cover_asset_id, biz.gbp_logo_asset_id].filter(Boolean) as string[];
@@ -130,7 +165,7 @@ async function assembleObservationSources(
     seen.add(url);
     images.push({ url, label });
   };
-  push(biz.business_website_screenshot as string | null, "website homepage screenshot");
+  push(screenshotUrl, "website homepage screenshot");
   push(biz.business_logo as string | null, "brand logo");
   if (biz.gbp_cover_asset_id) push(assetUrls.get(biz.gbp_cover_asset_id as string), "GBP cover photo");
   if (biz.gbp_logo_asset_id) push(assetUrls.get(biz.gbp_logo_asset_id as string), "GBP logo");

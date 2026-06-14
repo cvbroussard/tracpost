@@ -19,10 +19,11 @@ const nextConfig: NextConfig = {
   ],
   // Force-include the linux canvas binary so Vercel deploys it.
   // Next.js's dependency tracer misses dynamic requires of platform-specific binaries.
-  // @sparticuz/chromium's brotli-compressed bin/*.br files are loaded at runtime
-  // via fs.createReadStream — the tracer doesn't see them either; explicit
-  // include is required or chromium fails to launch with "input directory does
-  // not exist. Please provide the location of the brotli files."
+  // Heavy native deps are SCOPED PER ROUTE to keep individual function
+  // bundles under Vercel's 250 MB unzipped limit. The /api/**/* glob would
+  // pull chromium (~150 MB unpacked) into every function — quickly busting
+  // the cap when combined with canvas + pdfjs already there. Each route key
+  // gets only the binaries it actually uses at runtime.
   outputFileTracingIncludes: {
     "/api/**/*": [
       "./node_modules/@napi-rs/canvas-linux-x64-gnu/**/*",
@@ -32,6 +33,13 @@ const nextConfig: NextConfig = {
       "./node_modules/pdf-to-img/**/*",
       "./node_modules/pdf-lib/**/*",
       "./node_modules/pdfjs-dist/standard_fonts/**/*",
+    ],
+    // Chromium's brotli-compressed bin/*.br files are loaded at runtime
+    // via fs.createReadStream. Without this explicit include the launch
+    // fails: "input directory does not exist. Please provide the location
+    // of the brotli files." Scoped to the screenshot route specifically so
+    // chromium doesn't get bundled into every other API function.
+    "/api/admin/businesses/[id]/website-screenshot": [
       "./node_modules/@sparticuz/chromium/bin/**/*",
     ],
   },

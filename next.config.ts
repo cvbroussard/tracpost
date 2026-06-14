@@ -14,9 +14,15 @@ const nextConfig: NextConfig = {
     "pdf-lib",
     "ffmpeg-static",
     "fluent-ffmpeg",
+    "@sparticuz/chromium",
+    "puppeteer-core",
   ],
   // Force-include the linux canvas binary so Vercel deploys it.
   // Next.js's dependency tracer misses dynamic requires of platform-specific binaries.
+  // @sparticuz/chromium's brotli-compressed bin/*.br files are loaded at runtime
+  // via fs.createReadStream — the tracer doesn't see them either; explicit
+  // include is required or chromium fails to launch with "input directory does
+  // not exist. Please provide the location of the brotli files."
   outputFileTracingIncludes: {
     "/api/**/*": [
       "./node_modules/@napi-rs/canvas-linux-x64-gnu/**/*",
@@ -26,6 +32,7 @@ const nextConfig: NextConfig = {
       "./node_modules/pdf-to-img/**/*",
       "./node_modules/pdf-lib/**/*",
       "./node_modules/pdfjs-dist/standard_fonts/**/*",
+      "./node_modules/@sparticuz/chromium/bin/**/*",
     ],
   },
   // TracPost blog and projects always route through the tenant engine

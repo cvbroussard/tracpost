@@ -24,17 +24,6 @@ const MODEL = "claude-sonnet-4-6";
 // v2 prompt content; renamed to match the public_presence_observation substrate
 // kind. Bump to v3 only when the prompt content materially changes.
 const PROMPT_VERSION = "public_presence_observation_v2";
-const MAX_GBP_PHOTOS = 4;
-
-/** GBP categories that signal brand-deliberate creative, in priority order. */
-const PRIORITY_GBP_CATEGORIES = [
-  "COVER",
-  "PROFILE",
-  "LOGO",
-  "EXTERIOR",
-  "INTERIOR",
-  "TEAM",
-] as const;
 
 // ── The observation payload schema ──────────────────────────────────────────
 // Type contract lives in aesthetic-observation-types.ts (client-safe, no
@@ -101,8 +90,8 @@ async function assembleObservationSources(
   const [biz] = await sql`
     SELECT id, name, url,
            business_website_screenshot, business_website_screenshot_at,
+           gbp_photos_grid, gbp_photos_grid_at,
            business_logo, business_favicon,
-           gbp_cover_asset_id, gbp_logo_asset_id,
            gbp_profile
     FROM businesses
     WHERE id = ${businessId}
@@ -148,36 +137,66 @@ async function assembleObservationSources(
     }
   }
 
-  // Resolve GBP cover / logo asset URLs from media_assets, if linked.
-  const assetIds = [biz.gbp_cover_asset_id, biz.gbp_logo_asset_id].filter(Boolean) as string[];
-  const assetUrls = new Map<string, string>();
-  if (assetIds.length) {
-    const rows = await sql`
-      SELECT id, storage_url FROM media_assets WHERE id = ANY(${assetIds})
-    `;
-    for (const r of rows) {
-      if (r.storage_url) assetUrls.set(r.id as string, r.storage_url as string);
+  // JIT GBP photos grid composite — single composite image containing up to
+  // 10 photos from gbp_photo_sync (owner-published, synced from Google's GBP
+  // Media API; genuinely public). Replaces the previous loop of N individual
+  // base64 photo images: one composite is a smaller payload + lets the LLM
+  // observe cross-photo patterns (variety, coherence, repeated subjects).
+  //
+  // Excludes gbp_cover_asset_id / gbp_logo_asset_id deliberately — those are
+  // TracPost-side nominations awaiting a push, not public artifacts. Agency-
+  // scope doctrine requires PPA to observe only what's live on Google.
+  let photosGridUrl = biz.gbp_photos_grid as string | null;
+  const gridAt = biz.gbp_photos_grid_at as Date | string | null;
+  const gridStale =
+    !gridAt || Date.now() - new Date(gridAt as string | Date).getTime() > SCREENSHOT_FRESHNESS_MS;
+  if (gridStale) {
+    try {
+      const { captureGbpPhotosGrid } = await import("@/lib/capture/gbp-photos-grid");
+      const captured = await captureGbpPhotosGrid(businessId);
+      if (captured) {
+        photosGridUrl = captured.url;
+        console.log(
+          `[ppa] JIT-built GBP photos grid for ${businessId} in ${captured.durationMs}ms ` +
+            `(${Math.round(captured.bytesSize / 1024)}KB, ${captured.photoCount} photos: ` +
+            `${captured.categoriesIncluded.join(", ")})`,
+        );
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `[ppa] GBP photos grid build failed for ${businessId}; proceeding without: ${msg}`,
+      );
     }
   }
 
-  // Priority-filtered GBP photos. ORDER BY array_position pinches the priority
-  // categories ahead of any others. synced_at DESC within tier biases toward
-  // recent/curated. Caps at MAX_GBP_PHOTOS.
-  const photoRows = await sql`
+  // Read GBP cover + GBP logo separately from gbp_photo_sync. These two
+  // photos have load-bearing observation roles distinct from the "rest of
+  // the portfolio" grid:
+  //   - Cover photo: the brand's most intentional GBP visual choice → enables
+  //     cross-surface comparison vs website hero ("is this the same project?")
+  //   - GBP logo: may DIFFER from business_logo (Google sometimes serves an
+  //     older crop, owner uploaded a square variant for the Maps tile, etc.)
+  //     → enables consistency check vs the website's brand logo
+  // Both stay null when the sync hasn't categorized them yet (deferred work
+  // per the tenant GBP photo workflow vision); the grid carries everything
+  // in that case.
+  const gbpSpecialRows = await sql`
     SELECT gbp_media_url, category
     FROM gbp_photo_sync
     WHERE business_id = ${businessId}
       AND gbp_media_url IS NOT NULL
-      AND category = ANY(${PRIORITY_GBP_CATEGORIES as unknown as string[]})
-    ORDER BY
-      array_position(${PRIORITY_GBP_CATEGORIES as unknown as string[]}, category),
-      synced_at DESC NULLS LAST
-    LIMIT ${MAX_GBP_PHOTOS}
+      AND category IN ('COVER', 'LOGO')
+    ORDER BY synced_at DESC NULLS LAST
   `;
+  const gbpCoverUrl =
+    (gbpSpecialRows.find((r) => r.category === "COVER")?.gbp_media_url as string | undefined) ?? null;
+  const gbpLogoUrl =
+    (gbpSpecialRows.find((r) => r.category === "LOGO")?.gbp_media_url as string | undefined) ?? null;
 
-  // Build image array in priority order: website screenshot (most signal),
-  // then brand logo, then GBP cover, then priority GBP photos. Dedupe by URL
-  // so the same R2 file isn't sent twice.
+  // Build image array. Priority order: website screenshot (most signal),
+  // brand logo (website-side), then the special GBP slots (cover + GBP logo),
+  // then the composite grid for everything else.
   const images: ObservationImage[] = [];
   const seen = new Set<string>();
   const push = (url: string | null | undefined, label: string) => {
@@ -186,12 +205,10 @@ async function assembleObservationSources(
     images.push({ url, label });
   };
   push(screenshotUrl, "website homepage screenshot");
-  push(biz.business_logo as string | null, "brand logo");
-  if (biz.gbp_cover_asset_id) push(assetUrls.get(biz.gbp_cover_asset_id as string), "GBP cover photo");
-  if (biz.gbp_logo_asset_id) push(assetUrls.get(biz.gbp_logo_asset_id as string), "GBP logo");
-  for (const r of photoRows) {
-    push(r.gbp_media_url as string, `GBP photo (${r.category as string})`);
-  }
+  push(biz.business_logo as string | null, "brand logo (website)");
+  push(gbpCoverUrl, "GBP cover photo (live on Google)");
+  push(gbpLogoUrl, "GBP logo (live on Google) — may differ from website brand logo");
+  push(photosGridUrl, "GBP photos composite grid — pulled from Google");
 
   const catRows = await sql`
     SELECT gc.name, sgc.is_primary

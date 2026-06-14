@@ -178,21 +178,24 @@ async function assembleObservationSources(
   //   - GBP logo: may DIFFER from business_logo (Google sometimes serves an
   //     older crop, owner uploaded a square variant for the Maps tile, etc.)
   //     → enables consistency check vs the website's brand logo
-  // Both stay null when the sync hasn't categorized them yet (deferred work
-  // per the tenant GBP photo workflow vision); the grid carries everything
-  // in that case.
+  // For the logo slot: Google's GBP Media API tags two related categories —
+  // LOGO (explicit) and PROFILE (the circular avatar that appears in Maps
+  // results, which most brands use AS their logo equivalent). LOGO is rare;
+  // PROFILE is what most accounts actually have. Prefer LOGO when present,
+  // fall back to PROFILE — both serve the same cross-surface comparison role.
   const gbpSpecialRows = await sql`
     SELECT gbp_media_url, category
     FROM gbp_photo_sync
     WHERE business_id = ${businessId}
       AND gbp_media_url IS NOT NULL
-      AND category IN ('COVER', 'LOGO')
+      AND category IN ('COVER', 'LOGO', 'PROFILE')
     ORDER BY synced_at DESC NULLS LAST
   `;
   const gbpCoverUrl =
     (gbpSpecialRows.find((r) => r.category === "COVER")?.gbp_media_url as string | undefined) ?? null;
   const gbpLogoUrl =
-    (gbpSpecialRows.find((r) => r.category === "LOGO")?.gbp_media_url as string | undefined) ?? null;
+    ((gbpSpecialRows.find((r) => r.category === "LOGO") ??
+      gbpSpecialRows.find((r) => r.category === "PROFILE"))?.gbp_media_url as string | undefined) ?? null;
 
   // Build image array. Priority order: website screenshot (most signal),
   // brand logo (website-side), then the special GBP slots (cover + GBP logo),

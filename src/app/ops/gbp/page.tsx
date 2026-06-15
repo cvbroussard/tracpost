@@ -37,6 +37,8 @@ function Row({ label, value, ok }: { label: string; value: string | number; ok?:
 function GbpContent({ siteId }: { siteId: string }) {
   const [data, setData] = useState<GbpData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pulling, setPulling] = useState(false);
+  const [pullFeedback, setPullFeedback] = useState<{ ok: boolean; message: string } | null>(null);
 
   const load = useCallback(() => {
     fetch(`/api/ops/gbp?site_id=${siteId}`)
@@ -46,6 +48,29 @@ function GbpContent({ siteId }: { siteId: string }) {
   }, [siteId]);
 
   useEffect(() => { setLoading(true); load(); }, [load]);
+
+  async function pullProfile() {
+    setPulling(true);
+    setPullFeedback(null);
+    try {
+      const res = await fetch(`/api/admin/sites/${siteId}/gbp-profile-pull`, { method: "POST" });
+      const d = await res.json();
+      if (res.ok && d.ok) {
+        if (d.description_changed) {
+          setPullFeedback({ ok: true, message: "Description updated from Google." });
+        } else {
+          setPullFeedback({ ok: true, message: "Re-synced. No description change detected." });
+        }
+        load();
+      } else {
+        setPullFeedback({ ok: false, message: `${d.error ?? "error"}: ${d.message ?? "pull failed"}` });
+      }
+    } catch (e) {
+      setPullFeedback({ ok: false, message: e instanceof Error ? e.message : "request failed" });
+    } finally {
+      setPulling(false);
+    }
+  }
 
   // Operator surface trimmed 2026-06-13: Connection Health card + all action
   // buttons (Push to Google, Sync Photos, Sync Reviews, Regenerate Categories,
@@ -84,6 +109,40 @@ function GbpContent({ siteId }: { siteId: string }) {
             <Row label="Reviews" value={`${data.reviews.total} total`} />
             {data.reviews.pendingReplies > 0 && (
               <Row label="Pending Replies" value={data.reviews.pendingReplies} ok={false} />
+            )}
+          </div>
+
+          {/* Manual GBP profile re-sync (beta tooling).
+              Owner edits on Google → click here → local cache refreshes →
+              PPA observes the live state on next run. Photos are a separate
+              flow. Categories stay TracPost-canonical (per locked doctrine);
+              they are not refreshed by this action. */}
+          <div className="rounded-xl border border-border bg-surface p-4 shadow-card space-y-2">
+            <h3 className="text-sm font-medium">Re-sync from Google</h3>
+            <p className="text-[10px] text-muted leading-relaxed">
+              Refreshes the local cache for description, hours, phone, address, website,
+              service areas, and review stats. Use when the owner has edited the GBP
+              listing directly on Google&apos;s side. Photos and categories are not
+              touched by this action.
+            </p>
+            <button
+              type="button"
+              onClick={pullProfile}
+              disabled={pulling}
+              className="w-full rounded border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-wait transition-colors"
+            >
+              {pulling ? "Pulling…" : "⚙ Pull profile from Google"}
+            </button>
+            {pullFeedback && (
+              <p
+                className={`text-[10px] ${
+                  pullFeedback.ok
+                    ? "text-green-700 dark:text-green-400"
+                    : "text-rose-600 dark:text-rose-400"
+                }`}
+              >
+                {pullFeedback.message}
+              </p>
             )}
           </div>
         </div>

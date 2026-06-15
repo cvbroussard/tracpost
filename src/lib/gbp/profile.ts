@@ -249,10 +249,18 @@ export type SyncScope = "initial" | "operator" | "tenant";
  *
  * Scope param (added 2026-06-11) gates which halves of the local cache
  * get touched per the role-based ownership model — see SyncScope.
+ *
+ * options.forceOverwrite (added 2026-06-15) bypasses the safe-merge in
+ * re-sync mode and treats Google as the canonical source for display
+ * fields. Used when the owner edits GBP directly on Google's side and
+ * needs the local cache refreshed (e.g., PPA observation needs to see
+ * the live state). Categories handling is unchanged — TracPost stays
+ * canonical for categories regardless of forceOverwrite.
  */
 export async function syncProfileFromGoogle(
   siteId: string,
   scope: SyncScope = "initial",
+  options: { forceOverwrite?: boolean } = {},
 ): Promise<GbpProfile | null> {
   const creds = await getGbpCredentials(siteId);
   if (!creds) return null;
@@ -294,10 +302,11 @@ export async function syncProfileFromGoogle(
   // Operator scope skips this entirely (operator's pull touches categories
   // only).
   if (scope === "initial" || scope === "tenant") {
-    if (isInitialSync) {
-      // Initial sync — full write, Google is source of truth.
-      // Reset dirty state too: by definition there are no local-side edits
-      // pending push when we just pulled fresh from Google.
+    if (isInitialSync || options.forceOverwrite) {
+      // Initial sync (or force-overwrite) — full write, Google is source
+      // of truth. Reset dirty state too: by definition there are no
+      // local-side edits pending push when we just pulled fresh from
+      // Google.
       await sql`
         UPDATE businesses
         SET gbp_profile = ${JSON.stringify(result)}::jsonb,

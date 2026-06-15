@@ -70,6 +70,9 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Standard Posts", path: "/studio/standard-posts" },
       { label: "Video", path: "/studio/video" },
       { label: "Web Pages", path: "/studio/web-pages" },
+      // Phase 1 website generator surface (catalog → page content JSON).
+      // Per the website-generator-brand-identity-overhaul build.
+      { label: "Website Generation", path: "/studio/website-generation" },
       // /ops/website parked in Studio 2026-06-13 — legacy triggers
       // (Save Work Content / Regenerate Copy / Derive Services) retained
       // here until ported into the orchestrator-side website generator

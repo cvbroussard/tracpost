@@ -45,7 +45,6 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Brand Identity", path: "/brand-identity" },
       { label: "Public Presence Analysis", path: "/brand-identity/observation" },
       { label: "Competitive Analysis", path: "/competitive-analysis" },
-      { label: "Brand Categorization", path: "/categories-coaching" },
       { label: "Readiness Findings", path: "/brand-identity/readiness-findings" },
       { label: "Strategic Recommendation", path: "/strategic-recommendation" },
     ],
@@ -56,6 +55,11 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Infrastructure Pipeline", path: "/infrastructure" },
       { label: "Subscription", path: "/billing" },
       { label: "Integrations", path: "/connections" },
+      // Brand Categorization moved from Branding → Infrastructure 2026-06-16
+      // per [[gbp-categories-cma-authority]] refinement: categories are an
+      // OUTPUT of CMA (Cat 2 / Infrastructure), not a Cat 1 brand-identity
+      // input. Architectural twin of services generation; both sit here.
+      { label: "Brand Categorization", path: "/categories-coaching" },
       { label: "GBP", path: "/gbp" },
     ],
   },

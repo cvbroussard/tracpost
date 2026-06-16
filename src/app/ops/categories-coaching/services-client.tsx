@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { CmaRequiredBlocker } from "./cma-required-blocker";
 
 interface SiteService {
   id: string;
@@ -47,6 +48,7 @@ export function ServicesClient({ siteId }: { siteId: string }) {
   const [regenerating, setRegenerating] = useState(false);
   const [lastResult, setLastResult] = useState<RegenResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cmaBlocker, setCmaBlocker] = useState<{ code: "no_cma" | "no_tier2"; message: string } | null>(null);
 
   const loadServices = useCallback(async () => {
     if (!siteId) return;
@@ -85,14 +87,21 @@ export function ServicesClient({ siteId }: { siteId: string }) {
     setRegenerating(true);
     setError(null);
     setLastResult(null);
+    setCmaBlocker(null);
     try {
       const res = await fetch(`/api/admin/site-services/${siteId}/regenerate`, {
         method: "POST",
       });
-      const d = (await res.json()) as RegenResult | { error: string; message?: string };
+      const d = (await res.json()) as
+        | RegenResult
+        | { ok: false; error: string; code?: "no_cma" | "no_tier2"; message?: string };
+      if (res.status === 412 && "error" in d && d.error === "cma_required" && d.code && d.message) {
+        setCmaBlocker({ code: d.code, message: d.message });
+        return;
+      }
       if (!res.ok || !("ok" in d) || !d.ok) {
         const msg = "message" in d ? d.message : "error" in d ? d.error : `HTTP ${res.status}`;
-        throw new Error(msg);
+        throw new Error(msg || `HTTP ${res.status}`);
       }
       setLastResult(d as RegenResult);
       await loadServices();
@@ -108,6 +117,7 @@ export function ServicesClient({ siteId }: { siteId: string }) {
 
   return (
     <div className="space-y-4 p-4">
+      {cmaBlocker && <CmaRequiredBlocker code={cmaBlocker.code} message={cmaBlocker.message} />}
       {/* Trigger panel */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between gap-4">
@@ -115,7 +125,8 @@ export function ServicesClient({ siteId }: { siteId: string }) {
             <p className="text-[10px] text-muted leading-relaxed">
               Runs the cluster-driven pipeline: CMA queries → intent clustering → brand-voiced
               service generation → N:1 category anchor binding. Replaces existing 'auto'
-              services in full. Requires a completed CMA — runs against the most recent one.
+              services in full. Requires a completed CMA — run one manually via Competitive
+              Analysis first.
             </p>
           </div>
           <div className="flex items-center gap-2">

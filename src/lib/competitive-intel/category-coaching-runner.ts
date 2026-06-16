@@ -14,12 +14,17 @@
  * async work, returns immediately, client polls the GET endpoint.
  */
 import { sql } from "@/lib/db";
-import { runAnalysisForSite, type AnalysisPayload } from "./analysis-assembly";
+import type { AnalysisPayload } from "./analysis-assembly";
 import { coachCategoriesForSite } from "./category-coaching";
 
 export interface RunCategoryCoachingResult {
   runId: string;
   status: "complete" | "failed";
+  /**
+   * Vestigial — kept for backward-compat with callers that read this
+   * flag. Always false since the manual-before-autopilot doctrine
+   * (2026-06-16) removed auto-trigger.
+   */
   cmaAutoTriggered: boolean;
   error?: string;
 }
@@ -28,6 +33,47 @@ export interface RunCategoryCoachingResult {
  * Run the full coaching ceremony for a site. Idempotent at the row
  * level — each call inserts a new run.
  */
+/**
+ * Pre-check for the manual-before-autopilot doctrine: does this site
+ * have a CMA suitable for downstream pipelines? Returns null if ready,
+ * or a structured blocker object explaining what's missing.
+ *
+ * Both the categories coaching trigger and the services regenerate
+ * trigger call this before doing any work, so the UI can render the
+ * same "CMA required" blocker rather than failing mid-pipeline with
+ * an opaque error.
+ */
+export interface CmaBlocker {
+  code: "no_cma" | "no_tier2";
+  message: string;
+}
+
+export async function checkCmaReadiness(siteId: string): Promise<CmaBlocker | null> {
+  const [existingCma] = await sql`
+    SELECT id, analysis_data
+    FROM competitive_market_analyses
+    WHERE business_id = ${siteId} AND status = 'complete'
+    ORDER BY generated_at DESC LIMIT 1
+  `;
+  if (!existingCma) {
+    return {
+      code: "no_cma",
+      message:
+        "No completed Competitive Market Analysis exists for this site. Run a CMA via Competitive Analysis before triggering categories coaching or services regeneration.",
+    };
+  }
+  const payload = existingCma.analysis_data as AnalysisPayload;
+  const tier2Count = (payload.competitorCategories || []).length;
+  if (tier2Count === 0) {
+    return {
+      code: "no_tier2",
+      message:
+        "The most recent CMA predates Tier 2 competitor-category enrichment (or enrichment failed for all competitors). Re-run the CMA via Competitive Analysis to get a Tier-2-complete payload.",
+    };
+  }
+  return null;
+}
+
 export async function runCategoryCoachingForSite(siteId: string): Promise<RunCategoryCoachingResult> {
   const [row] = await sql`
     INSERT INTO category_coaching_runs (business_id, status)
@@ -35,41 +81,19 @@ export async function runCategoryCoachingForSite(siteId: string): Promise<RunCat
     RETURNING id
   `;
   const runId = row.id as string;
-  let cmaAutoTriggered = false;
 
   try {
-    // β rule: completed CMA with Tier 2 competitorCategories must exist
-    const [existingCma] = await sql`
-      SELECT id, analysis_data
-      FROM competitive_market_analyses
-      WHERE business_id = ${siteId} AND status = 'complete'
-      ORDER BY generated_at DESC LIMIT 1
-    `;
-
-    let needsCma = !existingCma;
-    if (existingCma) {
-      const payload = existingCma.analysis_data as AnalysisPayload;
-      const tier2Count = (payload.competitorCategories || []).length;
-      // If CMA exists but predates Tier 2 (or Tier 2 enrichment failed
-      // for all competitors), we can't coach against primary-only signal.
-      // Force a fresh run rather than degrading silently.
-      if (tier2Count === 0) needsCma = true;
+    // Manual-before-autopilot: surface a structured blocker if CMA isn't
+    // ready, rather than auto-triggering one. Operator must manually
+    // run CMA via Competitive Analysis first. Auto-trigger may return
+    // later as an explicit autopilot capability — for now we want each
+    // step's behavior to be observable in isolation.
+    const blocker = await checkCmaReadiness(siteId);
+    if (blocker) {
+      throw new Error(`cma_required: ${blocker.message}`);
     }
 
-    if (needsCma) {
-      cmaAutoTriggered = true;
-      await sql`
-        UPDATE category_coaching_runs
-        SET error_message = 'Auto-triggering CMA (β rule)...'
-        WHERE id = ${runId}
-      `;
-      const cmaResult = await runAnalysisForSite(siteId);
-      if (cmaResult.status === "failed") {
-        throw new Error(`Auto-triggered CMA failed: ${cmaResult.error ?? "unknown"}`);
-      }
-    }
-
-    // Now CMA is guaranteed present + Tier 2 enriched. Coach.
+    // CMA is guaranteed present + Tier 2 enriched. Coach.
     const coaching = await coachCategoriesForSite(siteId);
 
     await sql`
@@ -82,7 +106,7 @@ export async function runCategoryCoachingForSite(siteId: string): Promise<RunCat
       WHERE id = ${runId}
     `;
 
-    return { runId, status: "complete", cmaAutoTriggered };
+    return { runId, status: "complete", cmaAutoTriggered: false };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     await sql`
@@ -90,7 +114,7 @@ export async function runCategoryCoachingForSite(siteId: string): Promise<RunCat
       SET status = 'failed', error_message = ${errorMessage}, updated_at = NOW()
       WHERE id = ${runId}
     `;
-    return { runId, status: "failed", cmaAutoTriggered, error: errorMessage };
+    return { runId, status: "failed", cmaAutoTriggered: false, error: errorMessage };
   }
 }
 

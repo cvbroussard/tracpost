@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { CmaRequiredBlocker } from "./cma-required-blocker";
 
 type CoachedAction = "keep" | "add" | "drop" | "promote_to_primary";
 
@@ -47,6 +48,7 @@ export function CategoriesCoachingClient({ siteId }: { siteId: string }) {
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [appliedNotice, setAppliedNotice] = useState<string | null>(null);
+  const [cmaBlocker, setCmaBlocker] = useState<{ code: "no_cma" | "no_tier2"; message: string } | null>(null);
 
   const loadRun = useCallback(async () => {
     if (!siteId) return;
@@ -80,8 +82,19 @@ export function CategoriesCoachingClient({ siteId }: { siteId: string }) {
     if (!siteId) return;
     setTriggering(true);
     setAppliedNotice(null);
+    setCmaBlocker(null);
+    setError(null);
     try {
       const res = await fetch(`/api/admin/category-coaching/${siteId}/run`, { method: "POST" });
+      if (res.status === 412) {
+        const d = (await res.json().catch(() => null)) as
+          | { error: string; code?: "no_cma" | "no_tier2"; message?: string }
+          | null;
+        if (d?.error === "cma_required" && d.code && d.message) {
+          setCmaBlocker({ code: d.code, message: d.message });
+          return;
+        }
+      }
       if (!res.ok && res.status !== 202) throw new Error(`Trigger failed (${res.status})`);
       // Brief delay then refresh — the runner inserts the row at status='running' as first step
       setTimeout(loadRun, 1000);
@@ -116,12 +129,14 @@ export function CategoriesCoachingClient({ siteId }: { siteId: string }) {
 
   return (
     <div className="space-y-4 p-4">
+      {cmaBlocker && <CmaRequiredBlocker code={cmaBlocker.code} message={cmaBlocker.message} />}
       {/* Trigger panel */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1">
             <p className="text-[10px] text-muted leading-relaxed">
-              Auto-triggers a CMA if none exists (β rule). Full pipeline ~60-120s, ~$0.21/run.
+              Requires a completed CMA — run one manually via Competitive Analysis first.
+              Coaching itself takes ~30-60s once the CMA is in place.
             </p>
           </div>
           <div className="flex items-center gap-2">

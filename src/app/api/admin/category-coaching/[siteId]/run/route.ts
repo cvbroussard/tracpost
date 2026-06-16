@@ -1,32 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";
+import { checkCmaReadiness } from "@/lib/competitive-intel/category-coaching-runner";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5 min — accommodates CMA auto-trigger + coaching
+export const maxDuration = 120; // coaching only; CMA must be pre-run by operator
 
 /**
  * POST /api/admin/category-coaching/[siteId]/run
  *
  * Trigger a fresh GBP categories coaching ceremony for the site.
  *
- * Enforces the β rule: if no completed CMA with Tier 2 data exists,
- * auto-triggers a CMA and waits for completion before coaching. The
- * full pipeline (CMA + Tier 2 + coaching) takes ~60-120 seconds on
- * the long tail.
+ * Manual-before-autopilot (2026-06-16): no auto-trigger of CMA. If no
+ * completed CMA with Tier 2 data exists, returns 412 Precondition
+ * Failed with code `cma_required` so the UI can render a blocker
+ * pointing the operator at /ops/competitive-analysis. Auto-trigger
+ * may return later as an explicit autopilot capability.
  *
- * Response (immediate):
- *   { runId, status: 'running' }
- *
- * Client polls GET endpoint for completion.
+ * Synchronous pre-check: if blocker, no run row inserted. If ready,
+ * inserts run row at status='running', returns 202, work happens in
+ * background via Vercel waitUntil; client polls GET for completion.
  */
 export async function POST(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ siteId: string }> },
 ) {
   if (!await isAdminRequest()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { siteId } = await params;
+
+  // Synchronous CMA readiness check — UI gets the blocker immediately.
+  const blocker = await checkCmaReadiness(siteId);
+  if (blocker) {
+    return NextResponse.json(
+      { ok: false, error: "cma_required", code: blocker.code, message: blocker.message },
+      { status: 412 },
+    );
+  }
 
   const { runCategoryCoachingForSite } = await import("@/lib/competitive-intel/category-coaching-runner");
 

@@ -18,6 +18,7 @@ import { isAdminRequest } from "@/lib/admin-session";
 import { runInfrastructurePipeline } from "@/lib/competitive-intel/pipeline-orchestrator";
 import { persistDerivedServices } from "@/lib/services/derive";
 import { bindServicesToCategories } from "@/lib/services/junction-bind";
+import { checkCmaReadiness } from "@/lib/competitive-intel/category-coaching-runner";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -30,6 +31,17 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { siteId } = await ctx.params;
+
+  // Manual-before-autopilot: pre-check CMA readiness; surface blocker
+  // instead of throwing mid-pipeline. Mirrors the categories coaching
+  // run endpoint.
+  const blocker = await checkCmaReadiness(siteId);
+  if (blocker) {
+    return NextResponse.json(
+      { ok: false, error: "cma_required", code: blocker.code, message: blocker.message },
+      { status: 412 },
+    );
+  }
 
   try {
     const plan = await runInfrastructurePipeline(siteId);

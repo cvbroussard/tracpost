@@ -6,27 +6,40 @@
  * exact queries that would bring this subscriber's actual customers in.
  *
  * Query composition strategy:
- *   PRIMARY queries (highest weight) — category × primary service area
+ *   PRIMARY queries (highest weight) — primary anchor × primary service area
  *     "general contractor Pittsburgh"
  *   ADDITIONAL queries (medium weight) — additional categories × primary area
  *     "kitchen remodeler Pittsburgh"
  *     "bathroom remodeler Pittsburgh"
- *   GEO-EXPANSION queries (lower weight) — primary category × each additional service area
+ *   GEO-EXPANSION queries (lower weight) — primary anchor × each additional service area
  *     "general contractor Mt. Lebanon"
  *     "general contractor Squirrel Hill"
  *
+ * Blind mode (no canonical categories yet): the primary ANCHOR falls back
+ * to `businesses.business_type` per [[gbp-categories-cma-authority]] (2026-06-16
+ * refinement). Categories are an OUTPUT of CMA, not an INPUT — real SEO
+ * agencies run competitive analysis on business context before recommending
+ * categories. With business_type + service areas, CMA Run 1 can fire for a
+ * fresh business with zero GBP categorization. Subsequent runs include
+ * applied categories as additional refinement signal for sharper queries.
+ *
  * Caps total query count to limit SERP API spend. Default ~20 queries
  * per analysis run; tunable per subscriber tier (Enterprise gets more).
- *
- * Pure logic — no external API dependencies. Reads from existing
- * platform tables (site_gbp_categories, gbp_profile.serviceArea).
  */
 import { sql } from "@/lib/db";
+
+/** Sentinel gcid used by blind-mode (no-category) queries — not in gbp_categories */
+export const BLIND_MODE_GCID = "business_type:anchor";
 
 export interface TargetQuery {
   query: string;
   weight: "primary" | "additional" | "geo_expansion";
-  /** gcid this query targets — links results back to a specific category */
+  /**
+   * gcid this query targets, or BLIND_MODE_GCID for blind-mode queries
+   * derived from business_type before any categories exist. Stored
+   * for provenance only — downstream consumers don't JOIN it to
+   * gbp_categories (competitor-extraction reads only `query` + `weight`).
+   */
   gcid: string;
   /** Place name this query targets — links results back to a specific area */
   placeName: string;
@@ -43,9 +56,11 @@ export interface QueryDerivationOptions {
  * Returns queries ranked by weight (primary first). Caps at maxQueries
  * to control SERP API spend.
  *
- * Returns empty array if the site is missing prerequisites (no GBP
- * categories assigned, no service areas declared). Caller can surface
- * a coaching message rather than burn a SERP call on no-op queries.
+ * Returns empty array only when the site has neither canonical categories
+ * NOR a business_type AND has no service areas declared — i.e. the
+ * minimum business-context floor is unmet. With business_type + service
+ * areas alone, queries derive in blind mode (no category dep). Caller
+ * can surface a coaching message in the rare empty case.
  */
 export async function deriveTargetQueries(
   siteId: string,
@@ -53,7 +68,8 @@ export async function deriveTargetQueries(
 ): Promise<TargetQuery[]> {
   const maxQueries = opts.maxQueries ?? 20;
 
-  // Load categories (with primary flag) — sorted primary first
+  // Load canonical categories (with primary flag) — sorted primary first.
+  // May be empty: blind mode handles that by falling back to business_type.
   const categories = await sql`
     SELECT gc.gcid, gc.name, sgc.is_primary
     FROM business_gbp_categories sgc
@@ -62,17 +78,47 @@ export async function deriveTargetQueries(
     ORDER BY sgc.is_primary DESC, gc.name
   `;
 
-  if (categories.length === 0) return [];
-
-  // Load service areas from GBP profile cache
+  // Load service areas + business_type from the businesses row in one query.
+  // business_type is the blind-mode anchor when no categories exist yet.
   const [site] = await sql`
-    SELECT gbp_profile->'serviceArea'->'places'->'placeInfos' AS place_infos
+    SELECT business_type,
+           gbp_profile->'serviceArea'->'places'->'placeInfos' AS place_infos
     FROM businesses
     WHERE id = ${siteId}
   `;
   const placeInfos = (site?.place_infos || []) as Array<{ placeId: string; placeName: string }>;
 
   if (placeInfos.length === 0) return [];
+
+  // Resolve the primary anchor and additional category set.
+  //
+  // - If canonical categories exist: primary category drives PRIMARY +
+  //   GEO_EXPANSION queries; others become ADDITIONAL queries.
+  // - If no canonical categories: fall back to businesses.business_type as
+  //   the primary anchor. No additional categories — the LLM-driven
+  //   coaching round 1 will produce them as CMA output, then a subsequent
+  //   CMA run gets the sharper query surface.
+  //
+  // This implements CMA blind mode per [[gbp-categories-cma-authority]]
+  // (2026-06-16 refinement). Categories are an OUTPUT of CMA, not an INPUT.
+  let primaryAnchorName: string;
+  let primaryAnchorGcid: string;
+  let additionalCategories: Array<{ gcid: string; name: string }>;
+
+  if (categories.length > 0) {
+    const primary = categories.find((c) => c.is_primary as boolean) ?? categories[0];
+    primaryAnchorName = primary.name as string;
+    primaryAnchorGcid = primary.gcid as string;
+    additionalCategories = categories
+      .filter((c) => c.gcid !== primary.gcid)
+      .map((c) => ({ gcid: c.gcid as string, name: c.name as string }));
+  } else {
+    const businessType = (site?.business_type as string) || null;
+    if (!businessType) return [];
+    primaryAnchorName = businessType;
+    primaryAnchorGcid = BLIND_MODE_GCID;
+    additionalCategories = [];
+  }
 
   // Pick PRIMARY area by SPECIFICITY, not declaration order.
   // GBP doesn't designate a primary service area; raw order is whatever
@@ -110,39 +156,39 @@ export async function deriveTargetQueries(
   const primaryPlace = ranked[0];
   const additionalPlaces = ranked.slice(1);
 
-  const primaryCategory = categories.find((c) => c.is_primary as boolean);
-  const additionalCategories = categories.filter((c) => !(c.is_primary as boolean));
-
   const queries: TargetQuery[] = [];
 
-  // PRIMARY queries: primary category × every service area
+  // PRIMARY queries: primary anchor × every service area.
   // This is the core competitive set — the searches that bring the
-  // bulk of the subscriber's customers in.
-  if (primaryCategory) {
+  // bulk of the subscriber's customers in. In blind mode, the anchor
+  // is business_type ("construction company Pittsburgh"); in
+  // refined mode, it's the canonical primary category ("general
+  // contractor Pittsburgh"). Same query shape either way.
+  queries.push({
+    query: `${primaryAnchorName} ${shortPlaceName(primaryPlace.placeName)}`,
+    weight: "primary",
+    gcid: primaryAnchorGcid,
+    placeName: primaryPlace.placeName,
+  });
+  for (const place of additionalPlaces) {
     queries.push({
-      query: `${primaryCategory.name} ${shortPlaceName(primaryPlace.placeName)}`,
-      weight: "primary",
-      gcid: primaryCategory.gcid as string,
-      placeName: primaryPlace.placeName,
+      query: `${primaryAnchorName} ${shortPlaceName(place.placeName)}`,
+      weight: "geo_expansion",
+      gcid: primaryAnchorGcid,
+      placeName: place.placeName,
     });
-    for (const place of additionalPlaces) {
-      queries.push({
-        query: `${primaryCategory.name} ${shortPlaceName(place.placeName)}`,
-        weight: "geo_expansion",
-        gcid: primaryCategory.gcid as string,
-        placeName: place.placeName,
-      });
-    }
   }
 
-  // ADDITIONAL queries: each additional category × primary service area
+  // ADDITIONAL queries: each additional category × primary service area.
   // Captures the spread of searches across the subscriber's broader
   // service set. Geo-fixed to primary area to keep count manageable.
+  // In blind mode this loop is a no-op (additionalCategories is empty);
+  // coaching round 1 produces the refined set as CMA output.
   for (const cat of additionalCategories) {
     queries.push({
       query: `${cat.name} ${shortPlaceName(primaryPlace.placeName)}`,
       weight: "additional",
-      gcid: cat.gcid as string,
+      gcid: cat.gcid,
       placeName: primaryPlace.placeName,
     });
   }

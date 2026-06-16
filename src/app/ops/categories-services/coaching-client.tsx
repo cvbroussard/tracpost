@@ -247,13 +247,22 @@ function CoachingDisplay({
         </div>
       </div>
 
-      {/* The 10-best plan */}
+      {/* The 10-best plan. Sort order: PRIMARY first (visually distinguished
+          as the heaviest anchor), then secondaries by LLM-reported confidence
+          descending. The LLM's emitted array order isn't deterministic on this
+          axis — the sort here makes the display predictable across runs. */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <h3 className="mb-3 text-sm font-medium">10-Best Category Plan</h3>
         <div className="space-y-2">
-          {data.categories.map((c, i) => (
-            <CategoryCard key={c.gcid} cat={c} index={i + 1} />
-          ))}
+          {[...data.categories]
+            .sort((a, b) => {
+              if (a.proposedPrimary && !b.proposedPrimary) return -1;
+              if (!a.proposedPrimary && b.proposedPrimary) return 1;
+              return (b.confidence ?? 0) - (a.confidence ?? 0);
+            })
+            .map((c, i) => (
+              <CategoryCard key={c.gcid} cat={c} index={i + 1} />
+            ))}
         </div>
       </div>
 

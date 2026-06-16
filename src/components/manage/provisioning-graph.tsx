@@ -1236,6 +1236,19 @@ export function ProvisioningGraph({ subscriberId, siteId }: { subscriberId: stri
             const msg = await res.text().catch(() => "");
             throw new Error(msg || `HTTP ${res.status}`);
           }
+          // The extract endpoint returns HTTP 200 even when the extractor
+          // throws (the throw is caught and reported as status='failed' in
+          // the response body). Surface the actual outcome to the operator
+          // instead of treating "ran" as "succeeded."
+          const data = (await res.json().catch(() => null)) as
+            | { ran?: Array<{ key: string; status: string; error?: string }> }
+            | null;
+          const aestheticResult = data?.ran?.find((r) => r.key === "aesthetic");
+          if (aestheticResult?.status === "failed") {
+            throw new Error(
+              aestheticResult.error || "Public Presence extraction failed",
+            );
+          }
           await refreshTasks();
           setActionFeedback({ ok: true, message: "Public Presence Analysis complete." });
         } else if (actionKey === "rerun_cma") {

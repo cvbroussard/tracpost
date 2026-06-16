@@ -516,9 +516,11 @@ async function callObservationModel(
 
   const response = await anthropic.messages.create({
     model: MODEL,
-    // Descriptor-keyed v2 schema has ~25 evidence-bearing slots; output runs
-    // 5-7K tokens once populated. 4096 truncated mid-JSON on first v2 run.
-    max_tokens: 8192,
+    // Descriptor-keyed v2 schema has ~25 evidence-bearing slots; output
+    // 5-7K tokens once populated. Bumped 4096 → 8192 → 16384 — Phase 1.5
+    // richer site context (catalog hero + generated image) pushed payload
+    // size past 8192, causing truncation that surfaced as "non-JSON output."
+    max_tokens: 16384,
     system: buildSystemPrompt(),
     messages: [{ role: "user", content }],
   });
@@ -530,9 +532,15 @@ async function callObservationModel(
   let payload: BrandIdentityObservationPayload;
   try {
     payload = JSON.parse(cleaned) as BrandIdentityObservationPayload;
-  } catch {
+  } catch (parseErr) {
+    // Capture diagnostic signal: stop_reason distinguishes max_tokens
+    // truncation from genuine non-JSON output; raw text head lets us see
+    // what the model actually produced without dumping a 20K-char blob.
+    const stopReason = (response as { stop_reason?: string }).stop_reason ?? "unknown";
+    const head = cleaned.slice(0, 300).replace(/\s+/g, " ");
+    const tail = cleaned.slice(-200).replace(/\s+/g, " ");
     throw new Error(
-      `aesthetic-observation: model returned non-JSON output (model=${MODEL}); raw text length=${text.length}`,
+      `aesthetic-observation: model output failed JSON parse (model=${MODEL}, stop_reason=${stopReason}, length=${text.length}). Head: ${head} … Tail: ${tail}`,
     );
   }
 

@@ -28,6 +28,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 import type { AnalysisPayload } from "./analysis-assembly";
 import type { CompetitorCategories } from "./serp-fetch";
+import type { IntentCluster } from "./intent-clustering";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -44,6 +45,15 @@ export interface CoachedCategory {
   confidence: number;
   /** Subscriber-readable explanation that cites the underlying signal */
   reasoning: string;
+  /**
+   * Intent cluster_ids this category serves (M:N tag — populated by
+   * tagCoachedCategoriesWithClusters() post-processor when intent
+   * clustering has run). Empty array if no clustering output is
+   * available (legacy path before [[services-pipeline-doctrine]]
+   * second-pass refinement landed). Used by the deterministic M:N
+   * junction binder to wire service_gbp_categories rows.
+   */
+  cluster_ids?: string[];
 }
 
 export interface CoachingResult {
@@ -465,5 +475,47 @@ export async function coachCategoriesForSite(siteId: string): Promise<CoachingRe
     brandDna: null,
     analysis: payload,
     analysisId: cma.id as string,
+  });
+}
+
+/**
+ * Tag each coached category with the intent cluster_ids it serves.
+ *
+ * Deterministic post-processor — no LLM call. For each output category,
+ * walk every cluster's observed_category_frequencies and check whether
+ * the category's gcid appears with non-trivial frequency. If so, the
+ * category is tagged with that cluster_id.
+ *
+ * The M:N junction binder uses these cluster_ids to wire
+ * service_gbp_categories rows: a service tagged with cluster X binds
+ * to every category also tagged with cluster X.
+ *
+ * THRESHOLD: a category is considered to serve a cluster when at least
+ * one competitor in that cluster declared the gcid. Conservative — keeps
+ * the binding tight without requiring the LLM to author cluster_ids
+ * directly (which would complicate the well-tuned coaching prompt).
+ *
+ * Per [[services-pipeline-doctrine]] (second-pass refinement 2026-06-16).
+ */
+export function tagCoachedCategoriesWithClusters(
+  categories: CoachedCategory[],
+  clusters: IntentCluster[],
+): CoachedCategory[] {
+  if (clusters.length === 0) {
+    // No clustering ran — preserve legacy behavior, leave cluster_ids empty
+    return categories.map((c) => ({ ...c, cluster_ids: [] }));
+  }
+
+  return categories.map((cat) => {
+    const cluster_ids: string[] = [];
+    for (const cluster of clusters) {
+      const hit = cluster.observed_category_frequencies.find(
+        (f) => f.gcid === cat.gcid,
+      );
+      if (hit && hit.count > 0) {
+        cluster_ids.push(cluster.cluster_id);
+      }
+    }
+    return { ...cat, cluster_ids };
   });
 }

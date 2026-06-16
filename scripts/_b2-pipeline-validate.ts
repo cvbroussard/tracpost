@@ -85,19 +85,26 @@ async function main() {
   }
 
   console.log("\n" + "═".repeat(80));
-  console.log(`PROJECTED M:N JUNCTION BINDINGS (deterministic preview):`);
+  console.log(`PROJECTED N:1 CATEGORY ANCHORS (deterministic preview):`);
   console.log("═".repeat(80));
+  const coachedGcids = new Set(result.coachedCategories.map((c) => c.gcid));
+  const coachedNames = new Map(result.coachedCategories.map((c) => [c.gcid, c.name]));
+  let boundCount = 0;
   for (const svc of result.derivedServices) {
-    const matchingCats = result.coachedCategories.filter(
-      (cat) => cat.cluster_ids?.includes(svc.cluster_id),
+    const cluster = result.clusters.find((c) => c.cluster_id === svc.cluster_id);
+    if (!cluster) {
+      console.log(`\n"${svc.name}" → UNBOUND (cluster vanished)`);
+      continue;
+    }
+    const winner = cluster.observed_category_frequencies.find((f) =>
+      coachedGcids.has(f.gcid),
     );
-    console.log(`\n"${svc.name}" → ${matchingCats.length} categor${matchingCats.length === 1 ? "y" : "ies"}:`);
-    if (matchingCats.length === 0) {
-      console.log(`  (no coached category shares cluster ${svc.cluster_id} — service would be UNBOUND)`);
+    if (winner) {
+      boundCount++;
+      console.log(`\n"${svc.name}" → ${coachedNames.get(winner.gcid)}`);
+      console.log(`  (cluster: ${cluster.intent_label}; winner freq: ${winner.count})`);
     } else {
-      for (const cat of matchingCats) {
-        console.log(`  - ${cat.name}`);
-      }
+      console.log(`\n"${svc.name}" → UNBOUND (cluster ${svc.cluster_id} has no coached category match)`);
     }
   }
 
@@ -107,14 +114,7 @@ async function main() {
   console.log(`Clusters: ${result.clusters.length}`);
   console.log(`Categories (10-best): ${result.coachedCategories.length}`);
   console.log(`Services derived: ${result.derivedServices.length}`);
-  const unbound = result.derivedServices.filter(
-    (s) => !result.coachedCategories.some((c) => c.cluster_ids?.includes(s.cluster_id)),
-  );
-  if (unbound.length > 0) {
-    console.log(`⚠ Unbound services: ${unbound.length} (no matching coached category)`);
-  } else {
-    console.log(`✓ All services bind to at least one coached category`);
-  }
+  console.log(`Bound services (N:1): ${boundCount}/${result.derivedServices.length}`);
 }
 
 main().catch((e) => {

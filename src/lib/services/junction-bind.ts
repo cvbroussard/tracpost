@@ -1,24 +1,27 @@
 /**
- * M:N junction binder — wires service_gbp_categories rows by
- * cluster_id intersection.
+ * Services → category binder. N:1, not M:N.
  *
- * Per [[services-pipeline-doctrine]] (second-pass refinement 2026-06-16):
- * services and categories both flow from upstream intent clusters and
- * tag their outputs with the source cluster_id. This binder reads those
- * tags and computes the M:N graph deterministically — no LLM call.
+ * Per [[services-pipeline-doctrine]] (third-pass refinement 2026-06-16):
+ * each service points to ONE canonical GBP category — its strongest
+ * signal match from the cluster's observed-category frequencies. The
+ * earlier M:N model produced over-bound services (a single bathroom
+ * service anchored to 6+ categories because incidental matches from
+ * competitor co-occurrence slipped through). N:1 forces sharper curation
+ * and emits cleaner downstream signal (schema.org serviceType, GBP
+ * services field, sitelinks).
  *
  * For each service S:
- *   1. Find S's source cluster_id (from PersistedService).
- *   2. Find all coached categories C where C.cluster_ids includes
- *      S's cluster_id.
- *   3. Among those, pick the strongest signal as PRIMARY anchor for
- *      this service: the category with the highest count in the
- *      cluster's observed_category_frequencies.
- *   4. INSERT service_gbp_categories rows — one per matched category,
- *      with is_primary=true on the strongest one, false on the rest.
+ *   1. Find S's source cluster_id.
+ *   2. From the cluster's observed_category_frequencies, find the
+ *      strongest match that ALSO appears in the coached categories
+ *      set. (A category outside the coaching plan can't anchor a
+ *      service — it won't get applied to GBP.)
+ *   3. UPDATE services.primary_gcid to that gcid.
  *
- * Idempotent: deletes existing rows for the services before inserting.
- * Safe to re-run after a regen.
+ * If no coached category serves the service's cluster, primary_gcid
+ * stays NULL — the service is "unbound" and exists on the website
+ * without a GBP category anchor (still renderable, just doesn't
+ * benefit from the closed-loop SEO surface).
  */
 import "server-only";
 import { sql } from "@/lib/db";
@@ -26,11 +29,11 @@ import type { CoachedCategory } from "@/lib/competitive-intel/category-coaching"
 import type { IntentCluster } from "@/lib/competitive-intel/intent-clustering";
 import type { PersistedService } from "./derive";
 
-export interface JunctionBindingResult {
-  /** Total service_gbp_categories rows written. */
-  bindings: number;
-  /** Services that produced no bindings (no coached category shares their cluster). */
-  unboundServices: Array<{ id: string; name: string; cluster_id: string }>;
+export interface BindingResult {
+  /** Services that were bound to a primary category. */
+  bound: Array<{ service_id: string; service_name: string; primary_gcid: string; category_name: string }>;
+  /** Services with no coached category in their source cluster — primary_gcid stays NULL. */
+  unbound: Array<{ service_id: string; service_name: string; cluster_id: string }>;
 }
 
 export async function bindServicesToCategories(args: {
@@ -38,72 +41,59 @@ export async function bindServicesToCategories(args: {
   persistedServices: PersistedService[];
   coachedCategories: CoachedCategory[];
   clusters: IntentCluster[];
-}): Promise<JunctionBindingResult> {
-  const { siteId, persistedServices, coachedCategories, clusters } = args;
+}): Promise<BindingResult> {
+  const { persistedServices, coachedCategories, clusters } = args;
 
   if (persistedServices.length === 0) {
-    return { bindings: 0, unboundServices: [] };
+    return { bound: [], unbound: [] };
   }
 
-  // Build a per-cluster index of coached categories that serve it.
-  // Each entry: { cluster_id → CoachedCategory[] }, with each category
-  // carrying the cluster's observed-frequency count so we can pick
-  // the strongest anchor.
   const clusterById = new Map(clusters.map((c) => [c.cluster_id, c]));
-  const coachedByCluster = new Map<string, Array<{ cat: CoachedCategory; freq: number }>>();
-  for (const cat of coachedCategories) {
-    const tags = cat.cluster_ids ?? [];
-    for (const cid of tags) {
-      const cluster = clusterById.get(cid);
-      if (!cluster) continue;
-      const freqEntry = cluster.observed_category_frequencies.find(
-        (f) => f.gcid === cat.gcid,
-      );
-      const freq = freqEntry?.count ?? 0;
-      const list = coachedByCluster.get(cid) ?? [];
-      list.push({ cat, freq });
-      coachedByCluster.set(cid, list);
-    }
-  }
+  const coachedGcids = new Set(coachedCategories.map((c) => c.gcid));
+  const coachedNameByGcid = new Map(coachedCategories.map((c) => [c.gcid, c.name]));
 
-  // Sort each cluster's matched categories by freq desc — strongest first.
-  for (const list of coachedByCluster.values()) {
-    list.sort((a, b) => b.freq - a.freq);
-  }
-
-  // Idempotent reset: drop any existing bindings for these services.
-  // Using IN list with parameterized array would be cleaner, but neon's
-  // tagged-template parser doesn't expand arrays — loop instead.
-  for (const svc of persistedServices) {
-    await sql`DELETE FROM service_gbp_categories WHERE service_id = ${svc.id}`;
-  }
-
-  let bindings = 0;
-  const unboundServices: JunctionBindingResult["unboundServices"] = [];
+  const bound: BindingResult["bound"] = [];
+  const unbound: BindingResult["unbound"] = [];
 
   for (const svc of persistedServices) {
-    const matches = coachedByCluster.get(svc.cluster_id) ?? [];
-    if (matches.length === 0) {
-      unboundServices.push({
-        id: svc.id,
-        name: svc.name,
+    const cluster = clusterById.get(svc.cluster_id);
+    if (!cluster) {
+      unbound.push({
+        service_id: svc.id,
+        service_name: svc.name,
         cluster_id: svc.cluster_id,
       });
+      // Clear any stale binding from a prior run
+      await sql`UPDATE services SET primary_gcid = NULL WHERE id = ${svc.id}`;
       continue;
     }
 
-    for (let i = 0; i < matches.length; i++) {
-      const { cat } = matches[i];
-      const isPrimary = i === 0; // strongest-freq match wins primary
-      await sql`
-        INSERT INTO service_gbp_categories (service_id, gcid, is_primary)
-        VALUES (${svc.id}, ${cat.gcid}, ${isPrimary})
-        ON CONFLICT DO NOTHING
-      `;
-      bindings++;
+    // Strongest-frequency category in this cluster that's also coached.
+    // observed_category_frequencies is already sorted by count desc.
+    const winner = cluster.observed_category_frequencies.find((f) =>
+      coachedGcids.has(f.gcid),
+    );
+
+    if (!winner) {
+      unbound.push({
+        service_id: svc.id,
+        service_name: svc.name,
+        cluster_id: svc.cluster_id,
+      });
+      await sql`UPDATE services SET primary_gcid = NULL WHERE id = ${svc.id}`;
+      continue;
     }
-    void siteId; // siteId is conceptually part of the operation but not needed in the row
+
+    await sql`
+      UPDATE services SET primary_gcid = ${winner.gcid} WHERE id = ${svc.id}
+    `;
+    bound.push({
+      service_id: svc.id,
+      service_name: svc.name,
+      primary_gcid: winner.gcid,
+      category_name: coachedNameByGcid.get(winner.gcid) ?? winner.name,
+    });
   }
 
-  return { bindings, unboundServices };
+  return { bound, unbound };
 }

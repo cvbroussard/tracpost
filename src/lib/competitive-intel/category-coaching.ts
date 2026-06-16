@@ -483,17 +483,23 @@ export async function coachCategoriesForSite(siteId: string): Promise<CoachingRe
  *
  * Deterministic post-processor — no LLM call. For each output category,
  * walk every cluster's observed_category_frequencies and check whether
- * the category's gcid appears with non-trivial frequency. If so, the
+ * the category's gcid appears with STRONG enough frequency. If so, the
  * category is tagged with that cluster_id.
  *
  * The M:N junction binder uses these cluster_ids to wire
  * service_gbp_categories rows: a service tagged with cluster X binds
  * to every category also tagged with cluster X.
  *
- * THRESHOLD: a category is considered to serve a cluster when at least
- * one competitor in that cluster declared the gcid. Conservative — keeps
- * the binding tight without requiring the LLM to author cluster_ids
- * directly (which would complicate the well-tuned coaching prompt).
+ * THRESHOLD (2-of-2 rule, EITHER condition is sufficient):
+ *   1. The category appears for at least HALF of the cluster's
+ *      observed competitors. Majority-signal floor.
+ *   2. The category is in the TOP-3 most-frequent categories for that
+ *      cluster. Captures the strongest signal even when no category
+ *      crosses the majority floor (rare-cluster small-sample case).
+ *
+ * Initial v1 used count > 0 — too loose, produced over-bound services
+ * (a single bathroom service anchored to 9 categories because a few
+ * incidental "1-competitor" categories slipped through).
  *
  * Per [[services-pipeline-doctrine]] (second-pass refinement 2026-06-16).
  */
@@ -502,19 +508,31 @@ export function tagCoachedCategoriesWithClusters(
   clusters: IntentCluster[],
 ): CoachedCategory[] {
   if (clusters.length === 0) {
-    // No clustering ran — preserve legacy behavior, leave cluster_ids empty
     return categories.map((c) => ({ ...c, cluster_ids: [] }));
+  }
+
+  // Pre-compute, per cluster, the set of gcids that pass the threshold.
+  const clusterServedGcids = new Map<string, Set<string>>();
+  for (const cluster of clusters) {
+    const served = new Set<string>();
+    const competitorCount = cluster.observed_competitor_place_ids.length;
+    const majorityFloor = Math.max(1, Math.ceil(competitorCount / 2));
+    const topN = cluster.observed_category_frequencies.slice(0, 3);
+
+    for (const freq of cluster.observed_category_frequencies) {
+      const passesMajority = freq.count >= majorityFloor;
+      const passesTopN = topN.some((t) => t.gcid === freq.gcid);
+      if (passesMajority || passesTopN) {
+        served.add(freq.gcid);
+      }
+    }
+    clusterServedGcids.set(cluster.cluster_id, served);
   }
 
   return categories.map((cat) => {
     const cluster_ids: string[] = [];
-    for (const cluster of clusters) {
-      const hit = cluster.observed_category_frequencies.find(
-        (f) => f.gcid === cat.gcid,
-      );
-      if (hit && hit.count > 0) {
-        cluster_ids.push(cluster.cluster_id);
-      }
+    for (const [cid, served] of clusterServedGcids) {
+      if (served.has(cat.gcid)) cluster_ids.push(cid);
     }
     return { ...cat, cluster_ids };
   });

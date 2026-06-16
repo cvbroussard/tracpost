@@ -534,13 +534,26 @@ async function callObservationModel(
     payload = JSON.parse(cleaned) as BrandIdentityObservationPayload;
   } catch (parseErr) {
     // Capture diagnostic signal: stop_reason distinguishes max_tokens
-    // truncation from genuine non-JSON output; raw text head lets us see
-    // what the model actually produced without dumping a 20K-char blob.
+    // truncation from genuine non-JSON output. JSON.parse errors carry a
+    // character position; surface a window around that position so we can
+    // see the exact malformation (unescaped quote, trailing comma, etc.).
     const stopReason = (response as { stop_reason?: string }).stop_reason ?? "unknown";
-    const head = cleaned.slice(0, 300).replace(/\s+/g, " ");
-    const tail = cleaned.slice(-200).replace(/\s+/g, " ");
+    const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+    const posMatch = parseMsg.match(/position (\d+)/);
+    const pos = posMatch ? parseInt(posMatch[1], 10) : -1;
+    const windowText =
+      pos >= 0
+        ? cleaned.slice(Math.max(0, pos - 80), Math.min(cleaned.length, pos + 80))
+        : cleaned.slice(0, 200);
+    console.error("[aesthetic-observation] JSON.parse failed", {
+      model: MODEL,
+      stop_reason: stopReason,
+      length: text.length,
+      parseError: parseMsg,
+      windowAroundError: windowText,
+    });
     throw new Error(
-      `aesthetic-observation: model output failed JSON parse (model=${MODEL}, stop_reason=${stopReason}, length=${text.length}). Head: ${head} … Tail: ${tail}`,
+      `aesthetic-observation: JSON.parse failed (model=${MODEL}, stop_reason=${stopReason}, length=${text.length}). ${parseMsg}. Window around pos ${pos}: ${JSON.stringify(windowText)}`,
     );
   }
 

@@ -21,6 +21,8 @@ export interface HomePageData {
   heroTitle: string;
   heroSubtitle: string;
   ctaText: string;
+  heroCtaHref: string;
+  heroSecondaryCta: { text: string; href: string } | null;
   servicesTitle: string;
   servicesSubtitle: string;
   services: Array<{ title: string; description: string; image?: string }>;
@@ -137,6 +139,13 @@ export async function loadHomePage(siteId: string): Promise<HomePageData> {
     generatedHero?.primary_cta?.text
     ?? homeCopy?.ctaText
     ?? "Get Started";
+  const heroCtaHref = generatedHero?.primary_cta?.href ?? "/contact";
+  const heroSecondaryCta = generatedHero?.secondary_cta
+    ? {
+        text: generatedHero.secondary_cta.text,
+        href: generatedHero.secondary_cta.href,
+      }
+    : null;
 
   return {
     heroImage,
@@ -144,6 +153,8 @@ export async function loadHomePage(siteId: string): Promise<HomePageData> {
     heroTitle,
     heroSubtitle,
     ctaText,
+    heroCtaHref,
+    heroSecondaryCta,
     servicesTitle: homeCopy?.servicesTitle || "What We Do",
     servicesSubtitle: homeCopy?.servicesSubtitle || "",
     services: homeCopy?.services || [],
@@ -189,6 +200,8 @@ function emptyHome(): HomePageData {
     heroTitle: "",
     heroSubtitle: "",
     ctaText: "Contact",
+    heroCtaHref: "/contact",
+    heroSecondaryCta: null,
     servicesTitle: "",
     servicesSubtitle: "",
     services: [],

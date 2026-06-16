@@ -24,16 +24,18 @@ export default function HomeServiceBusiness({ data, prefix }: Props) {
             <h1 className="ws-hero-title">{data.heroTitle}</h1>
             <p className="ws-hero-subtitle">{data.heroSubtitle}</p>
             <div className="ws-hero-actions">
-              <a href={`${prefix}/contact`} className="ws-btn ws-btn-primary">
+              <a href={`${prefix}${data.heroCtaHref}`} className="ws-btn ws-btn-primary">
                 {data.ctaText}
               </a>
-              <a
-                href={`${prefix}/work`}
-                className="ws-btn ws-btn-outline"
-                style={{ color: "#fff", borderColor: "rgba(255,255,255,0.4)" }}
-              >
-                View Our Work
-              </a>
+              {data.heroSecondaryCta && (
+                <a
+                  href={`${prefix}${data.heroSecondaryCta.href}`}
+                  className="ws-btn ws-btn-outline"
+                  style={{ color: "#fff", borderColor: "rgba(255,255,255,0.4)" }}
+                >
+                  {data.heroSecondaryCta.text}
+                </a>
+              )}
             </div>
           </div>
         </div>

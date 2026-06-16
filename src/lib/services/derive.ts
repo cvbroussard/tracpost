@@ -1,34 +1,58 @@
 /**
- * Derive service rows from the brand playbook + the site's GBP
- * category assignment. Every service anchors to one or more gcids
- * (no ad-hoc services) — the service name is tenant-facing, the
- * gcid(s) carry SEO weight, schema.org types, and LLM keyword
- * constraints.
+ * Services derivation — cluster-driven.
  *
- * Distribution targets 6–8 total services: the primary gcid seeds
- * 2–3 tier variants (when the playbook supports tiering); each
- * additional gcid seeds 1 baseline service. Lines up with the
- * 3-column reflow grid on the work page.
+ * Per [[services-pipeline-doctrine]] (second-pass refinement 2026-06-16):
+ * queries (via intent clusters) are the parent of both services and
+ * categories. Each service derives from ONE intent cluster and gets
+ * tagged with that cluster's id; the M:N junction binder then wires
+ * service_gbp_categories rows by cluster_id intersection.
  *
- * Existing services are preserved unless force=true.
+ * The PRIOR design ("for each category, generate N variants") was
+ * wrong — it collapsed M:N to 1:1, mistook Google's taxonomy for
+ * what customers buy, and produced semantic near-duplicates. The
+ * cluster-driven design produces fewer, more focused services that
+ * match what customers actually search for, with M:N category
+ * anchoring falling out deterministically.
+ *
+ * Inputs:
+ *   - Intent clusters from intent-clustering.ts (REQUIRED — no clusters
+ *     means no services; clustering must run upstream)
+ *   - Brand playbook (offer, positioning, tagline) — for voice
+ *   - Business type — for fallback when playbook is thin
+ *   - (Future) Capacity constraints — to drop clusters the business
+ *     can't deliver. v1 trusts clustering to surface plausible
+ *     deliverables; capacity filter lands later.
+ *
+ * Output: 5-8 services, each tagged with source cluster_id in
+ * metadata. Junction binding happens in a separate step.
  */
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { sql } from "@/lib/db";
 import type { BrandPlaybook } from "@/lib/brand-intelligence/types";
 import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
+import type { IntentCluster } from "@/lib/competitive-intel/intent-clustering";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const MODEL = "claude-haiku-4-5-20251001";
 
-interface DerivedService {
+/**
+ * A service derived from an intent cluster. cluster_id is the M:N
+ * junction key — the binder uses it to wire service_gbp_categories.
+ */
+export interface DerivedService {
+  /** Brand-voiced service name (2-5 words). */
   name: string;
+  /** One-sentence, second-person, present-tense description. */
   description: string;
+  /** Optional price-range hint ("$8-15k", "From $200", "Custom quote"). */
   priceRange?: string;
+  /** Optional duration hint ("2-3 weeks", "1 hour"). */
   duration?: string;
-  /** gcid this service anchors to. Must appear in the site's categories. */
-  gcid: string;
-  /** true for the flagship variant per gcid; used to order tiles. */
-  isPrimaryForGcid: boolean;
+  /** Source intent cluster — M:N junction key. */
+  cluster_id: string;
+  /** The cluster's intent_label — preserved for diagnostics. */
+  cluster_intent_label: string;
 }
 
 function slugify(name: string): string {
@@ -39,146 +63,189 @@ function slugify(name: string): string {
     .slice(0, 60);
 }
 
-interface CategoryAnchor {
-  gcid: string;
-  name: string;
-  isPrimary: boolean;
-}
+const SYSTEM_PROMPT = `You are naming services for a local business's website.
 
-async function loadCategoryAnchors(siteId: string): Promise<CategoryAnchor[]> {
-  const rows = await sql`
-    SELECT sgc.gcid, sgc.is_primary, gc.name
-    FROM business_gbp_categories sgc
-    JOIN gbp_categories gc ON gc.gcid = sgc.gcid
-    WHERE sgc.business_id = ${siteId}
-    ORDER BY sgc.is_primary DESC
-  `;
-  return rows.map((r) => ({
-    gcid: String(r.gcid),
-    name: String(r.name),
-    isPrimary: Boolean(r.is_primary),
-  }));
-}
+Each service maps to ONE customer search-intent cluster — a group of queries customers actually use ("kitchen remodel", "kitchen renovation cost", etc.). Your job: produce ONE brand-voiced service name and description per cluster.
 
-async function generateServices(
-  playbook: BrandPlaybook,
-  businessType: string | null,
-  anchors: CategoryAnchor[],
-): Promise<DerivedService[]> {
-  const offerCore = playbook.offerCore;
-  const offerStatement = offerCore?.offerStatement?.finalStatement || "";
-  const benefits = offerCore?.benefits || [];
-  const useCases = offerCore?.useCases || [];
+NAMING:
+- 2-5 words. Brand-voiced. Customer-facing.
+- Match the cluster's intent_label vocabulary (what customers searched), not Google's taxonomy ("Kitchen remodeler"), not operator jargon ("GC services").
+- Tone follows the brand playbook — strong positioning, no weasel words, no hyperbole.
 
-  const primary = anchors.find((a) => a.isPrimary);
-  const additional = anchors.filter((a) => !a.isPrimary);
+DESCRIPTION:
+- One sentence. Second-person, present-tense. Tells the customer what they get.
+- Should evoke what the cluster's intent represents — if customers search "historic home renovation," the description speaks to that, not generic remodeling.
 
-  const anchorBlock = anchors
-    .map((a) => `  ${a.isPrimary ? "[PRIMARY]" : "[ADDITIONAL]"} ${a.gcid} — ${a.name}`)
-    .join("\n");
+PRICE / DURATION:
+- Optional. Include ONLY when the brand playbook supports a clear claim. Vague hints ("Custom quote", "Contact for pricing") add no value — omit them.
 
-  const prompt = `You are defining the service tiles for a ${businessType || primary?.name || "local business"}'s website. Each tile anchors to one GBP category (gcid) — the anchor carries the SEO weight, the tile name + description is tenant-facing.
+CONSTRAINTS:
+- One service per cluster. No tier variants (budget/mid/premium) unless explicitly justified by competitor evidence in the cluster — v1 doesn't support tier-variant generation, so produce exactly one service per cluster.
+- Never invent activities the brand can't deliver. The cluster's intent already represents queries customers run; pair it with the brand's offer positioning.
+- Don't restate the cluster's intent_label verbatim — that's the customer's query language, not the brand's service name.
 
-Tenant context:
-Offer statement: ${offerStatement || "(not set)"}
-Key benefits: ${benefits.join("; ") || "(none)"}
-Use cases: ${useCases.join("; ") || "(none)"}
+OUTPUT a JSON array only. No prose, no markdown fences.
 
-GBP category anchors (services MUST map to one of these gcids):
-${anchorBlock}
-
-Target 6–8 total services distributed as:
-- Primary anchor (${primary?.name || "N/A"}): 2–3 tier variants — different price points, scopes, or customer types. One must be marked isPrimaryForGcid=true (the flagship). If the benefits list doesn't support tiering, 1 is fine.
-- Each additional anchor: exactly 1 baseline service (isPrimaryForGcid=true).
-
-A tier variant is something like:
-  "Kitchen Refresh" (budget, cabinet reface + paint) vs
-  "Signature Kitchen" (custom cabinetry + stone) vs
-  "Whole-Home Kitchen" (structural + custom everything)
-
-Do NOT invent categories. Use only the gcids listed above. Do NOT duplicate a variant across gcids. Names should sound like a real business's offerings — not taglines or benefit statements.
-
-Reply with ONLY a JSON array:
+Schema:
 [
   {
-    "name": "Short service name (2-5 words)",
-    "description": "One-sentence, second-person, present-tense description of what the customer gets.",
-    "priceRange": "optional — e.g. '$8–15k' or 'From $200' or 'Custom quote', or omit",
-    "duration": "optional — e.g. '2-3 weeks' or '1 hour' or omit",
-    "gcid": "gcid:... (must match one of the anchors above)",
-    "isPrimaryForGcid": true | false
-  }
+    "cluster_id": "cluster_1",
+    "name": "Historic Home Restoration",
+    "description": "You get a design-build team that understands pre-war construction — restoring period detail while integrating modern systems.",
+    "priceRange": null,
+    "duration": null
+  },
+  ...
 ]`;
 
-  const res = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2000,
-    messages: [{ role: "user", content: prompt }],
-  });
+function buildUserMessage(args: {
+  clusters: IntentCluster[];
+  playbook: BrandPlaybook | null;
+  businessType: string | null;
+}): string {
+  const { clusters, playbook, businessType } = args;
+  const offer = playbook?.offerCore;
+  const positioning = playbook?.brandPositioning;
+  const tagline = positioning?.selectedAngles?.[0]?.tagline || null;
 
-  const text = res.content[0].type === "text" ? res.content[0].text : "";
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error("LLM returned no JSON array");
-  const parsed = JSON.parse(match[0]) as DerivedService[];
+  const lines: string[] = [];
+  lines.push(`BUSINESS TYPE: ${businessType || "(not declared)"}`);
+  lines.push(`TAGLINE: ${tagline || "(none)"}`);
+  lines.push(
+    `OFFER STATEMENT: ${offer?.offerStatement?.finalStatement || "(none)"}`,
+  );
+  if (offer?.benefits?.length) {
+    lines.push(`KEY BENEFITS: ${offer.benefits.join("; ")}`);
+  }
+  if (offer?.useCases?.length) {
+    lines.push(`USE CASES: ${offer.useCases.join("; ")}`);
+  }
+  if (positioning?.selectedAngles?.length) {
+    const angles = positioning.selectedAngles
+      .map((a) => a.name)
+      .filter(Boolean)
+      .join("; ");
+    if (angles) lines.push(`POSITIONING ANGLES: ${angles}`);
+  }
 
-  const validGcids = new Set(anchors.map((a) => a.gcid));
-  return parsed.filter((s) => validGcids.has(s.gcid));
+  lines.push("");
+  lines.push(`INTENT CLUSTERS (one service per cluster):`);
+  lines.push("");
+  for (const c of clusters) {
+    lines.push(`cluster_id: ${c.cluster_id}`);
+    lines.push(`  intent_label: ${c.intent_label}`);
+    lines.push(
+      `  member_queries: ${c.member_queries.slice(0, 6).map((q) => `"${q}"`).join(", ")}`,
+    );
+    const topCategories = c.observed_category_frequencies
+      .slice(0, 4)
+      .map((f) => `${f.name} (${f.count})`)
+      .join(", ");
+    if (topCategories) {
+      lines.push(`  ranking-competitor categories: ${topCategories}`);
+    }
+    lines.push("");
+  }
+
+  lines.push(
+    `Produce ${clusters.length} services — exactly one per cluster. Return JSON only.`,
+  );
+
+  return lines.join("\n");
+}
+
+interface LlmService {
+  cluster_id: string;
+  name: string;
+  description: string;
+  priceRange?: string | null;
+  duration?: string | null;
 }
 
 /**
- * Full derivation pipeline. Skips if the site already has services
- * unless force=true. Writes both services rows and their
- * service_gbp_categories bindings atomically per service.
+ * Generate one brand-voiced service per intent cluster.
+ * Pure function — no DB writes. Caller persists.
  */
-export async function deriveServicesForSite(
-  siteId: string,
-  opts: { force?: boolean } = {},
-): Promise<{ created: number; skipped: boolean; reason?: string }> {
-  const [site] = await sql`
-    SELECT business_type FROM businesses WHERE id = ${siteId}
-  `;
-  const sitePlaybook = await getBrandPlaybookFromDescriptor(siteId);
-  if (!sitePlaybook) {
-    return { created: 0, skipped: true, reason: "no playbook" };
-  }
+export async function generateServicesFromClusters(args: {
+  clusters: IntentCluster[];
+  playbook: BrandPlaybook | null;
+  businessType: string | null;
+}): Promise<DerivedService[]> {
+  const { clusters } = args;
+  if (clusters.length === 0) return [];
 
-  const anchors = await loadCategoryAnchors(siteId);
-  if (anchors.length === 0) {
-    return { created: 0, skipped: true, reason: "no GBP categories — run categorizeForSite first" };
-  }
-
-  if (!opts.force) {
-    const [existing] = await sql`SELECT COUNT(*)::int AS n FROM services WHERE business_id = ${siteId}`;
-    if ((existing?.n as number) > 0) {
-      return { created: 0, skipped: true, reason: "services already exist" };
-    }
-  } else {
-    await sql`DELETE FROM services WHERE business_id = ${siteId} AND source = 'auto'`;
-  }
-
-  const services = await generateServices(
-    sitePlaybook,
-    (site.business_type as string) || null,
-    anchors,
-  );
-
-  // Order: primary-anchor variants first (flagship on top), then
-  // additional anchors in site_gbp_categories order.
-  const anchorRank = new Map(anchors.map((a, i) => [a.gcid, a.isPrimary ? -1 : i]));
-  services.sort((a, b) => {
-    const rankDiff = (anchorRank.get(a.gcid) ?? 99) - (anchorRank.get(b.gcid) ?? 99);
-    if (rankDiff !== 0) return rankDiff;
-    // Within a gcid, flagship first
-    return a.isPrimaryForGcid === b.isPrimaryForGcid ? 0 : a.isPrimaryForGcid ? -1 : 1;
+  const res = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 3000,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: buildUserMessage(args) }],
   });
 
-  let created = 0;
+  const text = res.content[0]?.type === "text" ? res.content[0].text : "";
+  const cleaned = text.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
+  const match = cleaned.match(/\[[\s\S]*\]/);
+  if (!match) {
+    throw new Error(
+      `services-derive: model returned no JSON array (length=${text.length})`,
+    );
+  }
+
+  let parsed: LlmService[];
+  try {
+    parsed = JSON.parse(match[0]) as LlmService[];
+  } catch (parseErr) {
+    const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+    throw new Error(`services-derive: JSON.parse failed — ${parseMsg}`);
+  }
+
+  // Validate every output service points at a real cluster.
+  const clusterById = new Map(clusters.map((c) => [c.cluster_id, c]));
+  const result: DerivedService[] = [];
+  for (const s of parsed) {
+    const cluster = clusterById.get(s.cluster_id);
+    if (!cluster) continue; // skip hallucinated cluster_ids
+    if (!s.name?.trim() || !s.description?.trim()) continue;
+    result.push({
+      name: s.name.trim(),
+      description: s.description.trim(),
+      priceRange: s.priceRange?.trim() || undefined,
+      duration: s.duration?.trim() || undefined,
+      cluster_id: cluster.cluster_id,
+      cluster_intent_label: cluster.intent_label,
+    });
+  }
+  return result;
+}
+
+/**
+ * Persist derived services to the services table. Existing 'auto'
+ * services for this site are deleted first (full overwrite — the
+ * pipeline run is the source of truth). Returns the inserted rows
+ * with their generated ids so the caller can run the M:N junction
+ * binder against them.
+ *
+ * cluster_id is stored in metadata JSONB for diagnostics + re-binding.
+ */
+export interface PersistedService extends DerivedService {
+  id: string;
+  slug: string;
+  display_order: number;
+}
+
+export async function persistDerivedServices(
+  siteId: string,
+  services: DerivedService[],
+): Promise<PersistedService[]> {
+  // Full overwrite for 'auto' source — the pipeline is authoritative.
+  await sql`DELETE FROM services WHERE business_id = ${siteId} AND source = 'auto'`;
+
+  const persisted: PersistedService[] = [];
   for (let i = 0; i < services.length; i++) {
     const s = services[i];
     const baseSlug = slugify(s.name);
     if (!baseSlug) continue;
 
-    // Uniqueify slug if collision (e.g., two "Custom Kitchen" variants)
+    // Uniqueify slug if collision.
     let slug = baseSlug;
     let attempt = 1;
     while (true) {
@@ -191,20 +258,62 @@ export async function deriveServicesForSite(
       if (attempt > 10) break;
     }
 
+    const metadata = {
+      cluster_id: s.cluster_id,
+      cluster_intent_label: s.cluster_intent_label,
+    };
+
     const [row] = await sql`
-      INSERT INTO services (business_id, name, slug, description, price_range, duration, display_order, source)
-      VALUES (${siteId}, ${s.name}, ${slug}, ${s.description}, ${s.priceRange || null}, ${s.duration || null}, ${i}, 'auto')
+      INSERT INTO services (
+        business_id, name, slug, description, price_range, duration,
+        display_order, source, metadata
+      )
+      VALUES (
+        ${siteId}, ${s.name}, ${slug}, ${s.description},
+        ${s.priceRange || null}, ${s.duration || null},
+        ${i}, 'auto', ${JSON.stringify(metadata)}::jsonb
+      )
       RETURNING id
     `;
     if (!row) continue;
+    persisted.push({
+      ...s,
+      id: row.id as string,
+      slug,
+      display_order: i,
+    });
+  }
+  return persisted;
+}
 
-    await sql`
-      INSERT INTO service_gbp_categories (service_id, gcid, is_primary)
-      VALUES (${row.id}, ${s.gcid}, ${s.isPrimaryForGcid})
-      ON CONFLICT DO NOTHING
-    `;
-    created++;
+/**
+ * Convenience wrapper for site-level pipeline runs. Loads playbook
+ * and business_type, generates services from clusters, persists them.
+ * Caller still must run the M:N junction binder separately to wire
+ * service_gbp_categories — that step requires coached categories
+ * which this function doesn't produce.
+ */
+export async function deriveServicesForSite(args: {
+  siteId: string;
+  clusters: IntentCluster[];
+}): Promise<{ created: number; persisted: PersistedService[]; skipped: boolean; reason?: string }> {
+  const { siteId, clusters } = args;
+
+  if (clusters.length === 0) {
+    return { created: 0, persisted: [], skipped: true, reason: "no intent clusters — run clustering first" };
   }
 
-  return { created, skipped: false };
+  const [site] = await sql`
+    SELECT business_type FROM businesses WHERE id = ${siteId}
+  `;
+  const playbook = await getBrandPlaybookFromDescriptor(siteId);
+
+  const services = await generateServicesFromClusters({
+    clusters,
+    playbook,
+    businessType: (site?.business_type as string) || null,
+  });
+
+  const persisted = await persistDerivedServices(siteId, services);
+  return { created: persisted.length, persisted, skipped: false };
 }

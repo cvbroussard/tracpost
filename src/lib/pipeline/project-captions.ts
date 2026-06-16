@@ -261,29 +261,15 @@ export async function maybeGenerateArticlePrompts(projectId: string): Promise<bo
 
 /**
  * Called when a playbook is sharpened/generated on a site. Fans out
- * to downstream derived content:
- *   1. GBP categorization (primary + additional with reasoning)
- *   2. Service derivation (6–8 tiles anchored to the categories)
- *   3. Per-project article prompt generation
+ * to per-project article prompt generation.
  *
- * Steps 1 and 2 are best-effort — failures log and continue so the
- * article-prompt cascade never blocks on a transient AI error.
+ * GBP categorization and services derivation USED to fan out here. Both
+ * moved to the CMA-driven pipeline 2026-06-16 per [[gbp-categories-cma-authority]]
+ * and [[services-pipeline-doctrine]] second-pass refinements: queries
+ * (via intent clusters) are the parent of both, not brand identity.
+ * Playbook sharpening is no longer the trigger; CMA completion is.
  */
 export async function onPlaybookSharpened(siteId: string): Promise<void> {
-  try {
-    const { categorizeForSite } = await import("@/lib/services/categorize");
-    await categorizeForSite(siteId);
-  } catch (err) {
-    console.error("GBP categorization failed:", err instanceof Error ? err.message : err);
-  }
-
-  try {
-    const { deriveServicesForSite } = await import("@/lib/services/derive");
-    await deriveServicesForSite(siteId);
-  } catch (err) {
-    console.error("Service derivation failed:", err instanceof Error ? err.message : err);
-  }
-
   const projects = await sql`SELECT id FROM projects WHERE business_id = ${siteId}`;
   for (const p of projects) {
     await maybeGenerateArticlePrompts(p.id as string);

@@ -59,7 +59,9 @@ const NAV_GROUPS: NavGroup[] = [
       // per [[gbp-categories-cma-authority]] refinement: categories are an
       // OUTPUT of CMA (Cat 2 / Infrastructure), not a Cat 1 brand-identity
       // input. Architectural twin of services generation; both sit here.
-      { label: "Brand Categorization", path: "/categories-coaching" },
+      // Renamed 2026-06-16 to "Categories & Services" when the services
+      // tab landed on the same page.
+      { label: "Categories & Services", path: "/categories-coaching" },
       { label: "GBP", path: "/gbp" },
     ],
   },

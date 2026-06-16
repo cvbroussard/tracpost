@@ -40,14 +40,7 @@ interface CoachingRun {
   error_message: string | null;
 }
 
-interface Site {
-  id: string;
-  name: string;
-}
-
-export function CategoriesCoachingClient({ subscriberId }: { subscriberId: string }) {
-  const [sites, setSites] = useState<Site[]>([]);
-  const [selectedSiteId, setSelectedSiteId] = useState<string>("");
+export function CategoriesCoachingClient({ siteId }: { siteId: string }) {
   const [run, setRun] = useState<CoachingRun | null>(null);
   const [loading, setLoading] = useState(false);
   const [triggering, setTriggering] = useState(false);
@@ -55,21 +48,12 @@ export function CategoriesCoachingClient({ subscriberId }: { subscriberId: strin
   const [error, setError] = useState<string | null>(null);
   const [appliedNotice, setAppliedNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch(`/api/admin/sites?subscription_id=${subscriberId}`)
-      .then((r) => (r.ok ? r.json() : { sites: [] }))
-      .then((d: { sites: Site[] }) => {
-        setSites(d.sites || []);
-        if (d.sites?.length > 0) setSelectedSiteId(d.sites[0].id);
-      });
-  }, [subscriberId]);
-
   const loadRun = useCallback(async () => {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/category-coaching/${selectedSiteId}`);
+      const res = await fetch(`/api/admin/category-coaching/${siteId}`);
       if (!res.ok) throw new Error(`Failed to load (${res.status})`);
       const d = await res.json();
       setRun(d.run);
@@ -78,7 +62,7 @@ export function CategoriesCoachingClient({ subscriberId }: { subscriberId: strin
     } finally {
       setLoading(false);
     }
-  }, [selectedSiteId]);
+  }, [siteId]);
 
   useEffect(() => {
     setAppliedNotice(null);
@@ -93,11 +77,11 @@ export function CategoriesCoachingClient({ subscriberId }: { subscriberId: strin
   }, [run, loadRun]);
 
   async function triggerRun() {
-    if (!selectedSiteId) return;
+    if (!siteId) return;
     setTriggering(true);
     setAppliedNotice(null);
     try {
-      const res = await fetch(`/api/admin/category-coaching/${selectedSiteId}/run`, { method: "POST" });
+      const res = await fetch(`/api/admin/category-coaching/${siteId}/run`, { method: "POST" });
       if (!res.ok && res.status !== 202) throw new Error(`Trigger failed (${res.status})`);
       // Brief delay then refresh — the runner inserts the row at status='running' as first step
       setTimeout(loadRun, 1000);
@@ -109,12 +93,12 @@ export function CategoriesCoachingClient({ subscriberId }: { subscriberId: strin
   }
 
   async function applyRun() {
-    if (!selectedSiteId || !run) return;
+    if (!siteId || !run) return;
     if (!confirm("Apply this plan to the site's GBP categories?\n\nThis replaces site_gbp_categories with the 10-best plan and marks gbp_sync_dirty=true. The push to Google fires on the next sync cycle.")) return;
     setApplying(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/category-coaching/${selectedSiteId}/apply`, {
+      const res = await fetch(`/api/admin/category-coaching/${siteId}/apply`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ runId: run.id }),
@@ -130,27 +114,15 @@ export function CategoriesCoachingClient({ subscriberId }: { subscriberId: strin
     }
   }
 
-  if (!subscriberId) {
-    return <div className="p-4 text-xs text-muted">Select a subscriber to view categories coaching.</div>;
-  }
-
   return (
     <div className="space-y-4 p-4">
       {/* Trigger panel */}
       <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1">
-            <label className="text-[10px] text-muted">Site</label>
-            <select
-              value={selectedSiteId}
-              onChange={(e) => setSelectedSiteId(e.target.value)}
-              className="mt-1 w-full max-w-md rounded border border-border bg-background px-3 py-1.5 text-xs focus:border-accent focus:outline-none"
-            >
-              {sites.length === 0 && <option>No sites</option>}
-              {sites.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            <p className="text-[10px] text-muted leading-relaxed">
+              Auto-triggers a CMA if none exists (β rule). Full pipeline ~60-120s, ~$0.21/run.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {run && (
@@ -163,16 +135,13 @@ export function CategoriesCoachingClient({ subscriberId }: { subscriberId: strin
             )}
             <button
               onClick={triggerRun}
-              disabled={triggering || !selectedSiteId || run?.status === "running"}
+              disabled={triggering || !siteId || run?.status === "running"}
               className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
             >
               {triggering ? "Triggering…" : run ? "Run new coaching" : "Run coaching"}
             </button>
           </div>
         </div>
-        <p className="mt-2 text-[10px] text-muted">
-          Auto-triggers a CMA if none exists (β rule). Full pipeline ~60-120s, ~$0.21/run.
-        </p>
         {error && <p className="mt-2 text-[10px] text-danger">{error}</p>}
         {run?.error_message && run.status === "failed" && (
           <p className="mt-2 text-[10px] text-danger">Last error: {run.error_message}</p>

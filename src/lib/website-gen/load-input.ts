@@ -22,7 +22,7 @@ export async function loadInput(businessId: string): Promise<GeneratorInput> {
   // ── business_info ────────────────────────────────────────────────
   const [biz] = await sql`
     SELECT id, name, business_type, location, url,
-           business_logo, business_favicon, gbp_profile
+           business_logo, business_favicon, gbp_profile, tagline
     FROM businesses WHERE id = ${businessId} LIMIT 1
   `;
   if (!biz) throw new Error(`website-gen: business ${businessId} not found`);
@@ -123,6 +123,7 @@ export async function loadInput(businessId: string): Promise<GeneratorInput> {
       url: (biz.url as string | null) ?? null,
       logo_url: (biz.business_logo as string | null) ?? null,
       favicon_url: (biz.business_favicon as string | null) ?? null,
+      tagline: (biz.tagline as string | null) ?? null,
     },
     catalog,
     gbp_profile,

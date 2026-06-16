@@ -146,6 +146,11 @@ export interface GeneratorInputBusinessInfo {
   url: string | null;
   logo_url: string | null;
   favicon_url: string | null;
+  /** Owner-canonical tagline. Null until owner declares (either by typing
+   *  or picking an exemplar from the brand_descriptor suggestion picker).
+   *  When present, generator uses this VERBATIM and ignores any tagline
+   *  text in brand_descriptor.declared. */
+  tagline: string | null;
 }
 
 export interface DescriptorSlot {

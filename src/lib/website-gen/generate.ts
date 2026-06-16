@@ -93,7 +93,7 @@ export async function generateHomePageHero(
   const snapshot = await captureCatalogSnapshot(input);
 
   // ── 3. Build prompts ────────────────────────────────────────────
-  const systemPrompt = buildBaseSystemPrompt(input.catalog);
+  const systemPrompt = buildBaseSystemPrompt(input);
   const userPrompt = buildHeroUserPrompt(input);
 
   // ── 4. Call Sonnet with tool use ────────────────────────────────

@@ -15,7 +15,21 @@
  */
 import type { GeneratorInput, DescriptorSlot } from "../types";
 
-export function buildBaseSystemPrompt(catalog: GeneratorInput["catalog"]): string {
+/**
+ * Build the shared base system prompt for all page generation.
+ *
+ * Signature takes the full input (not just catalog) because owner-canonical
+ * fields on the business row (e.g., business_info.tagline) take precedence
+ * over the descriptor JSONB's tagline picker. Per the 2026-06-15 promotion:
+ *   - businesses.tagline = owner-canonical
+ *   - brand_descriptor.verbal.tagline = LLM-generated suggestion engine
+ * Generator prefers the column when present; falls back to the descriptor
+ * otherwise.
+ */
+export function buildBaseSystemPrompt(
+  input: GeneratorInput,
+): string {
+  const catalog = input.catalog;
   const lines: string[] = [];
 
   lines.push(
@@ -76,10 +90,20 @@ export function buildBaseSystemPrompt(catalog: GeneratorInput["catalog"]): strin
   }
 
   // ── Tagline guidance ────────────────────────────────────────────
-  const tagline = declaredValue(catalog.verbal.tagline);
-  if (tagline) {
-    lines.push(`DECLARED TAGLINE (use verbatim where a tagline is called for):`);
-    lines.push(`  "${formatDeclared(tagline)}"`);
+  // businesses.tagline (owner-canonical column) takes precedence over the
+  // descriptor JSONB picker. If owner has declared a tagline on the
+  // business row, use that verbatim. Descriptor JSONB tagline is treated
+  // as the suggestion engine (LLM-generated candidates), never as
+  // canonical.
+  const ownerTagline = input.business_info.tagline;
+  const descriptorTagline = declaredValue(catalog.verbal.tagline);
+  const effectiveTagline = ownerTagline ?? (descriptorTagline ? formatDeclared(descriptorTagline) : null);
+  if (effectiveTagline) {
+    lines.push(`DECLARED TAGLINE (use verbatim where a tagline is called for, do NOT paraphrase or invent variants):`);
+    lines.push(`  "${effectiveTagline}"`);
+    lines.push("");
+  } else {
+    lines.push(`TAGLINE: no tagline is declared. Set tagline field to null in output; do NOT invent one.`);
     lines.push("");
   }
 

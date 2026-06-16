@@ -1,12 +1,19 @@
 /**
  * Home page data loader for a tenant's marketing site.
- * Reads cached copy from sites.website_copy (or falls back to minimal
- * placeholder), pulls hero asset (override first, then scored), pulls
+ *
+ * Phase 1.5 (2026-06-16) — hybrid render: prefers the new catalog-driven
+ * website_content (published row) for sections the v2 generator has
+ * produced; falls back to the legacy website_copy JSONB for sections
+ * not yet generated. Allows phased adoption per section type — hero
+ * ships first, services/projects/etc. follow.
+ *
+ * Pulls hero asset (website_content > pinned hero_asset_id > scored),
  * gallery images + recent blog articles for the gallery/articles strip.
  */
 import "server-only";
 import { sql } from "@/lib/db";
 import type { WebsiteCopy } from "@/lib/tenant-site/copy-generator";
+import type { PageContent, HeroSection } from "@/lib/website-gen/types";
 
 export interface HomePageData {
   heroImage: string | null;
@@ -30,7 +37,7 @@ export interface HomePageData {
 
 export async function loadHomePage(siteId: string): Promise<HomePageData> {
   const [site] = await sql`
-    SELECT website_copy, hero_asset_id, business_type, location
+    SELECT website_copy, hero_asset_id, business_type, location, tagline
     FROM businesses WHERE id = ${siteId}
   `;
 
@@ -41,9 +48,26 @@ export async function loadHomePage(siteId: string): Promise<HomePageData> {
   const copy = (site.website_copy as WebsiteCopy | null) || null;
   const homeCopy = copy?.home;
 
-  // Hero: pinned override first, else highest-scored image asset
+  // Phase 1.5 — catalog-driven override layer. When a published
+  // website_content row exists for this page, its hero section takes
+  // precedence over website_copy + asset-resolution fallback.
+  const [publishedRow] = await sql`
+    SELECT content
+    FROM website_content
+    WHERE business_id = ${siteId}
+      AND page_key = 'home'
+      AND status = 'published'
+    LIMIT 1
+  `;
+  const generatedContent = publishedRow?.content as PageContent | undefined;
+  const generatedHero = generatedContent?.sections.find(
+    (s) => s.type === "hero",
+  ) as HeroSection | undefined;
+
+  // Hero: generated > pinned override > highest-scored asset
   const heroAssetId = site.hero_asset_id as string | null;
-  const heroImage = await resolveHeroImage(siteId, heroAssetId);
+  const heroImage = generatedHero?.hero_image?.url
+    ?? (await resolveHeroImage(siteId, heroAssetId));
 
   // Gallery: top image assets (excluding hero)
   const galleryAssets = await sql`
@@ -85,18 +109,35 @@ export async function loadHomePage(siteId: string): Promise<HomePageData> {
       : null,
   }));
 
-  // Copy: use generated copy if present, otherwise minimal placeholder
-  // derived from the site row so the page still renders meaningfully.
+  // Copy: precedence order is generated catalog-driven content >
+  // legacy website_copy > minimal placeholder from the site row.
   const fallbackTitle = `Welcome to ${(site.business_type as string) || "our site"}`;
   const fallbackSubtitle = `${(site.business_type as string) || ""}${
     site.location ? ` in ${site.location}` : ""
   }`.trim();
 
+  // Hero copy from generated content if available. Subhead falls
+  // back to tagline so the rendered hero still has supporting copy
+  // when subhead is null (per HeroSection schema).
+  const heroTitle =
+    generatedHero?.headline
+    ?? homeCopy?.heroTitle
+    ?? fallbackTitle;
+  const heroSubtitle =
+    generatedHero?.subhead
+    ?? generatedHero?.tagline
+    ?? homeCopy?.heroSubtitle
+    ?? fallbackSubtitle;
+  const ctaText =
+    generatedHero?.primary_cta?.text
+    ?? homeCopy?.ctaText
+    ?? "Get Started";
+
   return {
     heroImage,
-    heroTitle: homeCopy?.heroTitle || fallbackTitle,
-    heroSubtitle: homeCopy?.heroSubtitle || fallbackSubtitle,
-    ctaText: homeCopy?.ctaText || "Get Started",
+    heroTitle,
+    heroSubtitle,
+    ctaText,
     servicesTitle: homeCopy?.servicesTitle || "What We Do",
     servicesSubtitle: homeCopy?.servicesSubtitle || "",
     services: homeCopy?.services || [],

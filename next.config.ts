@@ -60,6 +60,26 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [];
   },
+  async redirects() {
+    return [
+      // 2026-06-16: URL renamed from /categories-coaching → /categories-services.
+      // "Coaching" was misleading terminology — the system generates a
+      // recommendation for binary block-approval, not a dialog. Permanent
+      // redirect keeps bookmarks + open tabs functional through the
+      // transition. Both host modes covered: ops.tracpost.com serves
+      // /categories-coaching, preview/main serves /ops/categories-coaching.
+      {
+        source: "/categories-coaching",
+        destination: "/categories-services",
+        permanent: true,
+      },
+      {
+        source: "/ops/categories-coaching",
+        destination: "/ops/categories-services",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

@@ -59,7 +59,7 @@ export function GbpCategoriesDisplay({ businessId }: { businessId: string }) {
     return (
       <div className="rounded-md border border-dashed border-border bg-card/40 px-3 py-4 text-center">
         <p className="text-[11px] text-muted leading-relaxed">
-          No categories assigned yet. Run the coaching ceremony or re-categorize
+          No categories assigned yet. Generate a categories plan or re-categorize
           from catalog (actions below) to derive this brand&apos;s primary +
           additional GBP categories.
         </p>

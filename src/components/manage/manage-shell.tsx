@@ -60,8 +60,10 @@ const NAV_GROUPS: NavGroup[] = [
       // OUTPUT of CMA (Cat 2 / Infrastructure), not a Cat 1 brand-identity
       // input. Architectural twin of services generation; both sit here.
       // Renamed 2026-06-16 to "Categories & Services" when the services
-      // tab landed on the same page.
-      { label: "Categories & Services", path: "/categories-coaching" },
+      // tab landed; URL renamed from /categories-coaching to /categories-services
+      // when the "coaching" terminology was deemed misleading — system
+      // generates a recommendation for binary block-approval, not a dialog.
+      { label: "Categories & Services", path: "/categories-services" },
       { label: "GBP", path: "/gbp" },
     ],
   },

@@ -153,7 +153,7 @@ export function CategoriesCoachingClient({ siteId }: { siteId: string }) {
               disabled={triggering || !siteId || run?.status === "running"}
               className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
             >
-              {triggering ? "Triggering…" : run ? "Run new coaching" : "Run coaching"}
+              {triggering ? "Triggering…" : run ? "Regenerate plan" : "Generate plan"}
             </button>
           </div>
         </div>
@@ -174,8 +174,8 @@ export function CategoriesCoachingClient({ siteId }: { siteId: string }) {
 
       {run === null && !loading && (
         <div className="rounded-xl border border-border bg-surface p-6 text-center shadow-card">
-          <p className="text-xs text-muted">No coaching has run for this site yet.</p>
-          <p className="mt-1 text-[10px] text-muted">Click "Run coaching" to generate the 10-best GBP categories plan.</p>
+          <p className="text-xs text-muted">No categories plan exists for this site yet.</p>
+          <p className="mt-1 text-[10px] text-muted">Click &quot;Generate plan&quot; to produce the 10-best GBP categories recommendation.</p>
         </div>
       )}
 

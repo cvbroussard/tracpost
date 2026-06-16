@@ -111,10 +111,13 @@ const TASK_ACTIONS: Record<string, TaskAction[]> = {
 
   brand_categorization: [
     // Categories are platform-authored per the 2026-06-13 platform-vs-
-    // owner authorship separation. Heavy coaching ceremony lives at
-    // /ops/categories-coaching; inline Pull / Generate / Push actions
-    // render directly in the drawer body via <GbpCategoryActions />.
-    { label: "Open coaching ceremony", href: "/categories-coaching", icon: "→" },
+    // owner authorship separation. Plan review lives at
+    // /ops/categories-services (URL renamed 2026-06-16 from
+    // /categories-coaching when "coaching" was deemed misleading —
+    // system generates a recommendation for binary block-approval,
+    // not a dialog); inline Pull / Generate / Push actions render
+    // directly in the drawer body via <GbpCategoryActions />.
+    { label: "Review Categories & Services plan", href: "/categories-services", icon: "→" },
   ],
   brand_public_presence: [
     { label: "View observation", href: "/brand-identity/observation", icon: "→" },
@@ -868,8 +871,8 @@ function TaskDetailDrawer({
                 owner authorship separation: categories are PLATFORM-
                 authored so their write actions live here, not on step 14
                 (which now scopes to owner-authored Service Areas). The
-                heavy coaching ceremony remains accessible via the
-                "Open coaching ceremony" task action. */}
+                full plan-review surface is reachable via the
+                "Review Categories & Services plan" task action. */}
             {task.task_key === "brand_categorization" && businessId && (
               <section>
                 <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">

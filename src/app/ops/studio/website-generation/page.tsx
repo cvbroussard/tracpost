@@ -14,6 +14,9 @@ function WebsiteGenerationContent({ siteId }: { siteId: string }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageResult, setImageResult] = useState<{ url?: string; promptUsed?: string; catalogDescriptorsUsed?: string[]; catalogDescriptorsMissing?: string[]; durationMs?: number; bytesSize?: number; asset_id?: string } | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   async function generateHome() {
     setBusy(true);
@@ -33,6 +36,27 @@ function WebsiteGenerationContent({ siteId }: { siteId: string }) {
       setError(e instanceof Error ? e.message : "request failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function generateHeroImage() {
+    setImageBusy(true);
+    setImageError(null);
+    setImageResult(null);
+    try {
+      const res = await fetch(`/api/admin/businesses/${siteId}/website/generate-hero-image`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setImageError(`${data.error ?? "error"}: ${data.message ?? "image gen failed"}`);
+        return;
+      }
+      setImageResult(data);
+    } catch (e) {
+      setImageError(e instanceof Error ? e.message : "request failed");
+    } finally {
+      setImageBusy(false);
     }
   }
 
@@ -67,6 +91,81 @@ function WebsiteGenerationContent({ siteId }: { siteId: string }) {
           </pre>
         </div>
       )}
+
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <h3 className="text-sm font-medium mb-2">Phase 2 — Hero Image (Nano Banana)</h3>
+        <p className="text-xs text-muted leading-relaxed mb-3">
+          Generates a brand-faithful hero image using the catalog-derived prompt and the
+          alt text from the latest home draft. Persists to R2 and binds to the draft&apos;s
+          <code className="text-[10px]"> hero_image.asset_id</code>. Run Phase 1 first.
+        </p>
+        <button
+          type="button"
+          onClick={generateHeroImage}
+          disabled={imageBusy}
+          className="rounded border border-accent/40 bg-accent/10 px-4 py-2 text-xs font-medium hover:bg-accent/20 disabled:opacity-50 disabled:cursor-wait transition-colors"
+        >
+          {imageBusy ? "Generating image… (~20-40s)" : "Generate hero image"}
+        </button>
+        {imageError && (
+          <p className="mt-3 text-[10px] text-rose-600 dark:text-rose-400">{imageError}</p>
+        )}
+        {imageResult && (
+          <div className="mt-4 space-y-3">
+            {imageResult.url && (
+              <div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageResult.url}
+                  alt="Generated hero"
+                  className="w-full rounded border border-border"
+                />
+              </div>
+            )}
+            <div className="text-[10px] text-muted flex flex-wrap gap-x-4 gap-y-1">
+              {imageResult.durationMs !== undefined && (
+                <span>
+                  Duration: <span className="text-foreground">{Math.round(imageResult.durationMs / 100) / 10}s</span>
+                </span>
+              )}
+              {imageResult.bytesSize !== undefined && (
+                <span>
+                  Size: <span className="text-foreground">{Math.round(imageResult.bytesSize / 1024)} KB</span>
+                </span>
+              )}
+              {imageResult.asset_id && (
+                <span>
+                  Asset id: <span className="text-foreground font-mono text-[9px]">{imageResult.asset_id}</span>
+                </span>
+              )}
+            </div>
+            {imageResult.catalogDescriptorsUsed && imageResult.catalogDescriptorsUsed.length > 0 && (
+              <div className="text-[10px]">
+                <span className="text-muted">Descriptors used:</span>{" "}
+                <span className="text-foreground">
+                  {imageResult.catalogDescriptorsUsed.join(", ")}
+                </span>
+              </div>
+            )}
+            {imageResult.catalogDescriptorsMissing && imageResult.catalogDescriptorsMissing.length > 0 && (
+              <div className="text-[10px]">
+                <span className="text-muted">Descriptors missing:</span>{" "}
+                <span className="text-amber-600 dark:text-amber-400">
+                  {imageResult.catalogDescriptorsMissing.join(", ")}
+                </span>
+              </div>
+            )}
+            {imageResult.promptUsed && (
+              <details className="text-[10px] text-muted">
+                <summary className="cursor-pointer">Prompt used</summary>
+                <pre className="mt-2 whitespace-pre-wrap break-words font-mono bg-card/40 p-3 rounded border border-border">
+                  {imageResult.promptUsed}
+                </pre>
+              </details>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

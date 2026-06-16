@@ -17,6 +17,7 @@ import type { PageContent, HeroSection } from "@/lib/website-gen/types";
 
 export interface HomePageData {
   heroImage: string | null;
+  heroTagline: string | null;
   heroTitle: string;
   heroSubtitle: string;
   ctaText: string;
@@ -116,16 +117,20 @@ export async function loadHomePage(siteId: string): Promise<HomePageData> {
     site.location ? ` in ${site.location}` : ""
   }`.trim();
 
-  // Hero copy from generated content if available. Subhead falls
-  // back to tagline so the rendered hero still has supporting copy
-  // when subhead is null (per HeroSection schema).
+  // Hero copy from generated content if available. Tagline is the
+  // canonical brand statement — surfaced as its own slot (not folded
+  // into subhead) per closed-loop layer-stack doctrine; if PPA can't
+  // see it on the rendered page, the catalog value is effectively
+  // lost in translation.
+  const heroTagline =
+    generatedHero?.tagline
+    ?? (site.tagline ? String(site.tagline) : null);
   const heroTitle =
     generatedHero?.headline
     ?? homeCopy?.heroTitle
     ?? fallbackTitle;
   const heroSubtitle =
     generatedHero?.subhead
-    ?? generatedHero?.tagline
     ?? homeCopy?.heroSubtitle
     ?? fallbackSubtitle;
   const ctaText =
@@ -135,6 +140,7 @@ export async function loadHomePage(siteId: string): Promise<HomePageData> {
 
   return {
     heroImage,
+    heroTagline,
     heroTitle,
     heroSubtitle,
     ctaText,
@@ -179,6 +185,7 @@ async function resolveHeroImage(
 function emptyHome(): HomePageData {
   return {
     heroImage: null,
+    heroTagline: null,
     heroTitle: "",
     heroSubtitle: "",
     ctaText: "Contact",

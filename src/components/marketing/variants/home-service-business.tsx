@@ -18,6 +18,9 @@ export default function HomeServiceBusiness({ data, prefix }: Props) {
         {data.heroImage && <Image src={data.heroImage} alt={data.heroTitle || ""} className="ws-hero-bg" width={1920} height={1080} priority sizes="100vw" quality={75} />}
         <div className="ws-hero-overlay">
           <div className="ws-container ws-hero-content">
+            {data.heroTagline && (
+              <p className="ws-hero-tagline">{data.heroTagline}</p>
+            )}
             <h1 className="ws-hero-title">{data.heroTitle}</h1>
             <p className="ws-hero-subtitle">{data.heroSubtitle}</p>
             <div className="ws-hero-actions">
@@ -125,6 +128,15 @@ const serviceBusinessStyles = `
     background: linear-gradient(transparent 0%, rgba(0,0,0,0.65) 50%, rgba(0,0,0,0.8) 100%);
   }
   .ws-hero-content { max-width: 680px; }
+  .ws-hero-tagline {
+    font-family: var(--ws-heading-font);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.9);
+    margin-bottom: 12px;
+  }
   .ws-hero-title {
     font-family: var(--ws-heading-font);
     font-size: 48px;

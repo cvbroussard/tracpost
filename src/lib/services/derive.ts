@@ -73,8 +73,20 @@ NAMING:
 - Tone follows the brand playbook — strong positioning, no weasel words, no hyperbole.
 
 DESCRIPTION:
-- One sentence. Second-person, present-tense. Tells the customer what they get.
-- Should evoke what the cluster's intent represents — if customers search "historic home renovation," the description speaks to that, not generic remodeling.
+- One sentence, 15-30 words. Customer-facing tone.
+- Evokes what the cluster's intent represents — if customers search "historic home renovation," speak to historic restoration specifically, not generic remodeling.
+- VARY THE OPENING ACROSS SERVICES. Critical: do NOT start every description with the same word or phrase. A strip of cards all opening "You get..." or "We offer..." reads as templated AI copy and undersells the brand. Each description's first word should differ from the others.
+- Lead with capability, craft, or method — not generic benefit-promise language. For premium / specialist brands the description should sound like brand-voice writing, not B2B SaaS marketing.
+- Avoid weasel words ("comprehensive solutions", "tailored to your needs", "trusted partner") and hyperbole ("world-class", "unparalleled").
+
+EXAMPLES of varied openings (different shape per service, same level of clarity):
+- Capability-led: "Pittsburgh's most experienced design-build team for kitchens in pre-war homes — every layout, system, and finish coordinated under one roof."
+- Method-led: "Period detail preserved, mechanical systems brought current — restoration handled by the same crew that designs it."
+- Scope-led: "Whole-home renovation managed by architects who run the construction themselves, not subcontracted out."
+- Condition-led: "When the existing space needs more than cosmetic refresh — structural reconfiguration, layout reimagining, full systems integration."
+- Outcome-led: "Bathrooms that align with the home's architectural character — no incongruous remodel signatures."
+
+Note: the LLM should INTERNALIZE the principle (varied openings + craft-led voice), not literally copy these examples. Each business gets its own voice rooted in its playbook.
 
 PRICE / DURATION:
 - Optional. Include ONLY when the brand playbook supports a clear claim. Vague hints ("Custom quote", "Contact for pricing") add no value — omit them.
@@ -84,14 +96,12 @@ CONSTRAINTS:
 - Never invent activities the brand can't deliver. The cluster's intent already represents queries customers run; pair it with the brand's offer positioning.
 - Don't restate the cluster's intent_label verbatim — that's the customer's query language, not the brand's service name.
 
-OUTPUT a JSON array only. No prose, no markdown fences.
-
-Schema:
+OUTPUT a JSON array only. No prose, no markdown fences. Schema:
 [
   {
     "cluster_id": "cluster_1",
-    "name": "Historic Home Restoration",
-    "description": "You get a design-build team that understands pre-war construction — restoring period detail while integrating modern systems.",
+    "name": "Brand-voiced 2-5 word service name",
+    "description": "Single sentence, varied opening, craft-led voice. See EXAMPLES above for shape patterns — do not copy verbatim.",
     "priceRange": null,
     "duration": null
   },

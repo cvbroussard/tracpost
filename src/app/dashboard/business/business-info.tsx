@@ -7,6 +7,16 @@ import { PhoneE164Field } from "@/components/forms";
 interface Props {
   initial: {
     name: string;
+    /** Registered LLC/corporate name (e.g., "Bsquared Construction, LLC").
+     *  Per [[brand-naming-policy]] — compliance contexts only. */
+    legal_entity_name: string | null;
+    /** Canonical public-facing marketing name (e.g., "B2 Construction").
+     *  Used by every customer-facing surface (alt text, page copy, ads,
+     *  social, schema.org). Per [[brand-naming-policy]]. */
+    brand_name: string | null;
+    /** Declared abbreviation/nickname (e.g., "B2"). Permissible in casual
+     *  contexts only when set. */
+    brand_short_form: string | null;
     business_type: string | null;
     location: string | null;
     place_id: string | null;
@@ -36,6 +46,9 @@ function initialPlace(initial: Props["initial"]): PickedPlace | null {
 
 export function BusinessInfo({ initial }: Props) {
   const [name, setName] = useState(initial.name);
+  const [legalEntityName, setLegalEntityName] = useState(initial.legal_entity_name || "");
+  const [brandName, setBrandName] = useState(initial.brand_name || "");
+  const [brandShortForm, setBrandShortForm] = useState(initial.brand_short_form || "");
   const [businessType, setBusinessType] = useState(initial.business_type || "");
   const [place, setPlace] = useState<PickedPlace | null>(initialPlace(initial));
   const [phone, setPhone] = useState(initial.business_phone || "");
@@ -137,6 +150,9 @@ export function BusinessInfo({ initial }: Props) {
 
     const formData = new FormData();
     formData.set("name", name);
+    formData.set("legal_entity_name", legalEntityName);
+    formData.set("brand_name", brandName);
+    formData.set("brand_short_form", brandShortForm);
     formData.set("business_type", businessType);
     // Canonical place fields — picker is the only writer; "location" stays
     // populated as the formatted display string for back-compat with surfaces
@@ -216,6 +232,65 @@ export function BusinessInfo({ initial }: Props) {
           className="w-full text-sm"
           placeholder="Your business name"
         />
+        <p className="mt-1 text-[10px] text-dim">Internal label used in your dashboard. The brand naming fields below drive customer-facing copy.</p>
+      </div>
+
+      {/* Brand naming policy — three distinct fields per project_tracpost_brand_naming_policy */}
+      <div className="rounded border border-border bg-card/30 p-3 space-y-3">
+        <div>
+          <h3 className="text-sm font-medium">Brand Naming</h3>
+          <p className="mt-1 text-[11px] text-muted leading-relaxed">
+            Three distinct names, each used in a specific context. Required for the brand identity layer to produce consistent copy across your site, ads, GBP profile, and social.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs text-muted">
+            Brand Name <span className="text-accent">(canonical, public-facing)</span>
+          </label>
+          <input
+            type="text"
+            value={brandName}
+            onChange={(e) => setBrandName(e.target.value)}
+            className="w-full text-sm"
+            placeholder='e.g., "B2 Construction"'
+          />
+          <p className="mt-1 text-[10px] text-dim">
+            How customers see your brand name. Used in alt text, page copy, ads, GBP, social. <strong>Use this exact name everywhere customer-facing.</strong>
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs text-muted">
+            Legal Entity Name <span className="text-dim">(compliance only)</span>
+          </label>
+          <input
+            type="text"
+            value={legalEntityName}
+            onChange={(e) => setLegalEntityName(e.target.value)}
+            className="w-full text-sm"
+            placeholder='e.g., "Bsquared Construction, LLC"'
+          />
+          <p className="mt-1 text-[10px] text-dim">
+            Your registered LLC/corporate name. Used only for contracts, invoices, and legal/compliance footers. Never in marketing copy.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs text-muted">
+            Short Form / Nickname <span className="text-dim">(casual contexts)</span>
+          </label>
+          <input
+            type="text"
+            value={brandShortForm}
+            onChange={(e) => setBrandShortForm(e.target.value)}
+            className="w-full text-sm"
+            placeholder='e.g., "B2"'
+          />
+          <p className="mt-1 text-[10px] text-dim">
+            A declared abbreviation. Permissible in casual contexts only when set. Leave blank if your brand should never be abbreviated.
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

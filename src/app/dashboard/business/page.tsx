@@ -32,6 +32,7 @@ export default async function SettingsPage() {
              s.is_active, s.blog_cadence,
              s.business_phone, s.business_email, s.business_logo, s.business_favicon,
              s.brand_assets,
+             s.legal_entity_name, s.brand_name, s.brand_short_form,
              s.provisioning_status, s.metadata AS site_metadata
       FROM businesses s
       WHERE s.id = ${siteId}
@@ -77,6 +78,9 @@ export default async function SettingsPage() {
         <BusinessInfo
           initial={{
             name: (site?.name as string) || "",
+            legal_entity_name: (site?.legal_entity_name as string) || null,
+            brand_name: (site?.brand_name as string) || null,
+            brand_short_form: (site?.brand_short_form as string) || null,
             business_type: (site?.business_type as string) || null,
             location: (site?.location as string) || null,
             place_id: (site?.place_id as string) || null,

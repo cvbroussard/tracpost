@@ -153,9 +153,42 @@ export async function bindServicesToCategories(args: {
       continue;
     }
 
-    // primary = top-scored; associated = entire surviving candidate
-    // set (the cluster's curated category breadth).
-    const associated = candidates.map((c) => c.gcid);
+    // Curate associated_gcids[] with combined-evidence threshold.
+    //
+    // The challenge: cluster competitors share many incidental categories
+    // ("Deck builder" appears alongside "Kitchen remodeler" in renovation
+    // SERPs because generalist remodelers declare both). Naive thresholds
+    // (semantic OR frequency) let too much through. Combined evidence
+    // (semantic AND frequency) is stricter and produces the 1-3 category
+    // sets the doctrine expects.
+    //
+    // Rule:
+    //   - PRIMARY is always included (the semantic-aligned winner)
+    //   - For clusters with 3+ competitors: include additional candidates
+    //     that have BOTH semantic alignment (overlap >= 1) AND
+    //     majority-floor frequency (count >= ceil(competitorCount / 2))
+    //   - For clusters with < 3 competitors: PRIMARY ONLY (too few
+    //     data points to filter signal from noise — anything we'd
+    //     include is a guess from a sample of 1-2)
+    //
+    // Result for B Squared: narrow clusters (1-2 comp) → 1 category.
+    // Broader clusters (3+ comp) → 2-3 categories with combined-evidence
+    // backing.
+    const competitorCount = cluster.observed_competitor_place_ids.length;
+    let associated: string[];
+    if (competitorCount < 3) {
+      associated = [winner.gcid];
+    } else {
+      const majorityFloor = Math.ceil(competitorCount / 2);
+      const passesThreshold = (c: typeof candidates[number]) =>
+        c.semantic >= 1 && c.count >= majorityFloor;
+      associated = Array.from(
+        new Set([
+          winner.gcid,
+          ...candidates.filter(passesThreshold).map((c) => c.gcid),
+        ]),
+      );
+    }
 
     await sql`
       UPDATE services

@@ -223,24 +223,15 @@ export function BusinessInfo({ initial }: Props) {
         These details appear on your website, blog, and project pages.
       </p>
 
-      <div>
-        <label className="mb-1 block text-xs text-muted">Business Name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full text-sm"
-          placeholder="Your business name"
-        />
-        <p className="mt-1 text-[10px] text-dim">Internal label used in your dashboard. The brand naming fields below drive customer-facing copy.</p>
-      </div>
-
-      {/* Brand naming policy — three distinct fields per project_tracpost_brand_naming_policy */}
+      {/* Brand naming policy — three distinct fields per project_tracpost_brand_naming_policy.
+          Note: the legacy "Business Name" field is no longer rendered here. brand_name is
+          the canonical name; businesses.name is auto-synced to brand_name on save for
+          backward compat with code paths still reading the legacy column. */}
       <div className="rounded border border-border bg-card/30 p-3 space-y-3">
         <div>
           <h3 className="text-sm font-medium">Brand Naming</h3>
           <p className="mt-1 text-[11px] text-muted leading-relaxed">
-            Three distinct names, each used in a specific context. Required for the brand identity layer to produce consistent copy across your site, ads, GBP profile, and social.
+            Three distinct names, each used in a specific context. The Brand Name drives every customer-facing surface — site copy, ads, GBP profile, social, alt text, schema.org.
           </p>
         </div>
 

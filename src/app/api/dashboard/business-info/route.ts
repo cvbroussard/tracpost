@@ -29,13 +29,20 @@ export async function POST(req: NextRequest) {
 
   const siteId = session.activeSiteId;
   const formData = await req.formData();
-  const name = (formData.get("name") as string)?.trim() || null;
+  const submittedName = (formData.get("name") as string)?.trim() || null;
   // Brand naming policy fields — per [[brand-naming-policy]].
   // Empty strings normalize to null so blank inputs unset rather than store
   // empty values that would confuse downstream null-checks.
   const legalEntityName = ((formData.get("legal_entity_name") as string) || "").trim() || null;
   const brandName = ((formData.get("brand_name") as string) || "").trim() || null;
   const brandShortForm = ((formData.get("brand_short_form") as string) || "").trim() || null;
+  // Auto-sync `name` from `brand_name` per [[brand-naming-policy]] (2026-06-17
+  // redundancy fix). brand_name is the canonical owner-facing source of truth;
+  // businesses.name is a legacy column that code paths still read (site picker,
+  // admin lists, etc.). Keeping them synced eliminates the dual-field UX
+  // confusion without forcing a code-wide migration. If brand_name is empty
+  // (rare during rollout), fall back to whatever was submitted as name.
+  const name = brandName ?? submittedName;
   const businessType = (formData.get("business_type") as string)?.trim() || null;
   const location = (formData.get("location") as string)?.trim() || null;
   // Canonical place fields — picker writes all 5 atomically. Empty string

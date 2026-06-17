@@ -181,7 +181,7 @@ export function ServicesClient({ siteId }: { siteId: string }) {
           <h3 className="mb-3 text-sm font-medium">Current services ({services.length})</h3>
           <div className="space-y-2">
             {services.map((s) => (
-              <ServiceCard key={s.id} svc={s} />
+              <ServiceCard key={s.id} svc={s} siteId={siteId} />
             ))}
           </div>
         </div>
@@ -190,14 +190,52 @@ export function ServicesClient({ siteId }: { siteId: string }) {
   );
 }
 
-function ServiceCard({ svc }: { svc: SiteService }) {
+function ServiceCard({ svc: initial, siteId }: { svc: SiteService; siteId: string }) {
+  const [svc, setSvc] = useState(initial);
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
+  const [justRefreshed, setJustRefreshed] = useState(false);
+
   const sourceStyles =
     svc.source === "auto"
       ? { label: "AUTO", color: "bg-accent/10 text-accent border-accent/30" }
       : { label: svc.source.toUpperCase(), color: "bg-background text-muted border-border" };
   const clusterIntent = (svc.metadata as { cluster_intent_label?: string } | null)?.cluster_intent_label;
+  const canRegen = svc.source === "auto" && Boolean(clusterIntent);
+
+  async function regenerate() {
+    if (!canRegen || regenerating) return;
+    setRegenerating(true);
+    setRegenError(null);
+    try {
+      const res = await fetch(`/api/admin/site-services/${siteId}/${svc.id}/regenerate`, {
+        method: "POST",
+      });
+      const d = (await res.json()) as
+        | { ok: true; service: { id: string; name: string; description: string; priceRange: string | null; duration: string | null } }
+        | { ok?: false; error: string; message?: string };
+      if (!res.ok || !("ok" in d) || !d.ok) {
+        const msg = "message" in d ? d.message : "error" in d ? d.error : `HTTP ${res.status}`;
+        throw new Error(msg || `HTTP ${res.status}`);
+      }
+      setSvc((prev) => ({
+        ...prev,
+        name: d.service.name,
+        description: d.service.description,
+        price_range: d.service.priceRange,
+        duration: d.service.duration,
+      }));
+      setJustRefreshed(true);
+      setTimeout(() => setJustRefreshed(false), 2500);
+    } catch (e) {
+      setRegenError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
   return (
-    <div className="rounded border-l-2 border-l-border bg-background p-3">
+    <div className={`rounded border-l-2 ${justRefreshed ? "border-l-success bg-success/5" : "border-l-border bg-background"} p-3 transition-colors`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -218,6 +256,11 @@ function ServiceCard({ svc }: { svc: SiteService }) {
                 ⚠ Unbound
               </span>
             )}
+            {justRefreshed && (
+              <span className="inline-flex items-center rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[9px] text-success">
+                ✓ Refreshed
+              </span>
+            )}
           </div>
           {svc.description && (
             <p className="mt-1 text-[11px] leading-relaxed text-muted">{svc.description}</p>
@@ -228,7 +271,21 @@ function ServiceCard({ svc }: { svc: SiteService }) {
             {svc.duration && <span>duration: {svc.duration}</span>}
             {clusterIntent && <span>cluster intent: &quot;{clusterIntent}&quot;</span>}
           </div>
+          {regenError && (
+            <p className="mt-1 text-[10px] text-danger">{regenError}</p>
+          )}
         </div>
+        {canRegen && (
+          <button
+            type="button"
+            onClick={regenerate}
+            disabled={regenerating}
+            title="Refresh this service's name + description (slug, hero, category anchor preserved)"
+            className="shrink-0 rounded border border-border bg-background px-2 py-1 text-[10px] hover:bg-card disabled:opacity-50 disabled:cursor-wait"
+          >
+            {regenerating ? "↻ Refreshing…" : "↻ Refresh"}
+          </button>
+        )}
       </div>
     </div>
   );

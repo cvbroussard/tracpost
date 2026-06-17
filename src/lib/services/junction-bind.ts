@@ -1,27 +1,34 @@
 /**
- * Services → category binder. N:1, not M:N.
+ * Services → category binder. Two-layer model: N:1 primary + cluster set.
  *
- * Per [[services-pipeline-doctrine]] (third-pass refinement 2026-06-16):
- * each service points to ONE canonical GBP category — its strongest
- * signal match from the cluster's observed-category frequencies. The
- * earlier M:N model produced over-bound services (a single bathroom
- * service anchored to 6+ categories because incidental matches from
- * competitor co-occurrence slipped through). N:1 forces sharper curation
- * and emits cleaner downstream signal (schema.org serviceType, GBP
- * services field, sitelinks).
+ * Per [[stable-service-identity]] (LOAD-BEARING 2026-06-16):
+ *   - primary_gcid:     N:1 canonical anchor (single category, for
+ *                       surfaces needing one: schema.org serviceType,
+ *                       single-anchor analytics, ad sitelinks)
+ *   - associated_gcids: the cluster's curated category set (for
+ *                       surfaces benefiting from breadth: GBP services
+ *                       push, cross-category ad campaigns, related-
+ *                       services matching)
+ *
+ * Both fields populated by the binder from the cluster's curated
+ * candidates (passed majority-floor OR top-3 threshold during
+ * clustering AND coached for this site). This is NOT a return to the
+ * over-binding M:N model the doctrine rejected — primary stays N:1
+ * (semantic-aligned), and associated_gcids[] is the SAME curated
+ * candidate set, persisted instead of discarded.
  *
  * For each service S:
  *   1. Find S's source cluster_id.
- *   2. From the cluster's observed_category_frequencies, find the
- *      strongest match that ALSO appears in the coached categories
- *      set. (A category outside the coaching plan can't anchor a
- *      service — it won't get applied to GBP.)
- *   3. UPDATE services.primary_gcid to that gcid.
+ *   2. From the cluster's observed_category_frequencies, filter to
+ *      categories ALSO in the coached set.
+ *   3. Sort by semantic alignment to cluster intent (primary key) +
+ *      frequency (tie-breaker). Winner = primary_gcid.
+ *   4. Entire surviving candidate list = associated_gcids[].
+ *   5. UPDATE services SET primary_gcid + associated_gcids.
  *
- * If no coached category serves the service's cluster, primary_gcid
- * stays NULL — the service is "unbound" and exists on the website
- * without a GBP category anchor (still renderable, just doesn't
- * benefit from the closed-loop SEO surface).
+ * If no coached category serves the service's cluster, both fields
+ * are cleared — service is "unbound" and exists on the website
+ * without a GBP category anchor.
  */
 import "server-only";
 import { sql } from "@/lib/db";
@@ -79,8 +86,14 @@ function semanticMatchScore(categoryName: string, intentLabel: string): number {
 
 export interface BindingResult {
   /** Services that were bound to a primary category. */
-  bound: Array<{ service_id: string; service_name: string; primary_gcid: string; category_name: string }>;
-  /** Services with no coached category in their source cluster — primary_gcid stays NULL. */
+  bound: Array<{
+    service_id: string;
+    service_name: string;
+    primary_gcid: string;
+    category_name: string;
+    associated_gcids: string[];
+  }>;
+  /** Services with no coached category in their source cluster. */
   unbound: Array<{ service_id: string; service_name: string; cluster_id: string }>;
 }
 
@@ -112,16 +125,12 @@ export async function bindServicesToCategories(args: {
         cluster_id: svc.cluster_id,
       });
       // Clear any stale binding from a prior run
-      await sql`UPDATE services SET primary_gcid = NULL WHERE id = ${svc.id}`;
+      await sql`UPDATE services SET primary_gcid = NULL, associated_gcids = '{}' WHERE id = ${svc.id}`;
       continue;
     }
 
-    // Pick the anchor by SEMANTIC ALIGNMENT first, then frequency as
-    // tie-breaker. Frequency alone was wrong — bathroom remodelers
-    // share categories with broader remodelers, so "Remodeler" wins
-    // raw frequency even in clusters whose intent points elsewhere
-    // (e.g. "Custom home building" cluster anchored to Remodeler
-    // instead of Custom home builder). The semantic score levels this.
+    // Filter cluster's observed categories to coached set + score by
+    // semantic alignment first, then frequency.
     const candidates = cluster.observed_category_frequencies
       .filter((f) => coachedGcids.has(f.gcid))
       .map((f) => ({
@@ -140,18 +149,26 @@ export async function bindServicesToCategories(args: {
         service_name: svc.name,
         cluster_id: svc.cluster_id,
       });
-      await sql`UPDATE services SET primary_gcid = NULL WHERE id = ${svc.id}`;
+      await sql`UPDATE services SET primary_gcid = NULL, associated_gcids = '{}' WHERE id = ${svc.id}`;
       continue;
     }
 
+    // primary = top-scored; associated = entire surviving candidate
+    // set (the cluster's curated category breadth).
+    const associated = candidates.map((c) => c.gcid);
+
     await sql`
-      UPDATE services SET primary_gcid = ${winner.gcid} WHERE id = ${svc.id}
+      UPDATE services
+      SET primary_gcid = ${winner.gcid},
+          associated_gcids = ${associated}
+      WHERE id = ${svc.id}
     `;
     bound.push({
       service_id: svc.id,
       service_name: svc.name,
       primary_gcid: winner.gcid,
       category_name: coachedNameByGcid.get(winner.gcid) ?? winner.name,
+      associated_gcids: associated,
     });
   }
 

@@ -22,6 +22,23 @@ import { generateEditorialImage } from "@/lib/image-gen/gemini";
 import { loadInput } from "@/lib/website-gen/load-input";
 import { buildServiceHeroPrompt, type BuiltServiceHeroPrompt } from "./service-hero-prompt";
 
+/**
+ * Derive a stable URL slug from a brand name. Frozen into the R2 key
+ * at upload time, so an old asset keeps its path even if the owner
+ * later renames the brand. Falls back to business_id (UUID) when no
+ * brand_name is set — ensures a valid path always.
+ */
+function brandSlug(brandName: string | null, businessId: string): string {
+  if (!brandName?.trim()) return businessId;
+  return (
+    brandName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || businessId
+  );
+}
+
 export interface ServiceHeroGenResult {
   serviceId: string;
   assetId: string;
@@ -39,6 +56,7 @@ interface LoadedService {
   id: string;
   business_id: string;
   name: string;
+  slug: string;
   description: string | null;
   primary_gcid: string | null;
   cluster_intent_label: string | null;
@@ -47,7 +65,7 @@ interface LoadedService {
 
 async function loadService(siteId: string, serviceId: string): Promise<LoadedService> {
   const [row] = await sql`
-    SELECT s.id, s.business_id, s.name, s.description, s.primary_gcid,
+    SELECT s.id, s.business_id, s.name, s.slug, s.description, s.primary_gcid,
            s.metadata->>'cluster_intent_label' AS cluster_intent_label,
            gc.name AS primary_category_name
     FROM services s
@@ -62,6 +80,7 @@ async function loadService(siteId: string, serviceId: string): Promise<LoadedSer
     id: row.id as string,
     business_id: row.business_id as string,
     name: row.name as string,
+    slug: (row.slug as string) || (row.id as string),
     description: row.description ? String(row.description) : null,
     primary_gcid: row.primary_gcid ? String(row.primary_gcid) : null,
     cluster_intent_label: row.cluster_intent_label ? String(row.cluster_intent_label) : null,
@@ -117,9 +136,26 @@ export async function generateServiceHero(
     );
   }
 
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  // Pretty URL: sites/<brand-slug>/services/<service-slug>/<seo-slug>-<hash>.<ext>
+  //
+  // - brand-slug frozen at upload time (old assets keep their path if the
+  //   brand later renames). Falls back to business UUID if brand_name unset.
+  // - service-slug is stable per [[stable-service-identity]].
+  // - filename uses the LLM-generated SEO slug from buildServiceHeroPrompt
+  //   (built.seo_slug) — keyword-dense, content-aware, no filler words.
+  //   Better than truncated alt text (could break mid-word + waste SEO
+  //   budget on "a"/"the"/"by") AND better than structured brand+service
+  //   slug alone (which just duplicates the path). Hash (4 chars) appended
+  //   for uniqueness across regens.
+  //
+  // Google Images indexes filenames + alt complementarily — filename
+  // carries the punchy keyword set, alt attribute carries the full
+  // brand-voiced sentence.
   const ext = image.mimeType === "image/jpeg" ? "jpg" : "png";
-  const r2Key = `service-hero/${siteId}/${serviceId}/${ts}.${ext}`;
+  const bSlug = brandSlug(input.business_info.brand_name, siteId);
+  const dedupeHash = Math.random().toString(36).slice(2, 6);
+  const filename = `${built.seo_slug}-${dedupeHash}.${ext}`;
+  const r2Key = `sites/${bSlug}/services/${service.slug}/${filename}`;
   const storageUrl = await uploadBufferToR2(r2Key, image.data, image.mimeType);
 
   const assetId = randomUUID();

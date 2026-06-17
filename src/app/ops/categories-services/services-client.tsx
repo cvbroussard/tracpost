@@ -224,6 +224,9 @@ function ServiceCard({ svc: initial, siteId }: { svc: SiteService; siteId: strin
   const [heroGenerating, setHeroGenerating] = useState(false);
   const [heroError, setHeroError] = useState<string | null>(null);
 
+  // Hero details (view existing prompt + alt without re-running LLM)
+  const [heroDetailsOpen, setHeroDetailsOpen] = useState(false);
+
   const sourceStyles =
     svc.source === "auto"
       ? { label: "AUTO", color: "bg-accent/10 text-accent border-accent/30" }
@@ -423,8 +426,55 @@ function ServiceCard({ svc: initial, siteId }: { svc: SiteService; siteId: strin
               {heroPanelOpen ? "× Close" : hasHero ? "🖼 Regenerate hero" : "🖼 Generate hero"}
             </button>
           )}
+          {hasHero && (svc.hero?.prompt || svc.hero?.alt) && (
+            <button
+              type="button"
+              onClick={() => setHeroDetailsOpen((v) => !v)}
+              title="View the prompt and alt text saved with the current hero image"
+              className="rounded border border-border bg-background px-2 py-1 text-[10px] hover:bg-card"
+            >
+              {heroDetailsOpen ? "▾ Hide prompt & alt" : "▸ Show prompt & alt"}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Hero details — read-only view of the EXISTING hero's persisted
+          prompt + alt + catalog provenance. No LLM call; pure DB read. */}
+      {heroDetailsOpen && svc.hero && (
+        <div className="mt-3 border-t border-border pt-3 space-y-2">
+          <p className="text-[9px] uppercase tracking-wide text-muted">
+            Current hero — saved {svc.hero.generated_at ? new Date(svc.hero.generated_at).toLocaleString() : "(date unknown)"}
+          </p>
+          {svc.hero.prompt && (
+            <div>
+              <label className="text-[9px] uppercase tracking-wide text-muted">Image prompt (used to render current hero)</label>
+              <pre className="mt-1 text-[10px] text-foreground bg-card/40 border border-border rounded p-2 whitespace-pre-wrap break-words font-mono leading-relaxed">{svc.hero.prompt}</pre>
+            </div>
+          )}
+          {svc.hero.alt && (
+            <div>
+              <label className="text-[9px] uppercase tracking-wide text-muted">Alt text (saved with current hero)</label>
+              <p className="mt-1 text-[10px] text-foreground bg-card/40 border border-border rounded p-2">{svc.hero.alt}</p>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] text-muted">
+            {svc.hero.catalog_descriptors_used.length > 0 && (
+              <span>
+                Catalog inputs used: <span className="text-foreground">{svc.hero.catalog_descriptors_used.join(", ")}</span>
+              </span>
+            )}
+            {svc.hero.catalog_descriptors_missing.length > 0 && (
+              <span>
+                Missing: <span className="text-warning">{svc.hero.catalog_descriptors_missing.join(", ")}</span>
+              </span>
+            )}
+          </div>
+          <p className="text-[9px] text-dim">
+            Read-only. To change them, update brand catalog descriptors and click &quot;🖼 Regenerate hero.&quot;
+          </p>
+        </div>
+      )}
 
       {/* Hero panel — opens below the card row */}
       {heroPanelOpen && (

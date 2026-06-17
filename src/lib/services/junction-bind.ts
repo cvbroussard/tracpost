@@ -34,6 +34,10 @@ import "server-only";
 import { sql } from "@/lib/db";
 import type { CoachedCategory } from "@/lib/competitive-intel/category-coaching";
 import type { IntentCluster } from "@/lib/competitive-intel/intent-clustering";
+import {
+  buildFamilyLookup,
+  type CategoryFamily,
+} from "@/lib/competitive-intel/category-families";
 import type { PersistedService } from "./derive";
 
 /**
@@ -102,8 +106,9 @@ export async function bindServicesToCategories(args: {
   persistedServices: PersistedService[];
   coachedCategories: CoachedCategory[];
   clusters: IntentCluster[];
+  categoryFamilies?: CategoryFamily[];
 }): Promise<BindingResult> {
-  const { persistedServices, coachedCategories, clusters } = args;
+  const { persistedServices, coachedCategories, clusters, categoryFamilies } = args;
 
   if (persistedServices.length === 0) {
     return { bound: [], unbound: [] };
@@ -112,6 +117,7 @@ export async function bindServicesToCategories(args: {
   const clusterById = new Map(clusters.map((c) => [c.cluster_id, c]));
   const coachedGcids = new Set(coachedCategories.map((c) => c.gcid));
   const coachedNameByGcid = new Map(coachedCategories.map((c) => [c.gcid, c.name]));
+  const familyLookup = categoryFamilies ? buildFamilyLookup(categoryFamilies) : null;
 
   const bound: BindingResult["bound"] = [];
   const unbound: BindingResult["unbound"] = [];
@@ -182,42 +188,37 @@ export async function bindServicesToCategories(args: {
       continue;
     }
 
-    // Curate associated_gcids[] with combined-evidence threshold.
+    // Curate associated_gcids[] from TWO sources:
     //
-    // The challenge: cluster competitors share many incidental categories
-    // ("Deck builder" appears alongside "Kitchen remodeler" in renovation
-    // SERPs because generalist remodelers declare both). Naive thresholds
-    // (semantic OR frequency) let too much through. Combined evidence
-    // (semantic AND frequency) is stricter and produces the 1-3 category
-    // sets the doctrine expects.
+    // 1. CATEGORY FAMILY (LLM-derived): the primary anchor's family members.
+    //    Captures semantic relations that token overlap can't see —
+    //    "Custom home builder" + "General contractor" + "Construction
+    //    company" all belong to the "Whole-home construction" family
+    //    despite zero shared text. This is the user-intuitive layer.
     //
-    // Rule:
-    //   - PRIMARY is always included (the semantic-aligned winner)
-    //   - For clusters with 3+ competitors: include additional candidates
-    //     that have BOTH semantic alignment (overlap >= 1) AND
-    //     majority-floor frequency (count >= ceil(competitorCount / 2))
-    //   - For clusters with < 3 competitors: PRIMARY ONLY (too few
-    //     data points to filter signal from noise — anything we'd
-    //     include is a guess from a sample of 1-2)
+    // 2. OBSERVED COMPETITOR EVIDENCE: for 3+ competitor clusters only,
+    //    additional categories that BOTH have semantic alignment AND
+    //    majority-floor frequency. Provides empirical backing for
+    //    relations the family layer might miss.
     //
-    // Result for B Squared: narrow clusters (1-2 comp) → 1 category.
-    // Broader clusters (3+ comp) → 2-3 categories with combined-evidence
-    // backing.
+    // For 1-2 competitor clusters, the family layer is the only source
+    // of additional associations (sample too small for empirical filter).
     const competitorCount = cluster.observed_competitor_place_ids.length;
-    let associated: string[];
-    if (competitorCount < 3) {
-      associated = [winner.gcid];
-    } else {
+    const familyMembers = familyLookup?.get(winner.gcid) ?? [];
+
+    let associatedFromObserved: string[] = [];
+    if (competitorCount >= 3) {
       const majorityFloor = Math.ceil(competitorCount / 2);
       const passesThreshold = (c: typeof candidates[number]) =>
         c.semantic >= 1 && c.count >= majorityFloor;
-      associated = Array.from(
-        new Set([
-          winner.gcid,
-          ...candidates.filter(passesThreshold).map((c) => c.gcid),
-        ]),
-      );
+      associatedFromObserved = candidates
+        .filter(passesThreshold)
+        .map((c) => c.gcid);
     }
+
+    const associated = Array.from(
+      new Set([winner.gcid, ...familyMembers, ...associatedFromObserved]),
+    );
 
     await sql`
       UPDATE services

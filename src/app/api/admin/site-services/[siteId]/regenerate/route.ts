@@ -51,6 +51,7 @@ export async function POST(
       persistedServices: persisted,
       coachedCategories: plan.coachedCategories,
       clusters: plan.clusters,
+      categoryFamilies: plan.categoryFamilies,
     });
 
     // Invalidate any tenant route that renders services.

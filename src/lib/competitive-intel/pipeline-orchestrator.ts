@@ -34,6 +34,10 @@ import {
   generateServicesFromClusters,
   type DerivedService,
 } from "@/lib/services/derive";
+import {
+  computeCategoryFamilies,
+  type CategoryFamily,
+} from "./category-families";
 import { getBrandPlaybookFromDescriptor } from "@/lib/brand-identity/playbook-from-descriptor";
 
 /**
@@ -48,6 +52,7 @@ export interface OrchestratorResult {
   coachedCategories: CoachedCategory[];
   coachingResult: CoachingResult;
   derivedServices: DerivedService[];
+  categoryFamilies: CategoryFamily[];
   generatedAt: string;
 }
 
@@ -97,12 +102,26 @@ export async function runInfrastructurePipeline(
     clusters,
   );
 
+  // Family grouping — LLM groups coached categories by conceptual
+  // relatedness. Used by the binder to populate associated_gcids[]
+  // beyond what pure token-overlap semantic matching can detect.
+  const [siteRow] = await sql`
+    SELECT business_type FROM businesses WHERE id = ${siteId} LIMIT 1
+  `;
+  const playbook = await getBrandPlaybookFromDescriptor(siteId);
+  const categoryFamilies = await computeCategoryFamilies({
+    coachedCategories,
+    businessType: (siteRow?.business_type as string) || null,
+    offerStatement: playbook?.offerCore?.offerStatement?.finalStatement ?? null,
+  });
+
   return {
     analysisId,
     clusters,
     coachedCategories,
     coachingResult: { ...coachingResult, categories: coachedCategories },
     derivedServices,
+    categoryFamilies,
     generatedAt: new Date().toISOString(),
   };
 }

@@ -112,11 +112,18 @@ async function main() {
     };
   });
 
+  console.log(`\nCategory families computed:`);
+  for (const f of plan.categoryFamilies) {
+    console.log(`  ${f.family_label}: [${f.gcids.map((g) => plan.coachedCategories.find((c) => c.gcid === g)?.name ?? g).join(", ")}]`);
+  }
+  console.log();
+
   const result = await bindServicesToCategories({
     siteId: businessId,
     persistedServices: persistedShape,
     coachedCategories: plan.coachedCategories,
     clusters: plan.clusters,
+    categoryFamilies: plan.categoryFamilies,
   });
   console.log(`Re-bound ${result.bound.length} services; ${result.unbound.length} unbound\n`);
   for (const b of result.bound) {

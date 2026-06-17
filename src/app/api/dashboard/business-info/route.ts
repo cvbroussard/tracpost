@@ -29,20 +29,15 @@ export async function POST(req: NextRequest) {
 
   const siteId = session.activeSiteId;
   const formData = await req.formData();
-  const submittedName = (formData.get("name") as string)?.trim() || null;
-  // Brand naming policy fields — per [[brand-naming-policy]].
-  // Empty strings normalize to null so blank inputs unset rather than store
-  // empty values that would confuse downstream null-checks.
+  // Per [[brand-naming-policy]] (2026-06-17, option B): `businesses.name` is
+  // the OPERATOR-MANAGED system label. Captured once at signup, then ONLY
+  // modified by operator (TracPost staff) for internal disambiguation
+  // purposes. The owner-facing dashboard does NOT write to it — the owner
+  // manages brand_name (canonical marketing) + legal_entity_name + brand_short_form.
+  // We intentionally don't read 'name' from this form.
   const legalEntityName = ((formData.get("legal_entity_name") as string) || "").trim() || null;
   const brandName = ((formData.get("brand_name") as string) || "").trim() || null;
   const brandShortForm = ((formData.get("brand_short_form") as string) || "").trim() || null;
-  // Auto-sync `name` from `brand_name` per [[brand-naming-policy]] (2026-06-17
-  // redundancy fix). brand_name is the canonical owner-facing source of truth;
-  // businesses.name is a legacy column that code paths still read (site picker,
-  // admin lists, etc.). Keeping them synced eliminates the dual-field UX
-  // confusion without forcing a code-wide migration. If brand_name is empty
-  // (rare during rollout), fall back to whatever was submitted as name.
-  const name = brandName ?? submittedName;
   const businessType = (formData.get("business_type") as string)?.trim() || null;
   const location = (formData.get("location") as string)?.trim() || null;
   // Canonical place fields — picker writes all 5 atomically. Empty string
@@ -66,8 +61,11 @@ export async function POST(req: NextRequest) {
   const ogTitle = (formData.get("og_title") as string)?.trim() || null;
   const ogDescription = (formData.get("og_description") as string)?.trim() || null;
 
-  if (!name) {
-    return NextResponse.json({ error: "Site name is required" }, { status: 400 });
+  if (!brandName) {
+    return NextResponse.json(
+      { error: "Brand Name is required (the canonical public-facing marketing name)" },
+      { status: 400 },
+    );
   }
 
   // Validate email
@@ -188,8 +186,7 @@ export async function POST(req: NextRequest) {
 
   await sql`
     UPDATE businesses
-    SET name = ${name},
-        legal_entity_name = ${legalEntityName},
+    SET legal_entity_name = ${legalEntityName},
         brand_name = ${brandName},
         brand_short_form = ${brandShortForm},
         business_type = ${businessType},
@@ -208,6 +205,9 @@ export async function POST(req: NextRequest) {
         updated_at = NOW()
     WHERE id = ${siteId}
   `;
+  // NOTE: businesses.name intentionally NOT updated here — it's operator-
+  // managed per [[brand-naming-policy]] option B (2026-06-17). Set at
+  // signup, modified only by operator UI (future surface).
 
   return NextResponse.json({ success: true, business_logo: logoUrl, business_favicon: faviconUrl, og_image: ogImageUrl, brand_assets: brandAssets });
 }

@@ -13,6 +13,16 @@ import { NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-session";
 import { sql } from "@/lib/db";
 
+interface ServiceHeroData {
+  asset_id: string;
+  url: string;
+  alt: string | null;
+  prompt: string | null;
+  generated_at: string | null;
+  catalog_descriptors_used: string[];
+  catalog_descriptors_missing: string[];
+}
+
 interface SiteServiceRow {
   id: string;
   name: string;
@@ -27,6 +37,8 @@ interface SiteServiceRow {
   primary_category_name: string | null;
   associated_gcids: string[];
   associated_category_names: Array<{ gcid: string; name: string }>;
+  hero_asset_id: string | null;
+  hero: ServiceHeroData | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,13 +52,14 @@ export async function GET(
   }
   const { siteId } = await ctx.params;
 
-  // Two-step: services first, then resolve all referenced gcids in
-  // one batch (faster than a per-row subquery on a small table).
+  // Three-step: services, gbp_category name resolution, hero asset
+  // resolution. Each in one batch.
   const services = await sql`
     SELECT
       s.id, s.name, s.slug, s.description, s.price_range, s.duration,
       s.display_order, s.source, s.metadata, s.primary_gcid,
       s.associated_gcids,
+      s.hero_asset_id,
       gc.name AS primary_category_name,
       s.created_at, s.updated_at
     FROM services s
@@ -69,8 +82,40 @@ export async function GET(
       : [];
   const nameByGcid = new Map(nameRows.map((r) => [r.gcid as string, r.name as string]));
 
+  const heroAssetIds = Array.from(
+    new Set(
+      services.map((r) => r.hero_asset_id as string | null).filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const heroRows =
+    heroAssetIds.length > 0
+      ? await sql`
+          SELECT id, storage_url, context_note, metadata
+          FROM media_assets
+          WHERE id = ANY(${heroAssetIds}::uuid[])
+        `
+      : [];
+  const heroByAssetId = new Map(
+    heroRows.map((r) => {
+      const meta = (r.metadata as Record<string, unknown> | null) ?? {};
+      return [
+        r.id as string,
+        {
+          asset_id: r.id as string,
+          url: r.storage_url as string,
+          alt: (meta.alt_text as string | undefined) ?? (r.context_note as string | undefined) ?? null,
+          prompt: (meta.prompt_full as string | undefined) ?? null,
+          generated_at: (meta.generated_at as string | undefined) ?? null,
+          catalog_descriptors_used: (meta.catalog_descriptors_used as string[] | undefined) ?? [],
+          catalog_descriptors_missing: (meta.catalog_descriptors_missing as string[] | undefined) ?? [],
+        } satisfies ServiceHeroData,
+      ];
+    }),
+  );
+
   const enriched = services.map((r) => {
     const associated = (r.associated_gcids as string[] | null) ?? [];
+    const heroAssetId = r.hero_asset_id as string | null;
     return {
       ...r,
       associated_gcids: associated,
@@ -78,6 +123,8 @@ export async function GET(
         gcid,
         name: nameByGcid.get(gcid) ?? gcid,
       })),
+      hero_asset_id: heroAssetId,
+      hero: heroAssetId ? heroByAssetId.get(heroAssetId) ?? null : null,
     };
   });
 

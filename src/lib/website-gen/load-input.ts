@@ -22,7 +22,8 @@ export async function loadInput(businessId: string): Promise<GeneratorInput> {
   // ── business_info ────────────────────────────────────────────────
   const [biz] = await sql`
     SELECT id, name, business_type, location, url,
-           business_logo, business_favicon, gbp_profile, tagline
+           business_logo, business_favicon, gbp_profile, tagline,
+           legal_entity_name, brand_name, brand_short_form
     FROM businesses WHERE id = ${businessId} LIMIT 1
   `;
   if (!biz) throw new Error(`website-gen: business ${businessId} not found`);
@@ -118,6 +119,9 @@ export async function loadInput(businessId: string): Promise<GeneratorInput> {
     business_info: {
       business_id: biz.id as string,
       name: (biz.name as string | null) ?? null,
+      legal_entity_name: (biz.legal_entity_name as string | null) ?? null,
+      brand_name: (biz.brand_name as string | null) ?? (biz.name as string | null) ?? null,
+      brand_short_form: (biz.brand_short_form as string | null) ?? null,
       business_type: (biz.business_type as string | null) ?? null,
       location: (biz.location as string | null) ?? null,
       url: (biz.url as string | null) ?? null,

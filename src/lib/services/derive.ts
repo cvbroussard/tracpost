@@ -91,6 +91,11 @@ Note: the LLM should INTERNALIZE the principle (varied openings + craft-led voic
 PRICE / DURATION:
 - Optional. Include ONLY when the brand playbook supports a clear claim. Vague hints ("Custom quote", "Contact for pricing") add no value — omit them.
 
+BRAND NAME (when present in inputs):
+- If a BRAND_NAME field is provided, use it EXACTLY as written when referencing the business in description text.
+- If a BRAND_SHORT_FORM is provided, you may use it in informal/casual contexts but only when natural.
+- NEVER invent variants. Do not combine the brand name with the service category to form compounds like "[Brand] Renovation" or "[Brand] Custom" — those are forbidden inventions. If you cannot use the brand name naturally in a sentence, OMIT the brand name from that sentence rather than invent.
+
 CONSTRAINTS:
 - One service per cluster. No tier variants (budget/mid/premium) unless explicitly justified by competitor evidence in the cluster — v1 doesn't support tier-variant generation, so produce exactly one service per cluster.
 - Never invent activities the brand can't deliver. The cluster's intent already represents queries customers run; pair it with the brand's offer positioning.
@@ -112,13 +117,21 @@ function buildUserMessage(args: {
   clusters: IntentCluster[];
   playbook: BrandPlaybook | null;
   businessType: string | null;
+  brandName: string | null;
+  brandShortForm: string | null;
 }): string {
-  const { clusters, playbook, businessType } = args;
+  const { clusters, playbook, businessType, brandName, brandShortForm } = args;
   const offer = playbook?.offerCore;
   const positioning = playbook?.brandPositioning;
   const tagline = positioning?.selectedAngles?.[0]?.tagline || null;
 
   const lines: string[] = [];
+  if (brandName) {
+    lines.push(`BRAND_NAME: ${brandName}   ← use EXACTLY as written. Do NOT vary or invent compounds.`);
+    if (brandShortForm) {
+      lines.push(`BRAND_SHORT_FORM: ${brandShortForm}   ← permissible in casual contexts only.`);
+    }
+  }
   lines.push(`BUSINESS TYPE: ${businessType || "(not declared)"}`);
   lines.push(`TAGLINE: ${tagline || "(none)"}`);
   lines.push(
@@ -180,6 +193,10 @@ export async function generateServicesFromClusters(args: {
   clusters: IntentCluster[];
   playbook: BrandPlaybook | null;
   businessType: string | null;
+  /** Canonical public-facing marketing name. Per [[brand-naming-policy]]. */
+  brandName: string | null;
+  /** Declared abbreviation. Per [[brand-naming-policy]]. */
+  brandShortForm: string | null;
 }): Promise<DerivedService[]> {
   const { clusters } = args;
   if (clusters.length === 0) return [];
@@ -314,7 +331,8 @@ export async function deriveServicesForSite(args: {
   }
 
   const [site] = await sql`
-    SELECT business_type FROM businesses WHERE id = ${siteId}
+    SELECT business_type, brand_name, brand_short_form, name
+    FROM businesses WHERE id = ${siteId}
   `;
   const playbook = await getBrandPlaybookFromDescriptor(siteId);
 
@@ -322,6 +340,8 @@ export async function deriveServicesForSite(args: {
     clusters,
     playbook,
     businessType: (site?.business_type as string) || null,
+    brandName: (site?.brand_name as string) || (site?.name as string) || null,
+    brandShortForm: (site?.brand_short_form as string) || null,
   });
 
   const persisted = await persistDerivedServices(siteId, services);

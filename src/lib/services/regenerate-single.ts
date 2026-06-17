@@ -72,6 +72,11 @@ These show shape variety. Do NOT copy them verbatim.
 PRICE / DURATION:
 - Optional. Include ONLY when the brand playbook supports a clear claim. Vague hints ("Custom quote") add no value — omit them.
 
+BRAND NAME (when present in inputs):
+- If a BRAND_NAME field is provided, use it EXACTLY as written when referencing the business in description text.
+- If a BRAND_SHORT_FORM is provided, you may use it in informal/casual contexts but only when natural.
+- NEVER invent variants. Do not combine the brand name with the service category to form compounds like "[Brand] Renovation" or "[Brand] Custom" — those are forbidden inventions. If you cannot use the brand name naturally in a sentence, OMIT the brand name from that sentence rather than invent.
+
 CONSTRAINTS:
 - Don't restate the cluster's intent label verbatim — that's the customer's query language, not the brand's service name.
 - Don't reuse the current name or description verbatim — produce something fresh.
@@ -91,6 +96,8 @@ function buildUserMessage(args: {
   service: ExistingService;
   others: OtherService[];
   businessType: string | null;
+  brandName: string | null;
+  brandShortForm: string | null;
   playbookSummary: {
     tagline: string | null;
     offerStatement: string | null;
@@ -99,6 +106,12 @@ function buildUserMessage(args: {
   };
 }): string {
   const lines: string[] = [];
+  if (args.brandName) {
+    lines.push(`BRAND_NAME: ${args.brandName}   ← use EXACTLY as written. Do NOT vary or invent compounds.`);
+    if (args.brandShortForm) {
+      lines.push(`BRAND_SHORT_FORM: ${args.brandShortForm}   ← permissible in casual contexts only.`);
+    }
+  }
   lines.push(`BUSINESS TYPE: ${args.businessType || "(not declared)"}`);
   lines.push(`TAGLINE: ${args.playbookSummary.tagline || "(none)"}`);
   lines.push(`OFFER STATEMENT: ${args.playbookSummary.offerStatement || "(none)"}`);
@@ -179,9 +192,12 @@ export async function regenerateSingleService(args: {
     openingPhrase: openingPhraseOf(r.description ? String(r.description) : null),
   }));
 
-  // Load site context
+  // Load site context — includes brand_name + brand_short_form per
+  // [[brand-naming-policy]] so the LLM has the canonical name explicitly
+  // instead of inventing variants.
   const [site] = await sql`
-    SELECT business_type FROM businesses WHERE id = ${siteId} LIMIT 1
+    SELECT business_type, brand_name, brand_short_form, name
+    FROM businesses WHERE id = ${siteId} LIMIT 1
   `;
   const playbook = await getBrandPlaybookFromDescriptor(siteId);
   const positioning = playbook?.brandPositioning;
@@ -201,6 +217,8 @@ export async function regenerateSingleService(args: {
     },
     others,
     businessType: site?.business_type ? String(site.business_type) : null,
+    brandName: (site?.brand_name as string) || (site?.name as string) || null,
+    brandShortForm: (site?.brand_short_form as string) || null,
     playbookSummary: {
       tagline,
       offerStatement: offerCore?.offerStatement?.finalStatement ?? null,

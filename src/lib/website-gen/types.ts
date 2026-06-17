@@ -140,7 +140,21 @@ export interface ContactMethodsSection {
 
 export interface GeneratorInputBusinessInfo {
   business_id: string;
+  /** Operator-facing system label (signup-typed name). NOT a marketing
+   *  source of truth — generators must read brand_name instead per
+   *  [[brand-naming-policy]]. Kept here for backward-compat. */
   name: string | null;
+  /** Registered LLC/corporate name. Compliance contexts only — never
+   *  marketing copy. Nullable until owner provides. */
+  legal_entity_name: string | null;
+  /** CANONICAL public-facing marketing name. Used by every customer-
+   *  facing surface. Required for any generation prompt producing
+   *  customer-facing copy. Per [[brand-naming-policy]]. */
+  brand_name: string | null;
+  /** Declared abbreviation/nickname (e.g., "B2" for "B2 Construction").
+   *  Permissible in casual contexts ONLY when set. Blank = forbidden
+   *  to abbreviate. Per [[brand-naming-policy]]. */
+  brand_short_form: string | null;
   business_type: string | null;
   location: string | null;
   url: string | null;

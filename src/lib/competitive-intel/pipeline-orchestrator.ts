@@ -87,12 +87,17 @@ export async function runInfrastructurePipeline(
   const [coachingResult, derivedServices] = await Promise.all([
     coachCategoriesForSite(siteId),
     (async () => {
-      const [site] = await sql`SELECT business_type FROM businesses WHERE id = ${siteId}`;
+      const [site] = await sql`
+        SELECT business_type, brand_name, brand_short_form, name
+        FROM businesses WHERE id = ${siteId}
+      `;
       const playbook = await getBrandPlaybookFromDescriptor(siteId);
       return generateServicesFromClusters({
         clusters,
         playbook,
         businessType: (site?.business_type as string) || null,
+        brandName: (site?.brand_name as string) || (site?.name as string) || null,
+        brandShortForm: (site?.brand_short_form as string) || null,
       });
     })(),
   ]);

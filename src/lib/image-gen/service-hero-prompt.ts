@@ -59,10 +59,12 @@ const SYSTEM_PROMPT = `You are constructing two outputs for a local business's s
 
 Both outputs draw from the SAME brand catalog inputs to ensure visual coherence with the rest of the brand's surfaces (home page hero, other services, etc.). The catalog descriptors are the canonical brand visual identity — your prompts must translate them faithfully.
 
+BRAND NAME (CRITICAL): The inputs include a BRAND_NAME field with the canonical public-facing marketing name. When referencing the business in the alt text, use this name EXACTLY as written. Do NOT abbreviate, expand, or vary it. If a BRAND_SHORT_FORM is provided, you may use it in informal/casual contexts but only when natural. NEVER invent variants (e.g., do not combine the brand name with the service type to form compounds like "[Brand] Renovation" or "[Brand] Custom" — those are forbidden inventions). If you cannot use the brand name naturally, OMIT the brand name from the alt text rather than invent.
+
 CRITICAL CONSTRAINTS:
 - DO NOT invent visual details not implied by the catalog. If the catalog says "Pittsburgh pre-war homes, period detail, warm desaturated palette" don't add "Mediterranean tile, neon accents" out of thin air.
 - The image must depict the kind of WORK the service represents (e.g., a Kitchen Reimagined service image shows a kitchen rendered in the brand's style — NOT abstract or symbolic art).
-- The alt text should evoke both WHAT'S in the image AND the BRAND'S identity (e.g., "A renovated pre-war Pittsburgh kitchen by [brand] — period detail preserved alongside refined modern finishes" is better than "A modern kitchen with white cabinets").
+- The alt text should evoke both WHAT'S in the image AND the BRAND'S identity. Use BRAND_NAME exactly as written.
 - Photographic quality directives: editorial, professionally lit, sharp focus, magazine-grade composition, natural light preferred, wide cinematic framing.
 - No stock-photography clichés: no overly posed people, no perfect-grin lifestyle staging, no generic "team" shots.
 - If visual.do_not_show is provided in inputs, the prompt must respect it.
@@ -111,6 +113,12 @@ function buildUserMessage(args: ServiceHeroPromptInput): {
 
   lines.push(`BUSINESS CONTEXT:`);
   const bi = input.business_info;
+  if (bi.brand_name) {
+    lines.push(`  BRAND_NAME:         ${bi.brand_name}   ← use EXACTLY as written in alt text. Do NOT vary.`);
+    if (bi.brand_short_form) {
+      lines.push(`  BRAND_SHORT_FORM:   ${bi.brand_short_form}   ← permissible in casual contexts only.`);
+    }
+  }
   if (bi.business_type) lines.push(`  Business type:      ${bi.business_type}`);
   if (bi.location) lines.push(`  Location:           ${bi.location}`);
   lines.push("");

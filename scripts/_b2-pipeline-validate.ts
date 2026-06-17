@@ -85,10 +85,26 @@ async function main() {
   }
 
   console.log("\n" + "═".repeat(80));
-  console.log(`PROJECTED N:1 CATEGORY ANCHORS (deterministic preview):`);
+  console.log(`PROJECTED N:1 CATEGORY ANCHORS (semantic-alignment preview):`);
   console.log("═".repeat(80));
   const coachedGcids = new Set(result.coachedCategories.map((c) => c.gcid));
   const coachedNames = new Map(result.coachedCategories.map((c) => [c.gcid, c.name]));
+  const stop = new Set(["and", "the", "for", "with", "from", "into", "your", "you", "are", "our", "all"]);
+  function stem(t: string): string {
+    if (t.length <= 4) return t;
+    for (const suf of ["ing", "er", "or", "ers", "ors", "ion"]) {
+      if (t.endsWith(suf) && t.length - suf.length >= 3) return t.slice(0, t.length - suf.length);
+    }
+    return t;
+  }
+  function toks(s: string): Set<string> {
+    return new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 2 && !stop.has(t)).map(stem));
+  }
+  function semanticMatch(catName: string, intent: string): number {
+    const ct = toks(catName); const it = toks(intent);
+    let n = 0; for (const t of ct) if (it.has(t)) n++;
+    return n;
+  }
   let boundCount = 0;
   for (const svc of result.derivedServices) {
     const cluster = result.clusters.find((c) => c.cluster_id === svc.cluster_id);
@@ -96,13 +112,15 @@ async function main() {
       console.log(`\n"${svc.name}" → UNBOUND (cluster vanished)`);
       continue;
     }
-    const winner = cluster.observed_category_frequencies.find((f) =>
-      coachedGcids.has(f.gcid),
-    );
+    const candidates = cluster.observed_category_frequencies
+      .filter((f) => coachedGcids.has(f.gcid))
+      .map((f) => ({ ...f, semantic: semanticMatch(f.name, cluster.intent_label) }))
+      .sort((a, b) => b.semantic !== a.semantic ? b.semantic - a.semantic : b.count - a.count);
+    const winner = candidates[0];
     if (winner) {
       boundCount++;
       console.log(`\n"${svc.name}" → ${coachedNames.get(winner.gcid)}`);
-      console.log(`  (cluster: ${cluster.intent_label}; winner freq: ${winner.count})`);
+      console.log(`  (cluster: ${cluster.intent_label}; semantic=${winner.semantic} freq=${winner.count})`);
     } else {
       console.log(`\n"${svc.name}" → UNBOUND (cluster ${svc.cluster_id} has no coached category match)`);
     }

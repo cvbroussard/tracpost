@@ -29,6 +29,54 @@ import type { CoachedCategory } from "@/lib/competitive-intel/category-coaching"
 import type { IntentCluster } from "@/lib/competitive-intel/intent-clustering";
 import type { PersistedService } from "./derive";
 
+/**
+ * Strip a small set of common English suffixes so token comparison
+ * matches "remodeler"/"remodeling", "builder"/"building", etc. without
+ * needing a real stemmer. Conservative — only trims the obvious ones.
+ */
+function stemToken(t: string): string {
+  if (t.length <= 4) return t;
+  for (const suffix of ["ing", "er", "or", "ers", "ors", "ion"]) {
+    if (t.endsWith(suffix) && t.length - suffix.length >= 3) {
+      return t.slice(0, t.length - suffix.length);
+    }
+  }
+  return t;
+}
+
+function tokenize(s: string): Set<string> {
+  const stop = new Set(["and", "the", "for", "with", "from", "into", "your", "you", "are", "our", "all"]);
+  return new Set(
+    s
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length > 2 && !stop.has(t))
+      .map(stemToken),
+  );
+}
+
+/**
+ * Semantic alignment score between a category name and a cluster's
+ * intent label. Token overlap with light stemming.
+ *
+ * Used as the PRIMARY sort key in the N:1 binder so the cluster's
+ * intent ("Custom home building") drives anchor selection toward
+ * the matching category ("Custom home builder") rather than whichever
+ * category happens to have the highest observed frequency across
+ * competitor declarations (which tends to crown broad-coverage
+ * categories like "Remodeler" that share none of the cluster's
+ * semantic content).
+ */
+function semanticMatchScore(categoryName: string, intentLabel: string): number {
+  const catTokens = tokenize(categoryName);
+  const intentTokens = tokenize(intentLabel);
+  let overlap = 0;
+  for (const t of catTokens) {
+    if (intentTokens.has(t)) overlap++;
+  }
+  return overlap;
+}
+
 export interface BindingResult {
   /** Services that were bound to a primary category. */
   bound: Array<{ service_id: string; service_name: string; primary_gcid: string; category_name: string }>;
@@ -68,11 +116,23 @@ export async function bindServicesToCategories(args: {
       continue;
     }
 
-    // Strongest-frequency category in this cluster that's also coached.
-    // observed_category_frequencies is already sorted by count desc.
-    const winner = cluster.observed_category_frequencies.find((f) =>
-      coachedGcids.has(f.gcid),
-    );
+    // Pick the anchor by SEMANTIC ALIGNMENT first, then frequency as
+    // tie-breaker. Frequency alone was wrong — bathroom remodelers
+    // share categories with broader remodelers, so "Remodeler" wins
+    // raw frequency even in clusters whose intent points elsewhere
+    // (e.g. "Custom home building" cluster anchored to Remodeler
+    // instead of Custom home builder). The semantic score levels this.
+    const candidates = cluster.observed_category_frequencies
+      .filter((f) => coachedGcids.has(f.gcid))
+      .map((f) => ({
+        ...f,
+        semantic: semanticMatchScore(f.name, cluster.intent_label),
+      }))
+      .sort((a, b) => {
+        if (b.semantic !== a.semantic) return b.semantic - a.semantic;
+        return b.count - a.count;
+      });
+    const winner = candidates[0];
 
     if (!winner) {
       unbound.push({

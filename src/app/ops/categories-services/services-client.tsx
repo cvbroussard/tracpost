@@ -15,6 +15,8 @@ interface SiteService {
   metadata: Record<string, unknown> | null;
   primary_gcid: string | null;
   primary_category_name: string | null;
+  associated_gcids: string[];
+  associated_category_names: Array<{ gcid: string; name: string }>;
   created_at: string;
   updated_at: string;
 }
@@ -245,12 +247,23 @@ function ServiceCard({ svc: initial, siteId }: { svc: SiteService; siteId: strin
             </span>
             {svc.primary_category_name && (
               <span
-                className="inline-flex items-center rounded-full border border-border bg-card/50 px-2 py-0.5 text-[9px] text-foreground"
+                className="inline-flex items-center rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-[9px] font-medium text-accent"
                 title={`Primary GBP anchor: ${svc.primary_gcid}`}
               >
                 ⚓ {svc.primary_category_name}
               </span>
             )}
+            {svc.associated_category_names
+              ?.filter((c) => c.gcid !== svc.primary_gcid)
+              .map((c) => (
+                <span
+                  key={c.gcid}
+                  className="inline-flex items-center rounded-full border border-border bg-card/50 px-2 py-0.5 text-[9px] text-muted"
+                  title={`Cluster-associated category: ${c.gcid} (for GBP services field, ad sitelinks, related-services matching)`}
+                >
+                  + {c.name}
+                </span>
+              ))}
             {!svc.primary_gcid && svc.source === "auto" && (
               <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[9px] text-warning">
                 ⚠ Unbound

@@ -129,18 +129,47 @@ export async function bindServicesToCategories(args: {
       continue;
     }
 
-    // Filter cluster's observed categories to coached set + score by
-    // semantic alignment first, then frequency.
-    const candidates = cluster.observed_category_frequencies
+    // Build the candidate pool from TWO sources:
+    //   1. observed: categories that appeared in cluster competitors AND
+    //      are in the coached plan (existing logic)
+    //   2. semantic-only: coached categories NOT observed in this cluster's
+    //      competitors but with semantic match to the cluster intent.
+    //      Captures cases like "Flooring installation" cluster where the
+    //      1 sampled competitor didn't declare "Flooring contractor", but
+    //      brand-level coaching included it because it's obviously right.
+    //
+    // Without semantic-only, Flooring Installation service would anchor to
+    // Remodeler (the only observed candidate in the coached set) because
+    // Flooring contractor was never a candidate even though it's the
+    // obvious choice.
+    const observedCandidates = cluster.observed_category_frequencies
       .filter((f) => coachedGcids.has(f.gcid))
       .map((f) => ({
-        ...f,
+        gcid: f.gcid,
+        name: f.name,
+        count: f.count,
         semantic: semanticMatchScore(f.name, cluster.intent_label),
+        observed: true,
+      }));
+
+    const observedGcidSet = new Set(observedCandidates.map((c) => c.gcid));
+    const semanticOnlyCandidates = coachedCategories
+      .filter((c) => !observedGcidSet.has(c.gcid))
+      .map((c) => ({
+        gcid: c.gcid,
+        name: c.name,
+        count: 0,
+        semantic: semanticMatchScore(c.name, cluster.intent_label),
+        observed: false,
       }))
-      .sort((a, b) => {
+      .filter((c) => c.semantic >= 1);
+
+    const candidates = [...observedCandidates, ...semanticOnlyCandidates].sort(
+      (a, b) => {
         if (b.semantic !== a.semantic) return b.semantic - a.semantic;
         return b.count - a.count;
-      });
+      },
+    );
     const winner = candidates[0];
 
     if (!winner) {
